@@ -28,6 +28,48 @@ def test_oanda_broker_rejects_missing_credentials_and_non_practice_url() -> None
         OandaBroker(settings(oanda_api_url="https://example-practice.invalid"))
 
 
+def test_oanda_broker_rejects_live_environment() -> None:
+    with pytest.raises(OandaBrokerError, match="must be practice"):
+        OandaBroker(
+            settings(OANDA_ENV="live", oanda_api_url="https://api-fxtrade.oanda.com")
+        )
+
+
+def test_oanda_not_tradeable_price_is_rejected() -> None:
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/pricing"):
+            return httpx.Response(
+                200,
+                json={
+                    "prices": [
+                        {
+                            "status": "closed",
+                            "closeoutBid": "149.990",
+                            "closeoutAsk": "150.010",
+                            "time": now,
+                            "quoteHomeConversionFactors": {
+                                "positiveUnits": "0.00667",
+                                "negativeUnits": "0.00668",
+                            },
+                        }
+                    ]
+                },
+            )
+        return httpx.Response(404, json={"errorMessage": "not found"})
+
+    broker = OandaBroker(
+        settings(),
+        client=httpx.Client(
+            base_url="https://api-fxpractice.oanda.com",
+            transport=httpx.MockTransport(handler),
+        ),
+    )
+    with pytest.raises(OandaBrokerError, match="取引できません"):
+        broker.current_price("USD_JPY")
+
+
 def test_oanda_practice_price_order_fill_position_and_close() -> None:
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
 

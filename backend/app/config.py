@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     enable_live_trading: bool = False
     live_confirmation_phrase: str = "LIVE TRADING ENABLED"
+    # Recognized for completeness, but intentionally inert: automation never auto-starts.
+    # The bot always requires an explicit start and does not auto-resume after restart.
+    auto_trade_default_enabled: bool = False
     oanda_api_token: str | None = None
     oanda_account_id: str | None = None
     oanda_environment: str = Field(

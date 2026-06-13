@@ -376,7 +376,9 @@ def _run_automation_cycle(
             "created_at": datetime.utcnow().isoformat(),
         }
         state.last_cycle_at = datetime.utcnow()
-        state.consecutive_failures = 0
+        # NOTE: do not reset consecutive_failures here. Resetting on every market read
+        # would prevent the "2 consecutive close failures -> emergency stop" guard from
+        # ever accumulating. It is reset only on a clean fill or a successful close.
         db.commit()
     except Exception as error:
         _fatal_stop(db, state, "automation.market_or_account", error)
@@ -484,6 +486,7 @@ def _run_automation_cycle(
         try:
             state.current_positions_json = _positions_snapshot(broker.open_positions())
             state.last_cycle_at = datetime.utcnow()
+            state.consecutive_failures = 0
             db.commit()
         except Exception as error:
             _fatal_stop(db, state, "automation.position_confirmation", error)

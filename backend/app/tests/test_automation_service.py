@@ -25,6 +25,7 @@ class FakeOandaBroker:
     def __init__(self, *, position_side: str | None = None) -> None:
         self.position_side = position_side
         self.fail_price = False
+        self.fail_balance = False
         self.fail_order = False
         self.fail_close = False
         self.stale_price = False
@@ -32,6 +33,8 @@ class FakeOandaBroker:
         self.closed_summary: dict[str, Any] | None = None
 
     def account_summary(self) -> OandaAccount:
+        if self.fail_balance:
+            raise OandaBrokerError("account summary unavailable")
         return OandaAccount(
             balance=100000,
             nav=100000,
@@ -330,3 +333,61 @@ def test_external_sl_tp_close_is_reconciled_with_realized_pnl(db: Session) -> No
     assert result["last_fill"]["status"] == "closed"
     assert closed is not None
     assert closed.realized_pnl == 7.25
+
+
+def test_balance_failure_stops_bot_and_logs_error(db: Session) -> None:
+    broker = FakeOandaBroker()
+    initialize_automation(db, config(), broker=broker)  # type: ignore[arg-type]
+    broker.fail_balance = True
+    result = run_automation_cycle(db, broker=broker)  # type: ignore[arg-type]
+
+    assert result["enabled"] is False
+    assert result["bot"]["status"] == "error_stopped"
+    assert db.scalar(
+        select(ErrorLog).where(ErrorLog.source == "automation.market_or_account")
+    )
+    assert db.scalar(select(OrderLog)) is None
+
+
+def test_max_positions_blocks_order_without_stopping_bot(db: Session) -> None:
+    broker = FakeOandaBroker()
+    initialize_automation(db, config(), broker=broker)  # type: ignore[arg-type]
+    request = OrderRequest(
+        client_order_id="PRACTICE-MAXPOS-1",
+        mode="practice",
+        symbol="USD_JPY",
+        side="buy",
+        units=10,
+        current_price=150,
+        stop_loss=149.7,
+        take_profit=150.6,
+        spread_pips=1,
+        estimated_loss=10,
+        api_connection_ok=True,
+    )
+    result = place_order(
+        db,
+        request,
+        config().risk,  # max_positions=1
+        broker=broker,  # type: ignore[arg-type]
+        open_positions_override=1,
+    )
+    assert result["accepted"] is False
+    assert "最大ポジション数に到達" in result["reasons"]
+    assert get_or_create_bot_status(db).status == "running"
+
+
+def test_repeated_close_failure_emergency_stops_bot(db: Session) -> None:
+    broker = FakeOandaBroker(position_side="sell")
+    broker.fail_close = True
+    initialize_automation(db, config(), broker=broker)  # type: ignore[arg-type]
+
+    first = run_automation_cycle(db, broker=broker)  # type: ignore[arg-type]
+    assert first["last_fill"]["status"] == "close_failed"
+    assert first["enabled"] is True
+    assert first["bot"]["status"] == "running"
+
+    second = run_automation_cycle(db, broker=broker)  # type: ignore[arg-type]
+    assert second["enabled"] is False
+    assert second["bot"]["status"] == "error_stopped"
+    assert db.scalar(select(ErrorLog).where(ErrorLog.source == "automation.close"))

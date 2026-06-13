@@ -58,3 +58,82 @@ APIトークンはバックエンド環境変数だけで読み込みます。`.
 OANDA通信はMockTransportで試験済みですが、実際のpractice資格情報を使った注文・SL/TP・
 決済・通信断試験は未実施です。実資金APIは意図的に未実装です。経済指標カレンダーも
 今回の対象外です。
+
+## 市場開始後の practice E2E 手順（runbook）
+
+実資金は対象外です。live注文は実行しません。FXは週末休場のため、平日の市場稼働時間中
+（おおむね日本時間で月曜早朝〜土曜早朝）に実施します。すべての注文は必ず
+`broker_service.place_order` → `risk_service`（RiskManager）を通ります。
+
+補助スクリプト: `backend/scripts/practice_e2e.py`（practice専用。live broker は生成しない）。
+
+### 0. 実行前チェック
+- `OANDA_ENV=practice` / `ENABLE_LIVE_TRADING=false` を確認
+- `.env` がGit追跡対象外（`git status` に現れない）であることを確認
+- APIキーは画面・ログ・チャットに出さない（スクリプトは秘密情報を出力しません）
+
+### 1. `.env` 設定
+```bash
+cp .env.example .env
+# .env を編集し、practice の値を設定（live は使用しない）:
+#   OANDA_API_TOKEN=<practiceトークン>
+#   OANDA_ACCOUNT_ID=<practice口座ID>
+#   OANDA_ENV=practice
+#   OANDA_API_URL=https://api-fxpractice.oanda.com
+#   ENABLE_LIVE_TRADING=false
+#   AUTO_TRADE_DEFAULT_ENABLED=false
+```
+
+### 2. 起動 / 事前確認（読み取り専用）
+```bash
+cd backend
+.venv/bin/python -m scripts.practice_e2e preflight --symbol USD_JPY
+```
+このコマンドで以下を確認します:
+- account summary 取得 / 残高・通貨・建玉数
+- 直近ローソク足（M5×5）取得
+- 既存ポジション取得
+- 価格取得・スプレッド・価格鮮度
+- `tradeable` 判定（休場時は `NOT_TRADEABLE` と表示し、注文へ進みません）
+- 末尾の VERDICT が `READY` のときのみ次へ進む
+
+（API経由で確認したい場合: `POST /api/broker/connection-test?mode=practice` → ok:true、
+`POST /api/automation/start` は監視スレッドを伴うため、単発E2Eではスクリプトを推奨）
+
+### 3. 小数量 practice 注文（SL/TP付き・1〜10 units）
+```bash
+.venv/bin/python -m scripts.practice_e2e order --symbol USD_JPY --units 1 --side buy --confirm
+```
+- `--confirm` 必須。`tradeable` でなければ自動的に中止
+- SL/TP は自動付与（既定 SL20 / TP40 pips、`--stop-pips` / `--tp-pips` で調整可）
+- RiskManager 通過時のみ発注。注文IDと約定結果を表示
+
+### 4. 約定照合 / ポジション確認
+```bash
+.venv/bin/python -m scripts.practice_e2e status
+```
+- 直近 OrderLog の `status=filled` / 約定価格 / 注文ID を確認
+- 約定が確認できない場合は成功扱いせず Bot は停止します
+
+### 5. 決済 / 確定損益
+```bash
+.venv/bin/python -m scripts.practice_e2e close --symbol USD_JPY --confirm
+```
+- ポジションを決済し、確定損益（realized PnL）を OrderLog に照合保存
+- 決済失敗時は成功扱いせず、ErrorLog 保存・Bot停止
+- 完了後 `status` で確定損益を確認し、**OANDA practice 画面の取引履歴／残高と突合**
+
+### 6. 異常時の停止確認
+- 価格鮮度切れ・スプレッド超過・約定/決済確認失敗・429/timeout/通信断 →
+  Bot は `error_stopped` / `risk_stopped` になり、停止理由は BotLog / ErrorLog と
+  `GET /api/automation/status` で確認できます
+
+### 7. 実行後に確認するログ
+- `OrderLog`: 注文ID・約定価格・確定損益・risk_check_json
+- `BotLog`: 状態遷移と停止理由
+- `ErrorLog`: 失敗内容（Authorization ヘッダや token は含まれません）
+
+### 注意
+- APIキー・Authorization ヘッダは決して出力しない（コード上も非出力）
+- `OANDA_ENV=practice` 以外、または `tradeable=false` のときは注文しない
+- 長時間の無人稼働はしない。1回ずつ結果を確認する
