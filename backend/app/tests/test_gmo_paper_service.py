@@ -81,6 +81,62 @@ def test_replay_requires_minimum_bars(db: Session) -> None:
         )
 
 
+def _reversal_prices() -> list[float]:
+    # Flat, then climb (breakout buy), then a sustained drop (opposite sell signal).
+    flat = [150.00] * 8
+    climb = [150.00 + 0.05 * s for s in range(1, 13)]   # up to ~150.60
+    drop = [150.60 - 0.05 * s for s in range(1, 25)]     # down through entry -> SL territory
+    return flat + climb + drop
+
+
+def test_exit_policy_no_opposite_signal_exit_changes_exits(db: Session) -> None:
+    from app.models import PaperTradeSession
+    candles = _series(_reversal_prices())
+    strat = StrategyConfig(strategy_type=StrategyType.BREAKOUT, breakout_period=2)
+    execution = ExecutionConfig(stop_loss_pips=30, take_profit_pips=60, fixed_units=1000)
+
+    base = replay_paper_trades(
+        db, symbol="USD_JPY", timeframe="M1", candles=candles,
+        strategy=strat, execution=execution, exit_policy="baseline",
+    )
+    base_trades = db.scalars(
+        select(PaperTrade).where(PaperTrade.session_id == base["session_id"])
+    ).all()
+    assert any("反対シグナル" in (t.exit_reason or "") for t in base_trades)
+
+    nop = replay_paper_trades(
+        db, symbol="USD_JPY", timeframe="M1", candles=candles,
+        strategy=strat, execution=execution, exit_policy="no_opposite_signal_exit",
+    )
+    nop_trades = db.scalars(
+        select(PaperTrade).where(PaperTrade.session_id == nop["session_id"])
+    ).all()
+    assert all("反対シグナル" not in (t.exit_reason or "") for t in nop_trades)
+    # the session records which policy produced it
+    nop_session = db.get(PaperTradeSession, nop["session_id"])
+    assert nop_session.config_json["exit_policy"] == "no_opposite_signal_exit"
+
+
+def test_force_close_at_end_leaves_no_open_position(db: Session) -> None:
+    candles = _series(_trending_prices())
+    strat = StrategyConfig(strategy_type=StrategyType.BREAKOUT, breakout_period=2)
+    result = replay_paper_trades(
+        db, symbol="USD_JPY", timeframe="M1", candles=candles, strategy=strat,
+        execution=ExecutionConfig(stop_loss_pips=20, take_profit_pips=20, fixed_units=1000),
+        exit_policy="no_opposite_signal_exit", force_close_at_end=True,
+    )
+    assert result["open_position_count"] == 0
+
+
+def test_replay_rejects_unknown_exit_policy(db: Session) -> None:
+    import pytest
+    with pytest.raises(ValueError, match="exit_policy"):
+        replay_paper_trades(
+            db, symbol="USD_JPY", timeframe="M1", candles=_series(_trending_prices()),
+            strategy=StrategyConfig(), execution=ExecutionConfig(), exit_policy="bogus",
+        )
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)

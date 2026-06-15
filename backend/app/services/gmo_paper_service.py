@@ -59,6 +59,22 @@ def _close_trade(
     )
 
 
+# Paper-trade-only exit policies (analysis A/B; never wired into a live strategy).
+EXIT_POLICIES = (
+    "baseline",  # current behavior: opposite signal closes the position
+    "no_opposite_signal_exit",  # ignore opposite-signal exits; only SL/TP (+ end-of-data)
+    "min_hold_30m_before_opposite_exit",  # allow opposite-signal exit only after 30 min
+)
+
+
+def _opposite_exit_allowed(exit_policy: str, opened_at: datetime, now: datetime) -> bool:
+    if exit_policy == "no_opposite_signal_exit":
+        return False
+    if exit_policy == "min_hold_30m_before_opposite_exit":
+        return (now - opened_at).total_seconds() >= 30 * 60
+    return True  # baseline
+
+
 def replay_paper_trades(
     db: Session,
     *,
@@ -68,9 +84,13 @@ def replay_paper_trades(
     strategy: StrategyConfig,
     execution: ExecutionConfig,
     source: str = "gmo_public_kline",
+    exit_policy: str = "baseline",
+    force_close_at_end: bool = False,
 ) -> dict[str, Any]:
     if len(candles) < 3:
         raise ValueError("リプレイに必要な足が不足しています（3本以上必要）")
+    if exit_policy not in EXIT_POLICIES:
+        raise ValueError(f"未対応のexit_policyです: {exit_policy}")
     frame = candles_to_frame(candles)
     pip = pip_size(symbol)
     friction = pip * (execution.spread_pips / 2 + execution.slippage_pips)
@@ -83,6 +103,7 @@ def replay_paper_trades(
         config_json={
             "source": source,
             "bars": len(candles),
+            "exit_policy": exit_policy,
             "strategy": strategy.model_dump(mode="json"),
             "execution": execution.model_dump(mode="json"),
         },
@@ -105,8 +126,14 @@ def replay_paper_trades(
         signal = evaluate_strategy(frame.iloc[:index], strategy)
         signal_counts[signal.action] = signal_counts.get(signal.action, 0) + 1
 
-        # Close on an opposite signal at the next bar's open (no look-ahead).
-        if position and signal.action in {"buy", "sell"} and signal.action != position["side"]:
+        # Close on an opposite signal at the next bar's open (no look-ahead),
+        # subject to the exit policy under test.
+        if (
+            position
+            and signal.action in {"buy", "sell"}
+            and signal.action != position["side"]
+            and _opposite_exit_allowed(exit_policy, position["opened_at"], timestamp)
+        ):
             exit_price = (
                 open_price - friction if position["side"] == "buy" else open_price + friction
             )
@@ -168,28 +195,43 @@ def replay_paper_trades(
 
     open_position_count = 0
     if position:
-        # Leave the final position OPEN and record it as an unrealized paper position.
         last_close = float(frame.iloc[-1]["close"])
-        unrealized = _pnl(
-            symbol, position["side"], position["entry_price"], last_close, position["units"]
-        )
-        db.add(
-            PaperTrade(
-                session_id=session.id,
-                symbol=symbol,
-                side=position["side"],
-                status="open",
-                units=position["units"],
-                entry_price=position["entry_price"],
-                current_price=last_close,
-                stop_loss=position["stop_loss"],
-                take_profit=position["take_profit"],
-                unrealized_pnl=round(unrealized, 4),
-                entry_reason=position["entry_reason"],
-                opened_at=position["opened_at"],
+        last_ts = pd.Timestamp(frame.iloc[-1]["timestamp"]).to_pydatetime()
+        if force_close_at_end:
+            # Close the final position at the last close so it counts as completed
+            # (used for fair exit-policy A/B; reason is identifiable for distortion checks).
+            exit_price = (
+                last_close - friction if position["side"] == "buy" else last_close + friction
             )
-        )
-        open_position_count = 1
+            db.add(
+                _close_trade(
+                    session, symbol, execution, position, exit_price,
+                    "データ終了強制クローズ", last_ts,
+                )
+            )
+            completed += 1
+        else:
+            # Default: leave the final position OPEN as an unrealized paper position.
+            unrealized = _pnl(
+                symbol, position["side"], position["entry_price"], last_close, position["units"]
+            )
+            db.add(
+                PaperTrade(
+                    session_id=session.id,
+                    symbol=symbol,
+                    side=position["side"],
+                    status="open",
+                    units=position["units"],
+                    entry_price=position["entry_price"],
+                    current_price=last_close,
+                    stop_loss=position["stop_loss"],
+                    take_profit=position["take_profit"],
+                    unrealized_pnl=round(unrealized, 4),
+                    entry_reason=position["entry_reason"],
+                    opened_at=position["opened_at"],
+                )
+            )
+            open_position_count = 1
 
     session.status = "stopped"
     session.stopped_at = datetime.utcnow()
