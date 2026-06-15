@@ -137,3 +137,36 @@ cd backend
 - APIキー・Authorization ヘッダは決して出力しない（コード上も非出力）
 - `OANDA_ENV=practice` 以外、または `tradeable=false` のときは注文しない
 - 長時間の無人稼働はしない。1回ずつ結果を確認する
+
+## GMO コイン外国為替FX 対応方針（段階導入）
+
+OANDA REST の条件が重いため、GMO コイン外国為替FX API を追加 broker 候補として段階導入します。
+**重要: GMO 外国為替FX にはデモ/practice 環境が無く、API は本番（実資金）のみ**です。30日間の
+無料トライアルは「API経由注文の手数料無料」であって、デモ取引ではありません。よって実注文は
+明示許可のある後続フェーズまで無効に保ちます。
+
+- 認証（Private 用・本フェーズ未使用）: ヘッダ `API-KEY` / `API-TIMESTAMP` / `API-SIGN`。
+  署名は `timestamp + method + path + body` を APIシークレットで HMAC-SHA256。
+  **APIキー・シークレット・署名文字列はログ・画面・チャット・Git に出さない。**
+- Public 応答エンベロープ: `{"status":0,"data":...}`。`status!=0` は `messages[].message_code`
+  （例 `ERR-5003`=レート制限）。HTTP 429 とあわせて失敗扱いで停止します。
+- レート制限: Public/Private WS は 1req/秒/IP、Private GET 6req/秒、Private POST 1req/秒（口座毎）。
+- 最小注文数量: `GET /public/v1/symbols` の `minOpenOrderSize` が正。主要ペア（USD_JPY 等）は
+  1通貨から可能（一部エキゾチックは 10/100/100,000 通貨）。**実注文前に必ず symbols で検証**。
+
+### フェーズ
+- **G1（実装済み）Public read-only**: `GmoFxBroker`（`app/brokers/gmo_fx_broker.py`）。
+  `service_status` / `current_price`（ticker）/ `candles`（klines）/ スプレッド算出 /
+  symbol 正規化 / timeout / 429・エラーエンベロープ停止。`market_order` は無効化（例外）。
+  既定 `GMO_FX_READONLY=true` / `GMO_FX_ORDER_ENABLED=false`。
+- **G2（設計のみ）Private read-only**: 残高 `/v1/account/assets`、建玉 `/v1/openPositions`、
+  注文情報 `/v1/orders`・`/v1/activeOrders`、約定 `/v1/latestExecutions`。実接続は後続。
+- **G3（設計のみ）dry-run order**: `gmo_dry_run_order()` が共通 RiskManager を通し、
+  `build_gmo_order_payload()` で注文ボディを生成するが**送信しない**。SL/TP は OrderRequest
+  スキーマで必須。OrderLog には `dry_run` として保存できる設計。
+- **G4（未実装）100通貨実E2E**: 口座開設・APIキー発行・明示許可がある場合のみ別タスクで実施。
+
+### 禁止（GMO）
+- 実注文 / 実決済 / Private API 実接続 / `GMO_FX_ORDER_ENABLED=true` 化（明示許可前）
+- APIキー・シークレットの出力・Git 追跡・ログ出力
+- RiskManager・live注文ブロック・OANDA 既存経路の弱体化

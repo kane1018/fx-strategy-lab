@@ -77,4 +77,14 @@ cd backend
 .venv/bin/python -m scripts.practice_e2e preflight --symbol USD_JPY
 ```
 
+## GMO コイン外国為替FX（追加broker・準備中）
+
+OANDA に加えて、GMO コイン外国為替FX API を追加 broker として扱う土台を用意しています。
+現状は **Public read-only のみ**（最新レート・Kline・スプレッド算出）で、実注文・Private API
+接続・APIキー送信は行いません。詳細と段階計画は [docs/SAFETY.md](docs/SAFETY.md) を参照。
+
+- `app/brokers/gmo_fx_broker.py`: `GmoFxBroker`（Public read-only）。`market_order` は無効化済み。
+- 設定: `BROKER_PROVIDER`（既定 `oanda`）、`GMO_FX_*`（既定 `READONLY=true` / `ORDER_ENABLED=false`）。
+- GMO 外国為替FX には**デモ環境がなく本番のみ**のため、実注文は別フェーズで明示許可があるまで無効です。
+
 バックテスト結果は将来の利益を保証しません。

@@ -21,6 +21,19 @@ class Settings(BaseSettings):
     )
     oanda_api_url: str = "https://api-fxpractice.oanda.com"
 
+    # Broker selection. "oanda" is the only wired order path; GMO is a Public
+    # read-only scaffold this phase (no real orders, no Private connection).
+    broker_provider: str = "oanda"
+    # GMO 外国為替FX. Secrets are read for a future Private phase but are NEVER
+    # logged or sent in the current read-only phase. Defaults keep orders OFF.
+    gmo_fx_api_key: str | None = None
+    gmo_fx_api_secret: str | None = None
+    gmo_fx_env: str = "production"
+    gmo_fx_readonly: bool = True
+    gmo_fx_order_enabled: bool = False
+    gmo_fx_max_units: float = 100
+    gmo_fx_public_url: str = "https://forex-api.coin.z.com/public"
+
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
