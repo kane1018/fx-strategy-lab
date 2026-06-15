@@ -77,6 +77,21 @@ cd backend
 .venv/bin/python -m scripts.practice_e2e preflight --symbol USD_JPY
 ```
 
+## 成績集計（仮想取引・読み取り専用）
+
+バックテスト / ペーパートレード / mock E2E を**カテゴリ別に分離**して損益・勝率・期待値を
+集計します（`app/services/performance_service.py`）。勝率・期待値は**完了取引のみ**を対象とし、
+未決済は含み損益として別表示。mock E2E・dry-run は動作確認用として戦略成績から除外します。
+読み取り専用で、ブローカー接続もDB書き込みも行いません。
+
+```bash
+cd backend
+.venv/bin/python -m scripts.performance_report
+```
+
+期待値 = 勝率 × 平均利益 − 負率 × 平均損失（定義上、`総損益 ÷ 完了取引数` と一致します）。
+完了取引が30件未満の集計は「参考値」として扱ってください。
+
 ## GMO コイン外国為替FX（追加broker・準備中）
 
 OANDA に加えて、GMO コイン外国為替FX API を追加 broker として扱う土台を用意しています。
