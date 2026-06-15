@@ -408,6 +408,18 @@ def test_adx_filter_blocks_entries_in_strong_trend(db: Session) -> None:
     assert np.nanmax(adx_series(candles_to_frame(candles))) >= 20
 
 
+def test_adx_oos_improvement_counts() -> None:
+    from scripts.adx_filter_oos_ab import improvement_counts
+
+    base = {"w1": {"expectancy": 0.10}, "w2": {"expectancy": -0.20},
+            "w3": {"expectancy": 0.05}, "w4": {"expectancy": 0.30}}
+    adx = {"w1": {"expectancy": 0.15}, "w2": {"expectancy": -0.05},  # better
+           "w3": {"expectancy": 0.05}, "w4": {"expectancy": 0.10}}   # w3 equal, w4 worse
+    improved, worsened = improvement_counts(base, adx)
+    assert improved == 2  # w1, w2
+    assert worsened == 1  # w4 (w3 is equal -> neither)
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
