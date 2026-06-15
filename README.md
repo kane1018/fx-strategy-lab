@@ -113,4 +113,12 @@ cd backend
 .venv/bin/python -m scripts.performance_report
 ```
 
+複数通貨ペア×複数戦略をまとめてリプレイするバッチも利用できます（`--date` で過去の取引日を指定）。
+`performance_report` の「ペーパートレード成績」は通貨ペア別・戦略別の内訳（`by_symbol`/`by_strategy`）も表示します。
+
+```bash
+.venv/bin/python -m scripts.paper_trade_gmo_batch --date 20260612
+.venv/bin/python -m scripts.performance_report
+```
+
 バックテスト結果は将来の利益を保証しません。

@@ -66,6 +66,20 @@ def main() -> int:
     print(f"セッション数={paper['session_count']}  "
           f"未決済={paper['open_position_count']}  含み損益={paper['unrealized_pnl']}")
     _print_stats(paper["overall"])
+    if paper.get("by_symbol"):
+        print("\n-- 通貨ペア別 --")
+        for name, stats in paper["by_symbol"].items():
+            flag = " (参考値)" if stats["reference_only"] else ""
+            print(f"[{name}] 取引={stats['completed_trades']} 勝率={stats['win_rate']}% "
+                  f"総損益={stats['total_pnl']} 期待値={stats['expectancy']} "
+                  f"PF={stats['profit_factor']}{flag}")
+    if paper.get("by_strategy"):
+        print("\n-- 戦略別 --")
+        for name, stats in paper["by_strategy"].items():
+            flag = " (参考値)" if stats["reference_only"] else ""
+            print(f"[{name}] 取引={stats['completed_trades']} 勝率={stats['win_rate']}% "
+                  f"総損益={stats['total_pnl']} 期待値={stats['expectancy']} "
+                  f"PF={stats['profit_factor']}{flag}")
 
     op = report["operational"]
     _hr("3. mock E2E / dry-run (動作確認 — 戦略成績に含めない)")

@@ -126,6 +126,10 @@ def test_paper_performance_excludes_open_from_win_rate(db: Session) -> None:
     assert paper["overall"]["completed_trades"] == 2  # open NOT counted
     assert paper["overall"]["win_rate"] == 50.0
     assert paper["overall"]["total_pnl"] == 5.0
+    # breakdowns are present and reflect the same completed trades
+    assert paper["by_symbol"]["USD_JPY"]["completed_trades"] == 2
+    assert paper["by_strategy"]["moving_average_cross"]["completed_trades"] == 2
+    assert paper["by_strategy"]["moving_average_cross"]["total_pnl"] == 5.0
 
 
 def test_mock_e2e_is_separated_from_strategy_performance(db: Session) -> None:

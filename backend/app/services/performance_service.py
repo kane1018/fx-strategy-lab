@@ -124,12 +124,21 @@ def paper_performance(db: Session) -> dict[str, Any]:
     closed = [t for t in trades if t.status == "closed" and t.realized_pnl is not None]
     open_trades = [t for t in trades if t.status == "open"]
     pnls = [float(t.realized_pnl) for t in closed]
+    session_strategy = {s.id: s.strategy_type for s in sessions}
+    by_symbol: dict[str, list[float]] = {}
+    by_strategy: dict[str, list[float]] = {}
+    for trade in closed:
+        by_symbol.setdefault(trade.symbol, []).append(float(trade.realized_pnl))
+        strat = session_strategy.get(trade.session_id, "unknown")
+        by_strategy.setdefault(strat, []).append(float(trade.realized_pnl))
     return {
         "category": "paper",
         "session_count": len(sessions),
         "open_position_count": len(open_trades),
         "unrealized_pnl": round(sum(float(t.unrealized_pnl) for t in open_trades), 2),
         "overall": _trade_stats(pnls),
+        "by_symbol": {name: _trade_stats(values) for name, values in by_symbol.items()},
+        "by_strategy": {name: _trade_stats(values) for name, values in by_strategy.items()},
     }
 
 
