@@ -295,6 +295,42 @@ def test_zero_cost_removes_friction_and_improves_pnl(db: Session) -> None:
     assert zero > current  # removing friction strictly improves total PnL
 
 
+def test_replay_honors_higher_timeframe_spacing(db: Session) -> None:
+    from app.models import PaperTradeSession
+
+    # 5-minute-spaced candles: holding times must be multiples of 5 and the session
+    # records the timeframe label, confirming timeframe flows end-to-end.
+    base = datetime(2026, 6, 1, 0, 0)
+    prices = [150.0] * 6 + [150.0 + 0.05 * s for s in range(1, 6)] + [150.25] * 20
+    candles = [
+        Candle(
+            timestamp=base + timedelta(minutes=5 * i),
+            open=(prices[i - 1] if i else prices[0]),
+            high=max(prices[i - 1] if i else prices[0], prices[i]) + 0.02,
+            low=min(prices[i - 1] if i else prices[0], prices[i]) - 0.02,
+            close=prices[i], volume=0,
+        )
+        for i in range(len(prices))
+    ]
+    strat = StrategyConfig(strategy_type=StrategyType.BREAKOUT, breakout_period=2)
+    res = replay_paper_trades(
+        db, symbol="USD_JPY", timeframe="M5", candles=candles, strategy=strat,
+        execution=ExecutionConfig(stop_loss_pips=80, take_profit_pips=80, fixed_units=1000),
+        exit_policy="time_stop_30m",
+    )
+    session = db.get(PaperTradeSession, res["session_id"])
+    assert session.timeframe == "M5"
+    closed = db.scalars(
+        select(PaperTrade).where(
+            PaperTrade.session_id == res["session_id"], PaperTrade.status == "closed"
+        )
+    ).all()
+    assert closed
+    for t in closed:
+        held = (t.closed_at - t.opened_at).total_seconds() / 60
+        assert held % 5 == 0  # 5-minute granularity respected
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
