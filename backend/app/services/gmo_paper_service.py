@@ -18,10 +18,11 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.models import PaperTrade, PaperTradeSession
-from app.schemas.trading import Candle, ExecutionConfig, StrategyConfig
+from app.schemas.trading import Candle, ExecutionConfig, StrategyConfig, StrategyType
 from app.services.market_data_service import candles_to_frame, pip_size
 from app.services.paper_trade_service import _pnl
-from app.strategies import evaluate_strategy
+from app.strategies import StrategySignal, evaluate_strategy
+from app.strategies.rsi_reversal import calculate_rsi
 
 
 def _close_trade(
@@ -64,6 +65,8 @@ EXIT_POLICIES = (
     "baseline",  # current behavior: opposite signal closes the position
     "no_opposite_signal_exit",  # ignore opposite-signal exits; only SL/TP (+ end-of-data)
     "min_hold_30m_before_opposite_exit",  # allow opposite-signal exit only after 30 min
+    "time_stop_30m",  # baseline exits + force-exit after 30 min held
+    "time_stop_60m",  # baseline exits + force-exit after 60 min held
 )
 
 
@@ -72,7 +75,33 @@ def _opposite_exit_allowed(exit_policy: str, opened_at: datetime, now: datetime)
         return False
     if exit_policy == "min_hold_30m_before_opposite_exit":
         return (now - opened_at).total_seconds() >= 30 * 60
-    return True  # baseline
+    return True  # baseline / time_stop_* keep the baseline opposite-signal behavior
+
+
+def _time_stop_minutes(exit_policy: str) -> int | None:
+    return {"time_stop_30m": 30, "time_stop_60m": 60}.get(exit_policy)
+
+
+def _precompute_rsi_signals(frame: pd.DataFrame, config: StrategyConfig) -> list[StrategySignal]:
+    """Exact per-bar rsi_reversal signals, vectorized (O(n)).
+
+    EWM(adjust=False) is causal, so the full-series RSI at row j equals the RSI
+    that evaluate_strategy(frame.iloc[:j+1]) would compute. So signal-at-prefix
+    [:i] (latest row i-1) compares rsi[i-2] vs rsi[i-1] — identical to the per-bar
+    path, just without recomputing on every bar.
+    """
+    rsi = calculate_rsi(frame["close"], config.rsi_period).to_numpy()
+    oversold, overbought = config.oversold, config.overbought
+    out: list[StrategySignal] = [StrategySignal("hold", "warmup")] * len(frame)
+    for i in range(config.rsi_period + 2, len(frame)):
+        prev, cur = float(rsi[i - 2]), float(rsi[i - 1])
+        if prev > oversold and cur <= oversold:
+            out[i] = StrategySignal("buy", f"RSI({config.rsi_period})={cur:.1f}<= {oversold}")
+        elif prev < overbought and cur >= overbought:
+            out[i] = StrategySignal("sell", f"RSI({config.rsi_period})={cur:.1f}>= {overbought}")
+        else:
+            out[i] = StrategySignal("hold", f"RSI({config.rsi_period})={cur:.1f}")
+    return out
 
 
 def replay_paper_trades(
@@ -86,6 +115,7 @@ def replay_paper_trades(
     source: str = "gmo_public_kline",
     exit_policy: str = "baseline",
     force_close_at_end: bool = False,
+    fast_signals: bool = False,
 ) -> dict[str, Any]:
     if len(candles) < 3:
         raise ValueError("リプレイに必要な足が不足しています（3本以上必要）")
@@ -94,6 +124,13 @@ def replay_paper_trades(
     frame = candles_to_frame(candles)
     pip = pip_size(symbol)
     friction = pip * (execution.spread_pips / 2 + execution.slippage_pips)
+    time_stop_min = _time_stop_minutes(exit_policy)
+    # Exact vectorized signals (RSI only) keep long continuous replays O(n).
+    precomputed = (
+        _precompute_rsi_signals(frame, strategy)
+        if fast_signals and strategy.strategy_type == StrategyType.RSI_REVERSAL
+        else None
+    )
 
     session = PaperTradeSession(
         status="running",
@@ -123,7 +160,12 @@ def replay_paper_trades(
         open_price = float(row["open"])
         high = float(row["high"])
         low = float(row["low"])
-        signal = evaluate_strategy(frame.iloc[:index], strategy)
+        close_price = float(row["close"])
+        signal = (
+            precomputed[index]
+            if precomputed is not None
+            else evaluate_strategy(frame.iloc[:index], strategy)
+        )
         signal_counts[signal.action] = signal_counts.get(signal.action, 0) + 1
 
         # Close on an opposite signal at the next bar's open (no look-ahead),
@@ -188,6 +230,22 @@ def replay_paper_trades(
                 db.add(
                     _close_trade(
                         session, symbol, execution, position, exit_price, reason, timestamp
+                    )
+                )
+                completed += 1
+                position = None
+
+        # Time stop: exit at this bar's close once max hold elapsed (SL/TP take priority).
+        if position and time_stop_min is not None:
+            held = (timestamp - position["opened_at"]).total_seconds() / 60
+            if held >= time_stop_min:
+                exit_price = (
+                    close_price - friction if position["side"] == "buy" else close_price + friction
+                )
+                db.add(
+                    _close_trade(
+                        session, symbol, execution, position, exit_price,
+                        f"時間ストップ{time_stop_min}分", timestamp,
                     )
                 )
                 completed += 1
