@@ -268,6 +268,33 @@ def test_tighter_stop_loss_reduces_sl_loss_magnitude(db: Session) -> None:
     assert loss_15 > loss_30  # -smaller magnitude > -larger magnitude
 
 
+def test_zero_cost_removes_friction_and_improves_pnl(db: Session) -> None:
+    # Same data/strategy; spread=slippage=0 must yield >= total realized PnL than
+    # the current-cost run (friction reduces every trade), confirming spread/slippage
+    # flow through the replay.
+    candles = _series(_reversal_prices())
+    strat = StrategyConfig(strategy_type=StrategyType.BREAKOUT, breakout_period=2)
+
+    def total_pnl(spread: float, slip: float) -> float:
+        res = replay_paper_trades(
+            db, symbol="USD_JPY", timeframe="M1", candles=candles, strategy=strat,
+            execution=ExecutionConfig(spread_pips=spread, slippage_pips=slip,
+                                      stop_loss_pips=30, take_profit_pips=60, fixed_units=1000),
+            exit_policy="baseline",
+        )
+        rows = db.scalars(
+            select(PaperTrade).where(
+                PaperTrade.session_id == res["session_id"],
+                PaperTrade.status == "closed",
+            )
+        ).all()
+        return round(sum(float(t.realized_pnl) for t in rows), 4)
+
+    current = total_pnl(1.2, 0.2)
+    zero = total_pnl(0.0, 0.0)
+    assert zero > current  # removing friction strictly improves total PnL
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
