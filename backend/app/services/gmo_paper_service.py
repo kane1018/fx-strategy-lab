@@ -14,6 +14,7 @@ or broker I/O itself.
 from datetime import datetime
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session
 
@@ -82,6 +83,28 @@ def _time_stop_minutes(exit_policy: str) -> int | None:
     return {"time_stop_30m": 30, "time_stop_60m": 60}.get(exit_policy)
 
 
+def adx_series(frame: pd.DataFrame, period: int = 14) -> np.ndarray:
+    """Wilder ADX over the frame's OHLC (period fixed at 14; not optimized)."""
+    high, low, close = frame["high"], frame["low"], frame["close"]
+    prev_close = close.shift(1)
+    true_range = pd.concat(
+        [(high - low), (high - prev_close).abs(), (low - prev_close).abs()], axis=1
+    ).max(axis=1)
+    up_move = high.diff()
+    down_move = -low.diff()
+    plus_dm = pd.Series(
+        np.where((up_move > down_move) & (up_move > 0), up_move, 0.0), index=frame.index
+    )
+    minus_dm = pd.Series(
+        np.where((down_move > up_move) & (down_move > 0), down_move, 0.0), index=frame.index
+    )
+    atr = true_range.ewm(alpha=1 / period, adjust=False).mean().replace(0, np.nan)
+    plus_di = 100 * plus_dm.ewm(alpha=1 / period, adjust=False).mean() / atr
+    minus_di = 100 * minus_dm.ewm(alpha=1 / period, adjust=False).mean() / atr
+    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
+    return dx.fillna(0).ewm(alpha=1 / period, adjust=False).mean().to_numpy()
+
+
 def _precompute_rsi_signals(frame: pd.DataFrame, config: StrategyConfig) -> list[StrategySignal]:
     """Exact per-bar rsi_reversal signals, vectorized (O(n)).
 
@@ -116,6 +139,7 @@ def replay_paper_trades(
     exit_policy: str = "baseline",
     force_close_at_end: bool = False,
     fast_signals: bool = False,
+    entry_adx_max: float | None = None,
 ) -> dict[str, Any]:
     if len(candles) < 3:
         raise ValueError("リプレイに必要な足が不足しています（3本以上必要）")
@@ -131,6 +155,8 @@ def replay_paper_trades(
         if fast_signals and strategy.strategy_type == StrategyType.RSI_REVERSAL
         else None
     )
+    # Regime filter (entry-only): block NEW entries when ADX >= entry_adx_max.
+    adx = adx_series(frame) if entry_adx_max is not None else None
 
     session = PaperTradeSession(
         status="running",
@@ -152,6 +178,7 @@ def replay_paper_trades(
 
     position: dict[str, Any] | None = None
     completed = 0
+    skipped_entries = 0
     signal_counts = {"buy": 0, "sell": 0, "hold": 0}
 
     for index in range(2, len(frame)):
@@ -189,7 +216,16 @@ def replay_paper_trades(
             position = None
 
         # Open a virtual position at the bar open if flat and signalled.
-        if not position and signal.action in {"buy", "sell"}:
+        # Gate on the ADX of the last COMPLETED bar (index-1) to avoid look-ahead,
+        # matching the signal's information set.
+        adx_blocks_entry = (
+            adx is not None
+            and not np.isnan(adx[index - 1])
+            and adx[index - 1] >= entry_adx_max
+        )
+        if not position and signal.action in {"buy", "sell"} and adx_blocks_entry:
+            skipped_entries += 1  # regime filter: strong trend -> skip new entry
+        elif not position and signal.action in {"buy", "sell"}:
             side = signal.action
             entry = open_price + friction if side == "buy" else open_price - friction
             units = min(execution.fixed_units or 1000, session.balance * execution.leverage / entry)
@@ -298,6 +334,7 @@ def replay_paper_trades(
         "session_id": session.id,
         "bars": len(candles),
         "completed_trades": completed,
+        "skipped_entries": skipped_entries,
         "open_position_count": open_position_count,
         "signal_counts": signal_counts,
     }

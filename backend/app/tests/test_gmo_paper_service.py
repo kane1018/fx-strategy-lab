@@ -358,6 +358,56 @@ def test_robustness_summary_aggregates_windows() -> None:
     assert s["worst_single_loss"] == -2.7
 
 
+def test_pattern_window_stats_excludes_symbol() -> None:
+    from scripts.aud_exclusion_ab import pattern_window_stats
+
+    def _t(symbol: str, pnl: float) -> dict:
+        return {"symbol": symbol, "pnl": pnl, "closed_at": datetime(2026, 1, 1),
+                "exit_category": "反対シグナル"}
+
+    results = {
+        "w1": [_t("USD_JPY", 1.0), _t("AUD_JPY", -5.0)],
+        "w2": [_t("EUR_JPY", 2.0), _t("AUD_JPY", -3.0)],
+    }
+    all_pairs = pattern_window_stats(results, set())
+    ex_aud = pattern_window_stats(results, {"AUD_JPY"})
+    # all_pairs counts AUD; ex_aud drops it
+    assert all_pairs["w1"]["completed_trades"] == 2
+    assert ex_aud["w1"]["completed_trades"] == 1
+    assert all_pairs["w1"]["total_pnl"] == -4.0
+    assert ex_aud["w1"]["total_pnl"] == 1.0
+    assert ex_aud["w2"]["total_pnl"] == 2.0
+
+
+def test_adx_filter_blocks_entries_in_strong_trend(db: Session) -> None:
+    from app.services.gmo_paper_service import adx_series
+
+    # Strong, steady uptrend -> high ADX. A breakout buy would open every time,
+    # but a low ADX cap must block (skip) those entries.
+    prices = [150.0 + 0.05 * i for i in range(120)]
+    candles = _series(prices)
+    strat = StrategyConfig(strategy_type=StrategyType.BREAKOUT, breakout_period=2)
+    execution = ExecutionConfig(stop_loss_pips=80, take_profit_pips=80, fixed_units=1000)
+
+    no_filter = replay_paper_trades(
+        db, symbol="USD_JPY", timeframe="M5", candles=candles, strategy=strat,
+        execution=execution, exit_policy="baseline",
+    )
+    filtered = replay_paper_trades(
+        db, symbol="USD_JPY", timeframe="M5", candles=candles, strategy=strat,
+        execution=execution, exit_policy="baseline", entry_adx_max=20,
+    )
+    # baseline opens trades and skips none; the ADX cap skips entries and opens fewer.
+    assert no_filter["skipped_entries"] == 0
+    assert filtered["skipped_entries"] > 0
+    assert filtered["completed_trades"] < no_filter["completed_trades"]
+    # ADX must actually be high (strong trend) on this series
+    import numpy as np
+
+    from app.services.market_data_service import candles_to_frame
+    assert np.nanmax(adx_series(candles_to_frame(candles))) >= 20
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
