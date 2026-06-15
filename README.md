@@ -117,8 +117,13 @@ cd backend
 `performance_report` の「ペーパートレード成績」は通貨ペア別・戦略別の内訳（`by_symbol`/`by_strategy`）も表示します。
 
 ```bash
+# 単一日
 .venv/bin/python -m scripts.paper_trade_gmo_batch --date 20260612
+# 複数営業日（再現性確認用。日別×戦略のロールアップも表示）
+.venv/bin/python -m scripts.paper_trade_gmo_batch --dates 20260608,20260609,20260610,20260611,20260612
 .venv/bin/python -m scripts.performance_report
 ```
+
+`performance_report` は通貨ペア別・戦略別・通貨ペア×戦略の内訳（30件未満は「参考値」）を表示します。
 
 バックテスト結果は将来の利益を保証しません。

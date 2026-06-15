@@ -31,55 +31,66 @@ _INTERVAL_TO_TIMEFRAME = {gmo: internal for internal, gmo in GMO_INTERVALS.items
 _ROW = "{:<8} {:<20} {:>5} {:>7} {:>9} {:>9} {:>7} {:>5}"
 
 
+def _replay_cell(timeframe, symbol, candles, strat) -> list[float]:
+    strategy = StrategyConfig(strategy_type=StrategyType(strat))
+    with SessionLocal() as db:
+        result = replay_paper_trades(
+            db, symbol=symbol, timeframe=timeframe,
+            candles=candles, strategy=strategy, execution=ExecutionConfig(),
+        )
+        closed = db.scalars(
+            select(PaperTrade).where(
+                PaperTrade.session_id == result["session_id"],
+                PaperTrade.status == "closed",
+            )
+        ).all()
+        return [float(t.realized_pnl) for t in closed]
+
+
 def main() -> int:
     Base.metadata.create_all(bind=engine)
     parser = argparse.ArgumentParser(description="Batch GMO Public paper replay (no real orders).")
     parser.add_argument("--symbols", default="USD_JPY,EUR_JPY,GBP_JPY,AUD_JPY")
     parser.add_argument("--strategies", default="moving_average_cross,rsi_reversal,breakout")
     parser.add_argument("--interval", default="1min", choices=sorted(_INTERVAL_TO_TIMEFRAME))
-    parser.add_argument("--date", default=None, help="YYYYMMDD (default: today, UTC)")
+    parser.add_argument("--date", default=None, help="single YYYYMMDD (default: today, UTC)")
+    parser.add_argument("--dates", default=None, help="comma-separated YYYYMMDD list (multi-day)")
     parser.add_argument("--limit", type=int, default=1500)
     args = parser.parse_args()
 
     timeframe = _INTERVAL_TO_TIMEFRAME[args.interval]
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     strategies = [s.strip() for s in args.strategies.split(",") if s.strip()]
+    dates = [d.strip() for d in args.dates.split(",")] if args.dates else [args.date]
 
     broker = GmoFxBroker()  # public only; no API key read or sent
-    print(f"service_status={broker.service_status()}  date={args.date or 'today'}  "
+    print(f"service_status={broker.service_status()}  dates={dates}  "
           f"interval={args.interval}  (read-only, no orders, no private API)")
 
-    rows: list[tuple[str, str, dict, int]] = []
-    for symbol in symbols:
-        try:
-            candles = broker.candles(symbol, timeframe, count=args.limit, date=args.date)
-        except GmoFxBrokerError as error:
-            print(f"  [skip] {symbol}: {error}")
-            continue
-        print(f"  {symbol}: bars={len(candles)}  "
-              f"{candles[0].timestamp.date()}..{candles[-1].timestamp.date()}")
-        for strat in strategies:
-            strategy = StrategyConfig(strategy_type=StrategyType(strat))
-            with SessionLocal() as db:
-                result = replay_paper_trades(
-                    db, symbol=symbol, timeframe=timeframe,
-                    candles=candles, strategy=strategy, execution=ExecutionConfig(),
-                )
-                closed = db.scalars(
-                    select(PaperTrade).where(
-                        PaperTrade.session_id == result["session_id"],
-                        PaperTrade.status == "closed",
-                    )
-                ).all()
-                pnls = [float(t.realized_pnl) for t in closed]
-            rows.append((symbol, strat, _trade_stats(pnls), result["open_position_count"]))
-        time.sleep(0.4)  # be gentle with the public rate limit
+    # Per-(date, strategy) PnLs for a daily-reproducibility rollup.
+    per_day_strategy: dict[tuple[str, str], list[float]] = {}
+    for date in dates:
+        print(f"\n# date={date or 'today'}")
+        for symbol in symbols:
+            try:
+                candles = broker.candles(symbol, timeframe, count=args.limit, date=date)
+            except GmoFxBrokerError as error:
+                print(f"  [skip] {symbol}: {error}")
+                continue
+            print(f"  {symbol}: bars={len(candles)}")
+            for strat in strategies:
+                pnls = _replay_cell(timeframe, symbol, candles, strat)
+                per_day_strategy.setdefault((date or "today", strat), []).extend(pnls)
+            time.sleep(0.4)  # be gentle with the public rate limit
 
-    print("\n" + _ROW.format("symbol", "strategy", "done", "win%", "total", "expect", "PF", "open"))
-    for symbol, strat, stats, open_count in rows:
+    print("\n=== per-day x strategy rollup (reproducibility) ===")
+    print(_ROW.format("date", "strategy", "done", "win%", "total", "expect", "PF", "ref"))
+    for (date, strat), pnls in sorted(per_day_strategy.items()):
+        stats = _trade_stats(pnls)
         print(_ROW.format(
-            symbol, strat, stats["completed_trades"], stats["win_rate"],
-            stats["total_pnl"], stats["expectancy"], str(stats["profit_factor"]), open_count,
+            date, strat, stats["completed_trades"], stats["win_rate"],
+            stats["total_pnl"], stats["expectancy"], str(stats["profit_factor"]),
+            "<30" if stats["reference_only"] else "ok",
         ))
     print("\nNext: .venv/bin/python -m scripts.performance_report")
     return 0

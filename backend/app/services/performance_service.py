@@ -127,10 +127,12 @@ def paper_performance(db: Session) -> dict[str, Any]:
     session_strategy = {s.id: s.strategy_type for s in sessions}
     by_symbol: dict[str, list[float]] = {}
     by_strategy: dict[str, list[float]] = {}
+    by_pair_strategy: dict[str, list[float]] = {}
     for trade in closed:
-        by_symbol.setdefault(trade.symbol, []).append(float(trade.realized_pnl))
         strat = session_strategy.get(trade.session_id, "unknown")
+        by_symbol.setdefault(trade.symbol, []).append(float(trade.realized_pnl))
         by_strategy.setdefault(strat, []).append(float(trade.realized_pnl))
+        by_pair_strategy.setdefault(f"{trade.symbol}|{strat}", []).append(float(trade.realized_pnl))
     return {
         "category": "paper",
         "session_count": len(sessions),
@@ -139,6 +141,9 @@ def paper_performance(db: Session) -> dict[str, Any]:
         "overall": _trade_stats(pnls),
         "by_symbol": {name: _trade_stats(values) for name, values in by_symbol.items()},
         "by_strategy": {name: _trade_stats(values) for name, values in by_strategy.items()},
+        "by_symbol_strategy": {
+            name: _trade_stats(values) for name, values in by_pair_strategy.items()
+        },
     }
 
 

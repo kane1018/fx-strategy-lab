@@ -80,6 +80,13 @@ def main() -> int:
             print(f"[{name}] 取引={stats['completed_trades']} 勝率={stats['win_rate']}% "
                   f"総損益={stats['total_pnl']} 期待値={stats['expectancy']} "
                   f"PF={stats['profit_factor']}{flag}")
+    if paper.get("by_symbol_strategy"):
+        print("\n-- 通貨ペア×戦略 --")
+        for name, stats in sorted(paper["by_symbol_strategy"].items()):
+            flag = " (参考値<30)" if stats["reference_only"] else ""
+            print(f"[{name}] 取引={stats['completed_trades']} 勝率={stats['win_rate']}% "
+                  f"総損益={stats['total_pnl']} 期待値={stats['expectancy']} "
+                  f"PF={stats['profit_factor']} 最大DD={stats['max_drawdown']}{flag}")
 
     op = report["operational"]
     _hr("3. mock E2E / dry-run (動作確認 — 戦略成績に含めない)")
