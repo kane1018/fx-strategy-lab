@@ -126,4 +126,13 @@ cd backend
 
 `performance_report` は通貨ペア別・戦略別・通貨ペア×戦略の内訳（30件未満は「参考値」）を表示します。
 
+蓄積したペーパー取引を、時間帯・相場環境（ADX/ATR/MA傾き/レンジ）・保有時間で分解する読み取り専用
+分析は `scripts.paper_analyze_gmo` で行います。結果は `analysis_exports/<run_id>/`（gitignore・ローカル
+生成）へ CSV / JSON / `summary.md` / `filter_candidates.md` として保存します。実価格はGMO Public APIの
+再取得klineから相場環境を再計算するもので、実注文・Private API・APIキーは使いません。
+
+```bash
+.venv/bin/python -m scripts.paper_analyze_gmo
+```
+
 バックテスト結果は将来の利益を保証しません。
