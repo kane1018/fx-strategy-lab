@@ -441,6 +441,19 @@ def test_classify_strategy_three_way() -> None:
     assert retire == "撤退"
 
 
+def test_complement_stats_counts_rsi_loss_windows() -> None:
+    from scripts.breakout_15window import complement_stats
+
+    rsi_exp = {"a": -0.1, "b": 0.2, "c": -0.3}
+    bk_stats = {"a": {"expectancy": 0.1, "total_pnl": 5.0},   # rsi neg, bk +
+                "b": {"expectancy": -0.2, "total_pnl": -3.0},  # rsi +, ignored
+                "c": {"expectancy": -0.05, "total_pnl": -2.0}}  # rsi neg, bk -
+    out = complement_stats(rsi_exp, bk_stats)
+    assert out["rsi_negative_windows"] == 2  # a, c
+    assert out["breakout_positive_in_those"] == 1  # a only
+    assert out["breakout_total_pnl_in_those"] == 3.0  # 5 + (-2)
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
