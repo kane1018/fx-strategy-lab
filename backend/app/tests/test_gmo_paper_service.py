@@ -234,6 +234,40 @@ def test_continuous_replay_holds_position_across_day_boundary(db: Session) -> No
     assert spanning, "expected a position held across the UTC day boundary"
 
 
+def test_tighter_stop_loss_reduces_sl_loss_magnitude(db: Session) -> None:
+    # Open a breakout buy, then drop sharply so the stop is hit. A 15-pip stop must
+    # exit with a smaller loss than a 30-pip stop on the same data.
+    prices = [150.0] * 6 + [150.0 + 0.05 * s for s in range(1, 6)] + [
+        150.25 - 0.05 * s for s in range(1, 30)
+    ]
+    candles = _series(prices)
+    strat = StrategyConfig(strategy_type=StrategyType.BREAKOUT, breakout_period=2)
+
+    def first_sl_loss(stop_pips: float) -> float:
+        # Disable opposite-signal exit so the same entry is held until its stop,
+        # isolating the effect of stop_loss_pips on the SL exit price.
+        res = replay_paper_trades(
+            db, symbol="USD_JPY", timeframe="M1", candles=candles, strategy=strat,
+            execution=ExecutionConfig(stop_loss_pips=stop_pips, take_profit_pips=200,
+                                      fixed_units=1000),
+            exit_policy="no_opposite_signal_exit",
+        )
+        sl = db.scalars(
+            select(PaperTrade).where(
+                PaperTrade.session_id == res["session_id"],
+                PaperTrade.exit_reason == "損切り到達",
+            )
+        ).all()
+        assert sl, f"expected an SL hit at stop_loss_pips={stop_pips}"
+        return float(sl[0].realized_pnl)
+
+    loss_15 = first_sl_loss(15)
+    loss_30 = first_sl_loss(30)
+    # both are losses; the tighter stop loses less (closer to zero)
+    assert loss_15 < 0 and loss_30 < 0
+    assert loss_15 > loss_30  # -smaller magnitude > -larger magnitude
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
