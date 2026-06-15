@@ -331,6 +331,33 @@ def test_replay_honors_higher_timeframe_spacing(db: Session) -> None:
         assert held % 5 == 0  # 5-minute granularity respected
 
 
+def test_robustness_summary_aggregates_windows() -> None:
+    from scripts.robustness_windows import robustness_summary
+
+    # 2 positive windows, 3 negative -> median negative, minority positive.
+    window_stats = {
+        "w1": {"expectancy": 0.05, "profit_factor": 1.2, "completed_trades": 40,
+               "max_drawdown": 10.0, "max_loss": -2.0},
+        "w2": {"expectancy": -0.03, "profit_factor": 0.9, "completed_trades": 45,
+               "max_drawdown": 12.0, "max_loss": -2.5},
+        "w3": {"expectancy": 0.02, "profit_factor": 1.05, "completed_trades": 25,
+               "max_drawdown": 8.0, "max_loss": -1.8},
+        "w4": {"expectancy": -0.1, "profit_factor": 0.6, "completed_trades": 50,
+               "max_drawdown": 20.0, "max_loss": -2.7},
+        "w5": {"expectancy": -0.04, "profit_factor": 0.85, "completed_trades": 38,
+               "max_drawdown": 15.0, "max_loss": -2.6},
+    }
+    s = robustness_summary(window_stats)
+    assert s["window_count"] == 5
+    assert s["positive_windows"] == 2
+    assert s["negative_windows"] == 3
+    assert s["edge_windows"] == 2  # w1, w3 (exp>0 & PF>1)
+    assert s["median_expectancy"] == -0.03  # median of sorted exps
+    assert s["windows_ge30_trades"] == 4  # w3 has 25
+    assert s["max_drawdown_max"] == 20.0
+    assert s["worst_single_loss"] == -2.7
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
