@@ -420,6 +420,27 @@ def test_adx_oos_improvement_counts() -> None:
     assert worsened == 1  # w4 (w3 is equal -> neither)
 
 
+def test_classify_strategy_three_way() -> None:
+    from scripts.rsi_final_15window import classify_strategy
+
+    base = dict(median_pf=1.3, positive_windows=8, n_windows=15, edge_windows=8,
+                symbol_concentrated=False)
+    # Robustly positive in both sub-periods -> keep as main candidate.
+    keep, _ = classify_strategy(median_exp=0.2, total_pnl=50.0,
+                                prior_median_exp=0.2, oos_median_exp=0.1, **base)
+    assert keep == "継続検証候補"
+    # Mildly positive overall but OOS negative / sign flip -> reference baseline.
+    ref, _ = classify_strategy(median_exp=0.05, total_pnl=20.0,
+                               prior_median_exp=0.12, oos_median_exp=-0.02, **base)
+    assert ref == "研究用ベースライン"
+    # Net non-positive overall -> retire.
+    retire, _ = classify_strategy(
+        median_exp=-0.02, total_pnl=-30.0, prior_median_exp=0.12,
+        oos_median_exp=-0.02, median_pf=0.98, positive_windows=6, n_windows=15,
+        edge_windows=6, symbol_concentrated=False)
+    assert retire == "撤退"
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
