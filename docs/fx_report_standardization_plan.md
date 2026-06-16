@@ -679,3 +679,121 @@ API-10: no endpoint exposes order/private/api-key/.env behavior
 - package 追加しない / 既存コード変更しない
 - 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない
 - 実注文・Private API・APIキー・`.env` に触れない
+
+### 14-16. read-only API 実装準備メモ（既存FastAPI構成の調査）
+
+`/reports` 系 read-only API を実装する前に、既存 backend の FastAPI 構成を read-only で調査し、
+ルーター追加位置・exports_root の扱い・テスト配置・危険導線との分離を確定する。**本節は調査 docs のみ**
+で、コード変更・API 実装は含まない。調査は `backend/app/` のソース構造のみを対象とし、`.env` の中身・
+secret・実 analysis_exports は読んでいない。
+
+#### 14-16-1. 調査目的
+
+- `/reports` 系 read-only API 実装前に既存 FastAPI 構成を把握する。
+- ルーター追加位置を決める / exports_root 設定方針を決める / APIテスト配置を決める。
+- 既存の危険導線（注文・broker 接続テスト等）と完全分離する。
+
+#### 14-16-2. FastAPI app 構成（調査結果）
+
+| 項目 | 調査結果 |
+| --- | --- |
+| app生成ファイル | `backend/app/main.py` |
+| app変数名 | `app`（`app = FastAPI(title="FX Strategy Lab API", version="0.1.0", lifespan=lifespan)`） |
+| 起動ファイル | `app/main.py`（uvicorn 起動想定。`uvicorn[standard]` は requirements にあり） |
+| 既存prefix | 大半が `/api/...`、ヘルスのみ `/health`（共通 prefix 変数は未使用） |
+| 既存middleware | CORSMiddleware（`allow_origins=[settings.frontend_origin]`） |
+| 既存CORS | あり（frontend_origin 1件、methods/headers `*`、credentials 有効） |
+| 既存router登録方法 | **`APIRouter` / `include_router` は未使用**。全 endpoint を `@app.get/post` で main.py に直接定義 |
+
+#### 14-16-3. 既存ルーター構成（調査結果）
+
+| 既存router | ファイル | prefix | tags | 備考 |
+| --- | --- | --- | --- | --- |
+| （専用 APIRouter なし） | `app/main.py` | `/api` ＋ `/health` | なし | endpoint をデコレータで直接定義 |
+
+主な既存 endpoint 群（参考）: `/health`、`/api/backtests`、`/api/paper/...`、`/api/signals/...`、
+`/api/broker/connection-test`、`/api/orders`（POST/GET/close）、`/api/bot/...`、`/api/automation/...`。
+
+`/reports` 系ルーターの追加候補（**今回はファイル作成しない**）:
+
+```text
+backend/app/routers/__init__.py   # 新規ディレクトリ（初の APIRouter 化）
+backend/app/routers/reports.py    # APIRouter(tags=["reports"])
+main.py で app.include_router(reports.router)
+```
+
+- 既存は main.py 直書きだが、`/reports` 系は **新規 APIRouter として分離**するのを推奨
+  （注文系と物理的に別ファイルになり、安全分離が明確）。
+- **パスの整合に関する未決事項**: §14 は `/reports` を採用しているが、既存規約は `/api/...`。
+  実装時に「§14 どおり `/reports`」か「既存に合わせ `/api/reports`」かを1つ決める。
+  推奨は **`/api/reports` 系**（既存規約・CORS・将来の UI フェッチと一貫）。決定後 §14-2 を追従更新する。
+
+#### 14-16-4. config / settings 構成（調査結果）
+
+- 設定は `app/config.py` の `Settings(BaseSettings)`（pydantic-settings、`get_settings()` で取得）。
+- `model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")`。
+  既に `enable_live_trading=False` / `gmo_fx_readonly=True` / `gmo_fx_order_enabled=False` と安全側。
+- **exports_root（analysis_exports の場所）の設定は未定義** → 実装時に `Settings` へ
+  `analysis_exports_root: str`（安全なデフォルト付き）を追加するのが自然。
+- exports_root 方針: API から任意パス指定させない / query で root を渡さない /
+  サーバー側固定設定（`get_settings()` 由来）/ `.env` の中身は表示しない /
+  テストでは tmp_path を root として注入できるようにする（依存注入 or settings override）/
+  root 不存在は §14-8 どおり 503。
+
+#### 14-16-5. API 実装候補（将来・今回はファイル作成しない）
+
+```text
+app/routers/reports.py
+  GET /reports                  -> list_report_index(exports_root)
+  GET /reports/{run_id}         -> report_detail(run_dir)
+  GET /reports/markdown         -> format_report_index_markdown(...)
+  GET /reports/{run_id}/markdown-> format_report_detail_markdown(...)
+（パス prefix は 14-16-3 の未決事項に従う。GET のみ）
+```
+
+#### 14-16-6. テスト配置候補
+
+| テスト種別 | 配置候補 | 内容 |
+| --- | --- | --- |
+| API一覧テスト | `app/tests/test_reports_api.py` | GET /reports（items/count・error行・CSV本文なし） |
+| API詳細テスト | `app/tests/test_reports_api.py` | GET /reports/{run_id}（detail・safety は index 内） |
+| markdownテスト | `app/tests/test_reports_api.py` | /markdown 2本（markdown 文字列を返す） |
+| error responseテスト | `app/tests/test_reports_api.py` | 400 / 404 / 422 / 503 |
+| safetyテスト | `app/tests/test_reports_api.py` | 注文/Private/APIキー/.env 導線が無いこと |
+
+- テストは `from fastapi.testclient import TestClient` を使用（既存 deps の fastapi + httpx で動く）。
+- run dir は **tmp_path に生成**し、その root を exports_root に注入。実 analysis_exports は読まない。
+- 既存命名規則 `test_*.py` / `test_*` 関数、pytest、`conftest.py` の `db` fixture と同じ流儀。
+
+#### 14-16-7. §14-14 実装前チェックリストへの回答
+
+- 既存FastAPIアプリの構成確認: **済**。`app/main.py` の `app`、全 endpoint デコレータ直書き、CORS あり。
+- ルーターを追加する場所の確認: **`app/routers/reports.py` を新規**（初の APIRouter 化）＋ main.py で include。
+- exports_rootの設定方法確認: `Settings` に `analysis_exports_root` を追加（pydantic-settings、固定・API指定不可）。
+- APIレスポンスモデルをPydanticで定義するか判断: MVP は **dict 直返しで可**（list/detail は既に整形済み dict）。
+  将来 UI/OpenAPI 強化時に Pydantic レスポンスモデルへ移行（任意）。
+- ローカル限定/認証方針確認: 既存に認証なし。MVP は **ローカル開発用・read-only**、127.0.0.1 バインド前提。
+  本格認証は §14 の範囲外（後日）。
+- 既存テスト構成確認: **済**。`app/tests/`、pytest、`db` fixture。TestClient は未使用だが追加依存なしで導入可。
+- 実analysis_exportsを読まないテスト方針確認: **tmp_path で run dir を作る**方針で確定。
+- 危険導線を追加しない確認: `/reports` 系は GET read-only のみ。注文/broker/automation には触れない。
+
+#### 14-16-8. 次に実装する場合の最小方針
+
+- まず `/reports` 系 router **だけ**追加する。既存注文系・GMO Private API・OANDA・RiskManager に触らない。
+- endpoints は **GET のみ**。POST/PUT/DELETE は作らない。
+- 実バックテスト・GMO API 取得は行わない。`analysis_exports/` は読み取りのみ。
+- CSV 本文は返さない。tests は tmp_path で作る。`TestClient`（既存 deps）を使う。追加依存なし。
+
+#### 14-16-9. 危険導線の現状（分離対象として記録）
+
+既存 main.py に以下の書き込み/実行系が既にある（**今回は変更しない**。`/reports` 系と完全分離する）:
+`/api/orders`（POST place_order）, `/api/orders/{id}/close`, `/api/broker/connection-test`,
+`/api/bot/start|stop`, `/api/automation/start|cycle|stop`。
+これらは read-only レポート API とは別系統であり、`/reports` 系からは参照も呼び出しもしない。
+なお APIキー/secret を返す導線・`.env` を表示する導線・market_order を有効化する導線は確認されなかった。
+
+#### 14-16-10. まだ決めないこと
+
+- UIデザイン / E2Eツール / 認証の本格設計 / CSVプレビュー / CSVダウンロード /
+  本番公開 / 実注文連携 / Private API連携 / paper forward。
