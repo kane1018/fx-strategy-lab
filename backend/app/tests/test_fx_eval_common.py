@@ -168,3 +168,16 @@ def test_write_summary_markdown(tmp_path) -> None:
     out = ensure_output_dir(tmp_path / "run")
     write_summary_markdown(out, "# 要約\n本文")
     assert (out / "summary.md").read_text() == "# 要約\n本文"
+
+
+def test_write_metrics_csv_supports_tp_extended_fields(tmp_path) -> None:
+    # breakout/bollinger use TP-extended stat fields; column order must be preserved
+    path = tmp_path / "tp.csv"
+    bk_fields = ["completed_trades", "total_pnl", "tp_count", "tp_total_pnl"]
+    rows = [{"window": "w1", "group": "prior10",
+             "stats": {"completed_trades": 302, "total_pnl": -80.5,
+                       "tp_count": 28, "tp_total_pnl": 12.3}}]
+    write_metrics_csv(path, rows, ["window", "group"], stat_fields=bk_fields)
+    out_rows = list(csv.reader(path.read_text().splitlines()))
+    assert out_rows[0] == ["window", "group", *bk_fields]
+    assert out_rows[1] == ["w1", "prior10", "302", "-80.5", "28", "12.3"]

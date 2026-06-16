@@ -16,8 +16,6 @@ No real orders, no Private API, no API key/secret. In-memory DBs only.
 
 from __future__ import annotations
 
-import csv
-import json
 import statistics
 import sys
 from datetime import datetime
@@ -27,6 +25,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.brokers import GmoFxBroker  # noqa: E402
 from app.schemas.trading import ExecutionConfig, StrategyConfig, StrategyType  # noqa: E402
+from scripts.fx_eval_common import (  # noqa: E402
+    ensure_output_dir,
+    run_id,
+    write_json,
+    write_manifest,
+    write_metrics_csv,
+    write_summary_markdown,
+    write_warnings,
+)
 from scripts.robustness_windows import (  # noqa: E402
     _OPP,
     _SL,
@@ -109,18 +116,9 @@ def main() -> int:
     return 0
 
 
-def _write_csv(path: Path, rows: list[dict], keys: list[str]) -> None:
-    with path.open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow([*keys, *BK_STAT_FIELDS])
-        for r in rows:
-            w.writerow([*[r[k] for k in keys], *[r["stats"][f] for f in BK_STAT_FIELDS]])
-
-
 def _export(results: dict, window_dates: dict, window_group: dict, warnings: list[str]) -> None:
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_gmo_public_paper_breakout15"
-    out = EXPORT_ROOT / run_id
-    out.mkdir(parents=True, exist_ok=True)
+    rid = run_id("breakout15")
+    out = ensure_output_dir(EXPORT_ROOT / rid)
 
     window_stats = {label: _summarize_bk(tr) for label, tr in results.items()}
     by_window = [{"window": label, "group": window_group[label],
@@ -150,10 +148,14 @@ def _export(results: dict, window_dates: dict, window_group: dict, warnings: lis
         sub = [t for t in all_trades if t["exit_category"] == reason]
         by_reason.append({"exit_reason": reason, "stats": _summarize_bk(sub)})
 
-    _write_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"])
-    _write_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"])
-    _write_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"])
-    _write_csv(out / "metrics_by_date.csv", by_date, ["window", "date"])
+    write_metrics_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_date.csv", by_date, ["window", "date"],
+                      stat_fields=BK_STAT_FIELDS)
 
     summary = _build_summary(results, window_stats, window_group, all_trades, symbol_window_wl)
     verdict, reasons = classify_strategy(
@@ -165,10 +167,9 @@ def _export(results: dict, window_dates: dict, window_group: dict, warnings: lis
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
-    (out / "metrics_breakout_15window_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2))
+    write_json(out / "metrics_breakout_15window_summary.json", summary)
 
-    (out / "warnings.json").write_text(json.dumps({
+    write_warnings(out, {
         "data_source": "GMO Public API klines (BID), read-only",
         "fixed_config": f"breakout(period 20) / {TIMEFRAME} / current_cost (spread {SPREAD}, "
                         f"slippage {SLIP}) / baseline exit / SL30 / TP60 / no ADX filter",
@@ -176,15 +177,15 @@ def _export(results: dict, window_dates: dict, window_group: dict, warnings: lis
         "rsi_baseline_ref_run": "20260616_082807_gmo_public_paper_rsi_final15 (commit f716631)",
         "note": "breakout 15-window evaluation; no parameter tuning; Public klines single-price.",
         "fetch_warnings": warnings,
-    }, ensure_ascii=False, indent=2))
-    _write_manifest(out, run_id, window_dates, window_group)
+    })
+    _write_manifest(out, rid, window_dates, window_group)
     _write_summary(out, by_window, by_symbol, by_reason, summary)
     _write_decision(out, summary, verdict, reasons)
     print(f"\nVERDICT: {verdict}")
     for r in reasons:
         print(f"  - {r}")
     print(f"complement: {summary['complement_vs_rsi']}")
-    print(f"Export written to: analysis_exports/{run_id}/")
+    print(f"Export written to: analysis_exports/{rid}/")
 
 
 def _build_summary(results: dict, window_stats: dict, window_group: dict,
@@ -234,9 +235,9 @@ def _build_summary(results: dict, window_stats: dict, window_group: dict,
     return summary
 
 
-def _write_manifest(out: Path, run_id: str, window_dates: dict, window_group: dict) -> None:
-    (out / "manifest.json").write_text(json.dumps({
-        "run_id": run_id, "created_at": datetime.now().isoformat(),
+def _write_manifest(out: Path, rid: str, window_dates: dict, window_group: dict) -> None:
+    write_manifest(out, {
+        "run_id": rid, "created_at": datetime.now().isoformat(),
         "kind": "gmo_public_paper_breakout15", "strategy": "breakout",
         "breakout_period": StrategyConfig(strategy_type=StrategyType.BREAKOUT).breakout_period,
         "timeframe": TIMEFRAME, "cost_scenario": "current_cost",
@@ -248,7 +249,7 @@ def _write_manifest(out: Path, run_id: str, window_dates: dict, window_group: di
                     for label, dates in window_dates.items()],
         "symbols": SYMBOLS, "continuous_replay": True, "no_order_execution": True,
         "gmo_readonly": True, "gmo_order_enabled": False,
-    }, ensure_ascii=False, indent=2))
+    })
 
 
 def _write_summary(out: Path, by_window: list[dict], by_symbol: list[dict],
@@ -321,7 +322,7 @@ def _write_summary(out: Path, by_window: list[dict], by_symbol: list[dict],
         "| exit_reason | 件数 | 総損益 | 期待値 |\n"
         "|--|--:|--:|--:|\n" + "\n".join(rsn_rows) + "\n"
     )
-    (out / "summary.md").write_text(text)
+    write_summary_markdown(out, text)
 
 
 def _write_decision(out: Path, summary: dict, verdict: str, reasons: list[str]) -> None:

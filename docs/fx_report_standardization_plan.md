@@ -100,8 +100,10 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
 2. manifest / warnings / summary / metrics writer の共通化（`fx_eval_common` 拡張）
    — **着手済み**: `fx_eval_common` に共通 writer（`ensure_output_dir` / `write_json` /
    `write_manifest` / `write_warnings` / `write_csv` / `write_metrics_csv` /
-   `write_summary_markdown`）を追加し、**まず `rsi_final_15window.py` 1本のみ**を移行
-   （出力内容は不変・mechanism のみ共通化）。他ランナーへの横展開は次段階。
+   `write_summary_markdown`）を追加。移行済み: `rsi_final_15window.py`（1本目）、
+   `breakout_15window.py`（2本目・TP拡張CSVは `write_metrics_csv(..., stat_fields=BK_STAT_FIELDS)`
+   で対応）。いずれも出力内容は不変・mechanism のみ共通化。残り（bollinger / market_structure /
+   rsi_m15 / rsi_m15_scaled / regime診断）は次段階。
 3. report schema の固定（summary.json のキーを契約として固定）
 4. 安全表示（safety_metadata）の単一ソース化
 5. レポート一覧UI / run詳細UI に備えたデータ構造整理
