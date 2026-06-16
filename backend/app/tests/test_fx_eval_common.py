@@ -6,6 +6,7 @@ from pathlib import Path
 
 from scripts.fx_eval_common import (
     DIAGNOSTIC_SUMMARY_REQUIRED_KEYS,
+    REPORT_INDEX_REQUIRED_KEYS,
     STRATEGY_SUMMARY_REQUIRED_KEYS,
     SYMBOLS,
     WINDOWS,
@@ -13,6 +14,7 @@ from scripts.fx_eval_common import (
     ensure_output_dir,
     fixed_config,
     group_labels,
+    report_index_entry,
     run_id,
     safety_metadata,
     validate_summary_schema,
@@ -294,3 +296,116 @@ def test_strategy_and_diagnostic_schemas_differ_but_share_verdict() -> None:
     assert "verdict" in STRATEGY_SUMMARY_REQUIRED_KEYS
     assert "verdict" in DIAGNOSTIC_SUMMARY_REQUIRED_KEYS
     assert set(STRATEGY_SUMMARY_REQUIRED_KEYS) != set(DIAGNOSTIC_SUMMARY_REQUIRED_KEYS)
+
+
+# --- report index entry (read-only metadata for a future report-list UI) ----------
+def _write_run(tmp_path, manifest=None, warnings=None, summaries=None):
+    run = ensure_output_dir(tmp_path / "20260101_000000_gmo_public_paper_demo")
+    if manifest is not None:
+        write_json(run / "manifest.json", manifest)
+    if warnings is not None:
+        write_json(run / "warnings.json", warnings)
+    for name, body in (summaries or {}).items():
+        write_json(run / name, body)
+    return run
+
+
+def _safe_manifest() -> dict:
+    return {"run_id": "20260101_000000_gmo_public_paper_demo", "kind": "gmo_public_paper_x",
+            "strategy": "rsi_reversal", "timeframe": "M5", "cost_scenario": "current_cost",
+            "spread_pips": 1.2, "slippage_pips": 0.2, "stop_loss_pips": 30,
+            "take_profit_pips": 60, "created_at": "2026-01-01T00:00:00", **safety_metadata()}
+
+
+def _strategy_summary_json() -> dict:
+    return {"verdict": "撤退", "median_expectancy": -0.01, "median_pf": 0.9,
+            "total_pnl": -5.0, "max_drawdown_max": 12.3, "window_count": 15}
+
+
+def test_report_index_entry_minimal_strategy(tmp_path) -> None:
+    run = _write_run(tmp_path, _safe_manifest(), {"fetch_warnings": []},
+                     {"metrics_x_15window_summary.json": _strategy_summary_json()})
+    entry = report_index_entry(run)
+    assert all(k in entry for k in REPORT_INDEX_REQUIRED_KEYS)
+    assert entry["kind"] == "gmo_public_paper_x"
+    assert entry["strategy"] == "rsi_reversal"
+    assert entry["cost_scenario"] == "current_cost" and entry["timeframe"] == "M5"
+    assert entry["verdict"] == "撤退" and entry["median_pf"] == 0.9
+    assert entry["read_only_confirmed"] is True and entry["safety_complete"] is True
+    assert entry["warnings_count"] == 0 and entry["has_warnings"] is False
+    assert entry["summary_file"] == "metrics_x_15window_summary.json"
+
+
+def test_report_index_entry_no_summary_raises(tmp_path) -> None:
+    run = _write_run(tmp_path, _safe_manifest(), {"fetch_warnings": []})
+    try:
+        report_index_entry(run)
+    except FileNotFoundError as exc:
+        assert "summary" in str(exc)
+    else:
+        raise AssertionError("expected FileNotFoundError when no summary exists")
+
+
+def test_report_index_entry_multiple_summaries_raises(tmp_path) -> None:
+    run = _write_run(tmp_path, _safe_manifest(), {"fetch_warnings": []},
+                     {"metrics_a_15window_summary.json": _strategy_summary_json(),
+                      "metrics_b_15window_summary.json": _strategy_summary_json()})
+    try:
+        report_index_entry(run)
+    except ValueError as exc:
+        assert "multiple" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for multiple summary files")
+
+
+def test_report_index_entry_missing_safety_not_optimistic(tmp_path) -> None:
+    # older strategy runner: manifest has only 3 of 6 safety flags -> not confirmed
+    manifest = {k: v for k, v in _safe_manifest().items()
+                if k not in ("real_order", "private_api_used", "api_key_used")}
+    run = _write_run(tmp_path, manifest, {"fetch_warnings": []},
+                     {"metrics_x_15window_summary.json": _strategy_summary_json()})
+    entry = report_index_entry(run)
+    assert entry["read_only_confirmed"] is False  # unknown is never optimistic
+    assert entry["safety_complete"] is False
+    assert entry["safety"]["real_order"] is None
+
+
+def test_report_index_entry_safety_conflict_detected(tmp_path) -> None:
+    manifest = {**_safe_manifest(), "real_order": False}
+    warnings = {"fetch_warnings": [], "real_order": True}  # disagree with manifest
+    run = _write_run(tmp_path, manifest, warnings,
+                     {"metrics_x_15window_summary.json": _strategy_summary_json()})
+    entry = report_index_entry(run)
+    assert "real_order" in entry["safety_conflicts"]
+    assert entry["read_only_confirmed"] is False
+
+
+def test_report_index_entry_counts_warnings(tmp_path) -> None:
+    run = _write_run(tmp_path, _safe_manifest(),
+                     {"fetch_warnings": ["2026-01-01 missing", "2025-12-25 missing"]},
+                     {"metrics_x_15window_summary.json": _strategy_summary_json()})
+    entry = report_index_entry(run)
+    assert entry["warnings_count"] == 2 and entry["has_warnings"] is True
+
+
+def test_report_index_entry_diagnostic_summary(tmp_path) -> None:
+    # regime diagnostic summary lacks median_expectancy/total_pnl -> None, still builds
+    manifest = {**_safe_manifest(), "kind": "gmo_public_paper_regime_predictability",
+                "strategy": None}
+    diag = {"verdict": "価値なし/打ち切り", "best_oos_rule": "roll3_de_bucket",
+            "best_oos": {}, "oos5_majority_acc": 0.25, "oos_margin_vs_majority": 0.13}
+    run = _write_run(tmp_path, manifest, {"fetch_warnings": []},
+                     {"metrics_regime_predictability_summary.json": diag})
+    entry = report_index_entry(run)
+    assert entry["verdict"] == "価値なし/打ち切り"
+    assert entry["median_expectancy"] is None and entry["total_pnl"] is None
+    assert entry["read_only_confirmed"] is True
+
+
+def test_report_index_entry_run_id_falls_back_to_dirname(tmp_path) -> None:
+    # no manifest -> run_id from dir name, metadata None, safety not confirmed
+    run = _write_run(tmp_path, None, {"fetch_warnings": []},
+                     {"metrics_x_15window_summary.json": _strategy_summary_json()})
+    entry = report_index_entry(run)
+    assert entry["run_id"] == "20260101_000000_gmo_public_paper_demo"
+    assert entry["kind"] is None and entry["read_only_confirmed"] is False

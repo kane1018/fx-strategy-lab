@@ -274,3 +274,116 @@ def validate_summary_schema(
     missing = [key for key in required_keys if key not in summary]
     if missing:
         raise ValueError(f"summary is missing required keys: {missing}")
+
+
+# --- report index (read-only metadata for a future report-list UI) ---
+# The 6 read-only safety flags a paper run asserts. Source order: manifest then
+# warnings (older strategy runners record only a subset in the manifest; m15/scaled/
+# regime record the full set). Unknown flags are NEVER treated as safe.
+REPORT_INDEX_SAFETY_KEYS = (
+    "real_order",
+    "private_api_used",
+    "api_key_used",
+    "gmo_readonly",
+    "gmo_order_enabled",
+    "no_order_execution",
+)
+# Keys report_index_entry() always returns (present even when value is None).
+REPORT_INDEX_REQUIRED_KEYS = (
+    "run_id",
+    "kind",
+    "strategy",
+    "timeframe",
+    "cost_scenario",
+    "verdict",
+    "median_expectancy",
+    "median_pf",
+    "total_pnl",
+    "max_drawdown_max",
+    "created_at",
+    "summary_file",
+    "safety",
+    "safety_complete",
+    "safety_conflicts",
+    "read_only_confirmed",
+    "warnings_count",
+    "has_warnings",
+)
+# Safe (read-only) means every flag is present AND has its read-only value.
+_SAFE_EXPECTED = {
+    "real_order": False,
+    "private_api_used": False,
+    "api_key_used": False,
+    "gmo_order_enabled": False,
+    "gmo_readonly": True,
+    "no_order_execution": True,
+}
+
+
+def _read_json_if_exists(path: Path) -> dict:
+    """Load a JSON object if the file exists, else return {} (read-only helper)."""
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text())
+    return data if isinstance(data, dict) else {}
+
+
+def report_index_entry(run_dir: str | Path) -> dict[str, Any]:
+    """Extract one report-list row from a single analysis_exports/<run_id>/ dir.
+
+    Read-only: reads manifest.json (metadata + cost), the single metrics_*_summary.json
+    (verdict + headline metrics), and warnings.json (data warnings + safety). Performs
+    NO directory traversal, network, or writes. Safety flags are unioned from manifest
+    then warnings; any unknown or conflicting flag makes read_only_confirmed False
+    (fail-safe — unknown is never treated as safe). Raises FileNotFoundError if no
+    summary file exists and ValueError if more than one is found.
+    """
+    run_dir = Path(run_dir)
+    manifest = _read_json_if_exists(run_dir / "manifest.json")
+    warnings = _read_json_if_exists(run_dir / "warnings.json")
+
+    summaries = sorted(run_dir.glob("metrics_*_summary.json"))
+    if not summaries:
+        raise FileNotFoundError(f"no metrics_*_summary.json found in {run_dir}")
+    if len(summaries) > 1:
+        names = [p.name for p in summaries]
+        raise ValueError(f"multiple metrics_*_summary.json in {run_dir}: {names}")
+    summary = _read_json_if_exists(summaries[0])
+
+    safety: dict[str, Any] = {}
+    conflicts: list[str] = []
+    for key in REPORT_INDEX_SAFETY_KEYS:
+        m_val, w_val = manifest.get(key), warnings.get(key)
+        if m_val is not None and w_val is not None and m_val != w_val:
+            conflicts.append(key)
+        safety[key] = m_val if m_val is not None else w_val
+
+    read_only_confirmed = not conflicts and all(
+        safety.get(k) == v for k, v in _SAFE_EXPECTED.items()
+    )
+    fetch_warnings = warnings.get("fetch_warnings") or []
+
+    return {
+        "run_id": manifest.get("run_id") or run_dir.name,
+        "kind": manifest.get("kind"),
+        "strategy": manifest.get("strategy"),
+        "timeframe": manifest.get("timeframe"),
+        "cost_scenario": manifest.get("cost_scenario"),
+        "spread_pips": manifest.get("spread_pips"),
+        "slippage_pips": manifest.get("slippage_pips"),
+        "stop_loss_pips": manifest.get("stop_loss_pips"),
+        "take_profit_pips": manifest.get("take_profit_pips"),
+        "verdict": summary.get("verdict"),
+        "median_expectancy": summary.get("median_expectancy"),
+        "median_pf": summary.get("median_pf"),
+        "total_pnl": summary.get("total_pnl"),
+        "max_drawdown_max": summary.get("max_drawdown_max"),
+        "created_at": manifest.get("created_at"),
+        "summary_file": summaries[0].name,
+        "safety": safety,
+        "safety_complete": all(safety[k] is not None for k in REPORT_INDEX_SAFETY_KEYS),
+        "safety_conflicts": conflicts,
+        "read_only_confirmed": read_only_confirmed,
+        "warnings_count": len(fetch_warnings),
+        "has_warnings": bool(fetch_warnings),
+    }

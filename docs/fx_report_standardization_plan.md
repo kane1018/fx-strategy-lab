@@ -121,6 +121,16 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    出力内容は不変。戦略系と診断系で構造が異なるため schema は2系統に分離。
 4. 安全表示（safety_metadata）の単一ソース化
 5. レポート一覧UI / run詳細UI に備えたデータ構造整理
+   — **着手済み**: `fx_eval_common` に read-only 純関数 `report_index_entry(run_dir)` を追加。
+   1 run ディレクトリの manifest/warnings/単一 metrics_*_summary.json から一覧用メタ
+   （run_id / kind / strategy / timeframe / cost_scenario / verdict / median_expectancy /
+   median_pf / total_pnl / max_drawdown_max / created_at / summary_file / safety(6flags) /
+   read_only_confirmed / safety_conflicts / warnings_count / has_warnings）を抽出。安全フラグは
+   manifest∪warnings を fail-safe 統合（不明・矛盾は read_only_confirmed=False）。summary 0件→
+   FileNotFoundError、複数→ValueError。ディレクトリ走査・UI実装はしない。
+   注記: 旧4戦略ランナー(rsi_final/breakout/bollinger/market_structure)の manifest は
+   real_order/private_api_used/api_key_used を記録しておらず read_only_confirmed=False になる
+   （安全だが未記録）。これら4本の manifest/warnings に safety_metadata() を載せるのが次の整理候補。
 6. E2E導入候補フローの docs 化（§11）
 
 まだ行わないこと: E2Eツール導入 / Playwright・Cypress 追加 / UI実装 / 実注文 / Private API接続 /
