@@ -976,3 +976,152 @@ MVP 外（将来追加）: CSVプレビュー / CSVダウンロード / 設定 /
 - UI 実装しない / E2E 導入しない / package 追加しない / API 変更しない / 既存コード変更しない
 - 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない
 - 実注文・Private API・APIキー・`.env` に触れない
+
+## 16. E2E導入計画
+
+一覧UI `/reports`・詳細UI `/reports/[run_id]`・read-only API `/api/reports` が揃ったので、
+E2E 実装前に **ツール選定・起動方法・テストデータ方針・E2E-01〜08 の具体化**をここで確定する。
+**本節は docs のみ**で、Playwright 導入・package 追加・E2E 実装は含まない。
+
+### 16-1. E2E 導入の目的
+
+- `/api/reports` read-only API と `/reports` UI の疎通を実ブラウザで確認する。
+- 一覧画面 → 詳細画面への流れを確認する。
+- safety badge / ERROR 行 / CSV 非展開 / 危険導線なしを確認する。
+- 戦略の勝敗・期待値の再計算は E2E の対象外。
+- 実注文・Private API・APIキー・`.env`・GMO 取得は E2E 対象外。
+- E2E は **read-only 表示の安全性確認**が目的。
+
+### 16-2. 推奨ツール
+
+**Playwright を推奨**。比較: Playwright（推奨）/ Cypress / 手動確認のみ。
+
+- Next.js のブラウザ E2E に向く / `data-testid` と相性がよい / 一覧→詳細遷移を確認しやすい。
+- web-first assertions で非同期表示（fetch 後の描画）に強い / 将来 CI 導入も可能。
+- ただし **今回は package 追加しない**。導入時はユーザー承認を得る。
+
+### 16-3. E2E 導入前の前提
+
+- backend dev server を起動する。frontend dev server を起動する。
+- backend の `analysis_exports_root` を **テスト用 tmp / 固定 fixture** に向ける（実 analysis_exports は読まない）。
+- テスト用 run ディレクトリを使う。UI は `NEXT_PUBLIC_API_BASE_URL` で backend へ接続する。
+- E2E では実注文・Private API・APIキー・`.env` を扱わない。
+- package 追加が必要なため、実導入時は **事前承認が必要**。
+
+### 16-4. テストデータ方針
+
+E2E 用データは実 `analysis_exports/` ではなく固定 fixture / tmp 相当のテスト root を使う。最低限:
+
+```text
+1. 正常run         : read_only_confirmed=true / safety_conflicts=[] → SAFE_READ_ONLY。
+                     summary / manifest / warnings / files を持つ
+2. error run       : has_error=true（壊れたrun）→ 一覧で ERROR 行
+3. safety conflict : safety_conflicts が空でない → SAFE 扱いされない
+4. safety incomplete: safety_complete=false → SAFE 扱いされない
+5. CSVを含むrun    : files に CSV メタはあるが、CSV 本文は画面に出ない
+```
+
+### 16-5. 起動方法方針（実コマンドは実装時に既存 scripts を確認して確定）
+
+```text
+backend:
+  cd backend
+  analysis_exports_root をテスト用 fixture に向けて uvicorn app.main:app --reload
+  （ANALYSIS_EXPORTS_ROOT=<fixture> を env で渡す。Settings が pydantic-settings のため env で上書き可）
+
+frontend:
+  cd frontend
+  NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+
+e2e:
+  Playwright から http://localhost:3000/reports を開く
+```
+
+### 16-6. E2E 対象フロー（§11 を現 UI に合わせて）
+
+```text
+E2E-01: レポート一覧が表示される
+E2E-02: 正常run に SAFE_READ_ONLY が表示される
+E2E-03: error run が ERROR として表示される
+E2E-04: run 詳細へ遷移できる
+E2E-05: 詳細画面に Overview/Safety/Metrics/Cost/Files/Summary/Final Decision が表示される
+E2E-06: 実注文・Private API・APIキー入力導線が存在しない
+E2E-07: CSV 本文が勝手に全展開されない
+E2E-08: safety conflict / incomplete は安全扱いされない
+```
+
+### 16-7. E2E-01〜08 の具体アサーション候補
+
+| E2E | 画面 | 主な selector / testid | アサーション |
+| --- | --- | --- | --- |
+| E2E-01 | /reports | reports-page / reports-table / reports-count | 一覧が表示される |
+| E2E-02 | /reports | safety-badge | "Read-only確認済み"（SAFE_READ_ONLY）が見える |
+| E2E-03 | /reports | error-row | ERROR 行と error message が見える |
+| E2E-04 | /reports → /reports/{run_id} | report-row 内リンク / report-detail-page | 詳細へ遷移できる |
+| E2E-05 | /reports/{run_id} | detail-overview/safety/metrics/cost/files/summary-markdown/final-decision | 7セクションが見える |
+| E2E-06 | 両画面 | text/button | 危険導線の文言・ボタンが存在しない |
+| E2E-07 | /reports/{run_id} | detail-files / body text | CSV メタは見えるが CSV 本文は見えない |
+| E2E-08 | /reports | safety-badge | conflict/incomplete 行が SAFE_READ_ONLY ではない |
+
+- 非同期描画は `await expect(locator).toBeVisible()` 等の web-first assertion で待つ。
+- E2E-08 は該当行の `safety-badge` の `data-safe="false"` / 文言（Safety conflict / Safety incomplete）で判定。
+
+### 16-8. 危険導線なしの確認語句
+
+```text
+実注文 / 決済 / 建玉取得 / Private API / APIキー / secret / .env /
+market_order / バックテスト再実行 / GMO API取得 / OANDA操作 / RiskManager操作 / DB直接操作
+```
+
+- E2E 対象は `/reports` と `/reports/[run_id]` に限定（既存別画面に同語句がある可能性があるため）。
+- 安全説明文として表示する場合と危険導線として表示する場合の区別は実装時に判断。MVP では危険導線自体を置かない。
+
+### 16-9. CSV 非展開の確認
+
+- Files 表に CSV の name/kind/size_bytes は表示してよい。CSV 本文は表示しない。
+- E2E 用 fixture の CSV に **特徴的な文字列**（例 `__CSV_BODY_MARKER__`）を入れ、画面にそれが出ないことを確認。
+- CSV ダウンロード/プレビューは MVP 外。
+
+### 16-10. E2E で判定しないこと
+
+- 戦略が勝てるか / 期待値・PF・損益の再計算 / バックテスト再実行 / GMO API 新規取得 /
+  実注文 / Private API 接続 / APIキー・secret の有効性 / OANDA 接続 / RiskManager の挙動 / DB 永続化。
+
+### 16-11. 導入時に変更が必要になり得るファイル（今回は作成しない）
+
+```text
+frontend/package.json            # @playwright/test 追加（承認後）
+frontend/playwright.config.ts    # baseURL / projects(chromium) / webServer
+frontend/e2e/reports.spec.ts     # E2E-01〜08
+frontend/e2e/fixtures/...         # テスト run ディレクトリ
+backend のテスト起動用設定         # analysis_exports_root を fixture へ（env 上書き、config 変更は最小）
+docs/fx_report_standardization_plan.md
+```
+
+### 16-12. package 追加の扱い
+
+- Playwright 導入には `@playwright/test` 等の追加が必要になる可能性が高い。
+- **今回は package 追加しない**。実導入前にユーザー承認を得る。
+- 承認後に `npm install -D @playwright/test` 等を検討。ブラウザインストール（`npx playwright install`）が必要な場合もある。
+
+### 16-13. 最初に実装する E2E の MVP 範囲
+
+- 1 spec file / Chromium のみ。
+- `/reports` 一覧表示 / `/reports` から詳細遷移 / safety badge / ERROR 行 / CSV 本文非表示 / 危険導線なし。
+- CI 連携・複数ブラウザ・認証は MVP 外。
+
+### 16-14. E2E 実装前チェックリスト
+
+- Playwright 導入の承認 / package 追加の承認。
+- backend テスト root の作り方（fixture run、env で `analysis_exports_root` 上書き）。
+- backend dev server 起動方法 / frontend dev server 起動方法 / `NEXT_PUBLIC_API_BASE_URL` 設定。
+- fixture run の作成方法 / data-testid の最終確認 / 危険導線なしの確認語句。
+- CSV 本文非表示用の特徴文字列 / 実 analysis_exports を読まない確認。
+- 実注文・Private API・APIキー・`.env` に触れない確認。
+
+### 16-15. 今回（§16 追加）はやらないこと
+
+- Playwright 導入しない / package 追加しない / E2E テストを書かない。
+- backend/frontend の起動スクリプトを変更しない / API・UI を変更しない。
+- 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない。
+- 実注文・Private API・APIキー・`.env` に触れない。
