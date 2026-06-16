@@ -21,8 +21,6 @@ No real orders, no Private API, no API key/secret. In-memory DBs only.
 
 from __future__ import annotations
 
-import csv
-import json
 import statistics
 import sys
 import time
@@ -52,10 +50,17 @@ from scripts.fx_eval_common import (  # noqa: E402
     _mem,
     _weekdays,
     classify_strategy,
+    ensure_output_dir,
     fixed_config,
     robustness_summary,
     run_id,
     safety_metadata,
+    write_json,
+    write_manifest,
+    write_markdown,
+    write_metrics_csv,
+    write_summary_markdown,
+    write_warnings,
 )
 from scripts.market_state_diagnostics import _day_market_state  # noqa: E402
 
@@ -145,17 +150,14 @@ def main() -> int:
 
 
 def _write_csv(path: Path, rows: list[dict], keys: list[str]) -> None:
-    with path.open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow([*keys, *BK_STAT_FIELDS])
-        for r in rows:
-            w.writerow([*[r[k] for k in keys], *[r["stats"][f] for f in BK_STAT_FIELDS]])
+    # Thin compat wrapper (rsi_m15_scaled imports this) delegating to the shared
+    # writer; kept until rsi_m15_scaled is migrated so its import surface is intact.
+    write_metrics_csv(path, rows, keys, stat_fields=BK_STAT_FIELDS)
 
 
 def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
     rid = run_id("rsi_m15_final15")
-    out = EXPORT_ROOT / rid
-    out.mkdir(parents=True, exist_ok=True)
+    out = ensure_output_dir(EXPORT_ROOT / rid)
     lo, hi = _tag_de(all_trades, day_de)
 
     window_stats = {label: _summarize_bk([t for t in all_trades if t["window"] == label])
@@ -207,10 +209,9 @@ def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
-    (out / "metrics_rsi_m15_15window_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2))
+    write_json(out / "metrics_rsi_m15_15window_summary.json", summary)
 
-    (out / "warnings.json").write_text(json.dumps({
+    write_warnings(out, {
         **fixed_config(timeframe=TIMEFRAME, strategy="rsi_reversal", adx_filter=False),
         **safety_metadata(),
         "de_tertiles": {"low<": lo, "high>=": hi},
@@ -218,7 +219,7 @@ def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
         "note": "rsi_reversal M15 15-window evaluation; SL/TP NOT re-tuned for M15; no tuning. "
                 "market-state breakdown uses DE tertiles only (day-class needs breakout M15).",
         "fetch_warnings": warnings,
-    }, ensure_ascii=False, indent=2))
+    })
     _write_manifest(out, rid, win_group)
     _write_summary(out, by_window, by_symbol, by_reason, by_state, summary)
     _write_decision(out, summary, verdict, reasons)
@@ -273,14 +274,14 @@ def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi
 
 
 def _write_manifest(out: Path, rid: str, win_group: dict) -> None:
-    (out / "manifest.json").write_text(json.dumps({
+    write_manifest(out, {
         "run_id": rid, "created_at": pd.Timestamp.now().isoformat(),
         "kind": "gmo_public_paper_rsi_m15_final15", "strategy": "rsi_reversal",
         **fixed_config(timeframe=TIMEFRAME, adx_filter=False),
         **safety_metadata(),
         "windows": [{"window": label, "group": g, "dates": _weekdays(s, e)}
                     for label, s, e, g in WINDOWS],
-    }, ensure_ascii=False, indent=2))
+    })
 
 
 def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> None:
@@ -345,7 +346,7 @@ def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> N
         "## market-state別(DE三分位のみ・day-classはbreakout M15未実施のため省略)\n"
         "| market_state | 完了 | 総損益 | 期待値 | PF |\n|--|--:|--:|--:|--:|\n" + st_rows + "\n"
     )
-    (out / "summary.md").write_text(text)
+    write_summary_markdown(out, text)
 
 
 def _write_decision(out, summary, verdict, reasons) -> None:
@@ -371,7 +372,7 @@ def _write_decision(out, summary, verdict, reasons) -> None:
         "- 撤退: M15化でも改善せず。高時間足でも単純rsiは不可と判断。\n"
         "- SL/TP/RSIのM15向け調整は過剰最適化のため、まず素のM15で判断する。\n"
     )
-    (out / "rsi_m15_final_decision.md").write_text(text)
+    write_markdown(out / "rsi_m15_final_decision.md", text)
 
 
 if __name__ == "__main__":
