@@ -71,6 +71,15 @@ def test_fixed_config_and_run_id_support_m15() -> None:
     assert run_id("rsi_m15_final15").endswith("_gmo_public_paper_rsi_m15_final15")
 
 
+def test_fixed_config_records_scaled_sl_tp() -> None:
+    # M15 scaled-risk confound check: SL50/TP100 must be recorded, cost unchanged
+    cfg = fixed_config(timeframe="M15", strategy="rsi_reversal",
+                       stop_loss_pips=50, take_profit_pips=100)
+    assert cfg["stop_loss_pips"] == 50 and cfg["take_profit_pips"] == 100
+    assert cfg["spread_pips"] == 1.2 and cfg["slippage_pips"] == 0.2  # cost untouched
+    assert run_id("rsi_m15_scaled_final15").endswith("_gmo_public_paper_rsi_m15_scaled_final15")
+
+
 def test_classify_strategy_three_way_from_common() -> None:
     base = dict(median_pf=1.3, positive_windows=8, n_windows=15, edge_windows=8,
                 symbol_concentrated=False)

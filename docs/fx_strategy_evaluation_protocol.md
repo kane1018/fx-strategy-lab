@@ -162,6 +162,9 @@ window ごと:
 - `adx_filter_oos_ab.py` — ADXフィルタの OOS A/B（却下の根拠）
 - `rsi_m15_15window.py` — **高時間足フェーズの初回**: rsi_reversal を M15 で同一15窓評価
   （`fixed_config(timeframe="M15")` を使用。SL/TP は比較のため M5 と同じ 30/60 で未調整）
+- `rsi_m15_scaled_15window.py` — M15 baseline の SL/TP交絡を1点固定で切り分け（SL50/TP100, RR1:2）。
+  探索ではなく交絡確認。結果: SL率は下がったが損益は改善せず＝SL30/TP60は不利な交絡ではなかった
+  （高時間足でも単純rsiにエッジ無し）。SL/TPの多点探索はしない。
 
 ### 高時間足フェーズ（別枠）
 

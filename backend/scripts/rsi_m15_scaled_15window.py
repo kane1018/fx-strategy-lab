@@ -1,45 +1,35 @@
-"""15-window evaluation of rsi_reversal on M15 (read-only, paper).
+"""15-window evaluation of rsi_reversal on M15 with SCALED risk (read-only, paper).
 
-First step of the higher-timeframe phase. M5 rsi_reversal was only a research
-baseline (thin edge eaten by cost + trend-day SL tail). Hypothesis: raising the
-timeframe to M15 lowers entry frequency and raises per-trade range, possibly
-improving the edge / cost ratio.
+Confound check, NOT an SL/TP search. M15 baseline reused M5's SL30/TP60, which may
+be too tight for M15's larger bars (baseline SL ratio 0.586 vs M5 0.487). Volatility
+scales ~ sqrt(time); M5->M15 is 3x, so 30*sqrt(3)≈52 and 60*sqrt(3)≈104. We test ONE
+pre-fixed scaled setting, SL50 / TP100 (RR 1:2 kept), to see whether SL30/TP60 was an
+unfair confound. Same 15 windows, same current_cost, same rsi_reversal, baseline exit.
 
-Same 15 windows, same FIXED config as M5 except timeframe=M15 (no tuning):
-current_cost (spread 1.2 / slippage 0.2), baseline exit, SL 30 / TP 60,
-4 JPY pairs, continuous replay, no filters. SL/TP are deliberately NOT re-tuned
-for M15 — this is a like-for-like "does M15 help by itself" check.
+This is a single fixed point. Do NOT try SL40/SL60/SL70/TP120 etc.
 
-Reuses scripts/fx_eval_common.py (windows, fixed config, safety metadata, run id,
-classification) and the shared summarizers. market-state breakdown uses DE tertiles
-only (day-class buckets would require a breakout M15 run, which is out of scope).
+Reuses rsi_m15_15window (_collect/_tag_de/_write_csv) and fx_eval_common.
 
 No real orders, no Private API, no API key/secret. In-memory DBs only.
 
-  .venv/bin/python -m scripts.rsi_m15_15window
+  .venv/bin/python -m scripts.rsi_m15_scaled_15window
 """
 
 from __future__ import annotations
 
-import csv
 import json
 import statistics
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd  # noqa: E402
-from sqlalchemy import select  # noqa: E402
 
-from app.brokers import GmoFxBroker, GmoFxBrokerError  # noqa: E402
-from app.models import PaperTrade  # noqa: E402
-from app.schemas.trading import Candle, ExecutionConfig, StrategyConfig, StrategyType  # noqa: E402
-from app.services.gmo_paper_service import replay_paper_trades  # noqa: E402
-from app.services.market_data_service import candles_to_frame, pip_size  # noqa: E402
-from scripts.bollinger_15window import DE_BUCKETS, de_bucket, de_thresholds  # noqa: E402
-from scripts.breakout_15window import _TP, BK_STAT_FIELDS, _summarize_bk  # noqa: E402
+from app.brokers import GmoFxBroker  # noqa: E402
+from app.schemas.trading import ExecutionConfig  # noqa: E402
+from scripts.bollinger_15window import DE_BUCKETS  # noqa: E402
+from scripts.breakout_15window import _TP, _summarize_bk  # noqa: E402
 from scripts.fx_eval_common import (  # noqa: E402
     _OPP,
     _SL,
@@ -48,8 +38,6 @@ from scripts.fx_eval_common import (  # noqa: E402
     SPREAD,
     SYMBOLS,
     WINDOWS,
-    _exit_category,
-    _mem,
     _weekdays,
     classify_strategy,
     fixed_config,
@@ -57,103 +45,28 @@ from scripts.fx_eval_common import (  # noqa: E402
     run_id,
     safety_metadata,
 )
-from scripts.market_state_diagnostics import _day_market_state  # noqa: E402
+from scripts.rsi_m15_15window import M5_REF, TIMEFRAME, _collect, _tag_de, _write_csv  # noqa: E402
 
-TIMEFRAME = "M15"
+SL_PIPS, TP_PIPS = 50.0, 100.0
 
-# rsi_reversal M5 baseline reference (committed run f716631) for comparison.
-M5_REF = {"median_expectancy": 0.0164, "median_pf": 1.016, "positive_windows": 8,
-          "total_pnl": 56.95, "max_drawdown_max": 65.46, "total_trades": 2069}
-
-
-def _fetch_candles(broker: GmoFxBroker, symbol: str, dates: list[str],
-                   warnings: list[str]) -> list[Candle] | None:
-    chunks = []
-    for date in dates:
-        try:
-            chunks.append(candles_to_frame(broker.candles(symbol, TIMEFRAME, 2000, date=date)))
-        except GmoFxBrokerError as error:
-            warnings.append(f"fetch failed {symbol} {date}: {error}")
-        time.sleep(0.2)
-    if not chunks:
-        return None
-    merged = pd.concat(chunks, ignore_index=True)
-    merged = merged.sort_values("timestamp").drop_duplicates("timestamp").reset_index(drop=True)
-    return [Candle(timestamp=pd.Timestamp(r["timestamp"]).to_pydatetime(),
-                   open=float(r["open"]), high=float(r["high"]), low=float(r["low"]),
-                   close=float(r["close"]), volume=0) for _, r in merged.iterrows()]
-
-
-def _replay_full(candles: list[Candle], symbol: str, strategy: StrategyConfig,
-                 execution: ExecutionConfig) -> list[dict]:
-    out: list[dict] = []
-    with _mem() as db:
-        res = replay_paper_trades(
-            db, symbol=symbol, timeframe=TIMEFRAME, candles=candles, strategy=strategy,
-            execution=execution, exit_policy="baseline", force_close_at_end=True,
-            fast_signals=True,
-        )
-        rows = db.scalars(select(PaperTrade).where(
-            PaperTrade.session_id == res["session_id"],
-            PaperTrade.status == "closed")).all()
-        for t in rows:
-            out.append({"date": t.opened_at.date().isoformat(), "pnl": float(t.realized_pnl),
-                        "symbol": symbol, "closed_at": t.closed_at,
-                        "exit_category": _exit_category(t.exit_reason or "")})
-    return out
-
-
-def _collect(broker: GmoFxBroker, warnings: list[str],
-             execution: ExecutionConfig | None = None) -> tuple[list[dict], dict]:
-    rsi = StrategyConfig(strategy_type=StrategyType.RSI_REVERSAL)
-    if execution is None:  # default = M15 baseline (SL30/TP60); scaled variant passes its own
-        execution = ExecutionConfig(spread_pips=SPREAD, slippage_pips=SLIP)
-    all_trades: list[dict] = []
-    day_de: dict[tuple[str, str], float] = {}
-    for label, start, end, group in WINDOWS:
-        dates = _weekdays(start, end)
-        for symbol in SYMBOLS:
-            candles = _fetch_candles(broker, symbol, dates, warnings)
-            if not candles:
-                continue
-            pip = pip_size(symbol)
-            trades = _replay_full(candles, symbol, rsi, execution)
-            frame = candles_to_frame(candles)
-            frame["date"] = pd.to_datetime(frame["timestamp"]).dt.date.astype(str)
-            for date, day_frame in frame.groupby("date"):
-                day_de[(symbol, date)] = _day_market_state(day_frame, pip)["direction_efficiency"]
-            for t in trades:
-                all_trades.append({**t, "window": label, "group": group})
-        done = sum(1 for t in all_trades if t["window"] == label)
-        print(f"{label:>13} {start}-{end} [{group}] rsi_M15 trades={done}")
-    return all_trades, day_de
-
-
-def _tag_de(all_trades: list[dict], day_de: dict) -> tuple[float, float]:
-    lo, hi = de_thresholds(list(day_de.values()))
-    for t in all_trades:
-        t["de_bucket"] = de_bucket(day_de.get((t["symbol"], t["date"]), 0.0), lo, hi)
-    return lo, hi
+# rsi_reversal M15 baseline (SL30/TP60) reference — committed run 6e120b1.
+M15_BASELINE_REF = {"median_expectancy": 0.0047, "median_pf": 1.004, "positive_windows": 8,
+                    "total_pnl": -7.47, "max_drawdown_max": 60.91, "total_trades": 935,
+                    "median_sl_ratio": 0.5862}
 
 
 def main() -> int:
     broker = GmoFxBroker()
     warnings: list[str] = []
-    all_trades, day_de = _collect(broker, warnings)
+    execution = ExecutionConfig(spread_pips=SPREAD, slippage_pips=SLIP,
+                                stop_loss_pips=SL_PIPS, take_profit_pips=TP_PIPS)
+    all_trades, day_de = _collect(broker, warnings, execution)
     _export(all_trades, day_de, warnings)
     return 0
 
 
-def _write_csv(path: Path, rows: list[dict], keys: list[str]) -> None:
-    with path.open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow([*keys, *BK_STAT_FIELDS])
-        for r in rows:
-            w.writerow([*[r[k] for k in keys], *[r["stats"][f] for f in BK_STAT_FIELDS]])
-
-
 def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
-    rid = run_id("rsi_m15_final15")
+    rid = run_id("rsi_m15_scaled_final15")
     out = EXPORT_ROOT / rid
     out.mkdir(parents=True, exist_ok=True)
     lo, hi = _tag_de(all_trades, day_de)
@@ -207,16 +120,17 @@ def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
-    (out / "metrics_rsi_m15_15window_summary.json").write_text(
+    (out / "metrics_rsi_m15_scaled_15window_summary.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=2))
 
     (out / "warnings.json").write_text(json.dumps({
-        **fixed_config(timeframe=TIMEFRAME, strategy="rsi_reversal", adx_filter=False),
+        **fixed_config(timeframe=TIMEFRAME, strategy="rsi_reversal",
+                       stop_loss_pips=SL_PIPS, take_profit_pips=TP_PIPS, adx_filter=False),
         **safety_metadata(),
         "de_tertiles": {"low<": lo, "high>=": hi},
-        "comparison_ref": "rsi_reversal M5 = f716631 (committed 15-window run)",
-        "note": "rsi_reversal M15 15-window evaluation; SL/TP NOT re-tuned for M15; no tuning. "
-                "market-state breakdown uses DE tertiles only (day-class needs breakout M15).",
+        "comparison_refs": "M15 baseline=6e120b1, M5 baseline=f716631 (committed runs)",
+        "note": "rsi_reversal M15 SCALED-risk (SL50/TP100) confound check; single fixed point, "
+                "NOT an SL/TP search. market-state breakdown uses DE tertiles only.",
         "fetch_warnings": warnings,
     }, ensure_ascii=False, indent=2))
     _write_manifest(out, rid, win_group)
@@ -236,6 +150,9 @@ def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi
     def _grp(stats_map, label):
         g = robustness_summary(stats_map)
         g["total_pnl"] = round(sum(s["total_pnl"] for s in stats_map.values()), 2)
+        g["median_sl_ratio"] = round(
+            statistics.median([s["sl_ratio"] for s in stats_map.values()]), 4
+        ) if stats_map else 0.0
         g["label"] = label
         return g
 
@@ -267,6 +184,7 @@ def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi
         "group_prior10": _grp(prior, "prior10"),
         "group_oos5": _grp(oos, "oos5"),
         "de_tertiles": {"low<": lo, "high>=": hi},
+        "m15_baseline_ref": M15_BASELINE_REF,
         "m5_ref": M5_REF,
     })
     return summary
@@ -275,8 +193,10 @@ def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi
 def _write_manifest(out: Path, rid: str, win_group: dict) -> None:
     (out / "manifest.json").write_text(json.dumps({
         "run_id": rid, "created_at": pd.Timestamp.now().isoformat(),
-        "kind": "gmo_public_paper_rsi_m15_final15", "strategy": "rsi_reversal",
-        **fixed_config(timeframe=TIMEFRAME, adx_filter=False),
+        "kind": "gmo_public_paper_rsi_m15_scaled_final15", "strategy": "rsi_reversal",
+        "scaled_risk_note": "SL50/TP100 (1:2) — single fixed confound check vs M15 baseline 30/60",
+        **fixed_config(timeframe=TIMEFRAME, stop_loss_pips=SL_PIPS,
+                       take_profit_pips=TP_PIPS, adx_filter=False),
         **safety_metadata(),
         "windows": [{"window": label, "group": g, "dates": _weekdays(s, e)}
                     for label, s, e, g in WINDOWS],
@@ -284,12 +204,12 @@ def _write_manifest(out: Path, rid: str, win_group: dict) -> None:
 
 
 def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> None:
-    win_h = ("| window | group | 期間 | 完了 | 勝率 | 総損益 | 期待値 | PF | 最大DD | SL | TP "
-             "| 判定 |\n|--|--|--|--:|--:|--:|--:|--:|--:|--:|--:|--|\n")
+    win_h = ("| window | group | 期間 | 完了 | 勝率 | 総損益 | 期待値 | PF | 最大DD | SL | SL率 "
+             "| TP | 判定 |\n|--|--|--|--:|--:|--:|--:|--:|--:|--:|--:|--:|--|\n")
     win_rows = "\n".join(
         f"| {r['window']} | {r['group']} | {r['period']} | {s['completed_trades']} | "
         f"{s['win_rate']}% | {s['total_pnl']} | {s['expectancy']} | {s['profit_factor']} | "
-        f"{s['max_drawdown']} | {s['sl_count']} | {s['tp_count']} | "
+        f"{s['max_drawdown']} | {s['sl_count']} | {s['sl_ratio']} | {s['tp_count']} | "
         f"{'+' if s['expectancy'] > 0 else '−'} |"
         for r in by_window for s in [r["stats"]])
     sym_rows = "\n".join(
@@ -302,11 +222,24 @@ def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> N
     st_rows = "\n".join(
         f"| {r['market_state']} | {r['stats']['completed_trades']} | {r['stats']['total_pnl']} | "
         f"{r['stats']['expectancy']} | {r['stats']['profit_factor']} |" for r in by_state)
-    g_p, g_o, m5 = summary["group_prior10"], summary["group_oos5"], summary["m5_ref"]
+    g_p, g_o = summary["group_prior10"], summary["group_oos5"]
+    m15, m5 = summary["m15_baseline_ref"], summary["m5_ref"]
+    cmp_h = ("| 条件 | 期待値中央値 | PF中央値 | プラスwindow | 合計損益 | 最大DD最大 | 総取引 "
+             "| SL率中央 |\n|--|--:|--:|--:|--:|--:|--:|--:|\n")
+    cmp_rows = (
+        f"| M15 scaled(50/100) | {summary['median_expectancy']} | {summary['median_pf']} | "
+        f"{summary['positive_windows']} | {summary['total_pnl']} | {summary['max_drawdown_max']} "
+        f"| {summary['total_trades']} | {summary['median_sl_ratio']} |\n"
+        f"| M15 baseline(30/60) | {m15['median_expectancy']} | {m15['median_pf']} | "
+        f"{m15['positive_windows']} | {m15['total_pnl']} | {m15['max_drawdown_max']} | "
+        f"{m15['total_trades']} | {m15['median_sl_ratio']} |\n"
+        f"| M5 baseline(30/60) | {m5['median_expectancy']} | {m5['median_pf']} | "
+        f"{m5['positive_windows']} | {m5['total_pnl']} | {m5['max_drawdown_max']} | "
+        f"{m5['total_trades']} | 0.487 |\n")
     text = (
-        "# rsi_reversal M15 15窓評価 (current_cost / SL30・TP60 固定・M5と同条件)\n\n"
+        "# rsi_reversal M15 scaled-risk 15窓評価 (SL50/TP100・1点固定の交絡確認)\n\n"
         "GMO Public klines。実注文なし・Private接続なし・APIキー未使用。"
-        "M5と同一15窓・同一固定条件で timeframe のみ M15。SL/TPはM15用に未調整。\n\n"
+        "SL/TP探索ではなくSL30/TP60交絡の1点固定診断。M15 baseline/M5 baselineと同一15窓。\n\n"
         "## window別\n" + win_h + win_rows + "\n\n"
         "## 15窓全体集計\n"
         f"- 期待値中央値: {summary['median_expectancy']} / PF中央値: {summary['median_pf']}\n"
@@ -323,55 +256,53 @@ def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> N
         f"- 単一ペア偏重: {summary['symbol_concentrated']} / DE三分位 "
         f"low<{summary['de_tertiles']['low<']} high>={summary['de_tertiles']['high>=']}\n\n"
         "## prior10 vs oos5\n"
-        "| group | window数 | 期待値中央値 | PF中央値 | プラスwindow | 合計損益 | 最大DD最大 |\n"
-        "|--|--:|--:|--:|--:|--:|--:|\n"
+        "| group | window数 | 期待値中央値 | PF中央値 | プラスwindow | 合計損益 | 最大DD最大 "
+        "| SL率中央 |\n|--|--:|--:|--:|--:|--:|--:|--:|\n"
         f"| prior10 | {g_p['window_count']} | {g_p['median_expectancy']} | {g_p['median_pf']} | "
-        f"{g_p['positive_windows']} | {g_p['total_pnl']} | {g_p['max_drawdown_max']} |\n"
+        f"{g_p['positive_windows']} | {g_p['total_pnl']} | {g_p['max_drawdown_max']} | "
+        f"{g_p['median_sl_ratio']} |\n"
         f"| oos5 | {g_o['window_count']} | {g_o['median_expectancy']} | {g_o['median_pf']} | "
-        f"{g_o['positive_windows']} | {g_o['total_pnl']} | {g_o['max_drawdown_max']} |\n\n"
-        "## M5 rsi_reversal baseline との比較\n"
-        "| timeframe | 期待値中央値 | PF中央値 | プラスwindow | 合計損益 | 最大DD最大 | 総取引 |\n"
-        "|--|--:|--:|--:|--:|--:|--:|\n"
-        f"| M15 | {summary['median_expectancy']} | {summary['median_pf']} | "
-        f"{summary['positive_windows']} | {summary['total_pnl']} | "
-        f"{summary['max_drawdown_max']} | {summary['total_trades']} |\n"
-        f"| M5 | {m5['median_expectancy']} | {m5['median_pf']} | {m5['positive_windows']} | "
-        f"{m5['total_pnl']} | {m5['max_drawdown_max']} | {m5['total_trades']} |\n\n"
+        f"{g_o['positive_windows']} | {g_o['total_pnl']} | {g_o['max_drawdown_max']} | "
+        f"{g_o['median_sl_ratio']} |\n\n"
+        "## M15 baseline / M5 baseline との比較\n" + cmp_h + cmp_rows + "\n"
         "## symbol別(15窓合算)\n"
         "| symbol | 完了 | 総損益 | 期待値 | PF | window勝敗 |\n|--|--:|--:|--:|--:|--|\n"
         + sym_rows + "\n\n"
         "## exit_reason別(15窓合算)\n"
         "| exit_reason | 件数 | 総損益 | 期待値 |\n|--|--:|--:|--:|\n" + rsn_rows + "\n\n"
-        "## market-state別(DE三分位のみ・day-classはbreakout M15未実施のため省略)\n"
+        "## market-state別(DE三分位のみ)\n"
         "| market_state | 完了 | 総損益 | 期待値 | PF |\n|--|--:|--:|--:|--:|\n" + st_rows + "\n"
     )
     (out / "summary.md").write_text(text)
 
 
 def _write_decision(out, summary, verdict, reasons) -> None:
-    m5 = summary["m5_ref"]
+    m15, m5 = summary["m15_baseline_ref"], summary["m5_ref"]
     text = (
-        "# rsi_reversal M15 最終判断\n\n"
+        "# rsi_reversal M15 scaled-risk (SL50/TP100) 最終判断\n\n"
         f"## 判定: {verdict}\n\n"
         "### 根拠\n" + "\n".join(f"- {r}" for r in reasons) + "\n\n"
         "### 集計\n"
         f"- 期待値中央値 {summary['median_expectancy']} / PF中央値 {summary['median_pf']} / "
         f"プラス窓 {summary['positive_windows']}/{summary['window_count']}\n"
-        f"- 総取引 {summary['total_trades']}(M5={m5['total_trades']}) / "
+        f"- 合計損益 {summary['total_pnl']} "
+        f"（M15base={m15['total_pnl']} / M5base={m5['total_pnl']}）\n"
+        f"- SL率中央 {summary['median_sl_ratio']} "
+        f"（M15base={m15['median_sl_ratio']} / M5base=0.487）\n"
+        f"- 総取引 {summary['total_trades']}（M15base={m15['total_trades']}）/ "
         f"1取引期待値 {summary['per_trade_expectancy']}\n"
-        f"- 合計損益 {summary['total_pnl']}(M5={m5['total_pnl']}) / "
-        f"最大DD最大 {summary['max_drawdown_max']} / DD/損益 {summary['dd_to_pnl']}\n"
         f"- prior10 中央値 {summary['group_prior10']['median_expectancy']} / "
         f"oos5 中央値 {summary['group_oos5']['median_expectancy']}\n"
         f"- TP {summary['tp_total_pnl']} / SL {summary['sl_total_pnl']} / "
         f"反対 {summary['opp_total_pnl']}\n\n"
+        "### SL/TP交絡の解釈\n"
+        "- SL率が baseline より下がり総損益・期待値が改善 → SL30/TP60 はM15に不利な交絡だった。\n"
+        "- 改善しない/悪化 → 交絡ではなく、M15でも単純rsiにエッジが無い。\n\n"
         "### 今後の扱い\n"
-        "- 継続検証候補: M30/H1 や 他戦略M15 へ拡張する価値あり。\n"
-        "- 研究用ベースライン: M15版ベースラインとして保存し、他戦略M15の比較基準にする。\n"
-        "- 撤退: M15化でも改善せず。高時間足でも単純rsiは不可と判断。\n"
-        "- SL/TP/RSIのM15向け調整は過剰最適化のため、まず素のM15で判断する。\n"
+        "- 継続検証候補 / 研究用ベースライン / 撤退 のいずれか（本文の判定に従う）。\n"
+        "- これは1点固定の交絡確認。SL/TPの多点探索は過剰最適化のため行わない。\n"
     )
-    (out / "rsi_m15_final_decision.md").write_text(text)
+    (out / "rsi_m15_scaled_final_decision.md").write_text(text)
 
 
 if __name__ == "__main__":
