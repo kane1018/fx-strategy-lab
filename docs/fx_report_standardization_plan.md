@@ -326,3 +326,131 @@ E2E-08: safety conflict / incomplete は安全扱いされない
 - `gmo_readonly = true` / `gmo_order_enabled = false` / `no_order_execution = true`
 - 画面・API応答に APIキー / secret / `.env` 値が出ないこと
 - 実注文ボタン・Private API 実行導線が存在しない、または無効であること
+
+## 13. 表示レイヤ方針（意思決定）
+
+### 13-1. この決定の目的
+
+- E2E に進む前に、レポート一覧・詳細を **どう表示するか** を1つに決める。
+- 現在は index/detail のデータ関数（`list_report_index` / `report_detail`）と
+  Markdown 整形関数（`format_report_index_markdown` / `format_report_detail_markdown`）が
+  揃っている。次は UI/API 実装に入る前の分岐点。
+- 表示レイヤは **実注文・Private API と完全に分離**する。
+- 最初の表示レイヤは **read-only に限定**する（書き込み・注文・残高取得を一切持たない）。
+
+### 13-2. 比較する2案
+
+**A. read-only API 方式**
+
+```text
+GET /reports                  -> list_report_index(exports_root)
+GET /reports/{run_id}         -> report_detail(run_dir)
+GET /reports/markdown         -> format_report_index_markdown(rows)
+GET /reports/{run_id}/markdown-> format_report_detail_markdown(detail)
+```
+
+- 既存の dict 返却関数とそのまま噛み合う。
+- 将来の UI と E2E に直結する。safety metadata を API レスポンスとして扱いやすい。
+- error row / safety conflict / incomplete を画面で扱いやすい。
+- API レスポンスを E2E で検証しやすい。
+- ただし endpoint 設計が必要。認証・アクセス制御・ローカル限定方針を後で決める必要がある。
+
+**B. 静的 Markdown 表示方式**
+
+```text
+list_report_index → format_report_index_markdown → .md として保存/表示
+report_detail     → format_report_detail_markdown → .md として保存/表示
+```
+
+- 実装が軽い。ChatGPT へ貼りやすい。サーバー/UI 不要。
+- ただし 一覧→詳細 の操作導線を E2E しにくい。
+- safety badge / error row の UI 表現へ発展しにくい。画面化時に作り直しが発生しやすい。
+
+### 13-3. 比較表
+
+| 観点 | A: read-only API | B: 静的Markdown |
+| --- | --- | --- |
+| 既存関数との相性 | ◎ dict をそのまま返せる | ○ formatter をそのまま使える |
+| UI化のしやすさ | ◎ 一覧/詳細に直結 | △ 画面化で作り直し |
+| E2Eのしやすさ | ◎ レスポンス/遷移を検証可 | △ 操作導線が乏しい |
+| ChatGPT相談のしやすさ | ○ /markdown で両立 | ◎ そのまま貼れる |
+| 安全表示の扱いやすさ | ◎ badge へ展開しやすい | △ テキスト止まり |
+| error rowの扱いやすさ | ◎ 行として明示しやすい | △ 表現が限定 |
+| CSV巨大本文を避けやすいか | ◎ API契約で本文を返さない | ○ formatter が出さない |
+| 実装の軽さ | △ endpoint 設計が要る | ◎ 最軽量 |
+| 将来の拡張性 | ◎ UI/E2E/フィルタへ伸びる | △ 頭打ち |
+| 実注文からの分離 | ◎ read-only 専用で隔離 | ◎ そもそも実行系なし |
+| 推奨度 | ◎ Primary | ○ Supporting |
+
+### 13-4. 推奨方針
+
+**A: read-only API 方式を採用**する。
+
+- すでに `list_report_index()` / `report_detail()` が UI/API 向けの dict を返す。
+- `format_*_markdown()` は ChatGPT 貼り付け用の補助として残せる（/markdown で両立）。
+- 将来の一覧UI・詳細UI・E2E に直結する。
+- safety metadata をバッジ表示へ展開しやすい。
+- error row / safety conflict を画面上で明示しやすい。
+- CSV 本文を読まない設計を API 側で守りやすい。
+- §11 の「最初のE2E対象フロー」と整合する。
+
+### 13-5. 採用する構成
+
+```text
+Primary:      read-only API
+Supporting:   Markdown formatter for ChatGPT / human review
+Not primary:  static Markdown only
+```
+
+### 13-6. 最初の read-only API MVP 範囲（将来・今回は実装しない）
+
+```text
+GET /reports
+  - list_report_index(exports_root) の結果を返す
+  - 実注文・Private API・APIキー入力導線なし
+  - error run も error row として返す
+
+GET /reports/{run_id}
+  - report_detail(run_dir) の結果を返す
+  - summary.md / final_decision.md は detail 内に含む
+  - CSV 本文は返さない（files 一覧だけ返す）
+
+GET /reports/markdown
+  - format_report_index_markdown(list_report_index(exports_root)) を返す
+
+GET /reports/{run_id}/markdown
+  - format_report_detail_markdown(report_detail(run_dir)) を返す
+```
+
+### 13-7. read-only API で絶対にやらないこと
+
+- 実注文しない / GMO Private API に接続しない
+- APIキー/secret を扱わない / `.env` を表示しない
+- market_order を有効化しない / DB を直接操作しない
+- CSV 巨大本文を返さない / analysis_exports を書き換えない
+- バックテストを再実行しない / GMO API から新規データ取得しない
+- 口座残高を取得しない / 注文・決済・建玉取得の導線を作らない
+
+### 13-8. E2E との対応（§11）
+
+- `GET /reports` が E2E-01〜03 を支える
+- `GET /reports/{run_id}` が E2E-04〜05 を支える
+- API/画面に危険導線がないことが E2E-06 を支える
+- CSV 本文を返さないことが E2E-07 を支える
+- safety conflict / incomplete を安全扱いしないことが E2E-08 を支える
+
+### 13-9. 次に進む条件
+
+```text
+次は「read-only API MVP仕様」を docs 化する。
+まだ API 実装には入らない。
+MVP仕様で endpoint / response shape / error response / safety badge mapping / tests を決める。
+その後に初めて実装へ進む。
+```
+
+### 13-10. 今回（§13 追加）はやらないこと
+
+- API 実装しない / UI 実装しない / E2E 導入しない
+- package 追加しない / 既存コード変更しない
+- 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない
+- 実注文・Private API・APIキー・`.env` に触れない
