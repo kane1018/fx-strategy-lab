@@ -8,7 +8,7 @@ unfair confound. Same 15 windows, same current_cost, same rsi_reversal, baseline
 
 This is a single fixed point. Do NOT try SL40/SL60/SL70/TP120 etc.
 
-Reuses rsi_m15_15window (_collect/_tag_de/_write_csv) and fx_eval_common.
+Reuses rsi_m15_15window (_collect/_tag_de) and fx_eval_common writers.
 
 No real orders, no Private API, no API key/secret. In-memory DBs only.
 
@@ -17,7 +17,6 @@ No real orders, no Private API, no API key/secret. In-memory DBs only.
 
 from __future__ import annotations
 
-import json
 import statistics
 import sys
 from pathlib import Path
@@ -29,7 +28,7 @@ import pandas as pd  # noqa: E402
 from app.brokers import GmoFxBroker  # noqa: E402
 from app.schemas.trading import ExecutionConfig  # noqa: E402
 from scripts.bollinger_15window import DE_BUCKETS  # noqa: E402
-from scripts.breakout_15window import _TP, _summarize_bk  # noqa: E402
+from scripts.breakout_15window import _TP, BK_STAT_FIELDS, _summarize_bk  # noqa: E402
 from scripts.fx_eval_common import (  # noqa: E402
     _OPP,
     _SL,
@@ -40,12 +39,19 @@ from scripts.fx_eval_common import (  # noqa: E402
     WINDOWS,
     _weekdays,
     classify_strategy,
+    ensure_output_dir,
     fixed_config,
     robustness_summary,
     run_id,
     safety_metadata,
+    write_json,
+    write_manifest,
+    write_markdown,
+    write_metrics_csv,
+    write_summary_markdown,
+    write_warnings,
 )
-from scripts.rsi_m15_15window import M5_REF, TIMEFRAME, _collect, _tag_de, _write_csv  # noqa: E402
+from scripts.rsi_m15_15window import M5_REF, TIMEFRAME, _collect, _tag_de  # noqa: E402
 
 SL_PIPS, TP_PIPS = 50.0, 100.0
 
@@ -67,8 +73,7 @@ def main() -> int:
 
 def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
     rid = run_id("rsi_m15_scaled_final15")
-    out = EXPORT_ROOT / rid
-    out.mkdir(parents=True, exist_ok=True)
+    out = ensure_output_dir(EXPORT_ROOT / rid)
     lo, hi = _tag_de(all_trades, day_de)
 
     window_stats = {label: _summarize_bk([t for t in all_trades if t["window"] == label])
@@ -104,11 +109,16 @@ def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
                          "stats": _summarize_bk([t for t in all_trades
                                                  if t.get("de_bucket") == bucket])})
 
-    _write_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"])
-    _write_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"])
-    _write_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"])
-    _write_csv(out / "metrics_by_date.csv", by_date, ["window", "date"])
-    _write_csv(out / "metrics_by_market_state.csv", by_state, ["market_state"])
+    write_metrics_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_date.csv", by_date, ["window", "date"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_market_state.csv", by_state, ["market_state"],
+                      stat_fields=BK_STAT_FIELDS)
 
     summary = _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi)
     verdict, reasons = classify_strategy(
@@ -120,10 +130,9 @@ def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
-    (out / "metrics_rsi_m15_scaled_15window_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2))
+    write_json(out / "metrics_rsi_m15_scaled_15window_summary.json", summary)
 
-    (out / "warnings.json").write_text(json.dumps({
+    write_warnings(out, {
         **fixed_config(timeframe=TIMEFRAME, strategy="rsi_reversal",
                        stop_loss_pips=SL_PIPS, take_profit_pips=TP_PIPS, adx_filter=False),
         **safety_metadata(),
@@ -132,7 +141,7 @@ def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
         "note": "rsi_reversal M15 SCALED-risk (SL50/TP100) confound check; single fixed point, "
                 "NOT an SL/TP search. market-state breakdown uses DE tertiles only.",
         "fetch_warnings": warnings,
-    }, ensure_ascii=False, indent=2))
+    })
     _write_manifest(out, rid, win_group)
     _write_summary(out, by_window, by_symbol, by_reason, by_state, summary)
     _write_decision(out, summary, verdict, reasons)
@@ -191,7 +200,7 @@ def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi
 
 
 def _write_manifest(out: Path, rid: str, win_group: dict) -> None:
-    (out / "manifest.json").write_text(json.dumps({
+    write_manifest(out, {
         "run_id": rid, "created_at": pd.Timestamp.now().isoformat(),
         "kind": "gmo_public_paper_rsi_m15_scaled_final15", "strategy": "rsi_reversal",
         "scaled_risk_note": "SL50/TP100 (1:2) — single fixed confound check vs M15 baseline 30/60",
@@ -200,7 +209,7 @@ def _write_manifest(out: Path, rid: str, win_group: dict) -> None:
         **safety_metadata(),
         "windows": [{"window": label, "group": g, "dates": _weekdays(s, e)}
                     for label, s, e, g in WINDOWS],
-    }, ensure_ascii=False, indent=2))
+    })
 
 
 def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> None:
@@ -273,7 +282,7 @@ def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> N
         "## market-state別(DE三分位のみ)\n"
         "| market_state | 完了 | 総損益 | 期待値 | PF |\n|--|--:|--:|--:|--:|\n" + st_rows + "\n"
     )
-    (out / "summary.md").write_text(text)
+    write_summary_markdown(out, text)
 
 
 def _write_decision(out, summary, verdict, reasons) -> None:
@@ -302,7 +311,7 @@ def _write_decision(out, summary, verdict, reasons) -> None:
         "- 継続検証候補 / 研究用ベースライン / 撤退 のいずれか（本文の判定に従う）。\n"
         "- これは1点固定の交絡確認。SL/TPの多点探索は過剰最適化のため行わない。\n"
     )
-    (out / "rsi_m15_scaled_final_decision.md").write_text(text)
+    write_markdown(out / "rsi_m15_scaled_final_decision.md", text)
 
 
 if __name__ == "__main__":

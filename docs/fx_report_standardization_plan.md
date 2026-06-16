@@ -102,10 +102,13 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    `write_manifest` / `write_warnings` / `write_csv` / `write_metrics_csv` /
    `write_summary_markdown` / `write_markdown`）を追加。移行済み: `rsi_final_15window.py`（1本目）、
    `breakout_15window.py`（2本目）、`bollinger_15window.py`（3本目）、
-   `market_structure_15window.py`（4本目）、`rsi_m15_15window.py`（5本目・TP拡張CSV＋
-   market-state別CSVを `write_metrics_csv(..., stat_fields=BK_STAT_FIELDS)` で対応、final_decision は
-   `write_markdown`。`_write_csv` は rsi_m15_scaled が import するため共通writerへの薄い委譲wrapperとして
-   残置）。いずれも出力内容は不変・mechanism のみ共通化。残り（rsi_m15_scaled / regime診断）は次段階。
+   `market_structure_15window.py`（4本目）、`rsi_m15_15window.py`（5本目）、
+   `rsi_m15_scaled_15window.py`（6本目）。TP拡張CSV＋market-state別CSVは
+   `write_metrics_csv(..., stat_fields=BK_STAT_FIELDS)`、final_decision は `write_markdown`。
+   scaled移行に伴い rsi_m15 の `_write_csv` 委譲wrapperは撤去済み（どのランナーからも未参照）。
+   いずれも出力内容は不変・mechanism のみ共通化。**TP拡張ランナー(breakout/bollinger/
+   market_structure/rsi_m15/rsi_m15_scaled)はすべて共通writer化完了**。残りは regime診断
+   （DictWriter系CSV・別パターン）のみ。`_summarize_bk` の共通化は別タスクで判断。
 3. report schema の固定（summary.json のキーを契約として固定）
 4. 安全表示（safety_metadata）の単一ソース化
 5. レポート一覧UI / run詳細UI に備えたデータ構造整理

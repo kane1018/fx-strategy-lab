@@ -149,12 +149,6 @@ def main() -> int:
     return 0
 
 
-def _write_csv(path: Path, rows: list[dict], keys: list[str]) -> None:
-    # Thin compat wrapper (rsi_m15_scaled imports this) delegating to the shared
-    # writer; kept until rsi_m15_scaled is migrated so its import surface is intact.
-    write_metrics_csv(path, rows, keys, stat_fields=BK_STAT_FIELDS)
-
-
 def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
     rid = run_id("rsi_m15_final15")
     out = ensure_output_dir(EXPORT_ROOT / rid)
@@ -193,11 +187,16 @@ def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
                          "stats": _summarize_bk([t for t in all_trades
                                                  if t.get("de_bucket") == bucket])})
 
-    _write_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"])
-    _write_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"])
-    _write_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"])
-    _write_csv(out / "metrics_by_date.csv", by_date, ["window", "date"])
-    _write_csv(out / "metrics_by_market_state.csv", by_state, ["market_state"])
+    write_metrics_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_date.csv", by_date, ["window", "date"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_market_state.csv", by_state, ["market_state"],
+                      stat_fields=BK_STAT_FIELDS)
 
     summary = _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi)
     verdict, reasons = classify_strategy(
