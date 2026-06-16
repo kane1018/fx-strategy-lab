@@ -803,3 +803,159 @@ app/routers/reports.py
 
 - UIデザイン / E2Eツール / 認証の本格設計 / CSVプレビュー / CSVダウンロード /
   本番公開 / 実注文連携 / Private API連携 / paper forward。
+
+## 15. UI MVP 仕様
+
+実装済みの `/api/reports` 系 read-only API（§14）を前提に、次に作るレポート閲覧 UI の MVP を確定する。
+**本節は docs のみ**で、UI 実装・API 変更・E2E 導入は含まない。
+
+### 15-1. UI MVP の目的
+
+- `/api/reports` 系 read-only API を使い、検証レポートを安全に閲覧する。
+- 最初の UI は **分析・確認用**であり、売買操作用ではない。
+- UI から実注文・Private API・APIキー入力・market_order 有効化は行わない。
+- §11 の E2E-01〜08 の対象となる最小画面を作る。
+- ChatGPT 相談用に Markdown 表示/コピー導線も補助として残す。
+- CSV 本文は勝手に全展開しない。
+
+### 15-2. 対象画面
+
+MVP 対象は2画面のみ:
+
+```text
+1. レポート一覧画面
+2. run詳細画面
+```
+
+MVP 外（将来追加）: CSVプレビュー / CSVダウンロード / 設定 / 認証 / paper forward / 実注文。
+
+### 15-3. レポート一覧画面仕様
+
+- Primary data source: `GET /api/reports`（`{"items": [...], "count": n}`）。
+- 表示列: status / run_id / kind / strategy / timeframe / cost_scenario / verdict /
+  median_expectancy / median_pf / total_pnl / max_drawdown_max / safety badge /
+  warnings（warnings_count・has_warnings）/ created_at / error。
+- `items` を表形式で表示、`count` を件数表示。`run_id` クリックで詳細へ遷移。
+- error row も一覧に表示し通常 run と区別。safety が未確認・矛盾・不足・error は **安全扱いしない**。
+- CSV 本文は表示しない。ページング・検索・フィルタは MVP 外（任意）。
+
+### 15-4. 一覧画面の状態表示
+
+| 状態 | 表示 |
+| --- | --- |
+| loading | 読み込み中 |
+| empty | レポートがありません |
+| error | レポート一覧を取得できません |
+| success | 件数＋一覧表 |
+| root missing / 503 | レポート保存先が未設定または存在しません |
+| broken run | ERROR 行として表示 |
+
+### 15-5. run詳細画面仕様
+
+- Primary data source: `GET /api/reports/{run_id}`。
+- 表示セクション: Overview / Safety / Metrics Summary / Cost / Execution / Files /
+  Summary Markdown / Final Decision。
+- 一覧から選択した run_id の詳細を表示。Safety は一覧より詳しく表示。
+- Files は name / kind / size_bytes のみ表示。CSV 本文は表示しない。
+- Summary Markdown / Final Decision は本文表示してよい。
+- `GET /api/reports/{run_id}/markdown` のコピー導線を補助として用意（任意）。
+- 一覧へ戻る導線を用意。run_id 不正(400)/404/422 をエラー表示する。
+
+### 15-6. 詳細画面の状態表示
+
+| 状態 | 表示 |
+| --- | --- |
+| loading | 詳細読み込み中 |
+| not found / 404 | run が見つかりません |
+| invalid run_id / 400 | run_id が不正です |
+| broken run / 422 | run 構造が壊れています |
+| error / 500 | 詳細取得に失敗しました |
+| success | 詳細セクション表示 |
+
+### 15-7. safety badge 表示仕様（§14-10 の UI 具体化）
+
+| 条件 | badge | 表示文言 | 意味 | 安全扱い |
+| --- | --- | --- | --- | --- |
+| read_only_confirmed=true and safety_conflicts=[] | SAFE_READ_ONLY | Read-only確認済み | 実注文なし確認済み | Yes |
+| has_error=true | ERROR | Error | 壊れた run | No |
+| safety_conflicts not empty | SAFETY_CONFLICT | Safety conflict | 安全メタ矛盾 | No |
+| safety_complete=false | SAFETY_INCOMPLETE | Safety incomplete | 安全メタ不足 | No |
+| read_only_confirmed=false | UNCONFIRMED | Unconfirmed | read-only 未確認 | No |
+
+- 優先順位 ERROR > SAFETY_CONFLICT > SAFETY_INCOMPLETE > UNCONFIRMED > SAFE_READ_ONLY。
+- 安全扱いできるのは **SAFE_READ_ONLY のみ**。色は仮でよいが、色だけに依存せず文言も必ず表示する。
+
+### 15-8. ERROR 行の表示仕様
+
+- `has_error=true` の row は ERROR 行。一覧に表示し、run_id と error message を表示。
+- 詳細遷移はできてもよいが、詳細取得で 422/404 になる場合はエラー表示。
+- SAFE 扱いしない。ERROR 行は折り畳みではなく MVP では常時表示。
+- error の詳細は表示してよいが、secret や `.env` 値は表示しない。
+
+### 15-9. CSV 方針
+
+- MVP では CSV 本文を表示しない。`files` の name/kind/size_bytes のみ表示。
+- CSV プレビュー・CSV ダウンロードは MVP 外（将来は別仕様・別 endpoint）。
+- 巨大 CSV を自動展開しないことは E2E 対象（E2E-07）。
+
+### 15-10. Markdown 導線
+
+- 一覧: `GET /api/reports/markdown` を ChatGPT 相談用の取得/コピー補助導線として用意。
+- 詳細: `GET /api/reports/{run_id}/markdown` を同様に補助導線として用意。
+- Markdown は Primary ではなく補助。UI の Primary data source は JSON。
+- Markdown をファイル生成しない。コピー導線は MVP で任意。
+
+### 15-11. UI 上に存在してはいけない危険導線
+
+- 実注文ボタン / 決済ボタン / 建玉取得ボタン
+- GMO Private API 接続ボタン / APIキー・secret 入力欄 / `.env` 表示導線
+- market_order 有効化スイッチ / バックテスト再実行ボタン / GMO API 新規取得ボタン
+- OANDA 操作導線 / RiskManager 操作導線 / DB 直接操作導線
+
+### 15-12. API との対応表
+
+| UI | API | 用途 |
+| --- | --- | --- |
+| レポート一覧 | GET /api/reports | 一覧 JSON（Primary） |
+| 一覧Markdownコピー | GET /api/reports/markdown | ChatGPT 貼り付け（補助） |
+| run詳細 | GET /api/reports/{run_id} | 詳細 JSON（Primary） |
+| 詳細Markdownコピー | GET /api/reports/{run_id}/markdown | ChatGPT 貼り付け（補助） |
+
+### 15-13. E2E との対応（§11）
+
+| E2E | UI確認 |
+| --- | --- |
+| E2E-01 | 一覧画面が表示される |
+| E2E-02 | 正常 run に SAFE_READ_ONLY が表示される |
+| E2E-03 | error run が ERROR として表示される |
+| E2E-04 | run 詳細へ遷移できる |
+| E2E-05 | 詳細画面に7セクションが表示される |
+| E2E-06 | 危険導線が存在しない |
+| E2E-07 | CSV 本文が全展開されない |
+| E2E-08 | conflict/incomplete が安全扱いされない |
+
+### 15-14. MVP 外
+
+- 認証の本格設計 / 本番公開 / CSVプレビュー / CSVダウンロード / ソート・検索・フィルタ /
+  グラフ表示 / レポート比較 / 戦略再実行 / バックテスト再実行 / paper forward /
+  実注文 / Private API / アラート・通知 / Pydantic response model 強化。
+
+### 15-15. UI 実装前チェックリスト（既存 frontend 調査結果つき）
+
+- frontend 構成: Next.js 15（App Router, `frontend/app/`）/ React 18 / TypeScript / Vitest（調査済み）。
+- 既存 UI 技術スタック: 上記 ＋ 既存 `frontend/components/`・`frontend/lib/`。
+- API 呼び出し方法: 既存 `frontend/lib/api.ts`（fetch ラッパ）を踏襲。
+- dev server / API base URL 方針: `NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"`（既存規約）。
+- read-only 表示であることの確認: 取得は GET のみ、書き込み導線を置かない。
+- safety badge 表示文言の確認: §15-7 の文言を使用。
+- error row 表示の確認: §15-8 に従う。
+- CSV 本文非表示の確認: §15-9 に従う。
+- E2E 用に安定したテキスト/属性を置く方針: 主要要素に `data-testid`（例 `report-row`,
+  `safety-badge`, `error-row`, `detail-section`）を付ける。
+- 危険導線を追加しない確認: §15-11 のいずれも置かない。
+
+### 15-16. 今回（§15 追加）はやらないこと
+
+- UI 実装しない / E2E 導入しない / package 追加しない / API 変更しない / 既存コード変更しない
+- 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない
+- 実注文・Private API・APIキー・`.env` に触れない
