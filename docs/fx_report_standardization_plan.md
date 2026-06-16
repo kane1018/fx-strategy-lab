@@ -1125,3 +1125,176 @@ docs/fx_report_standardization_plan.md
 - backend/frontend の起動スクリプトを変更しない / API・UI を変更しない。
 - 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない。
 - 実注文・Private API・APIキー・`.env` に触れない。
+
+### 16-16. E2E fixture run 生成方針
+
+§16-4 の5種 run を E2E で安定検証するため、固定 fixture run の構造・生成方法・配置・安全制約を
+ここで確定する。**本節は docs のみ**で、fixture スクリプト/ファイルの作成・package 追加・E2E 実装は含まない。
+
+> **実装コードの事実確認（read-only 調査結果）**: `report_index_entry()` は run dir 直下の
+> `metrics_*_summary.json` を1つだけ読む（0件→FileNotFoundError、複数→ValueError＝どちらも
+> `list_report_index()` で error row 化）。safety は manifest∪warnings で統合し、
+> **`safety_conflicts` は「manifest と warnings の両方に同じ安全キーがあり値が食い違う」場合のみ**
+> 立つ（片方だけ `real_order=true` では conflict にならず `read_only_confirmed=false`＝UNCONFIRMED）。
+> `safety_complete` は6フラグのいずれかが manifest にも warnings にも無い（None）と false。
+> この事実に基づき下記の各 run レシピを定義する。
+
+#### 16-16-1. fixture 方針の目的
+
+- E2E を実 analysis_exports に依存させない / 固定データで再現可能にする。
+- safety / error / CSV 非展開を確実に検証する。
+- API/UI/E2E の安全制約を守る。Playwright 導入前にテストデータ構造を固定する。
+
+#### 16-16-2. fixture root 方針
+
+- 配置候補: `frontend/e2e/fixtures/analysis_exports/`（生成スクリプト方式なら生成先。git 管理しない想定）。
+- 実 `analysis_exports/` とは別。小さい固定ファイルのみ。secret/APIキー/`.env`/DB を含めない。
+- CSV 本文には E2E 確認用の短い marker のみ。`analysis_exports_root` をこの root へ向けて E2E する。
+
+#### 16-16-3. 必要な5種類の run（レシピは上記事実確認に準拠）
+
+1. **normal run**（`e2e_normal_run`）: 一覧で正常行・SAFE_READ_ONLY、詳細7セクション、CSV メタ確認。
+   - `metrics_*_summary.json` を1つ / manifest.json / warnings.json / summary.md /
+     `*_final_decision.md` / small CSV。manifest に6安全フラグを read-only 値で完備
+     （real_order=false, private_api_used=false, api_key_used=false, gmo_readonly=true,
+     gmo_order_enabled=false, no_order_execution=true）。warnings は `{"fetch_warnings": []}`。
+     → read_only_confirmed=true / safety_conflicts=[] / safety_complete=true。
+2. **error run**（`e2e_error_run`）: 一覧で ERROR 行・has_error=true・SAFE 扱いされない。
+   - **推奨レシピ: summary JSON 0件**（manifest/warnings はあってよい）。最小で壊れた run を表現でき、
+     `list_report_index()` が FileNotFoundError を捕捉して error row 化する。
+3. **safety conflict run**（`e2e_conflict_run`）: safety_conflicts が非空・SAFE 扱いされない（E2E-08）。
+   - **推奨レシピ（事実準拠の訂正）: manifest と warnings で同一安全キーの値を食い違わせる**。
+     例: `manifest.real_order=false` かつ `warnings.real_order=true`
+     → safety_conflicts=["real_order"] / read_only_confirmed=false → SAFETY_CONFLICT。
+   - 注: 当初案「manifest.real_order=true 単体」は conflict にならず UNCONFIRMED になる（§16-16 冒頭の
+     事実確認参照）。conflict を作るには manifest↔warnings の不一致が必須。summary は正常にする。
+4. **safety incomplete run**（`e2e_incomplete_run`）: safety_complete=false・SAFE 扱いされない。
+   - **推奨レシピ: 6安全フラグのうち1つ以上を manifest からも warnings からも省く**
+     （例: `no_order_execution` を両方から欠落）→ その flag が None → safety_complete=false →
+     SAFETY_INCOMPLETE。summary は正常にする。
+5. **csv marker**: Files 表に CSV メタが出るが本文は画面に出ない（E2E-07）。
+   - **推奨: normal run に CSV marker を内包**（run 数を増やさず E2E-05/07 を同時確認）。
+     `metrics_by_window.csv` の本文に `__CSV_BODY_MARKER__` を含める。
+
+#### 16-16-4. 最小ファイル構成
+
+```text
+<run_id>/
+  manifest.json
+  warnings.json
+  metrics_<name>_summary.json     # error run は「無し」
+  summary.md
+  <name>_final_decision.md
+  metrics_by_window.csv           # 本文に __CSV_BODY_MARKER__（normal/csv run）
+```
+
+error run は例外として summary JSON を置かない（他ファイルは任意）。
+
+#### 16-16-5. fixture summary JSON 最小 shape（strategy summary、`validate_summary_schema` 準拠）
+
+```json
+{
+  "window_count": 15,
+  "median_expectancy": 0.0164,
+  "median_pf": 1.016,
+  "positive_windows": 8,
+  "negative_windows": 7,
+  "total_pnl": 56.95,
+  "max_drawdown_max": 65.46,
+  "group_prior10": {"median_expectancy": 0.02},
+  "group_oos5": {"median_expectancy": -0.01},
+  "verdict": "研究用ベースライン"
+}
+```
+
+今回の fixture は strategy summary で十分（diagnostic summary は不要）。
+
+#### 16-16-6. fixture manifest JSON 最小 shape
+
+```json
+{
+  "run_id": "e2e_normal_run",
+  "created_at": "2026-01-01T00:00:00",
+  "kind": "strategy",
+  "strategy": "rsi_reversal",
+  "timeframe": "M5",
+  "cost_scenario": "current_cost",
+  "symbols": ["USD_JPY", "EUR_JPY"],
+  "spread_pips": 1.2,
+  "slippage_pips": 0.2,
+  "stop_loss_pips": 30,
+  "take_profit_pips": 60,
+  "real_order": false,
+  "private_api_used": false,
+  "api_key_used": false,
+  "gmo_readonly": true,
+  "gmo_order_enabled": false,
+  "no_order_execution": true
+}
+```
+
+conflict run は warnings 側で1フラグだけ食い違わせ、incomplete run は1フラグを両方から省く。
+
+#### 16-16-7. warnings JSON 方針
+
+- normal run は `{"fetch_warnings": []}`。warnings_count / has_warnings 確認用に1 run だけ
+  小さい warning（例 `{"fetch_warnings": ["2026-01-01 no klines"]}`）を入れてよい。
+- conflict run はここに食い違う安全フラグ（例 `"real_order": true`）を入れる。secret/APIキー/`.env` は含めない。
+
+#### 16-16-8. Markdown ファイル方針
+
+- summary.md / `*_final_decision.md` は短い本文。Markdown rendering library は不要。
+- E2E では本文が（`<pre>` で）表示されることを確認。secret/APIキー/`.env` は含めない。
+
+#### 16-16-9. CSV ファイル方針
+
+- 小さい固定 CSV。本文に `__CSV_BODY_MARKER__` を含める。
+- Files 表に `metrics_by_window.csv` と size_bytes は表示。画面本文に `__CSV_BODY_MARKER__` が
+  出ないことを確認。CSV ダウンロード/プレビューは MVP 外。
+
+#### 16-16-10. 生成方法の比較と推奨
+
+- A. 固定 fixture ファイルを git 管理: E2E からそのまま使える/構造が見える。ただしファイル数増。
+- B. 生成スクリプトで一時生成: 実 analysis_exports と混同しにくい/クリーンな root を毎回用意/
+  CSV marker 等を明示生成。ただし E2E 起動前の生成手順が要る。
+- **推奨: B（生成スクリプトで一時生成）**。理由: 実データ非依存・package 追加前でも実装可・
+  クリーン root を用意しやすい・marker を明示生成できる。
+
+#### 16-16-11. 生成ヘルパの配置（推奨）
+
+- **推奨: `backend/scripts/create_e2e_report_fixtures.py`**。理由: report_detail/list_report_index が
+  backend 側にあり、JSON/CSV/Markdown 生成は Python が既存構成に近い（backend pytest の tmp_path 流儀と整合）。
+  frontend は生成済み fixture を見るだけにできる。既存の writer（ensure_output_dir / write_json 等）を再利用可。
+
+#### 16-16-12. E2E 起動時の接続方針（具体コマンドは Playwright 導入時に確定）
+
+```text
+1. 生成ヘルパで fixture root を作る
+2. backend を analysis_exports_root=<fixture_root> で起動（env 上書き）
+3. frontend を NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 で起動
+4. Playwright から http://localhost:3000/reports を開く
+```
+
+#### 16-16-13. 生成ヘルパで絶対にしないこと
+
+- 実 analysis_exports を読まない / GMO API を呼ばない / Private API を呼ばない /
+  APIキー・secret を扱わない / `.env` を読まない / DB を書かない / バックテストを実行しない /
+  実注文しない / 大きい CSV を作らない。
+
+#### 16-16-14. fixture 検証方針（将来ヘルパ実装時の最低限）
+
+- `list_report_index(fixture_root)` が正常に返る。
+- normal run → SAFE_READ_ONLY（read_only_confirmed=true / conflicts=[]）。
+- error run → has_error=true。
+- conflict run → safety_conflicts 非空。
+- incomplete run → safety_complete=false。
+- detail 取得で7セクション用データが揃う。
+- CSV 本文 marker（`__CSV_BODY_MARKER__`）は API/UI 本文に出ない。
+
+#### 16-16-15. 今回（§16-16 追加）はやらないこと
+
+- fixture 生成スクリプトを作らない / fixture ファイルを作らない。
+- Playwright 導入しない / package 追加しない / E2E テストを書かない。
+- backend/frontend の起動スクリプトを変更しない / API・UI を変更しない。
+- 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない。
+- 実注文・Private API・APIキー・`.env` に触れない。
