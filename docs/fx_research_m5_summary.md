@@ -89,6 +89,16 @@ ADX30 / breakout / Bollinger / market-structure は主検証から外す。
 または別市場の検証へ進む。
 ```
 
+### 追補: 高時間足とregime予測（フェーズ・クローズ）
+
+- M15 baseline（SL30/TP60）も M15 scaled-risk（SL50/TP100）も撤退〜フラットで、M5 を上回らず。
+  律速はトレンド日（high DE）の損失で、時間足にも SL/TP スケールにも不変と確認。
+- クローズ診断（`regime_predictability_diagnostics.py`, 売買なし）で、当日 DE 区分を前日までの
+  情報で OOS 予測できるかを検証 → 全ルールの OOS balanced accuracy ≤ ランダム(0.333)、
+  high_de はほぼ予測不可。**未来情報なしの no-trade/regime切替は機能しにくい**。
+- 以上より、**M5/M15 の単純テクニカル＋regimeフィルタ路線は一区切り**。`rsi_reversal M5` を
+  研究用ベースラインとして保存し、次は検証基盤整備・低コスト/別市場・別アプローチを検討する。
+
 ## 7. 今後やらないこと
 
 - M5 の単純入口戦略を追加で増やさない。

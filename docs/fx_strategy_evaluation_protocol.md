@@ -165,6 +165,10 @@ window ごと:
 - `rsi_m15_scaled_15window.py` — M15 baseline の SL/TP交絡を1点固定で切り分け（SL50/TP100, RR1:2）。
   探索ではなく交絡確認。結果: SL率は下がったが損益は改善せず＝SL30/TP60は不利な交絡ではなかった
   （高時間足でも単純rsiにエッジ無し）。SL/TPの多点探索はしない。
+- `regime_predictability_diagnostics.py` — **研究フェーズのクローズ診断（売買なし）**: 当日のDE区分
+  (low/medium/high) を前日までの情報だけでOOS予測できるかをbaseline/単純ルールで検証。結果: 全ルールの
+  OOS balanced accuracy ≤ ランダム(0.333)、high_de recall も低く、**前日情報では当日regimeを予測不可**。
+  → 未来情報なしの no-trade/regime切替は機能しにくいと確認。sklearn不使用。
 
 ### 高時間足フェーズ（別枠）
 
