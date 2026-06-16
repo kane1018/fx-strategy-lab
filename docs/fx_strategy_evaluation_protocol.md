@@ -158,6 +158,16 @@ window ごと:
 - `market_structure_15window.py` — market-structure 平均回帰の15窓評価
 - `market_state_diagnostics.py` — rsi/breakout の勝敗 × market state 診断
 - `adx_filter_oos_ab.py` — ADXフィルタの OOS A/B（却下の根拠）
+- `rsi_m15_15window.py` — **高時間足フェーズの初回**: rsi_reversal を M15 で同一15窓評価
+  （`fixed_config(timeframe="M15")` を使用。SL/TP は比較のため M5 と同じ 30/60 で未調整）
+
+### 高時間足フェーズ（別枠）
+
+M5 研究は一区切り済み。別時間足（M15/M30/H1）は **別フェーズ**として 1戦略ずつ評価する。
+共通 `fx_eval_common` の窓・コスト・安全条件・分類判定をそのまま使い、`fixed_config(timeframe=...)`
+で時間足のみ上書きする。注意: SL/TP は時間足に対して固定値（30/60）のままだと高時間足では相対的に
+タイトになり得る（SL率が上がる）。最初は素の状態で「時間足だけで改善するか」を見て、SL/TP の
+時間足調整は過剰最適化を警戒して別途・厳格に扱う。
 
 共通化の第一歩として標準定義・固定条件・安全メタデータ・分類判定を `fx_eval_common` に集約した。
 取得・replay・CSV/summary 出力処理の共通化は次の候補（[fx_research_m5_summary.md](fx_research_m5_summary.md) §8）。

@@ -55,6 +55,16 @@ def test_run_id_is_namespaced_and_timestamped() -> None:
     assert len(rid.split("_")[0]) == 8  # YYYYMMDD prefix
 
 
+def test_fixed_config_and_run_id_support_m15() -> None:
+    # higher-timeframe phase reuses the same helpers, overriding only timeframe
+    cfg = fixed_config(timeframe="M15", strategy="rsi_reversal")
+    assert cfg["timeframe"] == "M15"
+    assert cfg["strategy"] == "rsi_reversal"
+    assert cfg["spread_pips"] == 1.2  # cost unchanged
+    assert cfg["stop_loss_pips"] == 30 and cfg["take_profit_pips"] == 60  # SL/TP unchanged
+    assert run_id("rsi_m15_final15").endswith("_gmo_public_paper_rsi_m15_final15")
+
+
 def test_classify_strategy_three_way_from_common() -> None:
     base = dict(median_pf=1.3, positive_windows=8, n_windows=15, edge_windows=8,
                 symbol_concentrated=False)
