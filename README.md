@@ -135,4 +135,17 @@ cd backend
 .venv/bin/python -m scripts.paper_analyze_gmo
 ```
 
+## M5 戦略研究フェーズ（一区切り済み）
+
+GMO Public API の **read-only ペーパー検証**（実注文・Private API・APIキーなし）で、M5 /
+current_cost 環境の単純テクニカル戦略を 15窓プロトコル（IS 10窓 + OOS 5窓）で評価しました。
+rsi_reversal / ADX30 filter / breakout / Bollinger / market-structure と一巡した結果、
+**単純単一構造の戦略に頑健な正エッジは確認できず**、この研究フェーズは一区切りとしています。
+`rsi_reversal M5` のみ研究用ベースラインとして保存。
+
+- 総括: [docs/fx_research_m5_summary.md](docs/fx_research_m5_summary.md)
+- 今後の標準評価手順: [docs/fx_strategy_evaluation_protocol.md](docs/fx_strategy_evaluation_protocol.md)
+
+これらは検証基盤・分析用で、実注文機能ではありません。Private API / APIキーは使いません。
+
 バックテスト結果は将来の利益を保証しません。
