@@ -480,6 +480,20 @@ def test_market_state_indicators() -> None:
     assert pick_no_trade_candidate({}) == ""
 
 
+def test_bollinger_de_bucketing() -> None:
+    from scripts.bollinger_15window import de_bucket, de_thresholds
+
+    lo, hi = de_thresholds([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+    assert lo < hi
+    assert de_bucket(0.05, lo, hi) == "low_de"
+    assert de_bucket(0.35, lo, hi) == "medium_de"
+    assert de_bucket(0.95, lo, hi) == "high_de"
+    # too few points -> safe fallback (everything medium)
+    lo2, hi2 = de_thresholds([0.5])
+    assert (lo2, hi2) == (0.0, 1.0)
+    assert de_bucket(0.5, lo2, hi2) == "medium_de"
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)

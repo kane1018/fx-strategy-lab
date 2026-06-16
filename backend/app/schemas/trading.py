@@ -9,6 +9,7 @@ class StrategyType(StrEnum):
     MOVING_AVERAGE_CROSS = "moving_average_cross"
     RSI_REVERSAL = "rsi_reversal"
     BREAKOUT = "breakout"
+    BOLLINGER_REVERSION = "bollinger_reversion"
 
 
 class Side(StrEnum):
@@ -33,6 +34,8 @@ class StrategyConfig(BaseModel):
     oversold: float = Field(default=30, ge=1, le=49)
     overbought: float = Field(default=70, ge=51, le=99)
     breakout_period: int = Field(default=20, ge=2, le=200)
+    bollinger_period: int = Field(default=20, ge=2, le=200)
+    bollinger_sigma: float = Field(default=2.0, gt=0, le=5)
 
     @model_validator(mode="after")
     def validate_periods(self) -> "StrategyConfig":
