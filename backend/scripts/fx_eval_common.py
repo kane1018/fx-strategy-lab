@@ -430,3 +430,103 @@ def list_report_index(exports_root: str | Path) -> list[dict[str, Any]]:
     without_created.sort(key=lambda e: e.get("run_id") or "")
     errors.sort(key=lambda e: e.get("run_id") or "")
     return [*with_created, *without_created, *errors]
+
+
+# Column order for the report-index Markdown table (header == display label).
+REPORT_INDEX_TABLE_COLUMNS = (
+    "status", "run_id", "kind", "strategy", "timeframe", "cost", "verdict",
+    "expectancy", "pf", "total_pnl", "max_dd", "safety", "warnings",
+    "created_at", "error",
+)
+
+
+def _md_cell(value: Any) -> str:
+    """Render a value as one Markdown-table cell ('-' for None/empty, '|' escaped)."""
+    if value is None:
+        return "-"
+    text = str(value).replace("|", r"\|").replace("\n", " ").replace("\r", " ").strip()
+    return text or "-"
+
+
+def _md_num(value: Any, digits: int) -> str:
+    """Format a numeric cell to a fixed number of decimals ('-' if not a number)."""
+    if value is None:
+        return "-"
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return "-"
+
+
+def _report_row_status(row: Mapping[str, Any]) -> str:
+    """Single status token: ERROR > CONFLICT > UNCONFIRMED > WARN > OK."""
+    if row.get("has_error"):
+        return "ERROR"
+    if row.get("safety_conflicts"):
+        return "CONFLICT"
+    if not row.get("read_only_confirmed"):
+        return "UNCONFIRMED"
+    if row.get("has_warnings"):
+        return "WARN"
+    return "OK"
+
+
+def _report_row_safety(row: Mapping[str, Any]) -> str:
+    """Short safety label for one report row (display only, fail-safe wording)."""
+    if row.get("has_error"):
+        return "-"
+    conflicts = row.get("safety_conflicts")
+    if conflicts:
+        return "conflict:" + ",".join(str(k) for k in conflicts)
+    if row.get("read_only_confirmed"):
+        return "read-only"
+    if not row.get("safety_complete"):
+        return "incomplete"
+    return "unconfirmed"
+
+
+def _report_row_warnings(row: Mapping[str, Any]) -> str:
+    """Warnings cell: count for normal rows, '-' for error rows."""
+    if row.get("has_error"):
+        return "-"
+    count = row.get("warnings_count")
+    if count is None:
+        return "yes" if row.get("has_warnings") else "-"
+    return str(count)
+
+
+def format_report_index_markdown(rows: Sequence[Mapping[str, Any]]) -> str:
+    """Render list_report_index() rows as a Markdown table (read-only, pure formatter).
+
+    Display-only: takes the dict rows from list_report_index() and returns a Markdown
+    table string for humans / ChatGPT. Performs NO file, network, or broker I/O and does
+    NOT recompute metrics or summaries — it only formats what each row already carries.
+    Status is one token (ERROR > CONFLICT > UNCONFIRMED > WARN > OK); safety conflicts and
+    unconfirmed read-only state are surfaced verbatim (unknown is never shown as safe).
+    None / empty / missing values render as '-', headline metrics use fixed decimals, and
+    '|' is escaped so a cell cannot break the table. An empty rows list returns the header
+    and separator only. No trailing newline.
+    """
+    header = "| " + " | ".join(REPORT_INDEX_TABLE_COLUMNS) + " |"
+    separator = "| " + " | ".join("---" for _ in REPORT_INDEX_TABLE_COLUMNS) + " |"
+    lines = [header, separator]
+    for row in rows:
+        cells = [
+            _report_row_status(row),
+            _md_cell(row.get("run_id")),
+            _md_cell(row.get("kind")),
+            _md_cell(row.get("strategy")),
+            _md_cell(row.get("timeframe")),
+            _md_cell(row.get("cost_scenario")),
+            _md_cell(row.get("verdict")),
+            _md_num(row.get("median_expectancy"), 4),
+            _md_num(row.get("median_pf"), 3),
+            _md_num(row.get("total_pnl"), 2),
+            _md_num(row.get("max_drawdown_max"), 2),
+            _md_cell(_report_row_safety(row)),
+            _report_row_warnings(row),
+            _md_cell(row.get("created_at")),
+            _md_cell(row.get("error")),
+        ]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)

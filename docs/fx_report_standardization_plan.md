@@ -138,6 +138,13 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    JSON parse error・権限エラー等）は全体を止めず error 行（has_error=True / read_only_confirmed=
    False）にする。ソートは created_at 降順 → created_at 無し → error の順。exports_root が無い/
    非ディレクトリなら FileNotFoundError、空なら []。ディレクトリ走査のみで UI/API は作らない。
+   加えて `format_report_index_markdown(rows)` を追加: list_report_index() の戻り値を
+   人間/ChatGPT 用 Markdown 表に整形する read-only 純関数（ファイル/再計算なし）。列は
+   status / run_id / kind / strategy / timeframe / cost / verdict / expectancy / pf /
+   total_pnl / max_dd / safety / warnings / created_at / error。status は
+   ERROR>CONFLICT>UNCONFIRMED>WARN>OK の1トークン、safety は read-only / conflict:keys /
+   incomplete / unconfirmed、数値は固定小数（expectancy4・pf3・pnl/dd2）、None/空/欠損は `-`、
+   セル内 `|` はエスケープ、空 rows はヘッダ＋区切り行のみ・末尾改行なし。
 6. E2E導入候補フローの docs 化（§11）
 
 まだ行わないこと: E2Eツール導入 / Playwright・Cypress 追加 / UI実装 / 実注文 / Private API接続 /

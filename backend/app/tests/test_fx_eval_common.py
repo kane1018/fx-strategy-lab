@@ -14,6 +14,7 @@ from scripts.fx_eval_common import (
     classify_strategy,
     ensure_output_dir,
     fixed_config,
+    format_report_index_markdown,
     group_labels,
     list_report_index,
     report_index_entry,
@@ -533,3 +534,133 @@ def test_list_report_index_orders_created_then_nocreated_then_error(tmp_path) ->
     order = [r["run_id"] for r in rows]
     assert order == ["has_created", "no_created", "broken"]
     assert rows[1]["created_at"] is None and rows[1]["has_error"] is False
+
+
+# --- format_report_index_markdown (render report-index rows for humans/ChatGPT) ---
+def _ok_row(**over):
+    row = {
+        "run_id": "20260101_000000_gmo_public_paper_rsi",
+        "kind": "rsi_final15", "strategy": "rsi_reversal", "timeframe": "M5",
+        "cost_scenario": "current_cost", "verdict": "研究用ベースライン",
+        "median_expectancy": 0.123456, "median_pf": 1.23456, "total_pnl": 123.456,
+        "max_drawdown_max": -45.678, "created_at": "2026-01-01T00:00:00",
+        "summary_file": "metrics_rsi_15window_summary.json",
+        "safety": {k: False for k in REPORT_INDEX_SAFETY_KEYS},
+        "safety_complete": True, "safety_conflicts": [], "read_only_confirmed": True,
+        "warnings_count": 0, "has_warnings": False, "has_error": False,
+    }
+    row.update(over)
+    return row
+
+
+def _err_row(**over):
+    row = {
+        "run_id": "broken_run", "error": "no metrics_*_summary.json found",
+        "has_error": True, "read_only_confirmed": False, "created_at": None,
+        "summary_file": None,
+    }
+    row.update(over)
+    return row
+
+
+def _data_rows(md):
+    return md.splitlines()[2:]  # skip header + separator
+
+
+def _cells(line):
+    return [c.strip() for c in line.strip("|").split("|")]
+
+
+def test_format_report_index_empty_returns_header_only() -> None:
+    md = format_report_index_markdown([])
+    lines = md.splitlines()
+    assert len(lines) == 2  # header + separator, no data rows
+    assert lines[0].startswith("| status | run_id |")
+    assert set(lines[1].replace(" ", "").split("|")) <= {"", "---"}
+    assert not md.endswith("\n")  # no trailing newline
+
+
+def test_format_report_index_ok_row() -> None:
+    md = format_report_index_markdown([_ok_row()])
+    body = _data_rows(md)
+    assert len(body) == 1
+    cells = _cells(body[0])
+    assert cells[0] == "OK"
+    assert cells[1] == "20260101_000000_gmo_public_paper_rsi"
+    assert cells[7] == "0.1235"   # expectancy 4dp (rounded)
+    assert cells[8] == "1.235"    # pf 3dp
+    assert cells[9] == "123.46"   # total_pnl 2dp
+    assert cells[10] == "-45.68"  # max_dd 2dp
+    assert cells[11] == "read-only"
+    assert cells[12] == "0"       # warnings
+    assert cells[-1] == "-"       # error empty
+
+
+def test_format_report_index_preserves_row_order() -> None:
+    rows = [_ok_row(run_id="a"), _ok_row(run_id="b"), _ok_row(run_id="c")]
+    md = format_report_index_markdown(rows)
+    ids = [_cells(line)[1] for line in _data_rows(md)]
+    assert ids == ["a", "b", "c"]
+
+
+def test_format_report_index_error_row_status() -> None:
+    cells = _cells(_data_rows(format_report_index_markdown([_err_row()]))[0])
+    assert cells[0] == "ERROR"
+    assert cells[1] == "broken_run"
+    assert cells[11] == "-"  # safety
+    assert cells[12] == "-"  # warnings
+    assert "summary" in cells[-1]  # error message shown
+
+
+def test_format_report_index_unconfirmed_status() -> None:
+    cells = _cells(_data_rows(
+        format_report_index_markdown([_ok_row(read_only_confirmed=False)]))[0])
+    assert cells[0] == "UNCONFIRMED"
+    assert cells[11] == "unconfirmed"
+
+
+def test_format_report_index_conflict_status() -> None:
+    row = _ok_row(read_only_confirmed=False,
+                  safety_conflicts=["real_order", "gmo_readonly"])
+    cells = _cells(_data_rows(format_report_index_markdown([row]))[0])
+    assert cells[0] == "CONFLICT"
+    assert cells[11] == "conflict:real_order,gmo_readonly"
+
+
+def test_format_report_index_warn_status_when_data_warnings() -> None:
+    cells = _cells(_data_rows(format_report_index_markdown(
+        [_ok_row(warnings_count=2, has_warnings=True)]))[0])
+    assert cells[0] == "WARN"
+    assert cells[12] == "2"
+
+
+def test_format_report_index_none_and_missing_become_dash() -> None:
+    row = _ok_row(verdict=None, median_expectancy=None, median_pf=None,
+                  total_pnl=None, max_drawdown_max=None, created_at=None, strategy="")
+    row.pop("kind")  # missing key entirely
+    cells = _cells(_data_rows(format_report_index_markdown([row]))[0])
+    assert cells[2] == "-"   # kind missing
+    assert cells[3] == "-"   # strategy empty string
+    assert cells[6] == "-"   # verdict None
+    assert cells[7] == "-" and cells[8] == "-"
+    assert cells[9] == "-" and cells[10] == "-"
+    assert cells[13] == "-"  # created_at None
+
+
+def test_format_report_index_escapes_pipe_and_newline() -> None:
+    row = _ok_row(strategy="a|b", verdict="line1\nline2")
+    line = _data_rows(format_report_index_markdown([row]))[0]
+    assert r"a\|b" in line             # pipe escaped
+    assert "line1 line2" in line       # newline collapsed to space
+    assert len(_data_rows(format_report_index_markdown([row]))) == 1  # still 1 row
+
+
+def test_format_report_index_diagnostic_row_with_none_numerics() -> None:
+    # regime diagnostic rows carry a verdict but no strategy headline metrics
+    row = _ok_row(kind="regime_diag", strategy="regime_predictability",
+                  median_expectancy=None, median_pf=None, total_pnl=None,
+                  max_drawdown_max=None, verdict="予測可能性=低")
+    cells = _cells(_data_rows(format_report_index_markdown([row]))[0])
+    assert cells[0] == "OK"
+    assert cells[7] == "-" and cells[8] == "-"
+    assert cells[9] == "-" and cells[10] == "-"
