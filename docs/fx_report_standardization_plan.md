@@ -174,6 +174,11 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    `validate_report_detail` は強制せず欠損キー耐性を維持。末尾改行なし。
    一覧用 `format_report_index_markdown` と対で「一覧→詳細」両方が ChatGPT に貼れる。
 6. E2E導入候補フローの docs 化（§11）
+   — **着手済み**: §11 を index/detail 関数群（list_report_index / report_index_entry /
+   validate_report_index_row / format_report_index_markdown / report_detail /
+   validate_report_detail / format_report_detail_markdown / safety_metadata）に対応づけて
+   具体化。E2E前提・ユーザーフロー・関数⇔画面対応表・安全/一覧/詳細/禁止の確認項目・
+   E2Eテストケース候補（E2E-01〜08）・E2Eが判定しない範囲を確定。コード/UI/API は作らない。
 
 まだ行わないこと: E2Eツール導入 / Playwright・Cypress 追加 / UI実装 / 実注文 / Private API接続 /
 依存パッケージ追加。
@@ -192,11 +197,128 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
 
 ## 11. 最初のE2E対象フロー（将来）
 
-1. レポート一覧を開く
-2. run_id を選ぶ
-3. summary / metrics / warnings を確認する
-4. safety flags を確認する
-5. 実注文や Private API 操作が存在しないことを確認する
+index/detail 系の read-only 関数（`list_report_index` / `report_index_entry` /
+`validate_report_index_row` / `format_report_index_markdown` / `report_detail` /
+`validate_report_detail` / `format_report_detail_markdown` / `safety_metadata`）が
+出揃ったので、最初の E2E が対象にするユーザーフローと確認項目をここで確定する。
+本節は **docs 確定のみ**で、UI/API/E2E の実装は含まない。
+
+### 11-1. E2E導入前の前提（今回の境界）
+
+- E2E はまだ導入しない（Playwright/Cypress も入れない）。
+- UI も API もまだ実装しない。今回は **E2E 対象フローの docs 確定のみ**。
+- 実注文なし / Private API なし / APIキー・secret なし。
+- `.env` の表示・変更なし。実 `analysis_exports/` の読み込みなし。
+- 新戦略検証なし / 追加バックテストなし / コード変更なし。
+
+### 11-2. 最初のE2Eで守るべきユーザーフロー（将来）
+
+```text
+レポート一覧を開く
+↓
+run一覧が表示される
+↓
+read-only / no real order / no private api / api key unused / order disabled が
+  安全バッジとして見える
+↓
+verdict / expectancy / PF / total_pnl / max_dd / warnings が見える
+↓
+壊れたrunがある場合は ERROR 行として見える
+↓
+任意のrunを選択する
+↓
+run詳細が表示される
+↓
+Overview / Safety / Metrics Summary / Cost / Execution / Files /
+  Summary Markdown / Final Decision が見える
+↓
+CSV本文は勝手に読み込まれず、ファイル一覧またはダウンロード導線として扱われる
+↓
+実注文・Private API・APIキー入力・market_order の導線が存在しない
+```
+
+### 11-3. 関数と画面の対応表
+
+| 将来の画面/処理 | 支える関数 | 役割 |
+| --- | --- | --- |
+| レポート一覧データ | `list_report_index(exports_root)` | 複数runをread-onlyで一覧化（壊れたrunはerror行） |
+| 一覧1行 | `report_index_entry(run_dir)` | 1 runの代表メタ＋安全フラグを抽出 |
+| 一覧row契約 | `validate_report_index_row(row)` | UIが前提にするキーを presence-only 検証 |
+| 一覧Markdown | `format_report_index_markdown(rows)` | ChatGPT貼り付け用の一覧表 |
+| run詳細データ | `report_detail(run_dir)` | 1 runの詳細データ（index/manifest/warnings/summary/files）を集約 |
+| run詳細契約 | `validate_report_detail(detail)` | 詳細画面が前提にするキーを presence-only 検証 |
+| 詳細Markdown | `format_report_detail_markdown(detail)` | ChatGPT貼り付け用の詳細レポート |
+| 安全メタ | `safety_metadata()` | read-only / no order 系 6フラグの単一ソース |
+| 一覧キー契約 | `REPORT_INDEX_REQUIRED_KEYS` / `REPORT_INDEX_ERROR_REQUIRED_KEYS` | 正常行/error行の必須キー定義 |
+| 詳細キー契約 | `REPORT_DETAIL_REQUIRED_KEYS` | 詳細dictの必須キー定義 |
+| 安全キー契約 | `REPORT_INDEX_SAFETY_KEYS` | 検証対象の6安全フラグ名 |
+
+### 11-4. E2Eで確認すべき安全表示
+
+- `read_only_confirmed = True`
+- `real_order = False`
+- `private_api_used = False`
+- `api_key_used = False`
+- `gmo_readonly = True`
+- `gmo_order_enabled = False`
+- `no_order_execution = True`
+- `safety_conflicts = []`
+- safety incomplete / conflict / error run は **安全扱いしない**
+  （`read_only_confirmed=False` のまま、UNCONFIRMED / CONFLICT / ERROR として表示）。
+
+### 11-5. E2Eで確認すべき一覧項目（`format_report_index_markdown` の列）
+
+- status / run_id / kind / strategy / timeframe / cost / verdict /
+  expectancy / PF / total_pnl / max_dd / safety / warnings / created_at / error
+
+### 11-6. E2Eで確認すべき詳細項目（`format_report_detail_markdown` のセクション）
+
+- Overview / Safety / Metrics Summary / Cost / Execution / Files /
+  Summary Markdown / Final Decision
+
+### 11-7. E2Eで「存在しないこと」を確認する項目
+
+- 実注文ボタンが存在しない
+- GMO Private API 接続導線が存在しない
+- APIキー入力欄が存在しない
+- `.env` 表示導線が存在しない
+- market_order 有効化導線が存在しない
+- CSV 巨大本文を勝手に全展開しない（一覧 or ダウンロード導線に留める）
+- DB 直接操作導線が存在しない
+
+### 11-8. E2E導入の前にまだ必要なもの
+
+- read-only API にするか、静的 Markdown 表示にするかの方針決定
+- レポート一覧UI の MVP 仕様
+- run詳細UI の MVP 仕様
+- safety badge 表示ルール（True/False/conflict → バッジ・色）
+- error row 表示ルール（ERROR 行の見せ方）
+- cost metadata 表示ルール（spread/slippage/SL/TP のレイアウト）
+- CSV ダウンロード/プレビュー方針（先頭N行プレビューの要否）
+- E2Eツール選定
+- 最初のE2Eテストケース定義（次項）
+
+### 11-9. 最初のE2Eテストケース候補
+
+```text
+E2E-01: レポート一覧が表示される
+E2E-02: 正常runに安全バッジ（read-only等）が表示される
+E2E-03: error run が ERROR として表示される
+E2E-04: run詳細へ遷移できる
+E2E-05: 詳細画面に Overview/Safety/Metrics/Cost/Files/Summary/Final Decision が表示される
+E2E-06: 実注文・Private API・APIキー入力導線が存在しない
+E2E-07: CSV本文が勝手に全展開されない
+E2E-08: safety conflict / incomplete は安全扱いされない
+```
+
+### 11-10. E2Eは何を判定しないか
+
+- 戦略が勝てるかは判定しない
+- 期待値が正しいかを再計算しない
+- バックテストを再実行しない
+- GMO API からデータ取得しない
+- 実注文可否を試さない
+- Private API 接続を試さない
 
 ## 12. E2Eで確認すべき安全項目
 
