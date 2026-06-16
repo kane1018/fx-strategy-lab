@@ -42,8 +42,12 @@ test.describe("FX reports read-only E2E", () => {
       .locator('[data-run-id="e2e_normal_run"]')
       .getByRole("link", { name: "e2e_normal_run" })
       .click();
+    // First navigation to the dynamic route may trigger an on-demand dev compile;
+    // wait for the detail page to render before asserting the URL.
+    await expect(page.getByTestId("report-detail-page")).toBeVisible({
+      timeout: 20_000
+    });
     await expect(page).toHaveURL(/\/reports\/e2e_normal_run$/);
-    await expect(page.getByTestId("report-detail-page")).toBeVisible();
   });
 
   test("E2E-05: detail page shows all seven sections", async ({ page }) => {
@@ -91,5 +95,23 @@ test.describe("FX reports read-only E2E", () => {
       .getByTestId("safety-badge");
     await expect(incomplete).toHaveText(/Safety incomplete/);
     await expect(incomplete).toHaveAttribute("data-safe", "false");
+  });
+
+  test("E2E-09: detail markdown can be copied", async ({ page }) => {
+    // Deterministic clipboard stub: avoids headless secure-context/permission flakiness
+    // while still exercising button -> fetch -> writeText -> success message.
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText: async () => {} },
+        configurable: true
+      });
+    });
+    await page.goto("/reports/e2e_normal_run");
+    const button = page.getByTestId("copy-detail-markdown");
+    await expect(button).toBeVisible();
+    await button.click();
+    await expect(page.getByTestId("copy-detail-markdown-status")).toHaveText(
+      "Markdownをコピーしました"
+    );
   });
 });

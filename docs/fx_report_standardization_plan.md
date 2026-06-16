@@ -997,6 +997,15 @@ E2E 実装前に **ツール選定・起動方法・テストデータ方針・E
 > `tr.report-row-error`=赤系の薄い地色＋左マーカー、`.report-detail-error`/[role=alert]=赤枠アラート、
 > 詳細セクション余白・`.detail-kv`/`.detail-files` 可読性・`.detail-markdown` の折返し/スクロールを調整。
 > 既存ダッシュボードの `.safety-badge`（data-safe 無し）は無改変。E2E-01〜08 は引き続き 8 passed。
+>
+> **Markdown コピー導線（更新）**: `/reports/[run_id]` に「Markdownをコピー」ボタンを追加（read-only 補助、
+> §13 Supporting）。使用 API: `GET /api/reports/{run_id}/markdown`。fetch は `lib/reports.ts` の
+> `fetchReportDetailMarkdown(runId)`（400/404/422/500/network を判別、run_id は encode）。クリック時のみ
+> `navigator.clipboard.writeText` でコピーし、成功「Markdownをコピーしました」/失敗「Markdownのコピーに
+> 失敗しました」を表示（Clipboard 不可でも例外を出さない・自動コピーしない）。
+> data-testid: copy-detail-markdown / copy-detail-markdown-status。テスト: lib/reports.test.ts に
+> fetchReportDetailMarkdown 7件追加（vitest 31 passed）、E2E に E2E-09（コピー成功）追加で **9 passed**。
+> 機能は read-only・危険導線ではない。
 
 ### 16-1. E2E 導入の目的
 

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import {
   fetchReportDetail,
+  fetchReportDetailMarkdown,
   fmtCompact,
   fmtNum,
   fmtText,
@@ -203,6 +204,7 @@ export default function ReportDetailPage() {
   const params = useParams<{ run_id: string }>();
   const runId = Array.isArray(params.run_id) ? params.run_id[0] : params.run_id;
   const [result, setResult] = useState<FetchReportDetailResult | null>(null);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!runId) {
@@ -219,6 +221,26 @@ export default function ReportDetailPage() {
     };
   }, [runId]);
 
+  // Read-only copy aid: fetch the run's Markdown and write it to the clipboard.
+  // Only runs on explicit button click; never auto-copies; never mutates anything.
+  async function handleCopyMarkdown() {
+    if (!runId) {
+      return;
+    }
+    setCopyStatus(null);
+    const md = await fetchReportDetailMarkdown(runId);
+    if (md.status !== "success") {
+      setCopyStatus("Markdownのコピーに失敗しました");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(md.markdown);
+      setCopyStatus("Markdownをコピーしました");
+    } catch {
+      setCopyStatus("Markdownのコピーに失敗しました");
+    }
+  }
+
   return (
     <main data-testid="report-detail-page" className="report-detail-page">
       <p>
@@ -227,6 +249,22 @@ export default function ReportDetailPage() {
         </Link>
       </p>
       <h1>Run: {fmtText(runId)}</h1>
+
+      <p className="report-actions">
+        <button
+          type="button"
+          data-testid="copy-detail-markdown"
+          className="report-copy-button"
+          onClick={handleCopyMarkdown}
+        >
+          Markdownをコピー
+        </button>
+        {copyStatus && (
+          <span data-testid="copy-detail-markdown-status" className="report-copy-status">
+            {copyStatus}
+          </span>
+        )}
+      </p>
 
       {result === null && (
         <p data-testid="report-detail-loading">詳細読み込み中...</p>

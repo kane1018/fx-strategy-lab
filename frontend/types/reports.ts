@@ -30,6 +30,10 @@ export type ReportsResponse = {
   count: number;
 };
 
+export type ReportMarkdownResponse = {
+  markdown: string;
+};
+
 export type ReportFile = {
   name: string;
   kind: "json" | "csv" | "markdown" | "other" | string;

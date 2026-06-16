@@ -861,3 +861,31 @@ tr.report-row-error td:first-child {
 .reports-table {
   min-width: 900px;
 }
+
+/* Markdown copy action on the report detail page (read-only helper). */
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.report-copy-button {
+  border: 1px solid var(--line);
+  background: var(--panel-soft);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.report-copy-button:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.report-copy-status {
+  font-size: 12px;
+  color: var(--muted);
+}

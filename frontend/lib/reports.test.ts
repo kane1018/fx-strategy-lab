@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ReportIndexItem } from "@/types/reports";
 import {
   fetchReportDetail,
+  fetchReportDetailMarkdown,
   fetchReports,
   fmtCompact,
   fmtNum,
@@ -192,5 +193,70 @@ describe("fetchReportDetail", () => {
     };
     await fetchReportDetail("a b/c", fake as unknown as typeof fetch);
     expect(calledWith).toContain("/api/reports/a%20b%2Fc");
+  });
+});
+
+describe("fetchReportDetailMarkdown", () => {
+  const jsonResponse = (body: unknown, status = 200) =>
+    ({
+      status,
+      ok: status >= 200 && status < 300,
+      json: async () => body
+    }) as Response;
+
+  it("returns markdown string on success", async () => {
+    const fake = async () => jsonResponse({ markdown: "# FX Report Detail: run_a" });
+    const result = await fetchReportDetailMarkdown("run_a", fake as typeof fetch);
+    expect(result.status).toBe("success");
+    if (result.status === "success") {
+      expect(result.markdown).toContain("FX Report Detail");
+    }
+  });
+
+  it("maps 400 to invalid", async () => {
+    const fake = async () => jsonResponse({ detail: {} }, 400);
+    expect((await fetchReportDetailMarkdown("x", fake as typeof fetch)).status).toBe(
+      "invalid"
+    );
+  });
+
+  it("maps 404 to not_found", async () => {
+    const fake = async () => jsonResponse({ detail: {} }, 404);
+    expect((await fetchReportDetailMarkdown("x", fake as typeof fetch)).status).toBe(
+      "not_found"
+    );
+  });
+
+  it("maps 422 to broken", async () => {
+    const fake = async () => jsonResponse({ detail: {} }, 422);
+    expect((await fetchReportDetailMarkdown("x", fake as typeof fetch)).status).toBe(
+      "broken"
+    );
+  });
+
+  it("maps 500 to error", async () => {
+    const fake = async () => jsonResponse({ detail: "boom" }, 500);
+    expect((await fetchReportDetailMarkdown("x", fake as typeof fetch)).status).toBe(
+      "error"
+    );
+  });
+
+  it("maps a network throw to error", async () => {
+    const fake = async () => {
+      throw new Error("offline");
+    };
+    expect((await fetchReportDetailMarkdown("x", fake as typeof fetch)).status).toBe(
+      "error"
+    );
+  });
+
+  it("URL-encodes the run_id and targets /markdown", async () => {
+    let calledWith = "";
+    const fake = async (url: string | URL | Request) => {
+      calledWith = String(url);
+      return jsonResponse({ markdown: "ok" });
+    };
+    await fetchReportDetailMarkdown("a b/c", fake as unknown as typeof fetch);
+    expect(calledWith).toContain("/api/reports/a%20b%2Fc/markdown");
   });
 });

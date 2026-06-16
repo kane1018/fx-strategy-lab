@@ -137,3 +137,41 @@ export async function fetchReportDetail(
     return { status: "error", message };
   }
 }
+
+export type FetchReportMarkdownResult =
+  | { status: "success"; markdown: string }
+  | { status: "invalid" } // 400
+  | { status: "not_found" } // 404
+  | { status: "broken" } // 422
+  | { status: "error"; message: string };
+
+// Read-only fetch of one run's detail Markdown (ChatGPT/human copy aid, docs §13).
+// Same status mapping as fetchReportDetail; run_id is URL-encoded.
+export async function fetchReportDetailMarkdown(
+  runId: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<FetchReportMarkdownResult> {
+  try {
+    const response = await fetchImpl(
+      `${API_BASE}/api/reports/${encodeURIComponent(runId)}/markdown`,
+      { headers: { "Content-Type": "application/json" } }
+    );
+    if (response.status === 400) {
+      return { status: "invalid" };
+    }
+    if (response.status === 404) {
+      return { status: "not_found" };
+    }
+    if (response.status === 422) {
+      return { status: "broken" };
+    }
+    if (!response.ok) {
+      return { status: "error", message: `API error: ${response.status}` };
+    }
+    const data = (await response.json()) as { markdown?: string };
+    return { status: "success", markdown: data.markdown ?? "" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    return { status: "error", message };
+  }
+}
