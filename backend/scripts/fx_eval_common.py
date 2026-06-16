@@ -565,3 +565,114 @@ def format_report_index_markdown(rows: Sequence[Mapping[str, Any]]) -> str:
         ]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
+
+
+# --- report detail (read-only single-run data for a future run-detail UI) ---
+# Keys report_detail() always returns (present even when value is None / empty).
+REPORT_DETAIL_REQUIRED_KEYS = (
+    "run_id",
+    "run_dir",
+    "index",
+    "manifest",
+    "warnings",
+    "summary",
+    "summary_file",
+    "files",
+    "metrics_files",
+    "csv_files",
+    "markdown_files",
+)
+# Markdown bodies (summary.md / *_final_decision.md) are read inline only when small;
+# anything larger keeps just the filename so the detail dict stays light.
+_MAX_DETAIL_MARKDOWN_BYTES = 200_000
+
+
+def validate_report_detail(
+    detail: Mapping[str, Any],
+    required_keys: Sequence[str] = REPORT_DETAIL_REQUIRED_KEYS,
+) -> None:
+    """Assert a report-detail dict carries the required keys (presence only).
+
+    Mirrors validate_summary_schema / validate_report_index_row: raises ValueError
+    listing any missing keys, does NOT inspect or change values (None / "" are allowed),
+    and ignores extra keys. Lets a future run-detail UI rely on the contract.
+    """
+    if not isinstance(detail, Mapping):
+        raise ValueError(f"report detail must be a mapping, got {type(detail).__name__}")
+    missing = [key for key in required_keys if key not in detail]
+    if missing:
+        raise ValueError(f"report detail is missing required keys: {missing}")
+
+
+def _detail_file_kind(name: str) -> str:
+    """Classify a file by extension: json / csv / markdown / other."""
+    return {".json": "json", ".csv": "csv", ".md": "markdown"}.get(
+        Path(name).suffix.lower(), "other"
+    )
+
+
+def _read_small_markdown(path: Path) -> str | None:
+    """Read a small Markdown file as UTF-8, or None if absent / too large to inline."""
+    if not path.is_file() or path.stat().st_size > _MAX_DETAIL_MARKDOWN_BYTES:
+        return None
+    return path.read_text(encoding="utf-8")
+
+
+def report_detail(run_dir: str | Path) -> dict[str, Any]:
+    """Aggregate one run's detail data from a single analysis_exports/<run_id>/ dir.
+
+    Read-only: reuses report_index_entry() for the index row, reads manifest.json /
+    warnings.json / the single metrics_*_summary.json, lists the run dir's files
+    (name / kind / size_bytes; CSV bodies are NEVER read), and inlines only the small
+    summary.md and *_final_decision.md Markdown bodies (UTF-8, size-guarded). Performs
+    NO directory traversal beyond run_dir, network, or writes. Unlike list_report_index,
+    a broken run raises: FileNotFoundError if run_dir is missing/not a dir or no summary
+    exists, ValueError if multiple summaries exist, JSONDecodeError on malformed JSON.
+    """
+    run_dir = Path(run_dir)
+    if not run_dir.is_dir():
+        raise FileNotFoundError(f"run_dir not found or not a directory: {run_dir}")
+
+    index = report_index_entry(run_dir)  # raises on 0 / multiple summary or bad JSON
+    manifest = _read_json_if_exists(run_dir / "manifest.json")
+    warnings = _read_json_if_exists(run_dir / "warnings.json")
+    summary_file = index["summary_file"]
+    summary = _read_json_if_exists(run_dir / summary_file)
+
+    files: list[dict[str, Any]] = []
+    for child in sorted(run_dir.iterdir()):
+        if not child.is_file() or child.name.startswith("."):
+            continue
+        files.append({
+            "name": child.name,
+            "kind": _detail_file_kind(child.name),
+            "size_bytes": child.stat().st_size,
+        })
+    metrics_files = [f["name"] for f in files if f["name"].startswith("metrics_")]
+    csv_files = [f["name"] for f in files if f["kind"] == "csv"]
+    markdown_files = [f["name"] for f in files if f["kind"] == "markdown"]
+
+    summary_md_path = run_dir / "summary.md"
+    summary_markdown_file = "summary.md" if summary_md_path.is_file() else None
+    final_decisions = sorted(run_dir.glob("*_final_decision.md"))
+    final_decision_path = final_decisions[0] if final_decisions else None
+
+    return {
+        "run_id": index["run_id"],
+        "run_dir": str(run_dir),
+        "index": index,
+        "manifest": manifest,
+        "warnings": warnings,
+        "summary": summary,
+        "summary_file": summary_file,
+        "summary_markdown_file": summary_markdown_file,
+        "summary_markdown": _read_small_markdown(summary_md_path),
+        "final_decision_file": final_decision_path.name if final_decision_path else None,
+        "final_decision_markdown": (
+            _read_small_markdown(final_decision_path) if final_decision_path else None
+        ),
+        "files": files,
+        "metrics_files": metrics_files,
+        "csv_files": csv_files,
+        "markdown_files": markdown_files,
+    }

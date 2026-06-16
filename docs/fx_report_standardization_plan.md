@@ -152,6 +152,18 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    error / has_error / read_only_confirmed / created_at / summary_file）で検証し2系統に分離。
    `list_report_index()` は返却前に各行を該当 schema で検証（契約違反を早期検出）。
    `format_report_index_markdown()` は検証を強制せず欠損キー耐性を維持。
+   加えて run 詳細用に `report_detail(run_dir)` を追加: 1 run の詳細データを集約する
+   read-only 純関数。`report_index_entry()` を index として再利用し、manifest /
+   warnings / 単一 metrics_*_summary.json を読み、run dir 直下のファイルを
+   name / kind(json|csv|markdown|other) / size_bytes で一覧化（CSV 本文は読まない）、
+   summary.md と *_final_decision.md の小さい Markdown 本文のみ UTF-8 で取り込む
+   （サイズガード超過は本文 None・ファイル名は保持）。一覧用ファイルは
+   files / metrics_files / csv_files / markdown_files に分類。複数 run を扱う
+   list_report_index と違い個別 run の壊れは例外（run_dir 無/非dir→FileNotFoundError、
+   summary 0件→FileNotFoundError、複数→ValueError、JSON 破損→JSONDecodeError）。
+   詳細契約は `REPORT_DETAIL_REQUIRED_KEYS` と `validate_report_detail(detail)`
+   （presence-only・他の validate 系と同設計）で固定。実 analysis_exports は読まず
+   tmp_path のみでテスト。UI/API は作らない。
 6. E2E導入候補フローの docs 化（§11）
 
 まだ行わないこと: E2Eツール導入 / Playwright・Cypress 追加 / UI実装 / 実注文 / Private API接続 /

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from scripts.fx_eval_common import (
     DIAGNOSTIC_SUMMARY_REQUIRED_KEYS,
+    REPORT_DETAIL_REQUIRED_KEYS,
     REPORT_INDEX_ERROR_REQUIRED_KEYS,
     REPORT_INDEX_REQUIRED_KEYS,
     REPORT_INDEX_SAFETY_KEYS,
@@ -18,9 +19,11 @@ from scripts.fx_eval_common import (
     format_report_index_markdown,
     group_labels,
     list_report_index,
+    report_detail,
     report_index_entry,
     run_id,
     safety_metadata,
+    validate_report_detail,
     validate_report_index_row,
     validate_summary_schema,
     window_groups,
@@ -756,3 +759,153 @@ def test_formatter_still_tolerates_rows_that_fail_validation() -> None:
         raise AssertionError("expected sparse row to fail validation")
     md = format_report_index_markdown([sparse])  # must NOT raise
     assert "sparse" in md
+
+
+# --- report_detail (read-only single-run detail data for a future run-detail UI) ---
+def _make_detail_run(root, name="detail_run", *, with_md=True, n_summary=1):
+    run = _make_run(root, name, "2026-02-01T00:00:00", n_summary=n_summary)
+    (run / "metrics_by_window.csv").write_text("window,n,accuracy\nw1,30,0.55\n")
+    (run / "metrics_by_symbol.csv").write_text("symbol,n\nUSD_JPY,40\n")
+    (run / ".DS_Store").write_text("junk")  # hidden -> ignored
+    if with_md:
+        (run / "summary.md").write_text("# Summary\n研究用ベースライン\n", encoding="utf-8")
+        (run / "rsi_final_decision.md").write_text("# 判定\n継続検証候補\n", encoding="utf-8")
+    return run
+
+
+def test_report_detail_builds_from_normal_run(tmp_path) -> None:
+    run = _make_detail_run(tmp_path)
+    detail = report_detail(run)
+    validate_report_detail(detail)  # no raise
+    for key in REPORT_DETAIL_REQUIRED_KEYS:
+        assert key in detail
+    assert detail["run_id"] == "detail_run"
+    assert detail["run_dir"] == str(run)
+    assert isinstance(detail["index"], dict) and detail["index"]["run_id"] == "detail_run"
+    assert isinstance(detail["manifest"], dict) and detail["manifest"]["kind"] == "k"
+    assert isinstance(detail["warnings"], dict)
+    assert isinstance(detail["summary"], dict) and "verdict" in detail["summary"]
+    assert detail["summary_file"] == "metrics_0_15window_summary.json"
+
+
+def test_report_detail_classifies_and_lists_files(tmp_path) -> None:
+    run = _make_detail_run(tmp_path)
+    detail = report_detail(run)
+    names = {f["name"] for f in detail["files"]}
+    assert ".DS_Store" not in names  # hidden ignored
+    assert {"manifest.json", "warnings.json", "metrics_by_window.csv"} <= names
+    # every file entry carries name / kind / size_bytes, size read from stat (not body)
+    for f in detail["files"]:
+        assert set(f) == {"name", "kind", "size_bytes"}
+        assert isinstance(f["size_bytes"], int) and f["size_bytes"] >= 0
+    assert "metrics_0_15window_summary.json" in detail["metrics_files"]
+    assert "metrics_by_window.csv" in detail["csv_files"]
+    assert "metrics_by_symbol.csv" in detail["csv_files"]
+    assert "summary.md" in detail["markdown_files"]
+    kinds = {f["name"]: f["kind"] for f in detail["files"]}
+    assert kinds["manifest.json"] == "json"
+    assert kinds["metrics_by_window.csv"] == "csv"
+    assert kinds["summary.md"] == "markdown"
+
+
+def test_report_detail_does_not_read_csv_body(tmp_path) -> None:
+    run = _make_detail_run(tmp_path)
+    detail = report_detail(run)
+    # CSVs appear only as file metadata; no key holds their text content
+    assert "USD_JPY" not in json.dumps(detail, ensure_ascii=False, default=str)
+
+
+def test_report_detail_reads_small_markdown_bodies(tmp_path) -> None:
+    run = _make_detail_run(tmp_path)
+    detail = report_detail(run)
+    assert detail["summary_markdown_file"] == "summary.md"
+    assert detail["summary_markdown"] is not None
+    assert "研究用ベースライン" in detail["summary_markdown"]
+    assert detail["final_decision_file"] == "rsi_final_decision.md"
+    assert "継続検証候補" in detail["final_decision_markdown"]
+
+
+def test_report_detail_markdown_absent_keeps_keys_none(tmp_path) -> None:
+    run = _make_detail_run(tmp_path, with_md=False)
+    detail = report_detail(run)
+    assert detail["summary_markdown_file"] is None
+    assert detail["summary_markdown"] is None
+    assert detail["final_decision_file"] is None
+    assert detail["final_decision_markdown"] is None
+    validate_report_detail(detail)  # still valid (md keys are not required)
+
+
+def test_report_detail_missing_run_dir_raises(tmp_path) -> None:
+    try:
+        report_detail(tmp_path / "nope")
+    except FileNotFoundError as exc:
+        assert "run_dir" in str(exc)
+    else:
+        raise AssertionError("expected FileNotFoundError for missing run_dir")
+
+
+def test_report_detail_no_summary_raises(tmp_path) -> None:
+    run = _make_run(tmp_path, "no_sum", n_summary=0)
+    try:
+        report_detail(run)
+    except FileNotFoundError:
+        pass
+    else:
+        raise AssertionError("expected FileNotFoundError when no summary JSON")
+
+
+def test_report_detail_multiple_summary_raises(tmp_path) -> None:
+    run = _make_run(tmp_path, "dup", n_summary=2)
+    try:
+        report_detail(run)
+    except ValueError as exc:
+        assert "multiple" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for multiple summary JSON")
+
+
+def test_report_detail_diagnostic_and_conflict_runs_build(tmp_path) -> None:
+    diag = ensure_output_dir(tmp_path / "regime")
+    write_json(diag / "manifest.json", {"run_id": "regime", "kind": "regime_diag",
+                                        "strategy": "regime_predictability", "timeframe": "M5",
+                                        "cost_scenario": "current_cost",
+                                        "created_at": "2026-02-02T00:00:00", **safety_metadata()})
+    write_json(diag / "warnings.json", {"fetch_warnings": []})
+    write_json(diag / "metrics_regime_summary.json", _diagnostic_summary_shape())
+    validate_report_detail(report_detail(diag))  # diagnostic run
+
+    conflict = ensure_output_dir(tmp_path / "conflict")
+    write_json(conflict / "manifest.json", {"run_id": "conflict", "kind": "k", "strategy": "s",
+                                            "timeframe": "M5", "cost_scenario": "current_cost",
+                                            "created_at": "2026-02-03T00:00:00",
+                                            **safety_metadata()})
+    # warnings disagree on a safety flag -> safety_conflicts in index, still buildable
+    write_json(conflict / "warnings.json", {"fetch_warnings": [], "real_order": True})
+    write_json(conflict / "metrics_0_15window_summary.json", _strategy_summary_json())
+    detail = report_detail(conflict)
+    validate_report_detail(detail)
+    assert detail["index"]["safety_conflicts"]  # conflict surfaced via index
+
+
+def test_validate_report_detail_missing_key_raises_with_name() -> None:
+    detail = {k: None for k in REPORT_DETAIL_REQUIRED_KEYS}
+    del detail["summary"]
+    try:
+        validate_report_detail(detail)
+    except ValueError as exc:
+        assert "summary" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for missing key")
+
+
+def test_validate_report_detail_rejects_non_mapping_and_allows_extras() -> None:
+    for bad in (["x"], "x", 7, None):
+        try:
+            validate_report_detail(bad)
+        except ValueError as exc:
+            assert "mapping" in str(exc)
+        else:
+            raise AssertionError(f"expected ValueError for non-mapping: {bad!r}")
+    ok = {k: None for k in REPORT_DETAIL_REQUIRED_KEYS}
+    ok["extra"] = "anything"
+    validate_report_detail(ok)  # extras allowed, None values allowed
