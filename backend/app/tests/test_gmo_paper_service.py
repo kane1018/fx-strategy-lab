@@ -454,6 +454,32 @@ def test_complement_stats_counts_rsi_loss_windows() -> None:
     assert out["breakout_total_pnl_in_those"] == 3.0  # 5 + (-2)
 
 
+def test_market_state_indicators() -> None:
+    from scripts.market_state_diagnostics import (
+        classify_day,
+        count_reversals,
+        daily_range_pips,
+        direction_efficiency,
+        pick_no_trade_candidate,
+    )
+
+    # daily range in pips (USD_JPY pip = 0.01): (150.30 - 150.00)/0.01 = 30
+    assert daily_range_pips([150.30, 150.10], [150.05, 150.00], 0.01) == 30.0
+    # clean up-day: open 150.00 close 150.30, range 0.30 -> efficiency 1.0
+    assert direction_efficiency(150.00, 150.30, 150.30, 150.00) == 1.0
+    # chop: open==close -> efficiency 0
+    assert direction_efficiency(150.10, 150.10, 150.30, 150.00) == 0.0
+    # up,up,down,up -> sign sequence + + - + has 2 reversals
+    assert count_reversals([1.0, 1.1, 1.2, 1.0, 1.3]) == 2
+    assert classify_day(1.0, 1.0) == "both_win"
+    assert classify_day(1.0, -1.0) == "rsi_only_win"
+    assert classify_day(-1.0, 1.0) == "breakout_only_win"
+    assert classify_day(-1.0, -1.0) == "both_lose"
+    assert classify_day(0.0, 0.0) == "both_lose"  # zero counts as lose
+    assert pick_no_trade_candidate({"a": 0.1, "b": 0.5, "c": 0.2}) == "b"
+    assert pick_no_trade_candidate({}) == ""
+
+
 def test_replay_with_no_signal_creates_session_but_no_trades(db: Session) -> None:
     # Perfectly flat series -> no breakout, no trades.
     candles = _series([150.0] * 40)
