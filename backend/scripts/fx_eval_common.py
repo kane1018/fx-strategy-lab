@@ -309,6 +309,16 @@ REPORT_INDEX_REQUIRED_KEYS = (
     "warnings_count",
     "has_warnings",
 )
+# Keys an error row (a run that could not be read) always carries. Error rows do not
+# have the headline-metric / safety-detail keys, so they use a smaller contract.
+REPORT_INDEX_ERROR_REQUIRED_KEYS = (
+    "run_id",
+    "error",
+    "has_error",
+    "read_only_confirmed",
+    "created_at",
+    "summary_file",
+)
 # Safe (read-only) means every flag is present AND has its read-only value.
 _SAFE_EXPECTED = {
     "real_order": False,
@@ -318,6 +328,25 @@ _SAFE_EXPECTED = {
     "gmo_readonly": True,
     "no_order_execution": True,
 }
+
+
+def validate_report_index_row(
+    row: Mapping[str, Any],
+    required_keys: Sequence[str] = REPORT_INDEX_REQUIRED_KEYS,
+) -> None:
+    """Assert a report-index row carries the required keys (presence only).
+
+    Mirrors validate_summary_schema: raises ValueError listing any missing keys, does
+    NOT inspect or change values (None / "" are allowed), and ignores extra keys. Normal
+    rows use REPORT_INDEX_REQUIRED_KEYS; error rows (from list_report_index) use the
+    smaller REPORT_INDEX_ERROR_REQUIRED_KEYS. Lets a future report UI rely on the
+    contract without re-deriving it from the runners.
+    """
+    if not isinstance(row, Mapping):
+        raise ValueError(f"report index row must be a mapping, got {type(row).__name__}")
+    missing = [key for key in required_keys if key not in row]
+    if missing:
+        raise ValueError(f"report index row is missing required keys: {missing}")
 
 
 def _read_json_if_exists(path: Path) -> dict:
@@ -422,6 +451,12 @@ def list_report_index(exports_root: str | Path) -> list[dict[str, Any]]:
                 "created_at": None,
                 "summary_file": None,
             })
+
+    for entry in entries:
+        if entry["has_error"]:
+            validate_report_index_row(entry, REPORT_INDEX_ERROR_REQUIRED_KEYS)
+        else:
+            validate_report_index_row(entry)
 
     with_created = [e for e in entries if not e["has_error"] and e.get("created_at")]
     without_created = [e for e in entries if not e["has_error"] and not e.get("created_at")]

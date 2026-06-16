@@ -6,6 +6,7 @@ from pathlib import Path
 
 from scripts.fx_eval_common import (
     DIAGNOSTIC_SUMMARY_REQUIRED_KEYS,
+    REPORT_INDEX_ERROR_REQUIRED_KEYS,
     REPORT_INDEX_REQUIRED_KEYS,
     REPORT_INDEX_SAFETY_KEYS,
     STRATEGY_SUMMARY_REQUIRED_KEYS,
@@ -20,6 +21,7 @@ from scripts.fx_eval_common import (
     report_index_entry,
     run_id,
     safety_metadata,
+    validate_report_index_row,
     validate_summary_schema,
     window_groups,
     write_csv,
@@ -664,3 +666,93 @@ def test_format_report_index_diagnostic_row_with_none_numerics() -> None:
     assert cells[0] == "OK"
     assert cells[7] == "-" and cells[8] == "-"
     assert cells[9] == "-" and cells[10] == "-"
+
+
+# --- validate_report_index_row (presence-only contract for report-index rows) ------
+def test_validate_report_index_row_passes_on_complete_normal_row() -> None:
+    validate_report_index_row(_ok_row())  # no raise
+
+
+def test_validate_report_index_row_missing_key_raises_with_name() -> None:
+    row = _ok_row()
+    del row["verdict"]
+    try:
+        validate_report_index_row(row)
+    except ValueError as exc:
+        assert "verdict" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for missing key")
+
+
+def test_validate_report_index_row_allows_extra_keys() -> None:
+    validate_report_index_row(_ok_row(extra="anything", debug=123))  # no raise
+
+
+def test_validate_report_index_row_allows_none_and_empty_values() -> None:
+    # presence-only: None / "" are valid as long as the key exists
+    row = _ok_row(verdict=None, strategy="", median_expectancy=None)
+    validate_report_index_row(row)  # no raise
+
+
+def test_validate_report_index_row_rejects_non_mapping() -> None:
+    for bad in (["run_id"], "run_id", 42, None):
+        try:
+            validate_report_index_row(bad)
+        except ValueError as exc:
+            assert "mapping" in str(exc)
+        else:
+            raise AssertionError(f"expected ValueError for non-mapping: {bad!r}")
+
+
+def test_validate_report_index_row_error_schema_passes() -> None:
+    validate_report_index_row(_err_row(), REPORT_INDEX_ERROR_REQUIRED_KEYS)  # no raise
+
+
+def test_validate_report_index_row_error_schema_missing_key_raises() -> None:
+    row = _err_row()
+    del row["error"]
+    try:
+        validate_report_index_row(row, REPORT_INDEX_ERROR_REQUIRED_KEYS)
+    except ValueError as exc:
+        assert "error" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for missing error-row key")
+
+
+def test_validate_report_index_row_safety_conflict_and_diagnostic_rows_pass() -> None:
+    conflict = _ok_row(read_only_confirmed=False,
+                       safety_conflicts=["real_order"])
+    diag = _ok_row(kind="regime_diag", strategy="regime_predictability",
+                   median_expectancy=None, median_pf=None, total_pnl=None,
+                   max_drawdown_max=None, verdict="予測可能性=低")
+    validate_report_index_row(conflict)
+    validate_report_index_row(diag)
+
+
+def test_list_report_index_rows_satisfy_their_contracts(tmp_path) -> None:
+    _make_run(tmp_path, "ok_run", "2026-02-01T00:00:00")
+    _make_run(tmp_path, "broken_run", n_summary=0)  # -> error row
+    rows = list_report_index(tmp_path)
+    for row in rows:
+        if row["has_error"]:
+            validate_report_index_row(row, REPORT_INDEX_ERROR_REQUIRED_KEYS)
+        else:
+            validate_report_index_row(row)
+
+
+def test_report_index_entry_output_satisfies_required_keys(tmp_path) -> None:
+    run = _make_run(tmp_path, "entry_run", "2026-02-01T00:00:00")
+    validate_report_index_row(report_index_entry(run))  # entry-level contract
+
+
+def test_formatter_still_tolerates_rows_that_fail_validation() -> None:
+    # the formatter must stay lenient even on a row the validator would reject
+    sparse = {"run_id": "sparse", "has_error": False}
+    try:
+        validate_report_index_row(sparse)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected sparse row to fail validation")
+    md = format_report_index_markdown([sparse])  # must NOT raise
+    assert "sparse" in md

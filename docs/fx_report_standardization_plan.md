@@ -145,6 +145,13 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    ERROR>CONFLICT>UNCONFIRMED>WARN>OK の1トークン、safety は read-only / conflict:keys /
    incomplete / unconfirmed、数値は固定小数（expectancy4・pf3・pnl/dd2）、None/空/欠損は `-`、
    セル内 `|` はエスケープ、空 rows はヘッダ＋区切り行のみ・末尾改行なし。
+   さらに `validate_report_index_row(row, required_keys=...)` を追加: report index row の
+   presence-only 検証（`validate_summary_schema` と同設計）。非Mapping/必須キー不足で
+   ValueError（不足キー名を含む）、値・型・None/空は不問、追加キーは許容。正常行は
+   `REPORT_INDEX_REQUIRED_KEYS`、error 行は `REPORT_INDEX_ERROR_REQUIRED_KEYS`（run_id /
+   error / has_error / read_only_confirmed / created_at / summary_file）で検証し2系統に分離。
+   `list_report_index()` は返却前に各行を該当 schema で検証（契約違反を早期検出）。
+   `format_report_index_markdown()` は検証を強制せず欠損キー耐性を維持。
 6. E2E導入候補フローの docs 化（§11）
 
 まだ行わないこと: E2Eツール導入 / Playwright・Cypress 追加 / UI実装 / 実注文 / Private API接続 /
