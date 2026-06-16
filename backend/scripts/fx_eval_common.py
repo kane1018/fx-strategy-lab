@@ -13,6 +13,8 @@ No real orders, no Private API, no API key/secret.
 
 from __future__ import annotations
 
+import csv
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -109,6 +111,63 @@ def safety_metadata() -> dict:
         "gmo_readonly": True,
         "gmo_order_enabled": False,
     }
+
+
+# --- shared report writers (stdlib only; standardize analysis_exports output) ---
+# These centralize the file-writing mechanics so every runner produces the same
+# on-disk shape. They do NOT change content: write_json mirrors the prior inline
+# json.dumps(ensure_ascii=False, indent=2), and write_metrics_csv mirrors the
+# prior key-columns + _STAT_FIELDS CSV shape exactly.
+def ensure_output_dir(path: str | Path) -> Path:
+    """Create the run output directory (parents ok) and return it as a Path."""
+    out = Path(path)
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def write_json(path: str | Path, data: object) -> None:
+    """Write indent-2 JSON, preserving non-ASCII (Japanese) characters."""
+    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def write_manifest(out_dir: str | Path, manifest: dict) -> None:
+    write_json(Path(out_dir) / "manifest.json", manifest)
+
+
+def write_warnings(out_dir: str | Path, warnings: dict) -> None:
+    write_json(Path(out_dir) / "warnings.json", warnings)
+
+
+def write_summary_markdown(out_dir: str | Path, content: str) -> None:
+    (Path(out_dir) / "summary.md").write_text(content)
+
+
+def write_csv(path: str | Path, rows: list[dict], fieldnames: list[str] | None = None) -> None:
+    """Generic list[dict] -> CSV (DictWriter). fieldnames defaults to first row's keys."""
+    rows = list(rows)
+    if not rows and not fieldnames:
+        Path(path).write_text("")
+        return
+    fieldnames = fieldnames or list(rows[0].keys())
+    with Path(path).open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_metrics_csv(path: str | Path, rows: list[dict], key_fields: list[str],
+                      stat_fields: list[str] | None = None) -> None:
+    """Metrics CSV in the standard shape: key columns + stat columns.
+
+    Each row is {<key_fields...>, "stats": {<stat_fields...>}}. Matches the existing
+    15-window runner CSV output (csv.writer, header = keys + _STAT_FIELDS).
+    """
+    fields = stat_fields if stat_fields is not None else _STAT_FIELDS
+    with Path(path).open("w", newline="") as fh:
+        writer = csv.writer(fh)
+        writer.writerow([*key_fields, *fields])
+        for row in rows:
+            writer.writerow([*[row[k] for k in key_fields], *[row["stats"][f] for f in fields]])
 
 
 def classify_strategy(

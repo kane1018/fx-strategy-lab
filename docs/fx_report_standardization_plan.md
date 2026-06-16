@@ -98,6 +98,10 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
 
 1. analysis_exports 出力構造の標準化（本書のスキーマへ既存ランナーを寄せる）
 2. manifest / warnings / summary / metrics writer の共通化（`fx_eval_common` 拡張）
+   — **着手済み**: `fx_eval_common` に共通 writer（`ensure_output_dir` / `write_json` /
+   `write_manifest` / `write_warnings` / `write_csv` / `write_metrics_csv` /
+   `write_summary_markdown`）を追加し、**まず `rsi_final_15window.py` 1本のみ**を移行
+   （出力内容は不変・mechanism のみ共通化）。他ランナーへの横展開は次段階。
 3. report schema の固定（summary.json のキーを契約として固定）
 4. 安全表示（safety_metadata）の単一ソース化
 5. レポート一覧UI / run詳細UI に備えたデータ構造整理

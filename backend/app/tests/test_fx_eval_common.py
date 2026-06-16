@@ -1,16 +1,25 @@
 """Tests for the shared 15-window evaluation helpers (scripts/fx_eval_common.py)."""
 
+import csv
+import json
 from pathlib import Path
 
 from scripts.fx_eval_common import (
     SYMBOLS,
     WINDOWS,
     classify_strategy,
+    ensure_output_dir,
     fixed_config,
     group_labels,
     run_id,
     safety_metadata,
     window_groups,
+    write_csv,
+    write_json,
+    write_manifest,
+    write_metrics_csv,
+    write_summary_markdown,
+    write_warnings,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -106,3 +115,56 @@ def test_fx_docs_capture_read_only_safety_terms() -> None:
     )
     for term in ["read-only paper", "Private API", "実注文", "analysis_exports"]:
         assert term in docs
+
+
+# --- shared report writers (mechanism only; output must match prior inline logic) ---
+def test_ensure_output_dir_creates_dir(tmp_path) -> None:
+    out = ensure_output_dir(tmp_path / "run_x" / "nested")
+    assert out.exists() and out.is_dir()
+
+
+def test_write_json_is_indented_and_preserves_japanese(tmp_path) -> None:
+    path = tmp_path / "d.json"
+    data = {"判定": "研究用ベースライン", "n": 15}
+    write_json(path, data)
+    raw = path.read_text()
+    assert "研究用ベースライン" in raw  # non-ASCII preserved (ensure_ascii=False)
+    assert "\n  " in raw  # indent=2
+    assert json.loads(raw) == data
+    # byte-identical to the prior inline call
+    assert raw == json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def test_write_manifest_and_warnings_keep_safety_keys(tmp_path) -> None:
+    out = ensure_output_dir(tmp_path / "run")
+    write_manifest(out, {"run_id": "r", **safety_metadata()})
+    write_warnings(out, {"note": "x", **safety_metadata()})
+    man = json.loads((out / "manifest.json").read_text())
+    warn = json.loads((out / "warnings.json").read_text())
+    for flags in (man, warn):
+        assert flags["real_order"] is False
+        assert flags["private_api_used"] is False
+        assert flags["gmo_order_enabled"] is False
+
+
+def test_write_csv_generic_with_fieldnames(tmp_path) -> None:
+    path = tmp_path / "g.csv"
+    write_csv(path, [{"a": 1, "b": 2}, {"a": 3, "b": 4}], fieldnames=["a", "b"])
+    rows = list(csv.reader(path.read_text().splitlines()))
+    assert rows[0] == ["a", "b"]
+    assert rows[1] == ["1", "2"] and rows[2] == ["3", "4"]
+
+
+def test_write_metrics_csv_matches_key_plus_stats_shape(tmp_path) -> None:
+    path = tmp_path / "m.csv"
+    rows = [{"window": "w1", "stats": {"completed_trades": 10, "win_rate": 55.0}}]
+    write_metrics_csv(path, rows, ["window"], stat_fields=["completed_trades", "win_rate"])
+    out_rows = list(csv.reader(path.read_text().splitlines()))
+    assert out_rows[0] == ["window", "completed_trades", "win_rate"]
+    assert out_rows[1] == ["w1", "10", "55.0"]
+
+
+def test_write_summary_markdown(tmp_path) -> None:
+    out = ensure_output_dir(tmp_path / "run")
+    write_summary_markdown(out, "# 要約\n本文")
+    assert (out / "summary.md").read_text() == "# 要約\n本文"
