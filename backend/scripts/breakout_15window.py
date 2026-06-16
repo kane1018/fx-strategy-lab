@@ -28,6 +28,7 @@ from app.schemas.trading import ExecutionConfig, StrategyConfig, StrategyType  #
 from scripts.fx_eval_common import (  # noqa: E402
     ensure_output_dir,
     run_id,
+    validate_summary_schema,
     write_json,
     write_manifest,
     write_metrics_csv,
@@ -167,6 +168,7 @@ def _export(results: dict, window_dates: dict, window_group: dict, warnings: lis
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
+    validate_summary_schema(summary)
     write_json(out / "metrics_breakout_15window_summary.json", summary)
 
     write_warnings(out, {

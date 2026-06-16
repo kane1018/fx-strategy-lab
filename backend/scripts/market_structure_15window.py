@@ -41,6 +41,7 @@ from scripts.breakout_15window import _TP, BK_STAT_FIELDS, _summarize_bk  # noqa
 from scripts.fx_eval_common import (  # noqa: E402
     ensure_output_dir,
     run_id,
+    validate_summary_schema,
     write_json,
     write_manifest,
     write_markdown,
@@ -175,6 +176,7 @@ def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
+    validate_summary_schema(summary)
     write_json(out / "metrics_market_structure_15window_summary.json", summary)
 
     write_warnings(out, {

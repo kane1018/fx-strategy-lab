@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 
 from scripts.fx_eval_common import (
+    DIAGNOSTIC_SUMMARY_REQUIRED_KEYS,
+    STRATEGY_SUMMARY_REQUIRED_KEYS,
     SYMBOLS,
     WINDOWS,
     classify_strategy,
@@ -13,6 +15,7 @@ from scripts.fx_eval_common import (
     group_labels,
     run_id,
     safety_metadata,
+    validate_summary_schema,
     window_groups,
     write_csv,
     write_json,
@@ -222,3 +225,72 @@ def test_write_metrics_csv_market_state_key_order(tmp_path) -> None:
     out_rows = list(csv.reader(path.read_text().splitlines()))
     assert out_rows[0] == ["market_state", *bk_fields]
     assert out_rows[1] == ["low_de", "1760", "80.3", "5", "9.0"]
+
+
+# --- summary.json schema contract -----------------------------------------
+def _strategy_summary_shape() -> dict:
+    """Representative strategy summary (mirrors robustness_summary + _build_summary)."""
+    return {
+        "window_count": 15, "median_expectancy": 0.0164, "median_pf": 1.016,
+        "positive_windows": 8, "negative_windows": 7, "edge_windows": 8,
+        "windows_ge30_trades": 15, "max_drawdown_max": 65.46, "worst_single_loss": -3.14,
+        "total_pnl": 56.95, "group_prior10": {"label": "prior10"},
+        "group_oos5": {"label": "oos5"}, "symbol_pnl": {}, "verdict": "研究用ベースライン",
+    }
+
+
+def _diagnostic_summary_shape() -> dict:
+    """Representative regime diagnostic summary (mirrors _summary_dict)."""
+    return {
+        "prior10_rows": 440, "oos5_rows": 220, "best_oos_rule": "roll3_de_bucket",
+        "best_oos": {"accuracy": 0.38}, "oos5_majority_acc": 0.25,
+        "oos_margin_vs_majority": 0.1333, "rules": {}, "verdict": "価値なし/打ち切り",
+    }
+
+
+def test_strategy_summary_shape_satisfies_contract() -> None:
+    # presence-only contract; representative real shape must pass unchanged
+    validate_summary_schema(_strategy_summary_shape())
+
+
+def test_diagnostic_summary_shape_satisfies_contract() -> None:
+    validate_summary_schema(_diagnostic_summary_shape(), DIAGNOSTIC_SUMMARY_REQUIRED_KEYS)
+
+
+def test_validate_summary_schema_reports_missing_keys() -> None:
+    summary = _strategy_summary_shape()
+    del summary["total_pnl"]
+    del summary["verdict"]
+    try:
+        validate_summary_schema(summary)
+    except ValueError as exc:
+        assert "total_pnl" in str(exc) and "verdict" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for missing required keys")
+
+
+def test_validate_summary_schema_presence_only_allows_none_and_empty() -> None:
+    # None values and empty verdict are allowed (presence-only, not value validation)
+    summary = {k: None for k in STRATEGY_SUMMARY_REQUIRED_KEYS}
+    summary["verdict"] = ""
+    validate_summary_schema(summary)
+
+
+def test_validate_summary_schema_allows_extra_runner_specific_keys() -> None:
+    summary = {**_strategy_summary_shape(), "complement_vs_rsi": {}, "de_tertiles": {}}
+    validate_summary_schema(summary)
+
+
+def test_validate_summary_schema_rejects_non_mapping() -> None:
+    try:
+        validate_summary_schema(["not", "a", "mapping"])
+    except ValueError as exc:
+        assert "mapping" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for non-mapping summary")
+
+
+def test_strategy_and_diagnostic_schemas_differ_but_share_verdict() -> None:
+    assert "verdict" in STRATEGY_SUMMARY_REQUIRED_KEYS
+    assert "verdict" in DIAGNOSTIC_SUMMARY_REQUIRED_KEYS
+    assert set(STRATEGY_SUMMARY_REQUIRED_KEYS) != set(DIAGNOSTIC_SUMMARY_REQUIRED_KEYS)

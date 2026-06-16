@@ -32,6 +32,7 @@ from app.brokers import GmoFxBroker  # noqa: E402
 from app.services.market_data_service import candles_to_frame, pip_size  # noqa: E402
 from scripts.bollinger_15window import de_bucket, de_thresholds  # noqa: E402
 from scripts.fx_eval_common import (  # noqa: E402
+    DIAGNOSTIC_SUMMARY_REQUIRED_KEYS,
     EXPORT_ROOT,
     SYMBOLS,
     WINDOWS,
@@ -40,6 +41,7 @@ from scripts.fx_eval_common import (  # noqa: E402
     fixed_config,
     run_id,
     safety_metadata,
+    validate_summary_schema,
     write_csv,
     write_json,
     write_manifest,
@@ -269,6 +271,7 @@ def _export(per_series: list[dict], warnings: list[str]) -> None:
     _write_confusion(out, prior_results[best]["_pairs"], oos_results[best]["_pairs"])
     summary = _summary_dict(prior_rows, oos_rows, prior_maj, oos_maj, best, prior_results,
                             oos_results, ctx, verdict)
+    validate_summary_schema(summary, DIAGNOSTIC_SUMMARY_REQUIRED_KEYS)
     write_json(out / "metrics_regime_predictability_summary.json", summary)
     write_warnings(out, {
         **fixed_config(timeframe="M5", purpose="regime_predictability_diagnostic_no_trading"),

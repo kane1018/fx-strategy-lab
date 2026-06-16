@@ -16,8 +16,10 @@ from __future__ import annotations
 import csv
 import json
 import sys
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -230,3 +232,45 @@ def classify_strategy(
     if retire:
         return "撤退", reasons
     return "研究用ベースライン", reasons
+
+
+# --- summary.json schema contract (presence-only; values incl. None/"" are allowed) ---
+# Strategy 15-window runners (rsi/breakout/bollinger/market_structure/rsi_m15/scaled)
+# share robustness_summary() + _build_summary() keys; diagnostic runners (regime) have
+# a different shape. Keep them as separate contracts rather than forcing one schema.
+STRATEGY_SUMMARY_REQUIRED_KEYS = (
+    "window_count",
+    "median_expectancy",
+    "median_pf",
+    "positive_windows",
+    "negative_windows",
+    "total_pnl",
+    "max_drawdown_max",
+    "group_prior10",
+    "group_oos5",
+    "verdict",
+)
+DIAGNOSTIC_SUMMARY_REQUIRED_KEYS = (
+    "best_oos_rule",
+    "best_oos",
+    "oos5_majority_acc",
+    "oos_margin_vs_majority",
+    "verdict",
+)
+
+
+def validate_summary_schema(
+    summary: Mapping[str, Any],
+    required_keys: Sequence[str] = STRATEGY_SUMMARY_REQUIRED_KEYS,
+) -> None:
+    """Assert a metrics_*_summary.json dict carries the required keys (presence only).
+
+    Raises ValueError listing any missing keys. Does NOT inspect or change values
+    (None / "" are allowed) and does NOT touch runner-specific extra keys. Call this
+    right before write_json(summary) so future report UIs can rely on the contract.
+    """
+    if not isinstance(summary, Mapping):
+        raise ValueError(f"summary must be a mapping, got {type(summary).__name__}")
+    missing = [key for key in required_keys if key not in summary]
+    if missing:
+        raise ValueError(f"summary is missing required keys: {missing}")

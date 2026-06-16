@@ -44,6 +44,7 @@ from scripts.fx_eval_common import (  # noqa: E402
     robustness_summary,
     run_id,
     safety_metadata,
+    validate_summary_schema,
     write_json,
     write_manifest,
     write_markdown,
@@ -130,6 +131,7 @@ def _export(all_trades: list[dict], day_de: dict, warnings: list[str]) -> None:
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
+    validate_summary_schema(summary)
     write_json(out / "metrics_rsi_m15_scaled_15window_summary.json", summary)
 
     write_warnings(out, {

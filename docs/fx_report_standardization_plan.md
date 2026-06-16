@@ -112,6 +112,13 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    **主要ランナー全7本の出力writer標準化が完了**（stats入れ子型=write_metrics_csv、
    フラットdict型=write_csv の両系統が実戦投入済み）。`_summarize_bk` の共通化は別タスクで判断。
 3. report schema の固定（summary.json のキーを契約として固定）
+   — **着手済み**: `fx_eval_common` に `STRATEGY_SUMMARY_REQUIRED_KEYS`（window_count /
+   median_expectancy / median_pf / positive_windows / negative_windows / total_pnl /
+   max_drawdown_max / group_prior10 / group_oos5 / verdict）と `DIAGNOSTIC_SUMMARY_REQUIRED_KEYS`
+   （best_oos_rule / best_oos / oos5_majority_acc / oos_margin_vs_majority / verdict）を定義し、
+   `validate_summary_schema(summary, required_keys=...)`（presence-only・値は不問・ValueErrorで不足キー報告）
+   を追加。全7ランナーの `write_json(summary)` 直前で検証を呼ぶ（戦略系は既定、regimeは診断schema）。
+   出力内容は不変。戦略系と診断系で構造が異なるため schema は2系統に分離。
 4. 安全表示（safety_metadata）の単一ソース化
 5. レポート一覧UI / run詳細UI に備えたデータ構造整理
 6. E2E導入候補フローの docs 化（§11）
