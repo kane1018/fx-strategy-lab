@@ -806,8 +806,17 @@ app/routers/reports.py
 
 ## 15. UI MVP 仕様
 
-実装済みの `/api/reports` 系 read-only API（§14）を前提に、次に作るレポート閲覧 UI の MVP を確定する。
-**本節は docs のみ**で、UI 実装・API 変更・E2E 導入は含まない。
+実装済みの `/api/reports` 系 read-only API（§14）を前提に、レポート閲覧 UI の MVP を確定する。
+
+> **実装状況（更新）**: レポート一覧画面 `/reports` は **実装済み**（run詳細画面は次タスク）。
+> 実装ファイル: `frontend/app/reports/page.tsx`（一覧画面・Client Component）/
+> `frontend/lib/reports.ts`（safety badge 判定・数値整形・fetch＋503マッピング、JSX/DOM 非依存）/
+> `frontend/types/reports.ts`（ReportIndexItem / ReportsResponse）。
+> テスト: `frontend/lib/reports.test.ts`（Vitest node-env: safetyBadge 優先順位・fmtNum・fetchReports）。
+> data-testid: reports-page / reports-count / reports-table / report-row / error-row /
+> safety-badge / reports-loading / reports-empty / reports-error。
+> 注: 既存 frontend に jsdom / @vitejs/plugin-react が無く（package 追加は禁止）、React render
+> テストは未導入。描画の検証は `next build` の型チェック＋将来の E2E（§11）で担保する。
 
 ### 15-1. UI MVP の目的
 
