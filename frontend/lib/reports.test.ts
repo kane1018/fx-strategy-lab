@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { ReportIndexItem } from "@/types/reports";
-import { fetchReports, fmtNum, fmtText, safetyBadge } from "./reports";
+import {
+  fetchReportDetail,
+  fetchReports,
+  fmtCompact,
+  fmtNum,
+  fmtText,
+  safetyBadge
+} from "./reports";
 
 const okItem: ReportIndexItem = {
   run_id: "run_a",
@@ -101,5 +108,89 @@ describe("fetchReports", () => {
     if (result.status === "error") {
       expect(result.message).toContain("network down");
     }
+  });
+});
+
+describe("fmtCompact", () => {
+  it("renders missing values as dash", () => {
+    expect(fmtCompact(null)).toBe("-");
+    expect(fmtCompact(undefined)).toBe("-");
+    expect(fmtCompact("")).toBe("-");
+  });
+
+  it("renders dict/list as compact JSON", () => {
+    expect(fmtCompact({ median_expectancy: 0.1 })).toBe(
+      '{"median_expectancy":0.1}'
+    );
+    expect(fmtCompact(["a", "b"])).toBe('["a","b"]');
+  });
+
+  it("renders scalars as strings", () => {
+    expect(fmtCompact(9)).toBe("9");
+    expect(fmtCompact(true)).toBe("true");
+  });
+});
+
+describe("fetchReportDetail", () => {
+  const jsonResponse = (body: unknown, status = 200) =>
+    ({
+      status,
+      ok: status >= 200 && status < 300,
+      json: async () => body
+    }) as Response;
+
+  it("maps a successful response to success", async () => {
+    const fake = async () => jsonResponse({ run_id: "run_a", files: [] });
+    const result = await fetchReportDetail("run_a", fake as typeof fetch);
+    expect(result.status).toBe("success");
+    if (result.status === "success") {
+      expect(result.data.run_id).toBe("run_a");
+    }
+  });
+
+  it("maps 400 to invalid", async () => {
+    const fake = async () => jsonResponse({ detail: {} }, 400);
+    expect((await fetchReportDetail("bad", fake as typeof fetch)).status).toBe(
+      "invalid"
+    );
+  });
+
+  it("maps 404 to not_found", async () => {
+    const fake = async () => jsonResponse({ detail: {} }, 404);
+    expect((await fetchReportDetail("x", fake as typeof fetch)).status).toBe(
+      "not_found"
+    );
+  });
+
+  it("maps 422 to broken", async () => {
+    const fake = async () => jsonResponse({ detail: {} }, 422);
+    expect((await fetchReportDetail("x", fake as typeof fetch)).status).toBe(
+      "broken"
+    );
+  });
+
+  it("maps 500 to error", async () => {
+    const fake = async () => jsonResponse({ detail: "boom" }, 500);
+    expect((await fetchReportDetail("x", fake as typeof fetch)).status).toBe(
+      "error"
+    );
+  });
+
+  it("maps a network throw to error", async () => {
+    const fake = async () => {
+      throw new Error("offline");
+    };
+    const result = await fetchReportDetail("x", fake as typeof fetch);
+    expect(result.status).toBe("error");
+  });
+
+  it("URL-encodes the run_id in the request path", async () => {
+    let calledWith = "";
+    const fake = async (url: string | URL | Request) => {
+      calledWith = String(url);
+      return jsonResponse({ run_id: "a b", files: [] });
+    };
+    await fetchReportDetail("a b/c", fake as unknown as typeof fetch);
+    expect(calledWith).toContain("/api/reports/a%20b%2Fc");
   });
 });

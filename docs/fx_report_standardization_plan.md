@@ -808,13 +808,21 @@ app/routers/reports.py
 
 実装済みの `/api/reports` 系 read-only API（§14）を前提に、レポート閲覧 UI の MVP を確定する。
 
-> **実装状況（更新）**: レポート一覧画面 `/reports` は **実装済み**（run詳細画面は次タスク）。
-> 実装ファイル: `frontend/app/reports/page.tsx`（一覧画面・Client Component）/
-> `frontend/lib/reports.ts`（safety badge 判定・数値整形・fetch＋503マッピング、JSX/DOM 非依存）/
-> `frontend/types/reports.ts`（ReportIndexItem / ReportsResponse）。
-> テスト: `frontend/lib/reports.test.ts`（Vitest node-env: safetyBadge 優先順位・fmtNum・fetchReports）。
-> data-testid: reports-page / reports-count / reports-table / report-row / error-row /
-> safety-badge / reports-loading / reports-empty / reports-error。
+> **実装状況（更新）**: レポート一覧画面 `/reports` と run詳細画面 `/reports/[run_id]` は
+> **どちらも実装済み**。
+> 実装ファイル: `frontend/app/reports/page.tsx`（一覧）/ `frontend/app/reports/[run_id]/page.tsx`
+> （詳細・7セクション）/ `frontend/lib/reports.ts`（safety badge 判定・数値/compact整形・
+> fetchReports[503]・fetchReportDetail[400/404/422]、JSX/DOM 非依存）/
+> `frontend/types/reports.ts`（ReportIndexItem / ReportsResponse / ReportFile / ReportDetail）。
+> テスト: `frontend/lib/reports.test.ts`（Vitest node-env: safetyBadge / fmtNum / fmtCompact /
+> fetchReports / fetchReportDetail、run_id encode 検証含む）。
+> data-testid 一覧: reports-page / reports-count / reports-table / report-row / error-row /
+> safety-badge / reports-loading / reports-empty / reports-error /
+> report-detail-page / back-to-reports / detail-section / detail-overview / detail-safety /
+> detail-metrics / detail-cost / detail-files / detail-summary-markdown / detail-final-decision /
+> report-detail-loading / report-detail-error。
+> 詳細画面: Files は name/kind/size_bytes のみ、Summary/Final Decision は `<pre>` 本文表示
+> （Markdown rendering library は追加しない）、CSV/JSON 本文は展開しない。
 > 注: 既存 frontend に jsdom / @vitejs/plugin-react が無く（package 追加は禁止）、React render
 > テストは未導入。描画の検証は `next build` の型チェック＋将来の E2E（§11）で担保する。
 

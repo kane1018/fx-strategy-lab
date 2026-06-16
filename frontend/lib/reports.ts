@@ -1,7 +1,11 @@
 // Pure presentation/data helpers for the read-only reports list UI (docs §15).
 // Kept free of JSX/DOM so they are unit-testable under the existing node-env Vitest.
 
-import type { ReportIndexItem, ReportsResponse } from "@/types/reports";
+import type {
+  ReportDetail,
+  ReportIndexItem,
+  ReportsResponse
+} from "@/types/reports";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -52,6 +56,22 @@ export function fmtText(value: string | null | undefined): string {
   return value;
 }
 
+// Compact one-line display for any value; dict/list become compact JSON. "-" for
+// null/undefined/empty. Used for Metrics cells like group_prior10 / group_oos5.
+export function fmtCompact(value: unknown): string {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "-";
+    }
+  }
+  return String(value);
+}
+
 export type FetchReportsResult =
   | { status: "success"; data: ReportsResponse }
   | { status: "unavailable" } // 503: reports root not configured / missing
@@ -73,6 +93,44 @@ export async function fetchReports(
       return { status: "error", message: `API error: ${response.status}` };
     }
     const data = (await response.json()) as ReportsResponse;
+    return { status: "success", data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    return { status: "error", message };
+  }
+}
+
+export type FetchReportDetailResult =
+  | { status: "success"; data: ReportDetail }
+  | { status: "invalid" } // 400: run_id failed server-side validation
+  | { status: "not_found" } // 404: run does not exist
+  | { status: "broken" } // 422: run structure invalid (0/multiple summary, bad JSON)
+  | { status: "error"; message: string };
+
+// Read-only fetch of one run's detail. Maps the API's status codes (docs §15-6) to
+// distinct UI states; run_id is URL-encoded (server still re-validates it).
+export async function fetchReportDetail(
+  runId: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<FetchReportDetailResult> {
+  try {
+    const response = await fetchImpl(
+      `${API_BASE}/api/reports/${encodeURIComponent(runId)}`,
+      { headers: { "Content-Type": "application/json" } }
+    );
+    if (response.status === 400) {
+      return { status: "invalid" };
+    }
+    if (response.status === 404) {
+      return { status: "not_found" };
+    }
+    if (response.status === 422) {
+      return { status: "broken" };
+    }
+    if (!response.ok) {
+      return { status: "error", message: `API error: ${response.status}` };
+    }
+    const data = (await response.json()) as ReportDetail;
     return { status: "success", data };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
