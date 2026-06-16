@@ -981,7 +981,15 @@ MVP 外（将来追加）: CSVプレビュー / CSVダウンロード / 設定 /
 
 一覧UI `/reports`・詳細UI `/reports/[run_id]`・read-only API `/api/reports` が揃ったので、
 E2E 実装前に **ツール選定・起動方法・テストデータ方針・E2E-01〜08 の具体化**をここで確定する。
-**本節は docs のみ**で、Playwright 導入・package 追加・E2E 実装は含まない。
+
+> **実装状況（更新）**: Playwright E2E は **最小導入済み**（Chromium のみ、CI/複数ブラウザは未対応）。
+> 追加 package: `@playwright/test`（devDependency、`npx playwright install chromium` 実行）。
+> 設定: `frontend/playwright.config.ts`（baseURL=http://localhost:3000、testDir=e2e、webServer 2本=
+> ①fixture 生成＋`ANALYSIS_EXPORTS_ROOT=<fixture>` で uvicorn 起動 ②`NEXT_PUBLIC_API_BASE_URL` 付き
+> `npm run dev`）。spec: `frontend/e2e/reports.spec.ts`（E2E-01〜08、`npx playwright test` / `npm run e2e`、
+> 全8件 green）。fixture は `create_e2e_report_fixtures` が生成、実 analysis_exports 非接触。
+> 補助変更: vitest が e2e/*.spec.ts を拾わないよう `frontend/vitest.config.ts`（exclude e2e/）を追加。
+> 生成 fixture / test-results / playwright-report は gitignore（コミットしない）。
 
 ### 16-1. E2E 導入の目的
 

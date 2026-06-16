@@ -18,6 +18,10 @@ frontend/.next/
 frontend/node_modules/
 frontend/coverage/
 backend/htmlcov/
+frontend/e2e/fixtures/
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.cache/
 backend/.coverage
 # Locally generated analysis output (timestamped run_id dirs; regenerate via scripts.paper_analyze_gmo)
 analysis_exports/
