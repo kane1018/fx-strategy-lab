@@ -458,8 +458,14 @@ MVP仕様で endpoint / response shape / error response / safety badge mapping /
 ## 14. read-only API MVP 仕様
 
 §13 で Primary = read-only API に決定したので、FastAPI 実装に入る前に endpoint /
-レスポンス shape / エラー方針 / 安全表示 / テスト方針をここで確定する。本節は **仕様 docs のみ**で、
-API/UI/E2E の実装は含まない。
+レスポンス shape / エラー方針 / 安全表示 / テスト方針をここで確定する。
+
+> **実装状況（更新）**: 本仕様は **実装済み**。prefix は `/api/reports` に確定。
+> 実装ファイル: `app/routers/reports.py`（新規 APIRouter）/ `app/config.py`
+> （`analysis_exports_root` 追加）/ `app/main.py`（`include_router`）。
+> テスト: `app/tests/test_reports_api.py`（TestClient + tmp_path、API-01〜10）。
+> GET のみ・CSV 本文非返却・exports_root はサーバー固定（呼び出し側指定不可）。
+> 以下の節のパスは `/reports` 表記だが、実体は `/api/reports` 配下。
 
 ### 14-1. read-only API MVP の目的
 

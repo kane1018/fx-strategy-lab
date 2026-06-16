@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.database import Base, engine, get_db
+from app.routers import reports
 from app.schemas.trading import (
     AutoTradeConfig,
     BacktestRequest,
@@ -75,6 +76,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(reports.router)
 
 Db = Annotated[Session, Depends(get_db)]
 

@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     gmo_fx_max_units: float = 100
     gmo_fx_public_url: str = "https://forex-api.coin.z.com/public"
 
+    # Read-only report viewer: directory holding analysis_exports/<run_id>/ runs.
+    # Server-fixed; the /api/reports routes never accept a caller-supplied path.
+    analysis_exports_root: str = "analysis_exports"
+
     model_config = SettingsConfigDict(
         env_file=(".env", "../.env"),
         env_file_encoding="utf-8",
