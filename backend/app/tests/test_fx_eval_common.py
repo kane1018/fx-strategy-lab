@@ -7,6 +7,7 @@ from pathlib import Path
 from scripts.fx_eval_common import (
     DIAGNOSTIC_SUMMARY_REQUIRED_KEYS,
     REPORT_INDEX_REQUIRED_KEYS,
+    REPORT_INDEX_SAFETY_KEYS,
     STRATEGY_SUMMARY_REQUIRED_KEYS,
     SYMBOLS,
     WINDOWS,
@@ -409,3 +410,39 @@ def test_report_index_entry_run_id_falls_back_to_dirname(tmp_path) -> None:
     entry = report_index_entry(run)
     assert entry["run_id"] == "20260101_000000_gmo_public_paper_demo"
     assert entry["kind"] is None and entry["read_only_confirmed"] is False
+
+
+# --- completed safety metadata in older strategy-runner manifests -----------------
+def test_safety_metadata_covers_all_report_index_keys() -> None:
+    meta = safety_metadata()
+    assert set(REPORT_INDEX_SAFETY_KEYS) <= set(meta)  # all 6 index flags present
+    assert meta == {"real_order": False, "private_api_used": False, "api_key_used": False,
+                    "gmo_readonly": True, "gmo_order_enabled": False,
+                    "no_order_execution": True}
+
+
+def test_report_index_confirms_completed_older_runner_manifest(tmp_path) -> None:
+    # what rsi_final/breakout/bollinger/market_structure manifests now emit:
+    # legacy keys come from **safety_metadata(), so all 6 flags are present.
+    manifest = {"run_id": "20260101_000000_gmo_public_paper_rsi_final15",
+                "kind": "gmo_public_paper_rsi_final15", "strategy": "rsi_reversal",
+                "timeframe": "M5", "cost_scenario": "current_cost", "spread_pips": 1.2,
+                "slippage_pips": 0.2, "stop_loss_pips": 30, "take_profit_pips": 60,
+                "created_at": "2026-01-01T00:00:00", "symbols": ["USD_JPY"],
+                "continuous_replay": True, **safety_metadata()}
+    # older runners' warnings.json carries no safety flags (only data warnings)
+    warnings = {"data_source": "x", "fixed_config": "y", "fetch_warnings": []}
+    run = _write_run(tmp_path, manifest, warnings,
+                     {"metrics_15window_summary.json": _strategy_summary_json()})
+    entry = report_index_entry(run)
+    assert entry["safety_complete"] is True
+    assert entry["read_only_confirmed"] is True
+    assert entry["safety_conflicts"] == []
+    # legacy 3 keys preserved at their original values
+    assert entry["safety"]["no_order_execution"] is True
+    assert entry["safety"]["gmo_readonly"] is True
+    assert entry["safety"]["gmo_order_enabled"] is False
+    # the 3 newly-completed keys
+    assert entry["safety"]["real_order"] is False
+    assert entry["safety"]["private_api_used"] is False
+    assert entry["safety"]["api_key_used"] is False

@@ -41,6 +41,7 @@ from scripts.breakout_15window import _TP, BK_STAT_FIELDS, _summarize_bk  # noqa
 from scripts.fx_eval_common import (  # noqa: E402
     ensure_output_dir,
     run_id,
+    safety_metadata,
     validate_summary_schema,
     write_json,
     write_manifest,
@@ -252,8 +253,8 @@ def _write_manifest(out: Path, rid: str, win_group: dict) -> None:
         "adx_filter": False, "de_filter": False,
         "windows": [{"window": label, "group": g, "dates": _weekdays(s, e)}
                     for label, s, e, g in WINDOWS],
-        "symbols": SYMBOLS, "continuous_replay": True, "no_order_execution": True,
-        "gmo_readonly": True, "gmo_order_enabled": False,
+        "symbols": SYMBOLS, "continuous_replay": True,
+        **safety_metadata(),
     })
 
 

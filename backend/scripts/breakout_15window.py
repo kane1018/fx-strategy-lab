@@ -28,6 +28,7 @@ from app.schemas.trading import ExecutionConfig, StrategyConfig, StrategyType  #
 from scripts.fx_eval_common import (  # noqa: E402
     ensure_output_dir,
     run_id,
+    safety_metadata,
     validate_summary_schema,
     write_json,
     write_manifest,
@@ -249,8 +250,8 @@ def _write_manifest(out: Path, rid: str, window_dates: dict, window_group: dict)
         "adx_filter": False,
         "windows": [{"window": label, "group": window_group[label], "dates": dates}
                     for label, dates in window_dates.items()],
-        "symbols": SYMBOLS, "continuous_replay": True, "no_order_execution": True,
-        "gmo_readonly": True, "gmo_order_enabled": False,
+        "symbols": SYMBOLS, "continuous_replay": True,
+        **safety_metadata(),
     })
 
 
