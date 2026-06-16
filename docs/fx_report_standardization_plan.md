@@ -164,6 +164,15 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    詳細契約は `REPORT_DETAIL_REQUIRED_KEYS` と `validate_report_detail(detail)`
    （presence-only・他の validate 系と同設計）で固定。実 analysis_exports は読まず
    tmp_path のみでテスト。UI/API は作らない。
+   加えて `format_report_detail_markdown(detail)` を追加: report_detail() の戻り値を
+   人間/ChatGPT 用の1 run詳細 Markdown に整形する read-only 純関数（ファイル/再計算なし）。
+   セクションは Overview / Safety / Metrics Summary / Cost / Execution / Files /
+   Summary Markdown / Final Decision。各表は key|value（Files は name|kind|size_bytes）、
+   数値は固定小数（expectancy4・pf3・pnl/dd2）、dict/list セルは compact JSON、
+   None/空/欠損は `-`、セル内 `|` はエスケープ。summary.md / *_final_decision.md 本文は
+   セクション本文として埋め込み（無ければ `-`）、CSV/JSON 本文は表示しない。
+   `validate_report_detail` は強制せず欠損キー耐性を維持。末尾改行なし。
+   一覧用 `format_report_index_markdown` と対で「一覧→詳細」両方が ChatGPT に貼れる。
 6. E2E導入候補フローの docs 化（§11）
 
 まだ行わないこと: E2Eツール導入 / Playwright・Cypress 追加 / UI実装 / 実注文 / Private API接続 /

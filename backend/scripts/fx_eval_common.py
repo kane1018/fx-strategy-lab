@@ -676,3 +676,116 @@ def report_detail(run_dir: str | Path) -> dict[str, Any]:
         "csv_files": csv_files,
         "markdown_files": markdown_files,
     }
+
+
+def _detail_compact(value: Any) -> str:
+    """Render a value as one cell; dict/list become compact 1-line JSON."""
+    if isinstance(value, Mapping | list | tuple):
+        return _md_cell(json.dumps(value, ensure_ascii=False, default=str))
+    return _md_cell(value)
+
+
+def _detail_kv_table(pairs: Sequence[tuple[str, str]]) -> list[str]:
+    """Build a 2-column key/value Markdown table (values already formatted)."""
+    lines = ["| key | value |", "| --- | --- |"]
+    lines.extend(f"| {_md_cell(key)} | {value} |" for key, value in pairs)
+    return lines
+
+
+def _detail_body(text: Any) -> str:
+    """Section body for an embedded Markdown file: the text, or '-' if absent/empty."""
+    if text is None:
+        return "-"
+    stripped = str(text).strip()
+    return stripped or "-"
+
+
+def format_report_detail_markdown(detail: Mapping[str, Any]) -> str:
+    """Render report_detail() output as a Markdown detail report (read-only, pure).
+
+    Display-only: takes the dict from report_detail() and returns a Markdown string for
+    humans / ChatGPT. Performs NO file, network, or broker I/O and does NOT recompute
+    metrics — it only formats what the detail already carries. Sections: Overview, Safety,
+    Metrics Summary, Cost / Execution, Files, Summary Markdown, Final Decision. None /
+    empty / missing values render as '-', headline metrics use fixed decimals, dict/list
+    cells become compact JSON, and '|' is escaped inside tables. summary.md /
+    *_final_decision.md bodies are embedded as section text (CSV/JSON bodies are never
+    shown). Lenient to missing keys (does not call validate_report_detail). No trailing
+    newline.
+    """
+    index = detail.get("index") or {}
+    summary = detail.get("summary") or {}
+    safety = index.get("safety") or {}
+    run_id_display = _md_cell(detail.get("run_id") or index.get("run_id"))
+    conflicts = index.get("safety_conflicts") or []
+
+    out: list[str] = [f"# FX Report Detail: {run_id_display}", ""]
+
+    out.append("## Overview")
+    out.extend(_detail_kv_table([
+        ("run_id", _md_cell(detail.get("run_id") or index.get("run_id"))),
+        ("kind", _md_cell(index.get("kind"))),
+        ("strategy", _md_cell(index.get("strategy"))),
+        ("timeframe", _md_cell(index.get("timeframe"))),
+        ("cost_scenario", _md_cell(index.get("cost_scenario"))),
+        ("verdict", _md_cell(index.get("verdict"))),
+        ("created_at", _md_cell(index.get("created_at"))),
+    ]))
+    out.append("")
+
+    out.append("## Safety")
+    out.extend(_detail_kv_table([
+        ("read_only_confirmed", _md_cell(index.get("read_only_confirmed"))),
+        ("real_order", _md_cell(safety.get("real_order"))),
+        ("private_api_used", _md_cell(safety.get("private_api_used"))),
+        ("api_key_used", _md_cell(safety.get("api_key_used"))),
+        ("gmo_readonly", _md_cell(safety.get("gmo_readonly"))),
+        ("gmo_order_enabled", _md_cell(safety.get("gmo_order_enabled"))),
+        ("no_order_execution", _md_cell(safety.get("no_order_execution"))),
+        ("safety_conflicts", _md_cell(",".join(str(k) for k in conflicts)) if conflicts else "-"),
+    ]))
+    out.append("")
+
+    out.append("## Metrics Summary")
+    out.extend(_detail_kv_table([
+        ("median_expectancy", _md_num(summary.get("median_expectancy"), 4)),
+        ("median_pf", _md_num(summary.get("median_pf"), 3)),
+        ("total_pnl", _md_num(summary.get("total_pnl"), 2)),
+        ("max_drawdown_max", _md_num(summary.get("max_drawdown_max"), 2)),
+        ("positive_windows", _md_cell(summary.get("positive_windows"))),
+        ("negative_windows", _md_cell(summary.get("negative_windows"))),
+        ("group_prior10", _detail_compact(summary.get("group_prior10"))),
+        ("group_oos5", _detail_compact(summary.get("group_oos5"))),
+    ]))
+    out.append("")
+
+    out.append("## Cost / Execution")
+    out.extend(_detail_kv_table([
+        ("cost_scenario", _md_cell(index.get("cost_scenario"))),
+        ("spread_pips", _md_cell(index.get("spread_pips"))),
+        ("slippage_pips", _md_cell(index.get("slippage_pips"))),
+        ("stop_loss_pips", _md_cell(index.get("stop_loss_pips"))),
+        ("take_profit_pips", _md_cell(index.get("take_profit_pips"))),
+    ]))
+    out.append("")
+
+    out.append("## Files")
+    out.append("| name | kind | size_bytes |")
+    out.append("| --- | --- | --- |")
+    for f in detail.get("files") or []:
+        out.append(
+            f"| {_md_cell(f.get('name'))} | {_md_cell(f.get('kind'))} "
+            f"| {_md_cell(f.get('size_bytes'))} |"
+        )
+    out.append("")
+
+    out.append("## Summary Markdown")
+    out.append("")
+    out.append(_detail_body(detail.get("summary_markdown")))
+    out.append("")
+
+    out.append("## Final Decision")
+    out.append("")
+    out.append(_detail_body(detail.get("final_decision_markdown")))
+
+    return "\n".join(out)

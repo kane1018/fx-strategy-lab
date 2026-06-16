@@ -16,6 +16,7 @@ from scripts.fx_eval_common import (
     classify_strategy,
     ensure_output_dir,
     fixed_config,
+    format_report_detail_markdown,
     format_report_index_markdown,
     group_labels,
     list_report_index,
@@ -909,3 +910,174 @@ def test_validate_report_detail_rejects_non_mapping_and_allows_extras() -> None:
     ok = {k: None for k in REPORT_DETAIL_REQUIRED_KEYS}
     ok["extra"] = "anything"
     validate_report_detail(ok)  # extras allowed, None values allowed
+
+
+# --- format_report_detail_markdown (render one run's detail for humans/ChatGPT) -----
+def _full_detail(**over):
+    index = {
+        "run_id": "20260201_000000_gmo_public_paper_rsi", "kind": "rsi_final15",
+        "strategy": "rsi_reversal", "timeframe": "M5", "cost_scenario": "current_cost",
+        "spread_pips": 1.2, "slippage_pips": 0.2, "stop_loss_pips": 30,
+        "take_profit_pips": 60, "verdict": "研究用ベースライン",
+        "median_expectancy": 0.0821, "median_pf": 1.143, "total_pnl": 312.4,
+        "max_drawdown_max": -88.2, "created_at": "2026-02-01T00:00:00",
+        "summary_file": "metrics_0_15window_summary.json",
+        "safety": {k: (k in ("gmo_readonly", "no_order_execution"))
+                   for k in REPORT_INDEX_SAFETY_KEYS},
+        "safety_complete": True, "safety_conflicts": [], "read_only_confirmed": True,
+        "warnings_count": 0, "has_warnings": False,
+    }
+    summary = {
+        "window_count": 15, "median_expectancy": 0.0821, "median_pf": 1.143,
+        "positive_windows": 9, "negative_windows": 6, "total_pnl": 312.4,
+        "max_drawdown_max": -88.2, "group_prior10": {"median_expectancy": 0.1},
+        "group_oos5": {"median_expectancy": 0.05}, "verdict": "研究用ベースライン",
+    }
+    detail = {
+        "run_id": "20260201_000000_gmo_public_paper_rsi",
+        "run_dir": "/x/run", "index": index, "manifest": {"run_id": "x"},
+        "warnings": {"fetch_warnings": []}, "summary": summary,
+        "summary_file": "metrics_0_15window_summary.json",
+        "summary_markdown_file": "summary.md",
+        "summary_markdown": "# Summary\n研究用ベースライン\n",
+        "final_decision_file": "rsi_final_decision.md",
+        "final_decision_markdown": "# 判定\n継続検証候補\n",
+        "files": [
+            {"name": "manifest.json", "kind": "json", "size_bytes": 512},
+            {"name": "metrics_by_window.csv", "kind": "csv", "size_bytes": 2048},
+            {"name": "summary.md", "kind": "markdown", "size_bytes": 256},
+        ],
+        "metrics_files": ["metrics_0_15window_summary.json"],
+        "csv_files": ["metrics_by_window.csv"], "markdown_files": ["summary.md"],
+    }
+    detail.update(over)
+    return detail
+
+
+def _section(md, title):
+    # return the lines belonging to "## <title>" up to the next "## " heading
+    lines = md.splitlines()
+    start = lines.index(f"## {title}")
+    rest = lines[start + 1:]
+    end = next((i for i, ln in enumerate(rest) if ln.startswith("## ")), len(rest))
+    return rest[:end]
+
+
+def test_format_report_detail_has_all_sections_and_title() -> None:
+    md = format_report_detail_markdown(_full_detail())
+    assert md.startswith("# FX Report Detail: 20260201_000000_gmo_public_paper_rsi")
+    for title in ("Overview", "Safety", "Metrics Summary", "Cost / Execution",
+                  "Files", "Summary Markdown", "Final Decision"):
+        assert f"## {title}" in md
+    assert not md.endswith("\n")  # no trailing newline
+
+
+def test_format_report_detail_overview_and_metrics_values() -> None:
+    md = format_report_detail_markdown(_full_detail())
+    overview = "\n".join(_section(md, "Overview"))
+    assert "| run_id | 20260201_000000_gmo_public_paper_rsi |" in overview
+    assert "| strategy | rsi_reversal |" in overview
+    assert "| verdict | 研究用ベースライン |" in overview
+    metrics = "\n".join(_section(md, "Metrics Summary"))
+    assert "| median_expectancy | 0.0821 |" in metrics  # 4dp
+    assert "| median_pf | 1.143 |" in metrics            # 3dp
+    assert "| total_pnl | 312.40 |" in metrics           # 2dp
+    assert "| max_drawdown_max | -88.20 |" in metrics     # 2dp
+    assert "| positive_windows | 9 |" in metrics
+
+
+def test_format_report_detail_safety_table() -> None:
+    safety = "\n".join(_section(format_report_detail_markdown(_full_detail()), "Safety"))
+    assert "| read_only_confirmed | True |" in safety
+    assert "| real_order | False |" in safety
+    assert "| gmo_readonly | True |" in safety
+    assert "| safety_conflicts | - |" in safety
+
+
+def test_format_report_detail_safety_conflicts_listed() -> None:
+    d = _full_detail()
+    d["index"]["safety_conflicts"] = ["real_order", "gmo_readonly"]
+    safety = "\n".join(_section(format_report_detail_markdown(d), "Safety"))
+    assert "| safety_conflicts | real_order,gmo_readonly |" in safety
+
+
+def test_format_report_detail_cost_table() -> None:
+    cost = "\n".join(_section(format_report_detail_markdown(_full_detail()), "Cost / Execution"))
+    assert "| cost_scenario | current_cost |" in cost
+    assert "| spread_pips | 1.2 |" in cost
+    assert "| stop_loss_pips | 30 |" in cost
+
+
+def test_format_report_detail_files_table_and_no_csv_body() -> None:
+    md = format_report_detail_markdown(_full_detail())
+    files = _section(md, "Files")
+    assert files[0] == "| name | kind | size_bytes |"
+    body = "\n".join(files)
+    assert "| manifest.json | json | 512 |" in body
+    assert "| metrics_by_window.csv | csv | 2048 |" in body
+    # CSV body content must never appear (only metadata)
+    assert "window,n,accuracy" not in md
+
+
+def test_format_report_detail_embeds_markdown_bodies() -> None:
+    md = format_report_detail_markdown(_full_detail())
+    assert "研究用ベースライン" in "\n".join(_section(md, "Summary Markdown"))
+    assert "継続検証候補" in "\n".join(_section(md, "Final Decision"))
+
+
+def test_format_report_detail_missing_bodies_become_dash() -> None:
+    md = format_report_detail_markdown(
+        _full_detail(summary_markdown=None, final_decision_markdown=None))
+    assert "-" in [ln.strip() for ln in _section(md, "Summary Markdown")]
+    assert "-" in [ln.strip() for ln in _section(md, "Final Decision")]
+
+
+def test_format_report_detail_handles_none_and_missing_keys() -> None:
+    d = _full_detail()
+    d["index"]["verdict"] = None
+    d["summary"]["median_expectancy"] = None
+    del d["index"]["strategy"]  # missing key
+    md = format_report_detail_markdown(d)
+    assert "| verdict | - |" in md
+    assert "| strategy | - |" in md
+    assert "| median_expectancy | - |" in md
+
+
+def test_format_report_detail_escapes_pipe_in_cells() -> None:
+    d = _full_detail()
+    d["index"]["strategy"] = "a|b"
+    md = format_report_detail_markdown(d)
+    assert r"| strategy | a\|b |" in md
+
+
+def test_format_report_detail_empty_files_keeps_header() -> None:
+    md = format_report_detail_markdown(_full_detail(files=[]))
+    files = _section(md, "Files")
+    assert files[0] == "| name | kind | size_bytes |"
+    assert files[1] == "| --- | --- | --- |"
+    # no data rows between header/separator and the section break
+    assert all(not ln.startswith("| metrics") for ln in files)
+
+
+def test_format_report_detail_compact_dict_cells() -> None:
+    metrics = "\n".join(_section(format_report_detail_markdown(_full_detail()), "Metrics Summary"))
+    assert '"median_expectancy": 0.1' in metrics  # group_prior10 as compact JSON
+
+
+def test_format_report_detail_diagnostic_detail_does_not_break() -> None:
+    # regime diagnostic summaries lack strategy headline metrics -> dashes, no crash
+    diag = _full_detail()
+    diag["summary"] = {"best_oos_rule": "high_de", "best_oos": 0.55,
+                       "oos5_majority_acc": 0.5, "oos_margin_vs_majority": 0.05,
+                       "verdict": "予測可能性=低"}
+    md = format_report_detail_markdown(diag)
+    metrics = "\n".join(_section(md, "Metrics Summary"))
+    assert "| median_expectancy | - |" in metrics
+    assert "| group_prior10 | - |" in metrics
+
+
+def test_format_report_detail_from_report_detail_tmp_path(tmp_path) -> None:
+    run = _make_detail_run(tmp_path)
+    md = format_report_detail_markdown(report_detail(run))
+    assert md.startswith("# FX Report Detail: detail_run")
+    assert "## Files" in md and "研究用ベースライン" in md
