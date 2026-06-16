@@ -39,12 +39,16 @@ GMO Public API の実価格を使った **read-only ペーパー検証**で、M5
 
 | 戦略 | 分類 | 理由 |
 | --- | --- | --- |
-| rsi_reversal M5 | 研究用ベースライン | 15窓で薄くプラスだが、OOS弱く実運用候補ではない |
+| rsi_reversal M5 | 研究用ベースライン | 15窓で薄くプラスだが、OOS弱く実運用候補ではない。比較基準として保存 |
 | ADX30 filter | 却下 | prior10で改善も OOS非再現（過剰最適化の疑い） |
 | breakout M5 | 撤退 | 15窓で大幅マイナス、OOS全滅、rsiの負け窓を補完せず |
 | Bollinger M5 | 撤退 | RSIより全指標で劣後、SLテール重い |
 | market-structure M5 | 撤退 | 全戦略中最悪、取引数最多、low DEでも負け |
+| rsi_reversal M15 baseline | 撤退寄りフラット | 取引数は減るが合計損益マイナス、OOS弱い |
+| rsi_reversal M15 scaled-risk (SL50/TP100) | 撤退 | SL率は下がるが損益・PF・OOS・high_de損失が悪化 |
+| regime予測可能性診断 | 価値なし/打ち切り | OOS balanced accuracy がランダム以下、high_de recall が低い |
 | market-state 診断 | 補助分析基盤 | 戦略ではなく、勝ち負けと相場状態を突き合わせる分析基盤として有用 |
+| 単純テクニカル＋regimeフィルタ | 研究終了 | 上記すべての結論として、本路線は正式にクローズ |
 
 ## 4. 主要結果の比較表（15窓）
 
@@ -108,19 +112,42 @@ ADX30 / breakout / Bollinger / market-structure は主検証から外す。
 - 「勝てるまで条件を重ねる」ことをしない。
 - 実注文・Private API には進まない。
 
-## 8. 次フェーズ候補（優先順位）
+## 7b. 研究フェーズの正式クローズ（2026-06-16）
 
-1. **検証基盤として整える**（着手済み: 標準定義・固定条件・分類判定を `scripts/fx_eval_common.py` に集約）
-   - 15窓評価ランナーの共通化（rsi/bollinger/breakout/market_structure の重複を集約）。
-     標準window・固定条件・安全メタデータ・3分類判定は共通化済み。残りは取得/replay/出力処理。
-   - レポート出力の標準化（CSV / Markdown / summary.json のスキーマ統一）。
-   - 戦略比較の CSV/Markdown 出力整理。
-2. **高時間足の検証**
-   - M15 / M30 / H1 などを別枠で検証し、1取引あたり期待値がコストを上回りやすい土俵へ移す。
-3. **コストモデル精緻化**
-   - 実スプレッドに近いコストモデル、slippage 感度、BID/ASK 差の扱い。
-4. **rsi baseline の exit 改善検証（保留）**
-   - やる場合は 1ルール固定・OOS 厳格化・過剰最適化を強く警戒する。今は保留。
+単純テクニカル＋regimeフィルタの研究フェーズを **正式にクローズ**する。確定事項:
 
-各フェーズとも、戦略追加の前に「仮説」と「採用/却下条件」を先に明文化すること
-（[fx_strategy_evaluation_protocol.md](fx_strategy_evaluation_protocol.md) の禁止事項を参照）。
+- `rsi_reversal M5` のみを **研究用ベースライン**として保存（比較基準）。
+- M15 RSI系（baseline / scaled-risk）は **撤退**。高時間足での RSI 救済探索は行わない。
+- ADX30 / breakout / Bollinger / market-structure は **再探索しない**。
+- regime予測可能性診断は **価値なし/打ち切り**（前日情報で当日regimeをOOS予測できない）。
+- no-trade / regime切替は **現時点で売買ロジックへ入れない**（未来情報なしでは機能しにくい）。
+- 予測市場・外部イベントデータも **まだ売買ロジックへ入れない**。
+
+## 7c. 今回の研究フェーズでこれ以上やらないこと
+
+- RSIパラメータの追加探索
+- SL/TPの追加探索
+- M30/H1で同じRSIロジックを救うための探索
+- ADX/DE/no-tradeフィルタの売買ロジック組み込み
+- breakout / Bollinger / market-structure の再探索
+- 予測市場データの拙速な売買ロジック化
+- 実注文 / Private API / APIキー利用
+
+## 8. 次フェーズ（戦略追加ではなく検証基盤・レポート標準化へ）
+
+次フェーズは新しい戦略探索ではなく、検証基盤とレポート標準化に移る。詳細な設計は
+[fx_report_standardization_plan.md](fx_report_standardization_plan.md) を参照。
+
+優先事項:
+
+1. `analysis_exports/` の出力構造標準化
+2. manifest / warnings / summary / metrics の共通化
+3. 研究結果を比較しやすい report schema の固定
+4. read-only / no real order / no private api の安全表示の標準化
+5. 将来のレポート一覧UI / run詳細UIに備えたデータ構造整理
+6. E2E導入候補フローのdocs化（導入自体はまだ行わない）
+
+まだ行わないこと: E2Eツール導入 / Playwright・Cypress 追加 / UI実装 / 実注文 / Private API接続。
+
+（補足: コストモデル精緻化や低コスト/別市場の検証は、基盤標準化のあとに別フェーズとして検討する。
+着手済みなのは標準定義・固定条件・安全メタデータ・3分類判定の `scripts/fx_eval_common.py` 集約まで。）

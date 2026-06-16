@@ -193,4 +193,5 @@ E2E を導入する目安は以下。
 - read-only / no private api / no real order の安全状態を画面で確認できる
 - ユーザーがブラウザで検証結果を閲覧・比較できる
 
-それまでは pytest / ruff を優先する。
+それまでは pytest / ruff を優先する。E2Eの最初の対象フローと安全確認項目、レポート標準化の
+詳細設計は [fx_report_standardization_plan.md](fx_report_standardization_plan.md) を参照。

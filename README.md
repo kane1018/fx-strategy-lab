@@ -135,17 +135,20 @@ cd backend
 .venv/bin/python -m scripts.paper_analyze_gmo
 ```
 
-## M5 戦略研究フェーズ（一区切り済み）
+## FX 単純テクニカル研究フェーズ（正式クローズ済み）
 
-GMO Public API の **read-only ペーパー検証**（実注文・Private API・APIキーなし）で、M5 /
-current_cost 環境の単純テクニカル戦略を 15窓プロトコル（IS 10窓 + OOS 5窓）で評価しました。
-rsi_reversal / ADX30 filter / breakout / Bollinger / market-structure と一巡した結果、
-**単純単一構造の戦略に頑健な正エッジは確認できず**、この研究フェーズは一区切りとしています。
-`rsi_reversal M5` のみ研究用ベースラインとして保存。
+GMO Public API の **read-only ペーパー検証**（実注文・Private API・APIキーなし）で、M5/M15 の
+単純テクニカル戦略を 15窓プロトコル（IS 10窓 + OOS 5窓）で評価しました。rsi_reversal / ADX30 /
+breakout / Bollinger / market-structure（M5）、rsi_reversal M15（baseline / SL50・TP100 scaled）、
+さらに regime予測可能性診断まで一巡した結果、**単純単一構造＋regimeフィルタ路線に頑健な正エッジは
+確認できず**、本研究フェーズを **正式にクローズ**しました。`rsi_reversal M5` のみ研究用ベースライン
+として保存。次フェーズは戦略追加ではなく、**検証基盤・レポート標準化**へ移ります。
 
-- 総括: [docs/fx_research_m5_summary.md](docs/fx_research_m5_summary.md)
-- 今後の標準評価手順: [docs/fx_strategy_evaluation_protocol.md](docs/fx_strategy_evaluation_protocol.md)
+- 総括（最終判断・やらないこと・次フェーズ）: [docs/fx_research_m5_summary.md](docs/fx_research_m5_summary.md)
+- 標準評価手順（15窓プロトコル）: [docs/fx_strategy_evaluation_protocol.md](docs/fx_strategy_evaluation_protocol.md)
+- 次フェーズ設計（レポート標準化・E2E導入タイミング）: [docs/fx_report_standardization_plan.md](docs/fx_report_standardization_plan.md)
 
 これらは検証基盤・分析用で、実注文機能ではありません。Private API / APIキーは使いません。
+E2Eツール・UI・実注文は現時点では導入しません（導入条件は標準化プラン参照）。
 
 バックテスト結果は将来の利益を保証しません。
