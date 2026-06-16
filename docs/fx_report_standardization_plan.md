@@ -454,3 +454,228 @@ MVP仕様で endpoint / response shape / error response / safety badge mapping /
 - package 追加しない / 既存コード変更しない
 - 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない
 - 実注文・Private API・APIキー・`.env` に触れない
+
+## 14. read-only API MVP 仕様
+
+§13 で Primary = read-only API に決定したので、FastAPI 実装に入る前に endpoint /
+レスポンス shape / エラー方針 / 安全表示 / テスト方針をここで確定する。本節は **仕様 docs のみ**で、
+API/UI/E2E の実装は含まない。
+
+### 14-1. read-only API MVP の目的
+
+- レポート一覧・run詳細を UI/E2E から安全に参照するための薄い API。
+- 既存の `list_report_index()` / `report_detail()` / `format_*_markdown()` を API に載せるだけ
+  （値の再計算をしない）。
+- バックテストや GMO API 取得は行わない。
+- 実注文・Private API・APIキー入力・口座情報取得は扱わない。
+- 最初の API は **ローカル/開発用の read-only 表示レイヤに限定**する。
+
+### 14-2. MVP エンドポイント
+
+```text
+GET /reports
+GET /reports/{run_id}
+GET /reports/markdown
+GET /reports/{run_id}/markdown
+```
+
+### 14-3. GET /reports
+
+- 目的: 複数 run の一覧を返す。
+- 内部利用: `list_report_index(exports_root)`
+
+```json
+{
+  "items": [
+    {
+      "status": "OK",
+      "run_id": "...",
+      "kind": "...",
+      "strategy": "...",
+      "timeframe": "...",
+      "cost_scenario": "...",
+      "verdict": "...",
+      "median_expectancy": 0.0164,
+      "median_pf": 1.016,
+      "total_pnl": 56.95,
+      "max_drawdown_max": 65.46,
+      "created_at": "...",
+      "summary_file": "...",
+      "safety": {
+        "real_order": false,
+        "private_api_used": false,
+        "api_key_used": false,
+        "gmo_readonly": true,
+        "gmo_order_enabled": false,
+        "no_order_execution": true
+      },
+      "safety_complete": true,
+      "safety_conflicts": [],
+      "read_only_confirmed": true,
+      "warnings_count": 0,
+      "has_warnings": false,
+      "has_error": false
+    }
+  ],
+  "count": 1
+}
+```
+
+- `status` は §11-5 / safety badge（§14-10）に対応する1トークン。
+- error row も `items` に含める（`has_error=true`）。`has_error=true` は **安全扱いしない**。
+- CSV 本文は返さない。実 run の再計算はしない。
+
+### 14-4. GET /reports/{run_id}
+
+- 目的: 1 run の詳細データを返す。
+- 内部利用: `report_detail(run_dir)`
+
+```json
+{
+  "run_id": "...",
+  "index": {"...": "report_index_entry 相当"},
+  "manifest": {"...": "manifest.json"},
+  "warnings": {"...": "warnings.json"},
+  "summary": {"...": "metrics_*_summary.json"},
+  "summary_file": "...",
+  "summary_markdown_file": "summary.md",
+  "summary_markdown": "...",
+  "final_decision_file": "...",
+  "final_decision_markdown": "...",
+  "files": [
+    {"name": "metrics_by_window.csv", "kind": "csv", "size_bytes": 12345}
+  ],
+  "metrics_files": ["..."],
+  "csv_files": ["..."],
+  "markdown_files": ["..."]
+}
+```
+
+- CSV 本文は返さない。JSON/Markdown は既存 `report_detail()` の範囲のみ。
+- summary.md / final_decision.md は detail に含める。safety は `index` 内を参照する。
+- 実注文系情報は返さない。
+
+### 14-5. GET /reports/markdown
+
+- 目的: ChatGPT 貼り付け用の一覧 Markdown を返す。
+- 内部利用: `format_report_index_markdown(list_report_index(exports_root))`
+
+```json
+{ "markdown": "| status | run_id | ... |" }
+```
+
+- Markdown は補助用途。UI の Primary data source は `/reports` の JSON。実ファイル生成はしない。
+
+### 14-6. GET /reports/{run_id}/markdown
+
+- 目的: ChatGPT 貼り付け用の1 run詳細 Markdown を返す。
+- 内部利用: `format_report_detail_markdown(report_detail(run_dir))`
+
+```json
+{ "markdown": "# FX Report Detail: ..." }
+```
+
+- Markdown は補助用途。UI の Primary data source は `/reports/{run_id}` の JSON。実ファイル生成はしない。
+
+### 14-7. run_id 解決方針
+
+- `run_id` はディレクトリ名として扱う。
+- `..` や `/` を含む値は禁止。URL decode 後もパストラバーサルを許可しない。
+- `(exports_root / run_id).resolve()` が `exports_root.resolve()` 配下であることを確認する
+  （配下でなければ 400）。
+- 存在しない run は 404。
+- 許可パターン（既存 run_id は `YYYYMMDD_HHMMSS_gmo_public_paper_<kind>` 形式に合致）:
+
+```text
+^[A-Za-z0-9_.-]+$
+```
+
+  併せて、`.` 単体 / `..` / 先頭 `.`（隠し）/ パス区切りを含むものは拒否（安全側）。
+
+### 14-8. exports_root 解決方針
+
+- MVP では exports_root を **サーバー側で明示設定**する（例: 設定値 or 起動時パラメータ）。
+- `.env` の表示・編集はしない。実装時に安全なデフォルトを決める。
+- API から exports_root を任意指定させない（クエリで任意パスを渡させない）。
+- サーバー側で固定された root のみ読む。
+- root が存在しない場合は **503 Service Unavailable**（推奨）。
+  理由: API 自体は存在するが、レポート保存先設定が未準備だから（5xx=サーバー側都合）。
+
+### 14-9. エラーレスポンス方針
+
+| ケース | ステータス | 方針 |
+| --- | ---: | --- |
+| exports_root 未設定/不存在 | 503 | 設定未準備（サーバー側都合） |
+| run_id 不正（traversal/パターン外） | 400 | 入力不正 |
+| run_id が存在しない | 404 | 対象なし |
+| summary 0件/複数 | 422 | run構造不正 |
+| JSON 破損 | 422 | run構造不正 |
+| 予期しない例外 | 500 | 未分類エラー |
+
+- エラー本文は `{ "detail": "...", "code": "..." }` 程度の最小形。
+- 安全情報をエラー本文に入れる場合も、**不明な安全状態を安全扱いしない**
+  （成功レスポンスの safety は run 由来、エラー時は安全フラグを `true` で詐称しない）。
+
+### 14-10. safety badge mapping
+
+| 条件 | badge | 意味 |
+| --- | --- | --- |
+| read_only_confirmed=true and safety_conflicts=[] | SAFE_READ_ONLY | 安全確認済み |
+| has_error=true | ERROR | 壊れた run |
+| safety_conflicts not empty | SAFETY_CONFLICT | 安全メタ矛盾 |
+| safety_complete=false | SAFETY_INCOMPLETE | 安全メタ不足 |
+| read_only_confirmed=false | UNCONFIRMED | read-only 未確認 |
+
+- 優先順位は ERROR > SAFETY_CONFLICT > SAFETY_INCOMPLETE > UNCONFIRMED > SAFE_READ_ONLY。
+- conflict / incomplete / error / unconfirmed は **安全扱いしない**。
+- バッジ表示は UI 実装時に使う（`format_report_index_markdown` の status と整合）。今回は docs のみ。
+
+### 14-11. cost metadata mapping
+
+- 一覧（`/reports`）で表示: cost_scenario / timeframe
+- 詳細（`/reports/{run_id}`）で表示: cost_scenario / timeframe / spread_pips /
+  slippage_pips / stop_loss_pips / take_profit_pips / symbols
+- CSV 本文や再計算はしない。
+
+### 14-12. CSV 方針
+
+- `/reports` では CSV 本文を返さない。
+- `/reports/{run_id}` でも CSV 本文を返さない（files 一覧に name/kind/size_bytes のみ）。
+- CSV プレビューは MVP 外。
+- CSV ダウンロードも MVP 外（必要なら別 endpoint として後で検討）。
+- 巨大 CSV を自動展開しないことは E2E 対象（§11-7 / E2E-07）。
+
+### 14-13. 想定テスト（将来の API 実装時）
+
+```text
+API-01: GET /reports returns items/count
+API-02: GET /reports includes error rows
+API-03: GET /reports does not include CSV body
+API-04: GET /reports/{run_id} returns detail
+API-05: GET /reports/{run_id} rejects invalid run_id
+API-06: GET /reports/{run_id} returns 404 for missing run
+API-07: broken run returns 422
+API-08: markdown endpoints return markdown string
+API-09: safety badge mapping handles SAFE/ERROR/CONFLICT/INCOMPLETE/UNCONFIRMED
+API-10: no endpoint exposes order/private/api-key/.env behavior
+```
+
+- テストは tmp_path に作った run dir を exports_root に向けて行い、実 analysis_exports は読まない。
+
+### 14-14. 実装に進む前のチェックリスト
+
+- 既存 FastAPI アプリの構成（app 生成箇所・既存ルーター登録方法）確認
+- ルーターを追加する場所（例: `app/routers/`）の確認
+- exports_root の設定方法（設定値/起動パラメータ）確認
+- API レスポンスモデルを Pydantic で定義するか、dict をそのまま返すか判断
+- ローカル限定/認証方針（bind 先・公開しない方針）確認
+- 既存テスト構成（pytest 配置・fixtures）確認
+- 実 analysis_exports を読まないテスト方針（tmp_path）確認
+- 危険導線（注文/Private API/APIキー/.env）を追加しない確認
+
+### 14-15. 今回（§14 追加）はやらないこと
+
+- API 実装しない / UI 実装しない / E2E 導入しない
+- package 追加しない / 既存コード変更しない
+- 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない
+- 実注文・Private API・APIキー・`.env` に触れない
