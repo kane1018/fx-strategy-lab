@@ -130,16 +130,34 @@ window ごと:
 - `analysis_exports/`・`.db`・`.sqlite`・`trades.csv`・`open_positions.csv` 等の巨大/生成
   ファイルをコミットしない（コミットはコードとドキュメントのみ）。
 
-## 7. 既存ランナー（参考）
+## 7. 共通モジュールと既存ランナー
+
+### 共通モジュール（標準の単一の置き場所）
+
+`backend/scripts/fx_eval_common.py` が、本プロトコルで全ランナーが一致させるべき定義の
+**唯一の置き場所**:
+
+- `WINDOWS` — 標準15窓（label, start, end, group）、`window_groups()` / `group_labels()`
+- `SYMBOLS` / `TIMEFRAME` / `SPREAD` / `SLIP` / `STOP_LOSS_PIPS` / `TAKE_PROFIT_PIPS` / `EXIT_POLICY`
+- `fixed_config(**overrides)` — manifest/warnings 用の固定条件ブロック
+- `safety_metadata()` — read-only 安全フラグ（real_order=False など）
+- `run_id(kind)` — `YYYYMMDD_HHMMSS_gmo_public_paper_<kind>` 形式
+- `classify_strategy(...)` — 継続検証候補 / 研究用ベースライン / 撤退 の3分類判定（純関数）
+- `robustness_summary` / `_summarize` / `_weekdays` など集計helperの再エクスポート
+
+今後の新しいランナー（別時間足など）は、これらを `fx_eval_common` から import すること。
+`rsi_final_15window.py` は後方互換のため同じ名前を再エクスポートしている。
+
+### 既存ランナー（参考）
 
 `backend/scripts/` に、本プロトコルに沿った 15窓評価ランナーがある（read-only paper）:
 
-- `rsi_final_15window.py` — rsi_reversal の15窓評価（共通の窓定義・分類ロジックの基点）
+- `rsi_final_15window.py` — rsi_reversal の15窓評価（共通定義は fx_eval_common を再エクスポート）
 - `bollinger_15window.py` — Bollinger 平均回帰の15窓評価 + market-state別分解
 - `breakout_15window.py` — breakout の15窓評価
 - `market_structure_15window.py` — market-structure 平均回帰の15窓評価
 - `market_state_diagnostics.py` — rsi/breakout の勝敗 × market state 診断
 - `adx_filter_oos_ab.py` — ADXフィルタの OOS A/B（却下の根拠）
 
-次フェーズの「検証基盤として整える」では、これらの重複した取得・集計・出力処理の共通化を
-最優先候補とする（[fx_research_m5_summary.md](fx_research_m5_summary.md) §8）。
+共通化の第一歩として標準定義・固定条件・安全メタデータ・分類判定を `fx_eval_common` に集約した。
+取得・replay・CSV/summary 出力処理の共通化は次の候補（[fx_research_m5_summary.md](fx_research_m5_summary.md) §8）。

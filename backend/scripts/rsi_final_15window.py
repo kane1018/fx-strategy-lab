@@ -33,6 +33,19 @@ from app.models import PaperTrade  # noqa: E402
 from app.schemas.trading import Candle, ExecutionConfig, StrategyConfig, StrategyType  # noqa: E402
 from app.services.gmo_paper_service import replay_paper_trades  # noqa: E402
 from app.services.market_data_service import candles_to_frame  # noqa: E402
+
+# Canonical shared definitions live in fx_eval_common; re-exported here so the
+# existing `from scripts.rsi_final_15window import WINDOWS, ...` imports in the
+# sibling runners keep working unchanged.
+from scripts.fx_eval_common import (  # noqa: E402,F401
+    EXPORT_ROOT,
+    SLIP,
+    SPREAD,
+    SYMBOLS,
+    TIMEFRAME,
+    WINDOWS,
+    classify_strategy,
+)
 from scripts.robustness_windows import (  # noqa: E402
     _OPP,
     _SL,
@@ -43,87 +56,6 @@ from scripts.robustness_windows import (  # noqa: E402
     _weekdays,
     robustness_summary,
 )
-
-EXPORT_ROOT = Path(__file__).resolve().parent.parent.parent / "analysis_exports"
-SYMBOLS = ["USD_JPY", "EUR_JPY", "GBP_JPY", "AUD_JPY"]
-TIMEFRAME = "M5"
-SPREAD, SLIP = ExecutionConfig().spread_pips, ExecutionConfig().slippage_pips
-
-# (label, start, end, group) — 10 prior independent weeks + 5 OOS weeks.
-WINDOWS = [
-    ("window_1", "20260504", "20260515", "prior10"),
-    ("window_2", "20260420", "20260501", "prior10"),
-    ("window_3", "20260406", "20260417", "prior10"),
-    ("window_4", "20260323", "20260403", "prior10"),
-    ("window_5", "20260309", "20260320", "prior10"),
-    ("window_6", "20260223", "20260306", "prior10"),
-    ("window_7", "20260209", "20260220", "prior10"),
-    ("window_8", "20260126", "20260206", "prior10"),
-    ("window_9", "20260112", "20260123", "prior10"),
-    ("window_10", "20251229", "20260109", "prior10"),
-    ("oos_window_1", "20251215", "20251226", "oos5"),
-    ("oos_window_2", "20251201", "20251212", "oos5"),
-    ("oos_window_3", "20251117", "20251128", "oos5"),
-    ("oos_window_4", "20251103", "20251114", "oos5"),
-    ("oos_window_5", "20251020", "20251031", "oos5"),
-]
-
-
-def classify_strategy(
-    *,
-    median_exp: float,
-    median_pf: float,
-    positive_windows: int,
-    n_windows: int,
-    edge_windows: int,
-    total_pnl: float,
-    prior_median_exp: float,
-    oos_median_exp: float,
-    symbol_concentrated: bool,
-) -> tuple[str, list[str]]:
-    """Pure 3-way verdict: 継続検証候補 / 研究用ベースライン / 撤退.
-
-    継続: robustly positive across the whole independent set AND both sub-periods.
-    撤退: net non-positive overall (median<=0 or total<=0 or positive windows <=half).
-    研究用ベースライン: overall mildly positive but fails robustness (period sign
-    flip, OOS negative, PF<=1, or concentration) -> keep only as reference.
-    """
-    reasons: list[str] = []
-    majority = n_windows / 2
-    sign_flip = (prior_median_exp > 0) != (oos_median_exp > 0)
-
-    strong_keep = (
-        median_exp > 0
-        and median_pf > 1
-        and positive_windows > majority
-        and edge_windows > majority
-        and total_pnl > 0
-        and prior_median_exp > 0
-        and oos_median_exp > 0
-        and not symbol_concentrated
-    )
-    if strong_keep:
-        return "継続検証候補", ["全window横断で頑健に正(両期間ともプラス)"]
-
-    retire = median_exp <= 0 or total_pnl <= 0 or positive_windows <= majority
-    if median_exp <= 0:
-        reasons.append(f"期待値中央値 {median_exp} ≤ 0")
-    if median_pf <= 1:
-        reasons.append(f"PF中央値 {median_pf} ≤ 1")
-    if total_pnl <= 0:
-        reasons.append(f"合計損益 {total_pnl} ≤ 0")
-    if positive_windows <= majority:
-        reasons.append(f"プラスwindow {positive_windows}/{n_windows} が過半未満")
-    if sign_flip:
-        reasons.append("前10窓とOOS5窓で期待値中央値の符号が反転(期間依存)")
-    if oos_median_exp <= 0:
-        reasons.append(f"OOS5窓の期待値中央値 {oos_median_exp} ≤ 0")
-    if symbol_concentrated:
-        reasons.append("損益が単一通貨ペアに偏重")
-
-    if retire:
-        return "撤退", reasons
-    return "研究用ベースライン", reasons
 
 
 def _fetch_window_trades(broker: GmoFxBroker, dates: list[str], strategy, execution,

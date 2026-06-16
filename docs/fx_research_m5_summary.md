@@ -100,8 +100,9 @@ ADX30 / breakout / Bollinger / market-structure は主検証から外す。
 
 ## 8. 次フェーズ候補（優先順位）
 
-1. **検証基盤として整える**
+1. **検証基盤として整える**（着手済み: 標準定義・固定条件・分類判定を `scripts/fx_eval_common.py` に集約）
    - 15窓評価ランナーの共通化（rsi/bollinger/breakout/market_structure の重複を集約）。
+     標準window・固定条件・安全メタデータ・3分類判定は共通化済み。残りは取得/replay/出力処理。
    - レポート出力の標準化（CSV / Markdown / summary.json のスキーマ統一）。
    - 戦略比較の CSV/Markdown 出力整理。
 2. **高時間足の検証**
