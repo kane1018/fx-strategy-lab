@@ -6,6 +6,7 @@ import pandas as pd
 from app.schemas.trading import StrategyConfig, StrategyType
 from app.strategies.bollinger import bollinger_reversion_signal
 from app.strategies.breakout import breakout_signal
+from app.strategies.market_structure import market_structure_reversion_signal
 from app.strategies.moving_average_cross import moving_average_cross_signal
 from app.strategies.rsi_reversal import rsi_reversal_signal
 
@@ -26,6 +27,10 @@ def evaluate_strategy(frame: pd.DataFrame, config: StrategyConfig) -> StrategySi
     elif config.strategy_type == StrategyType.BOLLINGER_REVERSION:
         action, reason = bollinger_reversion_signal(
             frame, config.bollinger_period, config.bollinger_sigma
+        )
+    elif config.strategy_type == StrategyType.MARKET_STRUCTURE_REVERSION:
+        action, reason = market_structure_reversion_signal(
+            frame, config.swing_lookback, config.swing_wick_ratio
         )
     else:
         action, reason = breakout_signal(frame, config.breakout_period)

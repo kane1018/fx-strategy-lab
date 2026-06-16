@@ -10,6 +10,7 @@ class StrategyType(StrEnum):
     RSI_REVERSAL = "rsi_reversal"
     BREAKOUT = "breakout"
     BOLLINGER_REVERSION = "bollinger_reversion"
+    MARKET_STRUCTURE_REVERSION = "market_structure_reversion"
 
 
 class Side(StrEnum):
@@ -36,6 +37,8 @@ class StrategyConfig(BaseModel):
     breakout_period: int = Field(default=20, ge=2, le=200)
     bollinger_period: int = Field(default=20, ge=2, le=200)
     bollinger_sigma: float = Field(default=2.0, gt=0, le=5)
+    swing_lookback: int = Field(default=12, ge=2, le=200)
+    swing_wick_ratio: float = Field(default=0.4, gt=0, le=1)
 
     @model_validator(mode="after")
     def validate_periods(self) -> "StrategyConfig":

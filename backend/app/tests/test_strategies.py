@@ -69,3 +69,49 @@ def test_bollinger_signal_uses_only_last_completed_bar() -> None:
     assert evaluate_strategy(frame(base + [99.0]), config).action == "buy"
     # same drop but followed by a normal bar -> last row is normal -> not buy
     assert evaluate_strategy(frame(base + [99.0, 100.0]), config).action != "buy"
+
+
+def ohlc(bars: list[tuple[float, float, float, float]]) -> pd.DataFrame:
+    return pd.DataFrame(bars, columns=["open", "high", "low", "close"])
+
+
+_FLAT = [(100.0, 100.1, 99.9, 100.0)] * 11  # 11 calm bars (lookback 12 needs >=12)
+
+
+def test_market_structure_defaults_are_lookback12_wick40() -> None:
+    config = StrategyConfig(strategy_type=StrategyType.MARKET_STRUCTURE_REVERSION)
+    assert config.swing_lookback == 12
+    assert config.swing_wick_ratio == 0.4
+
+
+def test_market_structure_buy_on_swing_low_with_lower_wick() -> None:
+    config = StrategyConfig(strategy_type=StrategyType.MARKET_STRUCTURE_REVERSION)
+    # new swing low with a long lower wick (rejection): range 0.95, lower wick 0.9
+    bar = (99.9, 99.95, 99.0, 99.95)
+    assert evaluate_strategy(ohlc([*_FLAT, bar]), config).action == "buy"
+
+
+def test_market_structure_sell_on_swing_high_with_upper_wick() -> None:
+    config = StrategyConfig(strategy_type=StrategyType.MARKET_STRUCTURE_REVERSION)
+    # new swing high with a long upper wick: range 1.0, upper wick 0.95
+    bar = (100.05, 101.0, 100.0, 100.0)
+    assert evaluate_strategy(ohlc([*_FLAT, bar]), config).action == "sell"
+
+
+def test_market_structure_holds_without_wick_or_on_warmup() -> None:
+    config = StrategyConfig(strategy_type=StrategyType.MARKET_STRUCTURE_REVERSION)
+    # new swing low but no lower wick (close == low) -> hold
+    no_wick = (99.1, 99.2, 99.0, 99.0)
+    assert evaluate_strategy(ohlc([*_FLAT, no_wick]), config).action == "hold"
+    # fewer than lookback bars -> warmup hold
+    assert evaluate_strategy(ohlc(_FLAT[:5]), config).action == "hold"
+
+
+def test_market_structure_uses_only_last_completed_bar() -> None:
+    """No look-ahead: a swing-low wick bar fires only when it is the last row."""
+    config = StrategyConfig(strategy_type=StrategyType.MARKET_STRUCTURE_REVERSION)
+    bar = (99.9, 99.95, 99.0, 99.95)
+    assert evaluate_strategy(ohlc([*_FLAT, bar]), config).action == "buy"
+    # same bar followed by a calm bar -> last row is calm -> not buy
+    followed = ohlc([*_FLAT, bar, (100.0, 100.1, 99.9, 100.0)])
+    assert evaluate_strategy(followed, config).action != "buy"
