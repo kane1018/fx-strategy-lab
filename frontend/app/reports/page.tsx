@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import {
   fetchReports,
+  fetchReportsMarkdown,
   fmtNum,
   fmtText,
   safetyBadge,
@@ -73,6 +74,7 @@ function ReportRow({ item }: { item: ReportIndexItem }) {
 
 export default function ReportsPage() {
   const [result, setResult] = useState<FetchReportsResult | null>(null);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -86,9 +88,46 @@ export default function ReportsPage() {
     };
   }, []);
 
+  // Read-only copy aid: fetch the list Markdown and write it to the clipboard.
+  // Only runs on explicit button click; never auto-copies; never mutates anything.
+  async function handleCopyMarkdown() {
+    setCopyStatus(null);
+    const md = await fetchReportsMarkdown();
+    if (md.status === "unavailable") {
+      setCopyStatus("レポート保存先が未設定または存在しないためコピーできません");
+      return;
+    }
+    if (md.status !== "success") {
+      setCopyStatus("一覧Markdownのコピーに失敗しました");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(md.markdown);
+      setCopyStatus("一覧Markdownをコピーしました");
+    } catch {
+      setCopyStatus("一覧Markdownのコピーに失敗しました");
+    }
+  }
+
   return (
     <main data-testid="reports-page" className="reports-page">
       <h1>FX Reports</h1>
+
+      <p className="report-actions">
+        <button
+          type="button"
+          data-testid="copy-reports-markdown"
+          className="report-copy-button"
+          onClick={handleCopyMarkdown}
+        >
+          一覧Markdownをコピー
+        </button>
+        {copyStatus && (
+          <span data-testid="copy-reports-markdown-status" className="report-copy-status">
+            {copyStatus}
+          </span>
+        )}
+      </p>
 
       {result === null && (
         <p data-testid="reports-loading">読み込み中...</p>

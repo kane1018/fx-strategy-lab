@@ -175,3 +175,31 @@ export async function fetchReportDetailMarkdown(
     return { status: "error", message };
   }
 }
+
+export type FetchReportsMarkdownResult =
+  | { status: "success"; markdown: string }
+  | { status: "unavailable" } // 503: reports root not configured / missing
+  | { status: "error"; message: string };
+
+// Read-only fetch of the run-list Markdown (ChatGPT/human copy aid, docs §13).
+// Maps 503 to "unavailable" like fetchReports.
+export async function fetchReportsMarkdown(
+  fetchImpl: typeof fetch = fetch
+): Promise<FetchReportsMarkdownResult> {
+  try {
+    const response = await fetchImpl(`${API_BASE}/api/reports/markdown`, {
+      headers: { "Content-Type": "application/json" }
+    });
+    if (response.status === 503) {
+      return { status: "unavailable" };
+    }
+    if (!response.ok) {
+      return { status: "error", message: `API error: ${response.status}` };
+    }
+    const data = (await response.json()) as { markdown?: string };
+    return { status: "success", markdown: data.markdown ?? "" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown error";
+    return { status: "error", message };
+  }
+}

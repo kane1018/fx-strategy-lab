@@ -5,6 +5,7 @@ import {
   fetchReportDetail,
   fetchReportDetailMarkdown,
   fetchReports,
+  fetchReportsMarkdown,
   fmtCompact,
   fmtNum,
   fmtText,
@@ -258,5 +259,52 @@ describe("fetchReportDetailMarkdown", () => {
     };
     await fetchReportDetailMarkdown("a b/c", fake as unknown as typeof fetch);
     expect(calledWith).toContain("/api/reports/a%20b%2Fc/markdown");
+  });
+});
+
+describe("fetchReportsMarkdown", () => {
+  const jsonResponse = (body: unknown, status = 200) =>
+    ({
+      status,
+      ok: status >= 200 && status < 300,
+      json: async () => body
+    }) as Response;
+
+  it("returns markdown string on success", async () => {
+    const fake = async () => jsonResponse({ markdown: "| status | run_id |" });
+    const result = await fetchReportsMarkdown(fake as typeof fetch);
+    expect(result.status).toBe("success");
+    if (result.status === "success") {
+      expect(result.markdown).toContain("run_id");
+    }
+  });
+
+  it("maps 503 to unavailable", async () => {
+    const fake = async () => jsonResponse({ detail: {} }, 503);
+    expect((await fetchReportsMarkdown(fake as typeof fetch)).status).toBe(
+      "unavailable"
+    );
+  });
+
+  it("maps 500 to error", async () => {
+    const fake = async () => jsonResponse({ detail: "boom" }, 500);
+    expect((await fetchReportsMarkdown(fake as typeof fetch)).status).toBe("error");
+  });
+
+  it("maps a network throw to error", async () => {
+    const fake = async () => {
+      throw new Error("offline");
+    };
+    expect((await fetchReportsMarkdown(fake as typeof fetch)).status).toBe("error");
+  });
+
+  it("targets /api/reports/markdown", async () => {
+    let calledWith = "";
+    const fake = async (url: string | URL | Request) => {
+      calledWith = String(url);
+      return jsonResponse({ markdown: "ok" });
+    };
+    await fetchReportsMarkdown(fake as unknown as typeof fetch);
+    expect(calledWith).toContain("/api/reports/markdown");
   });
 });

@@ -1006,6 +1006,16 @@ E2E 実装前に **ツール選定・起動方法・テストデータ方針・E
 > data-testid: copy-detail-markdown / copy-detail-markdown-status。テスト: lib/reports.test.ts に
 > fetchReportDetailMarkdown 7件追加（vitest 31 passed）、E2E に E2E-09（コピー成功）追加で **9 passed**。
 > 機能は read-only・危険導線ではない。
+>
+> **一覧 Markdown コピー導線（更新）**: `/reports` にも「一覧Markdownをコピー」ボタンを追加（read-only 補助、
+> §13 Supporting）。使用 API: `GET /api/reports/markdown`。fetch は `lib/reports.ts` の
+> `fetchReportsMarkdown()`（503=unavailable / 500・network=error を判別）。クリック時のみ
+> `navigator.clipboard.writeText`、成功「一覧Markdownをコピーしました」/ unavailable「レポート保存先が
+> 未設定または存在しないためコピーできません」/ 失敗「一覧Markdownのコピーに失敗しました」を表示。
+> data-testid: copy-reports-markdown / copy-reports-markdown-status。CSS は詳細と共通
+> （.report-actions / .report-copy-button / .report-copy-status、型 ReportMarkdownResponse を再利用）。
+> テスト: lib/reports.test.ts に fetchReportsMarkdown 5件追加（vitest 36 passed）、E2E に E2E-10 追加で
+> **10 passed**。read-only・危険導線ではない。
 
 ### 16-1. E2E 導入の目的
 

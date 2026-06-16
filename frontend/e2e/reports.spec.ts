@@ -114,4 +114,20 @@ test.describe("FX reports read-only E2E", () => {
       "Markdownをコピーしました"
     );
   });
+
+  test("E2E-10: list markdown can be copied", async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, "clipboard", {
+        value: { writeText: async () => {} },
+        configurable: true
+      });
+    });
+    await page.goto("/reports");
+    const button = page.getByTestId("copy-reports-markdown");
+    await expect(button).toBeVisible();
+    await button.click();
+    await expect(page.getByTestId("copy-reports-markdown-status")).toHaveText(
+      "一覧Markdownをコピーしました"
+    );
+  });
 });
