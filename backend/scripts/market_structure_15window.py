@@ -19,8 +19,6 @@ No real orders, no Private API, no API key/secret. In-memory DBs only.
 
 from __future__ import annotations
 
-import csv
-import json
 import statistics
 import sys
 from datetime import datetime
@@ -40,6 +38,16 @@ from scripts.bollinger_15window import (  # noqa: E402
     _tag_market_state,
 )
 from scripts.breakout_15window import _TP, BK_STAT_FIELDS, _summarize_bk  # noqa: E402
+from scripts.fx_eval_common import (  # noqa: E402
+    ensure_output_dir,
+    run_id,
+    write_json,
+    write_manifest,
+    write_markdown,
+    write_metrics_csv,
+    write_summary_markdown,
+    write_warnings,
+)
 from scripts.market_state_diagnostics import (  # noqa: E402
     _day_market_state,
     _fetch_candles,
@@ -108,18 +116,9 @@ def main() -> int:
     return 0
 
 
-def _write_csv(path: Path, rows: list[dict], keys: list[str]) -> None:
-    with path.open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow([*keys, *BK_STAT_FIELDS])
-        for r in rows:
-            w.writerow([*[r[k] for k in keys], *[r["stats"][f] for f in BK_STAT_FIELDS]])
-
-
 def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None:
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_gmo_public_paper_market_structure15"
-    out = EXPORT_ROOT / run_id
-    out.mkdir(parents=True, exist_ok=True)
+    rid = run_id("market_structure15")
+    out = ensure_output_dir(EXPORT_ROOT / rid)
     lo, hi = _tag_market_state(all_trades, day_meta)
 
     window_stats = {label: _summarize_bk([t for t in all_trades if t["window"] == label])
@@ -155,11 +154,16 @@ def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None
         sub = [t for t in all_trades if t.get(field) == bucket]
         by_state.append({"market_state": bucket, "stats": _summarize_bk(sub)})
 
-    _write_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"])
-    _write_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"])
-    _write_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"])
-    _write_csv(out / "metrics_by_date.csv", by_date, ["window", "date"])
-    _write_csv(out / "metrics_by_market_state.csv", by_state, ["market_state"])
+    write_metrics_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_date.csv", by_date, ["window", "date"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_market_state.csv", by_state, ["market_state"],
+                      stat_fields=BK_STAT_FIELDS)
 
     summary = _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi)
     verdict, reasons = classify_strategy(
@@ -171,10 +175,9 @@ def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
-    (out / "metrics_market_structure_15window_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2))
+    write_json(out / "metrics_market_structure_15window_summary.json", summary)
 
-    (out / "warnings.json").write_text(json.dumps({
+    write_warnings(out, {
         "data_source": "GMO Public API klines (BID), read-only",
         "fixed_config": f"market_structure(lookback {SWING_LOOKBACK}, wick {WICK_RATIO}) / "
                         f"{TIMEFRAME} / current_cost (spread {SPREAD}, slippage {SLIP}) / "
@@ -185,14 +188,14 @@ def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None
         "comparison_refs": "rsi=f716631, breakout=d1acdd6, bollinger=f830fdf (committed runs)",
         "note": "market-structure 15-window evaluation; lookback/wick fixed; no tuning.",
         "fetch_warnings": warnings,
-    }, ensure_ascii=False, indent=2))
-    _write_manifest(out, run_id, win_group)
+    })
+    _write_manifest(out, rid, win_group)
     _write_summary(out, by_window, by_symbol, by_reason, by_state, summary)
     _write_decision(out, summary, verdict, reasons)
     print(f"\nVERDICT: {verdict}")
     for r in reasons:
         print(f"  - {r}")
-    print(f"Export written to: analysis_exports/{run_id}/")
+    print(f"Export written to: analysis_exports/{rid}/")
 
 
 def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi) -> dict:
@@ -235,9 +238,9 @@ def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi
     return summary
 
 
-def _write_manifest(out: Path, run_id: str, win_group: dict) -> None:
-    (out / "manifest.json").write_text(json.dumps({
-        "run_id": run_id, "created_at": datetime.now().isoformat(),
+def _write_manifest(out: Path, rid: str, win_group: dict) -> None:
+    write_manifest(out, {
+        "run_id": rid, "created_at": datetime.now().isoformat(),
         "kind": "gmo_public_paper_market_structure15", "strategy": "market_structure_reversion",
         "swing_lookback": SWING_LOOKBACK, "swing_wick_ratio": WICK_RATIO,
         "timeframe": TIMEFRAME, "cost_scenario": "current_cost",
@@ -249,7 +252,7 @@ def _write_manifest(out: Path, run_id: str, win_group: dict) -> None:
                     for label, s, e, g in WINDOWS],
         "symbols": SYMBOLS, "continuous_replay": True, "no_order_execution": True,
         "gmo_readonly": True, "gmo_order_enabled": False,
-    }, ensure_ascii=False, indent=2))
+    })
 
 
 def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> None:
@@ -318,7 +321,7 @@ def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> N
         "## market-state別(損益)\n"
         "| market_state | 完了 | 総損益 | 期待値 | PF |\n|--|--:|--:|--:|--:|\n" + st_rows + "\n"
     )
-    (out / "summary.md").write_text(text)
+    write_summary_markdown(out, text)
 
 
 def _write_decision(out, summary, verdict, reasons) -> None:
@@ -344,7 +347,7 @@ def _write_decision(out, summary, verdict, reasons) -> None:
         "- 撤退: 単純M5テクニカルの研究を一区切り。rsiを研究用ベースラインとして保存。\n"
         "- lookback/wick/SL/TPの追加調整は過剰最適化のため行わない。\n"
     )
-    (out / "market_structure_final_decision.md").write_text(text)
+    write_markdown(out / "market_structure_final_decision.md", text)
 
 
 if __name__ == "__main__":
