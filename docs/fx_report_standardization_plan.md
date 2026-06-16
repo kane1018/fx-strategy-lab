@@ -1128,8 +1128,20 @@ docs/fx_report_standardization_plan.md
 
 ### 16-16. E2E fixture run 生成方針
 
-§16-4 の5種 run を E2E で安定検証するため、固定 fixture run の構造・生成方法・配置・安全制約を
-ここで確定する。**本節は docs のみ**で、fixture スクリプト/ファイルの作成・package 追加・E2E 実装は含まない。
+§16-4 の5種 run を E2E で安定検証するため、固定 fixture run の構造・生成方法・配置・安全制約を確定する。
+
+> **実装状況（更新）**: 生成ヘルパは **実装済み**。
+> 実装ファイル: `backend/scripts/create_e2e_report_fixtures.py`
+> （純関数 `create_e2e_report_fixtures(output_root)` ＋ `python -m scripts.create_e2e_report_fixtures
+> --output-root <dir>` CLI、既存 writer ensure_output_dir/write_json/write_markdown/write_csv を再利用）。
+> テスト: `backend/app/tests/test_e2e_report_fixtures.py`（tmp_path 生成→list_report_index/report_detail で検証）。
+> 生成 run: e2e_normal_run / e2e_error_run / e2e_conflict_run / e2e_incomplete_run（4ディレクトリ。
+> CSV marker は normal run に内包＝独立 csv run は作らない）。
+> デフォルト出力先: `frontend/e2e/fixtures/analysis_exports`（生成物は git 管理しない）。
+> CSV marker: `__CSV_BODY_MARKER__`（CSV 本文セルにのみ存在。API/report_detail 出力には出ないことをテストで確認）。
+> 実 analysis_exports 非接触・secret/APIキー/.env 非含有をテストで担保。
+> 注: error run は summary 0件、conflict run は manifest.real_order=false ＋ warnings.real_order=true の
+> 不一致、incomplete run は api_key_used を manifest/warnings 両方から欠落、で生成。
 
 > **実装コードの事実確認（read-only 調査結果）**: `report_index_entry()` は run dir 直下の
 > `metrics_*_summary.json` を1つだけ読む（0件→FileNotFoundError、複数→ValueError＝どちらも
