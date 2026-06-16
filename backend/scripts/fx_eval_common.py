@@ -138,8 +138,13 @@ def write_warnings(out_dir: str | Path, warnings: dict) -> None:
     write_json(Path(out_dir) / "warnings.json", warnings)
 
 
+def write_markdown(path: str | Path, content: str) -> None:
+    """Write a markdown/text file verbatim (e.g. summary.md, *_final_decision.md)."""
+    Path(path).write_text(content)
+
+
 def write_summary_markdown(out_dir: str | Path, content: str) -> None:
-    (Path(out_dir) / "summary.md").write_text(content)
+    write_markdown(Path(out_dir) / "summary.md", content)
 
 
 def write_csv(path: str | Path, rows: list[dict], fieldnames: list[str] | None = None) -> None:

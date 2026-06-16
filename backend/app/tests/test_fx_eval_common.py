@@ -17,6 +17,7 @@ from scripts.fx_eval_common import (
     write_csv,
     write_json,
     write_manifest,
+    write_markdown,
     write_metrics_csv,
     write_summary_markdown,
     write_warnings,
@@ -181,3 +182,23 @@ def test_write_metrics_csv_supports_tp_extended_fields(tmp_path) -> None:
     out_rows = list(csv.reader(path.read_text().splitlines()))
     assert out_rows[0] == ["window", "group", *bk_fields]
     assert out_rows[1] == ["w1", "prior10", "302", "-80.5", "28", "12.3"]
+
+
+def test_write_markdown_writes_arbitrary_path(tmp_path) -> None:
+    # final_decision系の任意ファイル名へ書ける（summary.md固定ではない）
+    out = ensure_output_dir(tmp_path / "run")
+    write_markdown(out / "bollinger_final_decision.md", "# 判定\n撤退")
+    assert (out / "bollinger_final_decision.md").read_text() == "# 判定\n撤退"
+
+
+def test_write_metrics_csv_market_state_key_order(tmp_path) -> None:
+    # market-state別CSV: 単一キー列 market_state + TP拡張stat列で列順を維持
+    path = tmp_path / "ms.csv"
+    bk_fields = ["completed_trades", "total_pnl", "tp_count", "tp_total_pnl"]
+    rows = [{"market_state": "low_de",
+             "stats": {"completed_trades": 1760, "total_pnl": 80.3,
+                       "tp_count": 5, "tp_total_pnl": 9.0}}]
+    write_metrics_csv(path, rows, ["market_state"], stat_fields=bk_fields)
+    out_rows = list(csv.reader(path.read_text().splitlines()))
+    assert out_rows[0] == ["market_state", *bk_fields]
+    assert out_rows[1] == ["low_de", "1760", "80.3", "5", "9.0"]

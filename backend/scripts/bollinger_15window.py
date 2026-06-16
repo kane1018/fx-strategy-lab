@@ -20,8 +20,6 @@ No real orders, no Private API, no API key/secret. In-memory DBs only.
 
 from __future__ import annotations
 
-import csv
-import json
 import statistics
 import sys
 from datetime import datetime
@@ -38,6 +36,16 @@ from app.schemas.trading import ExecutionConfig, StrategyConfig, StrategyType  #
 from app.services.gmo_paper_service import replay_paper_trades  # noqa: E402
 from app.services.market_data_service import candles_to_frame, pip_size  # noqa: E402
 from scripts.breakout_15window import _TP, BK_STAT_FIELDS, _summarize_bk  # noqa: E402
+from scripts.fx_eval_common import (  # noqa: E402
+    ensure_output_dir,
+    run_id,
+    write_json,
+    write_manifest,
+    write_markdown,
+    write_metrics_csv,
+    write_summary_markdown,
+    write_warnings,
+)
 from scripts.market_state_diagnostics import (  # noqa: E402
     _day_market_state,
     _fetch_candles,
@@ -147,14 +155,6 @@ def main() -> int:
     return 0
 
 
-def _write_csv(path: Path, rows: list[dict], keys: list[str]) -> None:
-    with path.open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow([*keys, *BK_STAT_FIELDS])
-        for r in rows:
-            w.writerow([*[r[k] for k in keys], *[r["stats"][f] for f in BK_STAT_FIELDS]])
-
-
 def _tag_market_state(all_trades: list[dict], day_meta: dict) -> tuple[float, float]:
     des = [m["de"] for m in day_meta.values() if m["day_class"] != "unclassified"]
     lo, hi = de_thresholds(des)
@@ -166,9 +166,8 @@ def _tag_market_state(all_trades: list[dict], day_meta: dict) -> tuple[float, fl
 
 
 def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None:
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_gmo_public_paper_bollinger15"
-    out = EXPORT_ROOT / run_id
-    out.mkdir(parents=True, exist_ok=True)
+    rid = run_id("bollinger15")
+    out = ensure_output_dir(EXPORT_ROOT / rid)
     lo, hi = _tag_market_state(all_trades, day_meta)
 
     window_stats = {label: _summarize_bk([t for t in all_trades if t["window"] == label])
@@ -204,11 +203,16 @@ def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None
         sub = [t for t in all_trades if t.get(field) == bucket]
         by_state.append({"market_state": bucket, "stats": _summarize_bk(sub)})
 
-    _write_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"])
-    _write_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"])
-    _write_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"])
-    _write_csv(out / "metrics_by_date.csv", by_date, ["window", "date"])
-    _write_csv(out / "metrics_by_market_state.csv", by_state, ["market_state"])
+    write_metrics_csv(out / "metrics_by_window.csv", by_window, ["window", "group", "period"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_symbol.csv", by_symbol, ["symbol"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_exit_reason.csv", by_reason, ["exit_reason"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_date.csv", by_date, ["window", "date"],
+                      stat_fields=BK_STAT_FIELDS)
+    write_metrics_csv(out / "metrics_by_market_state.csv", by_state, ["market_state"],
+                      stat_fields=BK_STAT_FIELDS)
 
     summary = _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi)
     verdict, reasons = classify_strategy(
@@ -220,10 +224,9 @@ def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None
         symbol_concentrated=summary["symbol_concentrated"],
     )
     summary["verdict"] = verdict
-    (out / "metrics_bollinger_15window_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2))
+    write_json(out / "metrics_bollinger_15window_summary.json", summary)
 
-    (out / "warnings.json").write_text(json.dumps({
+    write_warnings(out, {
         "data_source": "GMO Public API klines (BID), read-only",
         "fixed_config": f"bollinger(period {BOLL_PERIOD}, sigma {BOLL_SIGMA}) / {TIMEFRAME} / "
                         f"current_cost (spread {SPREAD}, slippage {SLIP}) / baseline exit / "
@@ -233,14 +236,14 @@ def _export(all_trades: list[dict], day_meta: dict, warnings: list[str]) -> None
         "comparison_refs": "rsi=f716631, breakout=d1acdd6 (committed 15-window runs)",
         "note": "Bollinger 15-window evaluation; period/sigma fixed; no tuning.",
         "fetch_warnings": warnings,
-    }, ensure_ascii=False, indent=2))
-    _write_manifest(out, run_id, win_group)
+    })
+    _write_manifest(out, rid, win_group)
     _write_summary(out, by_window, by_symbol, by_reason, by_state, summary)
     _write_decision(out, summary, verdict, reasons)
     print(f"\nVERDICT: {verdict}")
     for r in reasons:
         print(f"  - {r}")
-    print(f"Export written to: analysis_exports/{run_id}/")
+    print(f"Export written to: analysis_exports/{rid}/")
 
 
 def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi) -> dict:
@@ -285,9 +288,9 @@ def _build_summary(all_trades, window_stats, win_group, symbol_window_wl, lo, hi
     return summary
 
 
-def _write_manifest(out: Path, run_id: str, win_group: dict) -> None:
-    (out / "manifest.json").write_text(json.dumps({
-        "run_id": run_id, "created_at": datetime.now().isoformat(),
+def _write_manifest(out: Path, rid: str, win_group: dict) -> None:
+    write_manifest(out, {
+        "run_id": rid, "created_at": datetime.now().isoformat(),
         "kind": "gmo_public_paper_bollinger15", "strategy": "bollinger_reversion",
         "bollinger_period": BOLL_PERIOD, "bollinger_sigma": BOLL_SIGMA,
         "timeframe": TIMEFRAME, "cost_scenario": "current_cost",
@@ -300,7 +303,7 @@ def _write_manifest(out: Path, run_id: str, win_group: dict) -> None:
                     for label, s, e, g in WINDOWS],
         "symbols": SYMBOLS, "continuous_replay": True, "no_order_execution": True,
         "gmo_readonly": True, "gmo_order_enabled": False,
-    }, ensure_ascii=False, indent=2))
+    })
 
 
 def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> None:
@@ -367,7 +370,7 @@ def _write_summary(out, by_window, by_symbol, by_reason, by_state, summary) -> N
         "## market-state別(Bollinger損益)\n"
         "| market_state | 完了 | 総損益 | 期待値 | PF |\n|--|--:|--:|--:|--:|\n" + st_rows + "\n"
     )
-    (out / "summary.md").write_text(text)
+    write_summary_markdown(out, text)
 
 
 def _write_decision(out, summary, verdict, reasons) -> None:
@@ -391,7 +394,7 @@ def _write_decision(out, summary, verdict, reasons) -> None:
         "- 研究用ベースライン: 構造はあるが実用性は低い。比較用に残す。\n"
         "- 撤退: 主検証から外し別アプローチへ。period/sigma/SL/TPの追加調整はしない。\n"
     )
-    (out / "bollinger_final_decision.md").write_text(text)
+    write_markdown(out / "bollinger_final_decision.md", text)
 
 
 if __name__ == "__main__":
