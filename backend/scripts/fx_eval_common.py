@@ -387,3 +387,46 @@ def report_index_entry(run_dir: str | Path) -> dict[str, Any]:
         "warnings_count": len(fetch_warnings),
         "has_warnings": bool(fetch_warnings),
     }
+
+
+def list_report_index(exports_root: str | Path) -> list[dict[str, Any]]:
+    """List report-index rows for every run directory under exports_root (read-only).
+
+    Each immediate non-hidden subdirectory is passed to report_index_entry(); a row
+    that cannot be read (no/duplicate summary, malformed JSON, permission error) becomes
+    an error row instead of aborting the whole listing. Normal rows get has_error=False;
+    error rows carry run_id/error/has_error=True/read_only_confirmed=False. Sorted:
+    normal rows with created_at (desc), then normal rows lacking created_at, then error
+    rows (each tier by run_id). Raises FileNotFoundError if exports_root is missing or
+    not a directory (a missing root is likely a misconfig, not an empty list). Performs
+    NO network, broker, or write I/O.
+    """
+    root = Path(exports_root)
+    if not root.is_dir():
+        raise FileNotFoundError(f"exports_root not found or not a directory: {root}")
+
+    entries: list[dict[str, Any]] = []
+    for child in sorted(root.iterdir()):
+        if not child.is_dir() or child.name.startswith("."):
+            continue
+        try:
+            entry = report_index_entry(child)
+            entry["has_error"] = False
+            entries.append(entry)
+        except (OSError, ValueError) as exc:
+            entries.append({
+                "run_id": child.name,
+                "error": str(exc),
+                "has_error": True,
+                "read_only_confirmed": False,
+                "created_at": None,
+                "summary_file": None,
+            })
+
+    with_created = [e for e in entries if not e["has_error"] and e.get("created_at")]
+    without_created = [e for e in entries if not e["has_error"] and not e.get("created_at")]
+    errors = [e for e in entries if e["has_error"]]
+    with_created.sort(key=lambda e: (e["created_at"], e.get("run_id") or ""), reverse=True)
+    without_created.sort(key=lambda e: e.get("run_id") or "")
+    errors.sort(key=lambda e: e.get("run_id") or "")
+    return [*with_created, *without_created, *errors]

@@ -15,6 +15,7 @@ from scripts.fx_eval_common import (
     ensure_output_dir,
     fixed_config,
     group_labels,
+    list_report_index,
     report_index_entry,
     run_id,
     safety_metadata,
@@ -446,3 +447,89 @@ def test_report_index_confirms_completed_older_runner_manifest(tmp_path) -> None
     assert entry["safety"]["real_order"] is False
     assert entry["safety"]["private_api_used"] is False
     assert entry["safety"]["api_key_used"] is False
+
+
+# --- list_report_index (read-only multi-run listing for a future report UI) -------
+def _make_run(root, name, created_at="2026-01-01T00:00:00", *, n_summary=1,
+              bad_manifest=False):
+    run = ensure_output_dir(root / name)
+    if bad_manifest:
+        (run / "manifest.json").write_text("{ not valid json ")
+    else:
+        write_json(run / "manifest.json", {"run_id": name, "kind": "k", "strategy": "s",
+                                           "timeframe": "M5", "cost_scenario": "current_cost",
+                                           "created_at": created_at, **safety_metadata()})
+    write_json(run / "warnings.json", {"fetch_warnings": []})
+    for i in range(n_summary):
+        write_json(run / f"metrics_{i}_15window_summary.json", _strategy_summary_json())
+    return run
+
+
+def test_list_report_index_sorts_by_created_at_desc(tmp_path) -> None:
+    _make_run(tmp_path, "run_a", "2026-01-01T00:00:00")
+    _make_run(tmp_path, "run_c", "2026-03-01T00:00:00")
+    _make_run(tmp_path, "run_b", "2026-02-01T00:00:00")
+    rows = list_report_index(tmp_path)
+    assert [r["run_id"] for r in rows] == ["run_c", "run_b", "run_a"]
+    assert all(r["has_error"] is False for r in rows)
+
+
+def test_list_report_index_ignores_files_and_hidden_dirs(tmp_path) -> None:
+    _make_run(tmp_path, "run_a")
+    (tmp_path / ".hidden").mkdir()
+    (tmp_path / "note.txt").write_text("x")
+    (tmp_path / ".DS_Store").write_text("")
+    rows = list_report_index(tmp_path)
+    assert [r["run_id"] for r in rows] == ["run_a"]
+
+
+def test_list_report_index_no_summary_becomes_error_row(tmp_path) -> None:
+    _make_run(tmp_path, "ok_run", "2026-02-01T00:00:00")
+    _make_run(tmp_path, "broken_run", n_summary=0)  # no summary file
+    rows = list_report_index(tmp_path)
+    ok = [r for r in rows if r["run_id"] == "ok_run"][0]
+    broken = [r for r in rows if r["run_id"] == "broken_run"][0]
+    assert ok["has_error"] is False  # one bad run does not drop the good ones
+    assert broken["has_error"] is True
+    assert broken["read_only_confirmed"] is False
+    assert broken["created_at"] is None and broken["summary_file"] is None
+    assert "summary" in broken["error"]
+    assert rows[-1]["run_id"] == "broken_run"  # error rows sort last
+
+
+def test_list_report_index_multiple_summary_becomes_error_row(tmp_path) -> None:
+    _make_run(tmp_path, "dup_run", n_summary=2)
+    rows = list_report_index(tmp_path)
+    assert rows[0]["has_error"] is True and "multiple" in rows[0]["error"]
+
+
+def test_list_report_index_json_parse_error_row(tmp_path) -> None:
+    _make_run(tmp_path, "bad_json", bad_manifest=True)
+    rows = list_report_index(tmp_path)
+    assert rows[0]["has_error"] is True and rows[0]["run_id"] == "bad_json"
+
+
+def test_list_report_index_missing_root_raises(tmp_path) -> None:
+    try:
+        list_report_index(tmp_path / "does_not_exist")
+    except FileNotFoundError as exc:
+        assert "exports_root" in str(exc)
+    else:
+        raise AssertionError("expected FileNotFoundError for missing exports_root")
+
+
+def test_list_report_index_empty_root_returns_empty(tmp_path) -> None:
+    assert list_report_index(tmp_path) == []
+
+
+def test_list_report_index_orders_created_then_nocreated_then_error(tmp_path) -> None:
+    _make_run(tmp_path, "has_created", "2026-05-01T00:00:00")
+    # normal run but manifest missing -> created_at None (still not an error)
+    nocreated = ensure_output_dir(tmp_path / "no_created")
+    write_json(nocreated / "warnings.json", {"fetch_warnings": []})
+    write_json(nocreated / "metrics_0_15window_summary.json", _strategy_summary_json())
+    _make_run(tmp_path, "broken", n_summary=0)
+    rows = list_report_index(tmp_path)
+    order = [r["run_id"] for r in rows]
+    assert order == ["has_created", "no_created", "broken"]
+    assert rows[1]["created_at"] is None and rows[1]["has_error"] is False

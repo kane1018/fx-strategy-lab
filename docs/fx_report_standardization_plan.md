@@ -133,6 +133,11 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    manifest∪warnings を fail-safe 統合（不明・矛盾は read_only_confirmed=False）。summary 0件→
    FileNotFoundError、複数→ValueError。ディレクトリ走査・UI実装はしない。
    （旧4戦略ランナーの safety 未記録は §4 で解消済み＝全 run で read_only_confirmed=True 可能。）
+   さらに `list_report_index(exports_root)` を追加: exports_root 直下の各 run dir に
+   report_index_entry() を適用し行リストを返す read-only 純関数。壊れた run（summary 0件/複数・
+   JSON parse error・権限エラー等）は全体を止めず error 行（has_error=True / read_only_confirmed=
+   False）にする。ソートは created_at 降順 → created_at 無し → error の順。exports_root が無い/
+   非ディレクトリなら FileNotFoundError、空なら []。ディレクトリ走査のみで UI/API は作らない。
 6. E2E導入候補フローの docs 化（§11）
 
 まだ行わないこと: E2Eツール導入 / Playwright・Cypress 追加 / UI実装 / 実注文 / Private API接続 /
