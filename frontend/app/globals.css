@@ -741,3 +741,123 @@ th {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* --- Read-only report viewer (/reports, /reports/[run_id]) ------------------ */
+/* Scoped to the reports pages and to [data-safe] so the dashboard's own
+   .safety-badge (which has no data-safe attribute) is left untouched. */
+
+.reports-page,
+.report-detail-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  color: var(--text);
+}
+
+.reports-page h1,
+.report-detail-page h1 {
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+
+/* Status pill on the reports list/detail (overrides the base flex .safety-badge). */
+.safety-badge[data-safe] {
+  display: inline-block;
+  border-radius: 99px;
+  padding: 3px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  background: rgba(120, 144, 156, 0.12);
+  color: var(--muted);
+}
+
+.safety-badge[data-safe="true"] {
+  border-color: rgba(46, 196, 166, 0.5);
+  background: rgba(46, 196, 166, 0.12);
+  color: var(--green);
+}
+
+/* not-safe (ERROR / CONFLICT / INCOMPLETE / UNCONFIRMED): caution styling.
+   The distinct wording in each badge carries the meaning; colour is a cue only. */
+.safety-badge[data-safe="false"] {
+  border-color: rgba(244, 201, 93, 0.5);
+  background: rgba(244, 201, 93, 0.12);
+  color: var(--amber);
+}
+
+/* ERROR rows in the list: subtle red tint + left marker, text stays readable. */
+tr.report-row-error td {
+  background: rgba(255, 107, 107, 0.07);
+}
+
+tr.report-row-error td:first-child {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+/* Detail-page error/empty alert box. */
+.report-detail-error,
+.report-detail-page [role="alert"] {
+  display: inline-block;
+  border: 1px solid rgba(255, 107, 107, 0.45);
+  background: rgba(255, 107, 107, 0.08);
+  color: var(--red);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
+/* Detail sections: spacing + headings. */
+.report-detail-page section {
+  margin-bottom: 24px;
+}
+
+.report-detail-page h2 {
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+/* key/value tables (Overview / Safety / Metrics / Cost). */
+.detail-kv td,
+.detail-kv th {
+  white-space: normal;
+}
+
+.detail-kv th {
+  width: 200px;
+  vertical-align: top;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* Files table: keep metadata compact and aligned. */
+.detail-files th,
+.detail-files td {
+  white-space: nowrap;
+}
+
+/* Embedded summary.md / final_decision.md bodies: wrap + scroll, no overflow. */
+.detail-markdown {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: 360px;
+}
+
+/* List table: allow horizontal scroll on the (wide) reports table. */
+.reports-table {
+  min-width: 900px;
+}

@@ -990,6 +990,13 @@ E2E 実装前に **ツール選定・起動方法・テストデータ方針・E
 > 全8件 green）。fixture は `create_e2e_report_fixtures` が生成、実 analysis_exports 非接触。
 > 補助変更: vitest が e2e/*.spec.ts を拾わないよう `frontend/vitest.config.ts`（exclude e2e/）を追加。
 > 生成 fixture / test-results / playwright-report は gitignore（コミットしない）。
+>
+> **UI スタイリング（更新）**: safety badge / ERROR 行 / 詳細エラー表示の最小スタイリングを
+> `frontend/app/globals.css` に追加（CSS のみ・JSX/機能変更なし）。`.safety-badge[data-safe="true"]`=
+> 緑（SAFE）、`[data-safe="false"]`=琥珀（CONFLICT/INCOMPLETE/UNCONFIRMED/ERROR、文言で区別・色は補助）、
+> `tr.report-row-error`=赤系の薄い地色＋左マーカー、`.report-detail-error`/[role=alert]=赤枠アラート、
+> 詳細セクション余白・`.detail-kv`/`.detail-files` 可読性・`.detail-markdown` の折返し/スクロールを調整。
+> 既存ダッシュボードの `.safety-badge`（data-safe 無し）は無改変。E2E-01〜08 は引き続き 8 passed。
 
 ### 16-1. E2E 導入の目的
 
