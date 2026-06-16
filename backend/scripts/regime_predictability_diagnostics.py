@@ -18,8 +18,6 @@ no Private API, no API key/secret. In-memory only (no DB writes).
 
 from __future__ import annotations
 
-import csv
-import json
 import statistics
 import sys
 from collections import Counter
@@ -38,9 +36,16 @@ from scripts.fx_eval_common import (  # noqa: E402
     SYMBOLS,
     WINDOWS,
     _weekdays,
+    ensure_output_dir,
     fixed_config,
     run_id,
     safety_metadata,
+    write_csv,
+    write_json,
+    write_manifest,
+    write_markdown,
+    write_summary_markdown,
+    write_warnings,
 )
 from scripts.market_state_diagnostics import _day_market_state, _fetch_candles  # noqa: E402
 
@@ -229,8 +234,7 @@ def _eval_rule(rows: list[dict], rule: str, ctx: dict) -> dict:
 
 def _export(per_series: list[dict], warnings: list[str]) -> None:
     rid = run_id("regime_predictability")
-    out = EXPORT_ROOT / rid
-    out.mkdir(parents=True, exist_ok=True)
+    out = ensure_output_dir(EXPORT_ROOT / rid)
     rows, lo, hi = _label_and_rows(per_series)
     prior_rows = [r for r in rows if r["group"] == "prior10"]
     oos_rows = [r for r in rows if r["group"] == "oos5"]
@@ -265,9 +269,8 @@ def _export(per_series: list[dict], warnings: list[str]) -> None:
     _write_confusion(out, prior_results[best]["_pairs"], oos_results[best]["_pairs"])
     summary = _summary_dict(prior_rows, oos_rows, prior_maj, oos_maj, best, prior_results,
                             oos_results, ctx, verdict)
-    (out / "metrics_regime_predictability_summary.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2))
-    (out / "warnings.json").write_text(json.dumps({
+    write_json(out / "metrics_regime_predictability_summary.json", summary)
+    write_warnings(out, {
         **fixed_config(timeframe="M5", purpose="regime_predictability_diagnostic_no_trading"),
         **safety_metadata(),
         "label": "DE tertile (low/medium/high); thresholds from prior10 only, applied to oos5",
@@ -276,7 +279,7 @@ def _export(per_series: list[dict], warnings: list[str]) -> None:
         "no_trading": True, "no_sklearn": True,
         "note": "regime predictability diagnostic; no orders, no strategy change.",
         "fetch_warnings": warnings,
-    }, ensure_ascii=False, indent=2))
+    })
     _write_manifest(out, rid, lo, hi)
     _write_summary(out, summary, by_rule, prior_maj, oos_maj)
     _write_decision(out, summary, verdict, reasons)
@@ -309,43 +312,41 @@ def _summary_dict(prior_rows, oos_rows, prior_maj, oos_maj, best, prior_results,
 def _write_by_rule_csv(path: Path, by_rule: list[dict]) -> None:
     fields = ["n", "accuracy", "balanced_accuracy", "high_de_precision", "high_de_recall",
               "low_de_precision", "low_de_recall"]
-    with path.open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow(["rule", "group", *fields])
-        for r in by_rule:
-            for grp in ("prior", "oos"):
-                w.writerow([r["rule"], grp, *[r[grp][f] for f in fields]])
+    fieldnames = ["rule", "group", *fields]
+    out_rows = [{"rule": r["rule"], "group": grp, **{f: r[grp][f] for f in fields}}
+                for r in by_rule for grp in ("prior", "oos")]
+    write_csv(path, out_rows, fieldnames)
 
 
 def _write_window_symbol_csv(out: Path, rows: list[dict], ctx: dict, best: str) -> None:
+    fields = ["n", "accuracy", "balanced_accuracy", "high_de_recall", "low_de_recall"]
+
     def _block(keyfn, keyname, path):
         groups: dict = {}
         for r in rows:
             groups.setdefault(keyfn(r), []).append(r)
-        with path.open("w", newline="") as fh:
-            w = csv.writer(fh)
-            w.writerow([keyname, "n", "accuracy", "balanced_accuracy", "high_de_recall",
-                        "low_de_recall"])
-            for key in sorted(groups):
-                res = _eval_rule(groups[key], best, ctx)
-                w.writerow([key, res["n"], res["accuracy"], res["balanced_accuracy"],
-                            res["high_de_recall"], res["low_de_recall"]])
+        out_rows = []
+        for key in sorted(groups):
+            res = _eval_rule(groups[key], best, ctx)
+            out_rows.append({keyname: key, **{f: res[f] for f in fields}})
+        write_csv(path, out_rows, [keyname, *fields])
     _block(lambda r: r["window"], "window", out / "metrics_by_window.csv")
     _block(lambda r: r["symbol"], "symbol", out / "metrics_by_symbol.csv")
 
 
 def _write_confusion(out: Path, prior_pairs, oos_pairs) -> None:
-    with (out / "confusion_matrix.csv").open("w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow(["group", "actual", *[f"pred_{c}" for c in CLASSES]])
-        for grp, pairs in (("prior10", prior_pairs), ("oos5", oos_pairs)):
-            mat = confusion(pairs, CLASSES)
-            for actual in CLASSES:
-                w.writerow([grp, actual, *[mat[actual][c] for c in CLASSES]])
+    fieldnames = ["group", "actual", *[f"pred_{c}" for c in CLASSES]]
+    out_rows = []
+    for grp, pairs in (("prior10", prior_pairs), ("oos5", oos_pairs)):
+        mat = confusion(pairs, CLASSES)
+        for actual in CLASSES:
+            out_rows.append({"group": grp, "actual": actual,
+                             **{f"pred_{c}": mat[actual][c] for c in CLASSES}})
+    write_csv(out / "confusion_matrix.csv", out_rows, fieldnames)
 
 
 def _write_manifest(out: Path, rid: str, lo: float, hi: float) -> None:
-    (out / "manifest.json").write_text(json.dumps({
+    write_manifest(out, {
         "run_id": rid, "created_at": datetime.now().isoformat(),
         "kind": "gmo_public_paper_regime_predictability", "no_trading": True,
         **fixed_config(timeframe="M5", purpose="regime_predictability_diagnostic"),
@@ -356,7 +357,7 @@ def _write_manifest(out: Path, rid: str, lo: float, hi: float) -> None:
         "windows": [{"window": label, "group": g, "dates": _weekdays(s, e)}
                     for label, s, e, g in WINDOWS],
         "symbols": SYMBOLS,
-    }, ensure_ascii=False, indent=2))
+    })
 
 
 def _write_summary(out: Path, summary: dict, by_rule: list[dict],
@@ -391,7 +392,7 @@ def _write_summary(out: Path, summary: dict, by_rule: list[dict],
         "ランダム相当の目安: 3クラスで accuracy≈0.333 / balanced≈0.333。\n"
         "majority/persistence/vote/threshold いずれも oos でこれを明確に超えるかが判断軸。\n"
     )
-    (out / "summary.md").write_text(text)
+    write_summary_markdown(out, text)
 
 
 def _write_decision(out: Path, summary: dict, verdict: str, reasons: list[str]) -> None:
@@ -412,7 +413,7 @@ def _write_decision(out: Path, summary: dict, verdict: str, reasons: list[str]) 
         "- 研究用メモ: 弱い予測力。説明用に残すが実戦略には入れない。\n"
         "- 価値あり: OOSでmajorityを明確に超える → no-trade/regime切替の検証に進む余地。\n"
     )
-    (out / "regime_predictability_final_decision.md").write_text(text)
+    write_markdown(out / "regime_predictability_final_decision.md", text)
 
 
 if __name__ == "__main__":

@@ -106,9 +106,11 @@ market-state別 / 重要な発見 / warnings(JSON) / 暫定結論 / 次の仮説
    `rsi_m15_scaled_15window.py`（6本目）。TP拡張CSV＋market-state別CSVは
    `write_metrics_csv(..., stat_fields=BK_STAT_FIELDS)`、final_decision は `write_markdown`。
    scaled移行に伴い rsi_m15 の `_write_csv` 委譲wrapperは撤去済み（どのランナーからも未参照）。
-   いずれも出力内容は不変・mechanism のみ共通化。**TP拡張ランナー(breakout/bollinger/
-   market_structure/rsi_m15/rsi_m15_scaled)はすべて共通writer化完了**。残りは regime診断
-   （DictWriter系CSV・別パターン）のみ。`_summarize_bk` の共通化は別タスクで判断。
+   いずれも出力内容は不変・mechanism のみ共通化。さらに `regime_predictability_diagnostics.py`
+   （7本目）も移行完了：フラットdict型CSV（by_rule / by_window / by_symbol / confusion_matrix）は
+   `write_csv(path, rows, fieldnames)` で対応（`write_csv` 本体は無改修で適用可）。
+   **主要ランナー全7本の出力writer標準化が完了**（stats入れ子型=write_metrics_csv、
+   フラットdict型=write_csv の両系統が実戦投入済み）。`_summarize_bk` の共通化は別タスクで判断。
 3. report schema の固定（summary.json のキーを契約として固定）
 4. 安全表示（safety_metadata）の単一ソース化
 5. レポート一覧UI / run詳細UI に備えたデータ構造整理

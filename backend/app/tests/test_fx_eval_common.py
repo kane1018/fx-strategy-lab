@@ -156,6 +156,26 @@ def test_write_csv_generic_with_fieldnames(tmp_path) -> None:
     assert rows[1] == ["1", "2"] and rows[2] == ["3", "4"]
 
 
+def test_write_csv_empty_rows_writes_header_only(tmp_path) -> None:
+    # regime by_window/by_symbol can be empty; with explicit fieldnames -> header only
+    path = tmp_path / "empty.csv"
+    write_csv(path, [], fieldnames=["window", "n", "accuracy"])
+    rows = list(csv.reader(path.read_text().splitlines()))
+    assert rows == [["window", "n", "accuracy"]]
+
+
+def test_write_csv_preserves_confusion_matrix_shape(tmp_path) -> None:
+    # regime confusion_matrix.csv: flat dict rows, fixed column order
+    path = tmp_path / "cm.csv"
+    fieldnames = ["group", "actual", "pred_low_de", "pred_medium_de", "pred_high_de"]
+    rows = [{"group": "oos5", "actual": "high_de",
+             "pred_low_de": 7, "pred_medium_de": 34, "pred_high_de": 4}]
+    write_csv(path, rows, fieldnames)
+    out = list(csv.reader(path.read_text().splitlines()))
+    assert out[0] == fieldnames
+    assert out[1] == ["oos5", "high_de", "7", "34", "4"]
+
+
 def test_write_metrics_csv_matches_key_plus_stats_shape(tmp_path) -> None:
     path = tmp_path / "m.csv"
     rows = [{"window": "w1", "stats": {"completed_trades": 10, "win_rate": 55.0}}]
