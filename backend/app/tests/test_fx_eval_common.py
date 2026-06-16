@@ -1,5 +1,7 @@
 """Tests for the shared 15-window evaluation helpers (scripts/fx_eval_common.py)."""
 
+from pathlib import Path
+
 from scripts.fx_eval_common import (
     SYMBOLS,
     WINDOWS,
@@ -10,6 +12,8 @@ from scripts.fx_eval_common import (
     safety_metadata,
     window_groups,
 )
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def test_standard_windows_are_10_prior_plus_5_oos() -> None:
@@ -36,8 +40,10 @@ def test_fixed_config_has_standard_values_and_allows_overrides() -> None:
     assert config["take_profit_pips"] == 60
     assert config["exit_policy"] == "baseline"
     assert config["symbols"] == SYMBOLS
+    assert len(config["symbols"]) == 4
     # overrides win (e.g. a runner annotating its strategy/params)
     assert fixed_config(strategy="bollinger")["strategy"] == "bollinger"
+    assert fixed_config(timeframe="M15")["timeframe"] == "M15"
 
 
 def test_safety_metadata_is_all_read_only() -> None:
@@ -79,3 +85,15 @@ def test_classify_strategy_three_way_from_common() -> None:
         median_pf=0.98, positive_windows=6, n_windows=15, edge_windows=6,
         symbol_concentrated=False)
     assert retire == "撤退"
+
+
+def test_fx_docs_capture_read_only_safety_terms() -> None:
+    docs = "\n".join(
+        [
+            (PROJECT_ROOT / "README.md").read_text(),
+            (PROJECT_ROOT / "docs/fx_research_m5_summary.md").read_text(),
+            (PROJECT_ROOT / "docs/fx_strategy_evaluation_protocol.md").read_text(),
+        ]
+    )
+    for term in ["read-only paper", "Private API", "実注文", "analysis_exports"]:
+        assert term in docs

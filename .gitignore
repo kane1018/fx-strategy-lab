@@ -3,12 +3,17 @@
 .env.*
 !.env.example
 *.db
+*.sqlite
 *.sqlite3
 *.log
+trades.csv
+open_positions.csv
 __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.next/
+node_modules/
 frontend/.next/
 frontend/node_modules/
 frontend/coverage/
