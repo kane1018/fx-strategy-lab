@@ -8,6 +8,11 @@ on:
   workflow_dispatch:
   pull_request:
 
+# Opt JavaScript actions (checkout / setup-node / setup-python) into the Node 24
+# runtime early to clear the "Node.js 20 actions are deprecated" runner warning.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   fx-report-e2e:
     runs-on: ubuntu-latest
