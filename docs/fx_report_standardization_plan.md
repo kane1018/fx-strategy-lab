@@ -1350,3 +1350,148 @@ conflict run は warnings 側で1フラグだけ食い違わせ、incomplete run
 - backend/frontend の起動スクリプトを変更しない / API・UI を変更しない。
 - 実 analysis_exports を読まない / 新戦略検証しない / バックテストしない。
 - 実注文・Private API・APIキー・`.env` に触れない。
+
+### 16-17. E2E CI 計画
+
+ローカルで通っている `npm run e2e`（E2E-01〜10、Chromium）を将来 GitHub Actions 等の CI で安全に
+再現するための方針・手順・制約・MVP 範囲を確定する。**本節は docs のみ**で、`.github/workflows/*` の
+作成・package 追加・E2E/コード変更は含まない。CI 導入は次段でユーザー承認後に行う。
+
+#### 16-17-1. CI 化の目的
+
+- ローカルで通っている `npm run e2e` を CI でも再現する。
+- `/reports` と `/reports/[run_id]` の read-only 閲覧フローを PR/変更時に確認する。
+- API/UI/fixture/E2E の統合が壊れていないかを確認する。
+- 実注文・Private API・APIキー・実 analysis_exports には触れない。
+- E2E は「安全な閲覧 UI の回帰確認」であり、戦略成績の再計算ではない。
+
+#### 16-17-2. CI 対象にする検証（段階分け）
+
+```text
+backend : pytest / ruff
+frontend: npm run lint / npm run test / npm run build / npm run e2e
+
+Phase 1: backend pytest/ruff ＋ frontend lint/test/build
+Phase 2: Playwright E2E (Chromium)
+Phase 3: artifacts upload / report 保存 / 手動実行(workflow_dispatch) / CI 最適化
+```
+
+#### 16-17-3. CI 環境の前提
+
+- GitHub Actions を第一候補。OS は `ubuntu-latest`。
+- Node.js は frontend の package に合わせて確認（engines 未指定のため実装時に確定。現行ローカル準拠）。
+- Python は backend の現行環境（venv は Python 3.11 系）に合わせて確認。
+- frontend は `npm ci`（package-lock.json あり）。backend は `requirements.txt` での `pip install`
+  （pyproject.toml も併存。実装時に既存方式を確認して確定）。
+- Playwright は Chromium のみ。複数ブラウザは MVP 外。
+- CI では実 analysis_exports を読まない。fixture 生成ヘルパで専用 root を作る。
+- `ANALYSIS_EXPORTS_ROOT` を fixture root へ向ける。`NEXT_PUBLIC_API_BASE_URL=http://localhost:8000`。
+
+#### 16-17-4. CI での E2E 起動方針（現 playwright.config.ts に準拠）
+
+```text
+1. repository checkout
+2. Node setup
+3. Python setup
+4. frontend dependencies install (npm ci)
+5. backend dependencies install (pip install -r requirements.txt)
+6. Playwright Chromium install
+7. fixture root 生成 (create_e2e_report_fixtures)
+8. backend uvicorn 起動 (ANALYSIS_EXPORTS_ROOT=<fixture>)
+9. frontend next dev 起動 (NEXT_PUBLIC_API_BASE_URL=http://localhost:8000)
+10. Playwright で /reports から E2E-01〜10 を実行
+```
+
+注: 現状 playwright.config.ts の webServer が ⑦⑧⑨ を内包しているため、CI でも `npm run e2e` 一発で
+⑦〜⑩ が走る想定。実 workflow 実装時に既存 package/scripts を確認して確定する。
+
+#### 16-17-5. fixture 方針
+
+- CI でも実 `analysis_exports/` は使わない。`backend/scripts/create_e2e_report_fixtures.py` を使う。
+- 生成先は CI 内の一時ディレクトリまたは `frontend/e2e/fixtures/analysis_exports`。
+- 生成 fixture はコミットしない（.gitignore 済み）。`ANALYSIS_EXPORTS_ROOT` で backend に渡す。
+- CSV marker `__CSV_BODY_MARKER__` が画面に出ないことを E2E-07 で確認。
+- fixture に secret/APIキー/`.env`/DB を含めない。
+
+#### 16-17-6. Playwright ブラウザ導入方針
+
+- MVP は Chromium のみ。`npx playwright install --with-deps chromium`（Linux ランナーの依存込み）。
+- CI（Linux）では追加の OS 依存が要る可能性 → `--with-deps` で吸収。
+- browser cache は最初は使わない。キャッシュ最適化は後日。複数ブラウザは MVP 外。
+
+#### 16-17-7. キャッシュ方針
+
+- npm cache は `actions/setup-node` の cache 機能を検討。Python は `actions/setup-python` の cache を検討。
+- Playwright browser cache は最初は使わない。E2E が安定してから必要に応じて検討。
+- 理由: 最初は再現性と単純さを優先。browser cache は環境差・OS 依存・更新メンテが増える。CI 時間が問題化したら最適化。
+
+#### 16-17-8. artifacts 方針
+
+- 失敗時に見る候補: `frontend/playwright-report/` / `frontend/test-results/` / Playwright trace /
+  screenshot（video は MVP では任意）。
+- artifacts は CI に upload してよいが repository にはコミットしない（.gitignore 維持）。
+- 成功時は保存しない or 短期保存。**失敗時のみ保存を推奨**。
+
+#### 16-17-9. workflow ファイル候補（今回は作成しない）
+
+- ファイル: `.github/workflows/fx-report-e2e.yml`（**今回は作らない**）。job 名: `fx-report-e2e`。
+- trigger 候補: `pull_request` / `push`(main) / `workflow_dispatch`。
+- 推奨: 最初は `workflow_dispatch` ＋ `pull_request`。実行時間・安定性を見て `push` に広げる。
+
+#### 16-17-10. secrets 方針
+
+- CI E2E では GitHub Secrets を使わない。APIキー/secret は不要。`.env` は使わない。
+- 実 GMO/OANDA 接続はしない。`ANALYSIS_EXPORTS_ROOT` / `NEXT_PUBLIC_API_BASE_URL` は secret ではない。
+- secret が必要になった時点で E2E 対象を再設計する。
+
+#### 16-17-11. 安全制約（CI でも厳守）
+
+- 実注文 / GMO Private API / APIキー・secret / `.env` 表示 / 実 analysis_exports 読込 /
+  GMO API 新規取得 / OANDA 操作 / RiskManager 操作 / DB 直接操作 / バックテスト再実行 /
+  CSV プレビュー・ダウンロード / 本番デプロイ — いずれもしない。
+
+#### 16-17-12. 最初の CI MVP 範囲
+
+- 含む: 1 workflow / ubuntu-latest / Node＋Python / frontend lint/test/build /
+  backend pytest/ruff / Playwright Chromium / E2E-01〜10 / fixture 生成ヘルパ利用 /
+  artifacts は失敗時のみ / 検証用であり本番デプロイしない。
+- MVP 外: 複数 OS / 複数ブラウザ / matrix / sharding / 本番デプロイ / secrets /
+  scheduled run / visual regression / report 公開 / Slack・Discord 通知。
+
+#### 16-17-13. 想定 workflow の擬似手順（実 YAML は今回作らない）
+
+```yaml
+name: FX Report E2E
+on:
+  workflow_dispatch:
+  pull_request:
+jobs:
+  fx-report-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - checkout
+      - setup node
+      - setup python
+      - install frontend deps   # npm ci
+      - install backend deps    # pip install -r backend/requirements.txt
+      - install playwright chromium  # npx playwright install --with-deps chromium
+      - run backend tests       # pytest / ruff
+      - run frontend tests      # npm run lint / test / build
+      - run playwright e2e      # npm run e2e (webServer が fixture+uvicorn+next を起動)
+      - upload artifacts on failure  # playwright-report / test-results
+```
+
+#### 16-17-14. CI 導入前チェックリスト
+
+- GitHub Actions 導入の承認 / workflow ファイル追加の承認 / CI 実行時間の許容確認。
+- Node バージョン確認 / Python バージョン確認 / backend 依存導入手順確認 / frontend `npm ci` 確認。
+- Playwright Chromium install 確認 / `ANALYSIS_EXPORTS_ROOT` env 指定確認 /
+  `NEXT_PUBLIC_API_BASE_URL` env 指定確認。
+- artifacts 保存方針確認 / secrets 不要確認 / 実 analysis_exports を読まない確認 / 本番デプロイしない確認。
+
+#### 16-17-15. 今回（§16-17 追加）はやらないこと
+
+- `.github/workflows/*` を作らない / GitHub Actions を実装しない / package 追加しない。
+- Playwright 設定を変えない / E2E spec を変えない / backend・frontend コードを変えない。
+- 実 analysis_exports を読まない / 本番デプロイしない / secrets を追加しない。
+- 新戦略検証しない / バックテストしない / 実注文・Private API・APIキー・`.env` に触れない。
