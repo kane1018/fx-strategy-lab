@@ -131,6 +131,10 @@ CI（`.github/workflows/fx-report-e2e.yml`）でも同等を実行（`workflow_d
 
 いずれも明示承認のうえで進める。本書時点ではデプロイは未実施。
 
+> 具体的な Vercel/Render 設定値・root directory・build/start command・env・サンプル配置・疎通確認・
+> トラブルシュート・手元操作チェックリストは [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md) にまとめた
+> （実デプロイ手前まで。実反映は手元で行う）。
+
 ## 9. analysis_exports の扱い（初回デプロイ）
 
 - `analysis_exports/` は **生成物で gitignore** のため、リポジトリにもデプロイ成果物にも自動では含まれない。

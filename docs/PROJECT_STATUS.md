@@ -68,9 +68,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 7. 次回 Codex / Claude Code に渡す作業候補（1つを選ぶ）
 
-- **初回デプロイ準備**（実デプロイ手前まで）: [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) §12 の
-  Codex プロンプト案に従い、Vercel(frontend)/Render(backend) のデプロイ設定・env 整理・サンプルレポート配置・
-  疎通確認手順を最小で用意（実反映・secrets 登録は手元で行う）。
+- **初回デプロイ（手元操作）**: [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md) に Vercel/Render の
+  具体設定・env・サンプル配置・疎通確認・トラブルシュート・チェックリストを整備済み。次は利用者が手元で
+  Render→Vercel の順にデプロイし、CORS/base URL を設定して疎通確認する（実反映は手元）。
 - レポート閲覧 UI の CSV プレビュー（read-only・先頭N行・別 endpoint、安全制約厳守）。
 - CI の `push`(main) トリガ追加 or browser cache 最適化（workflow のみ変更）。
 
