@@ -149,6 +149,42 @@ breakout / Bollinger / market-structure（M5）、rsi_reversal M15（baseline / 
 - 次フェーズ設計（レポート標準化・E2E導入タイミング）: [docs/fx_report_standardization_plan.md](docs/fx_report_standardization_plan.md)
 
 これらは検証基盤・分析用で、実注文機能ではありません。Private API / APIキーは使いません。
-E2Eツール・UI・実注文は現時点では導入しません（導入条件は標準化プラン参照）。
+
+## レポート閲覧 UI / read-only API（実装済み）
+
+標準化された `analysis_exports/<run_id>/` のレポートを **read-only** で閲覧する API と UI を実装済みです
+（実注文・Private API・APIキー・CSV 本文展開なし。設計は
+[docs/fx_report_standardization_plan.md](docs/fx_report_standardization_plan.md) §11〜§16）。
+
+- backend API（GET のみ、`app/routers/reports.py`）:
+  - `GET /api/reports` … run 一覧（壊れた run は error 行として返す）
+  - `GET /api/reports/{run_id}` … 1 run の詳細（manifest/warnings/summary/files メタ。CSV 本文は返さない）
+  - `GET /api/reports/markdown` / `GET /api/reports/{run_id}/markdown` … ChatGPT 貼り付け用 Markdown
+  - `exports_root` はサーバー固定（`ANALYSIS_EXPORTS_ROOT`、既定 `analysis_exports`）。呼び出し側からの任意指定不可。
+- frontend UI（`frontend/app/reports/`）:
+  - `/reports` … 一覧（safety バッジ / ERROR 行 / 状態表示 / 一覧 Markdown コピー）
+  - `/reports/[run_id]` … 詳細（Overview / Safety / Metrics / Cost / Files / Summary / Final Decision ＋ Markdown コピー）
+- read-only ヘルパ純関数は `backend/scripts/fx_eval_common.py`（`list_report_index` / `report_detail` /
+  `format_report_index_markdown` / `format_report_detail_markdown` / 各 `validate_*`）。
+
+## フロントエンド検証 / CI
+
+```bash
+cd frontend
+npm ci
+npm run lint
+npm run test     # Vitest（lib のユニットテスト。e2e/ は除外）
+npm run build
+npm run e2e       # Playwright（Chromium）E2E-01〜10。fixture 自動生成・実 analysis_exports 非使用
+```
+
+E2E は `backend/scripts/create_e2e_report_fixtures.py` が生成する固定 fixture を使い、
+`ANALYSIS_EXPORTS_ROOT` を fixture へ向けて backend(uvicorn) と Next dev を起動します（`playwright.config.ts`）。
+GitHub Actions の `FX Report E2E`（`.github/workflows/fx-report-e2e.yml`、trigger: `workflow_dispatch` /
+`pull_request`）が backend pytest+ruff / frontend lint+test+build / Playwright E2E を実行します。
+secrets 不使用・本番デプロイなし・実 analysis_exports 非接触。
+
+現在地・デプロイ前確認は [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) と
+[docs/DEPLOYMENT_READINESS.md](docs/DEPLOYMENT_READINESS.md) を参照してください。
 
 バックテスト結果は将来の利益を保証しません。
