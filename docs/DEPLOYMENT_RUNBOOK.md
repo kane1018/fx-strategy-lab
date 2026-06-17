@@ -1,5 +1,16 @@
 # 初回デプロイ Runbook（DEPLOYMENT_RUNBOOK）
 
+> **初回デプロイ済み（実績）**: 初回デプロイは **完了済み**。
+> backend = Render `https://fx-strategy-lab.onrender.com`（Start=`uvicorn app.main_readonly:app
+> --host 0.0.0.0 --port $PORT`）、frontend = Vercel `https://fx-strategy-lab.vercel.app`
+> （`NEXT_PUBLIC_API_BASE_URL=https://fx-strategy-lab.onrender.com`、CORS は Render
+> `FRONTEND_ORIGIN=https://fx-strategy-lab.vercel.app`）。実値・使用設定・疎通/安全確認結果は
+> [DEPLOYMENT_RESULT.md](DEPLOYMENT_RESULT.md) に記録。以降の本書は**再デプロイ/別環境向けの手順**として読む。
+>
+> **Vercel Output Directory の注意（実績）**: Output Directory は **Next.js 既定のまま（Override OFF）**にする。
+> `public` を指定すると `No Output Directory named "public"` エラーになる。出た場合は Output Directory に
+> `public` を指定せず（Override OFF）、Root Directory=`frontend`・Env（`NEXT_PUBLIC_API_BASE_URL`）を確認して Redeploy。
+
 FX Strategy Lab の **初回デプロイ手前まで**の具体手順。方針は
 [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md)（§0 確定方針）に従う。
 **本書は手元操作のための手順書であり、Claude Code/Codex 自身は実デプロイ・外部サービス設定・

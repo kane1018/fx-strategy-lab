@@ -8,8 +8,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 - リポジトリ: `https://github.com/kane1018/fx-strategy-lab.git`
 - branch: `main`
-- 最新コミット（本書作成時点の直近）: `4f0c3b8 ci: opt FX report E2E actions into node24 runtime`
 - GitHub Actions: `FX Report E2E` 成功実績あり（`workflow_dispatch` / `pull_request`）
+- **初回デプロイ: 完了済み（read-only レポート閲覧のみ）**
+  - backend (Render): `https://fx-strategy-lab.onrender.com`（entrypoint `app.main_readonly:app`）
+  - frontend (Vercel): `https://fx-strategy-lab.vercel.app`
+  - 実値・疎通/安全確認結果は [DEPLOYMENT_RESULT.md](DEPLOYMENT_RESULT.md)
 
 ## 2. 完了済み検証（ローカル直近）
 
@@ -56,8 +59,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
 - 認証 / アクセス制御（現状ローカル read-only 前提、認証なし）。
 - CI 最適化: 複数ブラウザ / matrix / sharding / Playwright browser cache / `push` トリガ拡張。
-- 本番デプロイ: **初回デプロイ方針は確定済み**（read-only レポート閲覧に限定、frontend=Vercel /
-  backend=Render。[DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) §0）。**実デプロイは未実施**。
+- 本番デプロイ: **初回デプロイ完了済み**（read-only レポート閲覧のみ、frontend=Vercel / backend=Render）。
+  実績は [DEPLOYMENT_RESULT.md](DEPLOYMENT_RESULT.md)。残課題: Render free sleep / 認証未実装 / 実データ非公開 /
+  独自ドメイン未設定 / 本番DB未化。
 - 戦略・検証の新フェーズ（標準化基盤の上での再設計。単純テクニカル単一構造は終了済み）。
 - 通知 / paper forward / 実 broker 連携（OANDA practice 以外）は明示承認が前提。
 
@@ -71,9 +75,8 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 7. 次回 Codex / Claude Code に渡す作業候補（1つを選ぶ）
 
-- **初回デプロイ（手元操作）**: [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md) に Vercel/Render の
-  具体設定・env・サンプル配置・疎通確認・トラブルシュート・チェックリストを整備済み。次は利用者が手元で
-  Render→Vercel の順にデプロイし、CORS/base URL を設定して疎通確認する（実反映は手元）。
+- **初回デプロイは完了済み**（[DEPLOYMENT_RESULT.md](DEPLOYMENT_RESULT.md)）。次の運用候補: 認証/アクセス制御の
+  要否判断、Render free sleep 対策、独自ドメイン、実レポートの安全な配置方法。
 - レポート閲覧 UI の CSV プレビュー（read-only・先頭N行・別 endpoint、安全制約厳守）。
 - CI の `push`(main) トリガ追加 or browser cache 最適化（workflow のみ変更）。
 

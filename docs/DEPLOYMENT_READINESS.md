@@ -1,8 +1,13 @@
 # デプロイ前確認（DEPLOYMENT_READINESS）
 
-FX Strategy Lab / read-only レポート閲覧プロジェクトを将来デプロイする前の確認事項・候補構成・手順。
-**本書は計画と確認リストであり、本番デプロイは実行しない。** 現構成（FastAPI backend ＋ Next.js
-frontend ＋ SQLite ＋ read-only レポート API/UI）に基づく現実的な整理に留める。
+> **状態（更新）**: 初回デプロイは **完了済み**（read-only レポート閲覧のみ）。
+> backend = Render `https://fx-strategy-lab.onrender.com`、frontend = Vercel
+> `https://fx-strategy-lab.vercel.app`。as-deployed の実値・疎通/安全確認結果は
+> [DEPLOYMENT_RESULT.md](DEPLOYMENT_RESULT.md) を参照。本書の方針・チェックリストは
+> 再デプロイ/拡張時の参照用として残す。
+
+FX Strategy Lab / read-only レポート閲覧プロジェクトのデプロイ方針・確認事項・候補構成・手順。
+現構成（FastAPI backend ＋ Next.js frontend ＋ SQLite ＋ read-only レポート API/UI）に基づく整理。
 
 ## 0. 初回デプロイ方針（確定）
 

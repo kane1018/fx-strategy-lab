@@ -150,11 +150,18 @@ breakout / Bollinger / market-structure（M5）、rsi_reversal M15（baseline / 
 
 これらは検証基盤・分析用で、実注文機能ではありません。Private API / APIキーは使いません。
 
-## レポート閲覧 UI / read-only API（実装済み）
+## レポート閲覧 UI / read-only API（実装済み・初回デプロイ済み）
 
 標準化された `analysis_exports/<run_id>/` のレポートを **read-only** で閲覧する API と UI を実装済みです
 （実注文・Private API・APIキー・CSV 本文展開なし。設計は
 [docs/fx_report_standardization_plan.md](docs/fx_report_standardization_plan.md) §11〜§16）。
+
+**初回デプロイ済み（read-only レポート閲覧のみ）**:
+- frontend (Vercel): `https://fx-strategy-lab.vercel.app`（`/reports`・`/reports/[run_id]`）
+- backend (Render): `https://fx-strategy-lab.onrender.com`（entrypoint **`app.main_readonly:app`**、
+  `/health` ＋ `/api/reports*` の GET のみ公開。注文系など他 API は非公開）
+- 実値・使用設定・疎通/安全確認結果は [docs/DEPLOYMENT_RESULT.md](docs/DEPLOYMENT_RESULT.md)。
+  手順は [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md)。実データ・個人情報は公開していません。
 
 - backend API（GET のみ、`app/routers/reports.py`）:
   - `GET /api/reports` … run 一覧（壊れた run は error 行として返す）
