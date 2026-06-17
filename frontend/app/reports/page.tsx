@@ -88,6 +88,15 @@ export default function ReportsPage() {
     };
   }, []);
 
+  // Auto-dismiss the copy status after a few seconds; cleared on re-copy/unmount.
+  useEffect(() => {
+    if (!copyStatus) {
+      return;
+    }
+    const timer = setTimeout(() => setCopyStatus(null), 5000);
+    return () => clearTimeout(timer);
+  }, [copyStatus]);
+
   // Read-only copy aid: fetch the list Markdown and write it to the clipboard.
   // Only runs on explicit button click; never auto-copies; never mutates anything.
   async function handleCopyMarkdown() {
@@ -123,7 +132,13 @@ export default function ReportsPage() {
           一覧Markdownをコピー
         </button>
         {copyStatus && (
-          <span data-testid="copy-reports-markdown-status" className="report-copy-status">
+          <span
+            data-testid="copy-reports-markdown-status"
+            className="report-copy-status"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
             {copyStatus}
           </span>
         )}

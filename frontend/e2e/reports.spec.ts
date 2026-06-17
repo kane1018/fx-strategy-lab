@@ -110,9 +110,10 @@ test.describe("FX reports read-only E2E", () => {
     const button = page.getByTestId("copy-detail-markdown");
     await expect(button).toBeVisible();
     await button.click();
-    await expect(page.getByTestId("copy-detail-markdown-status")).toHaveText(
-      "Markdownをコピーしました"
-    );
+    const status = page.getByTestId("copy-detail-markdown-status");
+    await expect(status).toHaveText("Markdownをコピーしました");
+    await expect(status).toHaveAttribute("role", "status");
+    await expect(status).toHaveAttribute("aria-live", "polite");
   });
 
   test("E2E-10: list markdown can be copied", async ({ page }) => {
@@ -126,8 +127,11 @@ test.describe("FX reports read-only E2E", () => {
     const button = page.getByTestId("copy-reports-markdown");
     await expect(button).toBeVisible();
     await button.click();
-    await expect(page.getByTestId("copy-reports-markdown-status")).toHaveText(
-      "一覧Markdownをコピーしました"
-    );
+    const status = page.getByTestId("copy-reports-markdown-status");
+    await expect(status).toHaveText("一覧Markdownをコピーしました");
+    await expect(status).toHaveAttribute("role", "status");
+    await expect(status).toHaveAttribute("aria-live", "polite");
+    // auto-dismiss: the status disappears after a few seconds
+    await expect(status).toHaveCount(0, { timeout: 8000 });
   });
 });

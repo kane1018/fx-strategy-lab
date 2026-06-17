@@ -1016,6 +1016,12 @@ E2E 実装前に **ツール選定・起動方法・テストデータ方針・E
 > （.report-actions / .report-copy-button / .report-copy-status、型 ReportMarkdownResponse を再利用）。
 > テスト: lib/reports.test.ts に fetchReportsMarkdown 5件追加（vitest 36 passed）、E2E に E2E-10 追加で
 > **10 passed**。read-only・危険導線ではない。
+>
+> **コピー結果 UX 改善（更新）**: 一覧/詳細のコピー結果メッセージ
+> （copy-reports-markdown-status / copy-detail-markdown-status）に `role="status"` /
+> `aria-live="polite"` / `aria-atomic="true"` を付与し、表示後 5 秒で自動消去（useEffect の
+> setTimeout＋clearTimeout、再コピー/アンマウントで cleanup）。文言・data-testid は不変、API/backend 変更なし。
+> E2E は role/aria 検証を E2E-09/10 に追加、E2E-10 で自動消去（status が消える）も確認。10 passed 継続。
 
 ### 16-1. E2E 導入の目的
 
