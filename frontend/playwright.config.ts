@@ -11,6 +11,9 @@ const FIXTURE_ROOT = "../frontend/e2e/fixtures/analysis_exports";
 export default defineConfig({
   testDir: "./e2e",
   testMatch: "**/*.spec.ts",
+  // The production smoke spec targets already-deployed public URLs and has its own
+  // config (playwright.prod.config.ts / `npm run e2e:prod`); keep it out of local E2E.
+  testIgnore: "**/production-smoke.spec.ts",
   fullyParallel: false,
   workers: 1,
   reporter: "list",

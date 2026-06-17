@@ -195,6 +195,9 @@ GitHub Actions の `FX Report E2E`（`.github/workflows/fx-report-e2e.yml`、tri
 `pull_request`）が backend pytest+ruff / frontend lint+test+build / Playwright E2E を実行します。
 secrets 不使用・本番デプロイなし・実 analysis_exports 非接触。
 
+デプロイ済みの公開 URL に対する read-only smoke 確認は `cd frontend && npm run e2e:prod`
+（手動 workflow `production-smoke.yml` あり）。詳細は [docs/PRODUCTION_SMOKE_TEST.md](docs/PRODUCTION_SMOKE_TEST.md)。
+
 現在地・デプロイ前確認は [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) と
 [docs/DEPLOYMENT_READINESS.md](docs/DEPLOYMENT_READINESS.md) を参照してください。
 公開可否・認証要否・公開禁止情報の方針は [docs/PUBLICATION_POLICY.md](docs/PUBLICATION_POLICY.md)

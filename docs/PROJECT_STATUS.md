@@ -75,8 +75,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 7. 次回 Codex / Claude Code に渡す作業候補（1つを選ぶ）
 
-- **初回デプロイは完了済み**（[DEPLOYMENT_RESULT.md](DEPLOYMENT_RESULT.md)）。次の運用候補: 認証/アクセス制御の
-  要否判断、Render free sleep 対策、独自ドメイン、実レポートの安全な配置方法。
+- **初回デプロイは完了済み**（[DEPLOYMENT_RESULT.md](DEPLOYMENT_RESULT.md)）。本番 read-only smoke は
+  `npm run e2e:prod`（[PRODUCTION_SMOKE_TEST.md](PRODUCTION_SMOKE_TEST.md)、手動 workflow あり）で自動確認可能。
+  次の運用候補: 認証/アクセス制御の要否判断、Render free sleep 対策、独自ドメイン、実レポートの安全な配置方法。
 - レポート閲覧 UI の CSV プレビュー（read-only・先頭N行・別 endpoint、安全制約厳守）。
 - CI の `push`(main) トリガ追加 or browser cache 最適化（workflow のみ変更）。
 
