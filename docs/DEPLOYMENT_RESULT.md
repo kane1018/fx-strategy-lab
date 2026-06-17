@@ -78,6 +78,15 @@ read-only / no-order を示すフラグ:
 - detail Safety: `real_order=false` / `private_api_used=false` / `api_key_used=false` /
   `gmo_readonly=true` / `gmo_order_enabled=false` / `no_order_execution=true`
 
+## 5b. 公開 UI（read-only 版に整合）
+
+- トップ `/` は **read-only 案内ランディング**（公開範囲の明示 ＋ `/reports` への誘導）。フル
+  TradingDashboard（バックテスト/ペーパー/シグナル/デモ注文）は **公開 UI に表示しない**ため、
+  read-only backend に無い API を叩いて `Failed to fetch` になる導線が無い。
+- `TradingDashboard` コンポーネント自体はローカル開発/将来用に残置（公開トップからは未参照）。
+- reports 機能（`/reports`・`/reports/[run_id]`・Markdown コピー）は従来どおり動作。E2E は landing 確認の
+  E2E-11 を追加し、計 **11 passed**。
+
 ## 6. 残課題
 
 - Render free instance は inactivity で **sleep** → 初回アクセスがコールドスタートで遅い可能性。

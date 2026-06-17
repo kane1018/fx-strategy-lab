@@ -157,7 +157,8 @@ breakout / Bollinger / market-structure（M5）、rsi_reversal M15（baseline / 
 [docs/fx_report_standardization_plan.md](docs/fx_report_standardization_plan.md) §11〜§16）。
 
 **初回デプロイ済み（read-only レポート閲覧のみ）**:
-- frontend (Vercel): `https://fx-strategy-lab.vercel.app`（`/reports`・`/reports/[run_id]`）
+- frontend (Vercel): `https://fx-strategy-lab.vercel.app`（トップ `/` は read-only 案内 → `/reports` へ誘導。
+  `/reports`・`/reports/[run_id]`。バックテスト/ペーパー/通知/注文系は公開版では未提供＝公開UIに導線なし）
 - backend (Render): `https://fx-strategy-lab.onrender.com`（entrypoint **`app.main_readonly:app`**、
   `/health` ＋ `/api/reports*` の GET のみ公開。注文系など他 API は非公開）
 - 実値・使用設定・疎通/安全確認結果は [docs/DEPLOYMENT_RESULT.md](docs/DEPLOYMENT_RESULT.md)。

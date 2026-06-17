@@ -134,4 +134,14 @@ test.describe("FX reports read-only E2E", () => {
     // auto-dismiss: the status disappears after a few seconds
     await expect(status).toHaveCount(0, { timeout: 8000 });
   });
+
+  test("E2E-11: landing page guides to read-only reports", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByTestId("landing-page")).toBeVisible();
+    await expect(page.getByTestId("landing-scope")).toContainText("read-only");
+    await expect(page.getByTestId("landing-unavailable")).toBeVisible();
+    await page.getByTestId("to-reports").click();
+    await expect(page).toHaveURL(/\/reports$/);
+    await expect(page.getByTestId("reports-page")).toBeVisible();
+  });
 });
