@@ -51,13 +51,26 @@ secrets 登録・課金設定を行わない。** 実際の Vercel/Render 画面
 | Runtime | Python |
 | Python Version | 3.11 系（ローカルと揃える。Render の env `PYTHON_VERSION=3.11.x`、または将来 `backend/runtime.txt`） |
 | Build Command | `pip install -r requirements.txt` |
-| Start Command | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Start Command | `uvicorn app.main_readonly:app --host 0.0.0.0 --port $PORT` |
 | Health Check Path | `/health` |
 | 環境変数 | §3 を参照 |
 
+> **重要（公開面の限定）**: 初回 backend は **`app.main:app` ではなく read-only 専用 entrypoint
+> `app.main_readonly:app`** を起動する。`app.main:app` は注文/paper/signals/bot/automation/broker の
+> POST 系 API も同じアプリに含むため、そのまま公開すると外部到達可能になる。`app.main_readonly:app` は
+> **`GET /health` と `GET /api/reports*` のみ**を公開し、CORS は GET/OPTIONS に限定する。
+> 公開 API: `GET /api/reports` / `GET /api/reports/{run_id}` / `GET /api/reports/markdown` /
+> `GET /api/reports/{run_id}/markdown` ＋ `GET /health`。注文系・broker 系は **include されないため 404**。
+> 既存 `app.main:app` はローカル開発・将来拡張用にそのまま残す（無変更）。
+
 注意点:
-- Start は Root Directory=`backend` 基準。`app.main:app` と `scripts.*` は `backend/` 直下のパッケージのため、
-  この working dir でのみ正しく解決する。
+- Start は Root Directory=`backend` 基準。`app.main_readonly:app` / `app.routers.reports` / `scripts.*` は
+  `backend/` 直下のパッケージのため、この working dir でのみ正しく解決する。
+- `app.main_readonly` は DB/automation lifespan を持たない（reports 閲覧は DB 不使用）。SQLite ファイルも作らない。
+- `ANALYSIS_EXPORTS_ROOT` の **相対パスは uvicorn の作業ディレクトリ基準**で解決される。Render の
+  Root Directory=`backend` なら `analysis_exports` は `backend/analysis_exports` を指す。確実を期すなら
+  **絶対パス**（例 `/opt/render/project/src/backend/analysis_exports`）を設定するか、Build でその相対先に
+  サンプルを生成する（§5）。
 - Render は `$PORT` を注入する。uvicorn は必ず `--host 0.0.0.0 --port $PORT` で待ち受ける。
 - **Render 無料プランは無操作で sleep** し、次アクセス時にコールドスタートで初回応答が遅い。許容できなければ
   有料プラン/別サービスを検討（方針 §0-3 の未確定事項）。
@@ -148,6 +161,8 @@ frontend は backend URL を、backend は frontend URL（CORS）を必要とす
 6. **ブラウザ DevTools**: Console に CORS / fetch エラーが無いこと。Network タブで `/api/reports*` が 200。
 7. **安全確認**: 画面・レスポンスに実注文/Private API/APIキー/secret/`.env` 値・CSV 本文が出ていないこと。
    注文/決済/自動売買などの危険導線が無いこと。
+8. **公開面の限定確認**: read-only entrypoint なら注文系などは未登録 → `GET https://<backend>/api/orders`
+   や `POST https://<backend>/api/reports` などが **404/405** で到達しないこと（`app.main_readonly:app` 起動の確認）。
 
 ---
 
@@ -156,7 +171,8 @@ frontend は backend URL を、backend は frontend URL（CORS）を必要とす
 | 症状 | 確認ポイント |
 | --- | --- |
 | frontend build 失敗 | Vercel Root Directory=`frontend` か。Node 20 か。ローカル `npm run build` が通るか |
-| backend が起動しない | Render Root Directory=`backend` / Start=`uvicorn app.main:app --host 0.0.0.0 --port $PORT` か |
+| backend が起動しない | Render Root Directory=`backend` / Start=`uvicorn app.main_readonly:app --host 0.0.0.0 --port $PORT` か |
+| 公開すべきでない API が見える | Start が `app.main:app` になっていないか（read-only は `app.main_readonly:app`） |
 | backend build 失敗 | `pip install -r requirements.txt`。Python 3.11 になっているか |
 | Node version 不一致 | Vercel の Node.js Version を 20 に |
 | CORS エラー | backend `FRONTEND_ORIGIN` が frontend オリジンと完全一致か。変更後に backend 再デプロイしたか |
@@ -179,7 +195,7 @@ frontend は backend URL を、backend は frontend URL（CORS）を必要とす
 - [ ] GitHub repo `kane1018/fx-strategy-lab` を選択。
 - [ ] Root Directory = `backend`。
 - [ ] Build Command = `pip install -r requirements.txt`（＋必要ならサンプル生成、§5）。
-- [ ] Start Command = `uvicorn app.main:app --host 0.0.0.0 --port $PORT`。
+- [ ] Start Command = `uvicorn app.main_readonly:app --host 0.0.0.0 --port $PORT`（**read-only entrypoint**。`app.main:app` は使わない）。
 - [ ] Health Check Path = `/health`。
 - [ ] Env: `FRONTEND_ORIGIN`（後で frontend URL）/ `ANALYSIS_EXPORTS_ROOT=analysis_exports` /
       `ENABLE_LIVE_TRADING=false` / `LOG_LEVEL=INFO` / `PYTHON_VERSION=3.11`。

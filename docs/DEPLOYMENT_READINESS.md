@@ -30,6 +30,10 @@ frontend ＋ SQLite ＋ read-only レポート API/UI）に基づく現実的な
 - **backend = Render（次点 Railway）**。理由: FastAPI/uvicorn の常駐プロセスを最小プランのコンテナ/PaaS で
   動かせる。Vercel は uvicorn 常駐に不向きなため frontend と backend は分離する。Cloud Run も技術的には可だが
   GCP 初期セットアップが重く、初回は Render を推奨。
+- **backend は read-only 専用 entrypoint `app.main_readonly:app` を起動**（`app.main:app` は公開しない）。
+  `app.main:app` には注文/paper/signals/bot/automation/broker の POST 系 API が含まれ外部到達可能になるため。
+  read-only entrypoint は `GET /health` ＋ `GET /api/reports*` のみ公開し、CORS を GET/OPTIONS に限定する
+  （実装 `backend/app/main_readonly.py`、手順 [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md) §2）。
 - frontend と backend は **別ホスト**になるため CORS / `NEXT_PUBLIC_API_BASE_URL` の設定が必須
   （§0-4 と後述「analysis_exports の扱い」「CORS / API 接続」）。
 - まだ決めきれない点: 独自ドメインの要否、Render 無料プランの sleep 挙動許容可否、レポート生成物の同期方法。

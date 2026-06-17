@@ -43,6 +43,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   `/api/reports`・`/api/reports/{run_id}`・`/api/reports/markdown`・`/api/reports/{run_id}/markdown`。
   `exports_root` はサーバー固定（`ANALYSIS_EXPORTS_ROOT`）、run_id 検証、CSV 本文非返却、
   503/400/404/422 のエラー方針。
+- **初回デプロイ用 read-only entrypoint**（`app/main_readonly.py`）: `GET /health` ＋ `GET /api/reports*`
+  のみを公開し、注文/paper/signals/bot/automation/broker は include しない（404）。CORS は GET/OPTIONS 限定。
+  既存 `app.main:app` は無変更。Render Start は `uvicorn app.main_readonly:app`（[DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md)）。
 - **read-only レポート UI**（`frontend/app/reports/`）: `/reports` 一覧（safety バッジ / ERROR 行 /
   状態表示 / Markdown コピー）、`/reports/[run_id]` 詳細（7セクション + Markdown コピー、aria-live 通知・自動消去）。
 - **E2E**: Playwright（Chromium）E2E-01〜10、fixture は `create_e2e_report_fixtures.py` で生成

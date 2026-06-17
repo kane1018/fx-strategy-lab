@@ -166,6 +166,9 @@ breakout / Bollinger / market-structure（M5）、rsi_reversal M15（baseline / 
   - `/reports/[run_id]` … 詳細（Overview / Safety / Metrics / Cost / Files / Summary / Final Decision ＋ Markdown コピー）
 - read-only ヘルパ純関数は `backend/scripts/fx_eval_common.py`（`list_report_index` / `report_detail` /
   `format_report_index_markdown` / `format_report_detail_markdown` / 各 `validate_*`）。
+- 初回デプロイは **read-only 専用 entrypoint `app.main_readonly:app`**（`/health` ＋ `/api/reports*` のみ公開、
+  CORS は GET/OPTIONS 限定）を使う。注文系など `app.main:app` の他 API は公開しない。詳細は
+  [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md)。ローカル開発は従来どおり `app.main:app`。
 
 ## フロントエンド検証 / CI
 
