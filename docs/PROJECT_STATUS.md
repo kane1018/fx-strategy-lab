@@ -53,7 +53,8 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
 - 認証 / アクセス制御（現状ローカル read-only 前提、認証なし）。
 - CI 最適化: 複数ブラウザ / matrix / sharding / Playwright browser cache / `push` トリガ拡張。
-- 本番デプロイ構成（[DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) 参照、未実施）。
+- 本番デプロイ: **初回デプロイ方針は確定済み**（read-only レポート閲覧に限定、frontend=Vercel /
+  backend=Render。[DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) §0）。**実デプロイは未実施**。
 - 戦略・検証の新フェーズ（標準化基盤の上での再設計。単純テクニカル単一構造は終了済み）。
 - 通知 / paper forward / 実 broker 連携（OANDA practice 以外）は明示承認が前提。
 
@@ -67,9 +68,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 7. 次回 Codex / Claude Code に渡す作業候補（1つを選ぶ）
 
+- **初回デプロイ準備**（実デプロイ手前まで）: [DEPLOYMENT_READINESS.md](DEPLOYMENT_READINESS.md) §12 の
+  Codex プロンプト案に従い、Vercel(frontend)/Render(backend) のデプロイ設定・env 整理・サンプルレポート配置・
+  疎通確認手順を最小で用意（実反映・secrets 登録は手元で行う）。
 - レポート閲覧 UI の CSV プレビュー（read-only・先頭N行・別 endpoint、安全制約厳守）。
 - CI の `push`(main) トリガ追加 or browser cache 最適化（workflow のみ変更）。
-- 本番デプロイの最小 PoC 計画 docs 化（DEPLOYMENT_READINESS の方針を1つに確定。実デプロイはしない）。
 
 ## 8. 安全制約（全フェーズ共通）
 
