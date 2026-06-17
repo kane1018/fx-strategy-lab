@@ -1,0 +1,73 @@
+name: FX Report E2E
+
+# Read-only CI for the FX report viewer (docs §16-17). Runs backend pytest/ruff,
+# frontend lint/test/build, and the Playwright read-only E2E (E2E-01〜10, Chromium).
+# No secrets, no real broker access, no real analysis_exports, no deploy. The E2E uses
+# generated fixtures via the existing `npm run e2e` (playwright.config.ts webServer).
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  fx-report-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      # Install backend deps into backend/.venv so the paths in playwright.config.ts
+      # (which calls backend/.venv/bin/python for fixtures + uvicorn) work unchanged.
+      - name: Install backend dependencies
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/python -m pip install --upgrade pip
+          backend/.venv/bin/pip install -r backend/requirements.txt
+
+      - name: Backend tests (pytest + ruff)
+        working-directory: backend
+        run: |
+          .venv/bin/python -m pytest
+          .venv/bin/ruff check .
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Frontend checks (lint + test + build)
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm run test
+          npm run build
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      # `npm run e2e` starts the fixture generator, the backend (ANALYSIS_EXPORTS_ROOT
+      # -> generated fixtures) and the Next dev server via the existing webServer config.
+      - name: Playwright E2E (Chromium)
+        working-directory: frontend
+        run: npm run e2e
+
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

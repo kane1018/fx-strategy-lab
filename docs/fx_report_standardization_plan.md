@@ -1353,9 +1353,20 @@ conflict run は warnings 側で1フラグだけ食い違わせ、incomplete run
 
 ### 16-17. E2E CI 計画
 
-ローカルで通っている `npm run e2e`（E2E-01〜10、Chromium）を将来 GitHub Actions 等の CI で安全に
-再現するための方針・手順・制約・MVP 範囲を確定する。**本節は docs のみ**で、`.github/workflows/*` の
-作成・package 追加・E2E/コード変更は含まない。CI 導入は次段でユーザー承認後に行う。
+ローカルで通っている `npm run e2e`（E2E-01〜10、Chromium）を GitHub Actions の CI で安全に
+再現するための方針・手順・制約・MVP 範囲を確定する。
+
+> **実装状況（更新）**: workflow は **実装済み**（ユーザー承認のうえ追加）。
+> ファイル: `.github/workflows/fx-report-e2e.yml`。workflow 名「FX Report E2E」/ job「fx-report-e2e」/
+> trigger: `workflow_dispatch` ＋ `pull_request`（push は MVP 外）/ runs-on: ubuntu-latest /
+> Node 20（actions/setup-node, npm cache）/ Python 3.11（actions/setup-python, pip cache）。
+> backend 依存は `backend/.venv` を作って `requirements.txt` を install（playwright.config.ts が
+> backend/.venv/bin/python を呼ぶため、設定を変えずに済むよう CI でも .venv を用意）。
+> 実行: backend `pytest`＋`ruff check .` → frontend `npm ci`→`lint`→`test`→`build` →
+> `npx playwright install --with-deps chromium` → `npm run e2e`。artifacts は
+> `if: failure()` で playwright-report / test-results を upload（成功時は保存しない）。
+> secrets 不使用・実 analysis_exports 非接触（fixture は webServer 内で生成）・本番デプロイなし。
+> Playwright browser cache は未使用。playwright.config.ts / E2E spec / アプリコードは無変更。
 
 #### 16-17-1. CI 化の目的
 
