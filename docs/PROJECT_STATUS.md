@@ -85,3 +85,7 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 実注文・GMO Private API・APIキー/secret 表示・`.env` 変更・OANDA 経路変更・RiskManager 変更・
 注文系変更・DB コミット・実 analysis_exports 読込（テスト/CI）・新戦略追加・追加バックテスト・
 本番デプロイは、明示承認なしに行わない。
+
+公開可否・認証要否・公開禁止情報の方針は [PUBLICATION_POLICY.md](PUBLICATION_POLICY.md) を単一参照点とする
+（現状の read-only サンプル公開は暫定可。§2 の条件に触れる前＝実データ/実取引/Private API/設定画面の公開前に
+認証/アクセス制御の必須化を再判断）。

@@ -197,5 +197,7 @@ secrets 不使用・本番デプロイなし・実 analysis_exports 非接触。
 
 現在地・デプロイ前確認は [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) と
 [docs/DEPLOYMENT_READINESS.md](docs/DEPLOYMENT_READINESS.md) を参照してください。
+公開可否・認証要否・公開禁止情報の方針は [docs/PUBLICATION_POLICY.md](docs/PUBLICATION_POLICY.md)
+（現状の read-only サンプル公開は暫定可。実データ・実取引・Private API・設定画面へ進む前に認証要否を再判断）。
 
 バックテスト結果は将来の利益を保証しません。
