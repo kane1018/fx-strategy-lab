@@ -60,8 +60,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   Public 由来の market data 正規化 → signal → **virtual（never-sent）order** → virtual position/PnL →
   safety → ShadowEvent の純粋ロジック（ネットワーク/broker/Private API/APIキーなし、注文送信関数なし）。
 - 本番 API（`app.main_readonly:app`）には未追加・公開 UI にも未露出（local-only）。
-- 設計と次フェーズ（2B 実 Public API / 2C shadow log / 3 Private read-only）は
+- 設計と次フェーズ（2C shadow log / 3 Private read-only）は
   [PHASE2_SHADOW_TRADING_PLAN.md](PHASE2_SHADOW_TRADING_PLAN.md)。
+- **Phase 2B（実装済み・local-only）**: GMO Public read-only adapter `app/shadow/gmo_public.py`
+  （`GmoPublicMarketDataClient`）＋ CLI `scripts/fetch_gmo_public_market_data.py`。
+  base `forex-api.coin.z.com/public` の `/v1/status|ticker|klines` を GET し Ticker/Candle に正規化。
+  APIキー不要・Private 禁止・注文なし・保存なし・本番未公開。仕様 [GMO_PUBLIC_API_PLAN.md](GMO_PUBLIC_API_PLAN.md)。
 
 ## 5. 未実装 / 次フェーズ候補
 
