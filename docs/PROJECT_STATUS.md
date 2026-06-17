@@ -54,6 +54,15 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 - **E2E**: Playwright（Chromium）E2E-01〜10、fixture は `create_e2e_report_fixtures.py` で生成
   （実 analysis_exports 非使用）。**CI**: GitHub Actions で backend/frontend/E2E を実行。
 
+## 4b. Phase 2A（shadow 検証土台・local-only）
+
+- `backend/app/shadow/`（models / market_data / service）と `app/tests/test_shadow_trading.py` を追加。
+  Public 由来の market data 正規化 → signal → **virtual（never-sent）order** → virtual position/PnL →
+  safety → ShadowEvent の純粋ロジック（ネットワーク/broker/Private API/APIキーなし、注文送信関数なし）。
+- 本番 API（`app.main_readonly:app`）には未追加・公開 UI にも未露出（local-only）。
+- 設計と次フェーズ（2B 実 Public API / 2C shadow log / 3 Private read-only）は
+  [PHASE2_SHADOW_TRADING_PLAN.md](PHASE2_SHADOW_TRADING_PLAN.md)。
+
 ## 5. 未実装 / 次フェーズ候補
 
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
