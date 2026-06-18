@@ -47,6 +47,7 @@ class ShadowTrader:
             if self.units > self.max_units:
                 self.halted = True
                 halt_reason = f"requested units {self.units} exceed max_units {self.max_units}"
+                self.halt_reason = halt_reason
             else:
                 order = VirtualOrder(side=signal.side, units=self.units, price=ticker.ask)
                 self.position.apply_fill(order)

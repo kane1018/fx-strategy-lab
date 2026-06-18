@@ -25,3 +25,6 @@ frontend/playwright/.cache/
 backend/.coverage
 # Locally generated analysis output (timestamped run_id dirs; regenerate via scripts.paper_analyze_gmo)
 analysis_exports/
+# Locally generated shadow-run output (Phase 2C; never committed)
+shadow_exports/
+backend/shadow_exports/

@@ -66,6 +66,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   （`GmoPublicMarketDataClient`）＋ CLI `scripts/fetch_gmo_public_market_data.py`。
   base `forex-api.coin.z.com/public` の `/v1/status|ticker|klines` を GET し Ticker/Candle に正規化。
   APIキー不要・Private 禁止・注文なし・保存なし・本番未公開。仕様 [GMO_PUBLIC_API_PLAN.md](GMO_PUBLIC_API_PLAN.md)。
+- **Phase 2C（実装済み・local-only）**: local shadow run runner（`app/shadow/signals.py` の `momentum_signal`
+  ＝demo・収益性判断ではない / `app/shadow/session.py` の `run_shadow_session` / CLI
+  `scripts/run_shadow_session.py` `--source mock|gmo-public --steps N`）。candles→signal→ShadowTrader→
+  events.jsonl/summary.json/metadata.json を `shadow_exports/<run_id>/`（**gitignore・commit 禁止**）に保存。
+  注文なし・Private/APIキー/.env 不要。手順 [SHADOW_RUNBOOK.md](SHADOW_RUNBOOK.md)。
 
 ## 5. 未実装 / 次フェーズ候補
 
