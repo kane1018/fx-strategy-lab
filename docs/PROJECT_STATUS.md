@@ -71,6 +71,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   `scripts/run_shadow_session.py` `--source mock|gmo-public --steps N`）。candles→signal→ShadowTrader→
   events.jsonl/summary.json/metadata.json を `shadow_exports/<run_id>/`（**gitignore・commit 禁止**）に保存。
   注文なし・Private/APIキー/.env 不要。手順 [SHADOW_RUNBOOK.md](SHADOW_RUNBOOK.md)。
+- **Phase 2D（実装済み・local-only）**: shadow run 集計 CLI（`app/shadow/aggregate.py` ＋
+  `scripts/summarize_shadow_runs.py` `--input-root shadow_exports --format markdown|csv --out <dir>`）。
+  複数 summary.json を合計/by_source・symbol・interval・date 集計し **safety 違反検出**（違反時 exit 2）。
+  入出力とも `shadow_exports/`（gitignore・commit 禁止）。ネットワーク/APIキー不要。安全性の継続確認が主目的
+  （収益性判断は未充足）。
 
 ## 5. 未実装 / 次フェーズ候補
 

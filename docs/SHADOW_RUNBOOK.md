@@ -61,6 +61,31 @@ last_price / data_points / halted / halt_reason / safety / created_at。
 - 注文送信関数なし。`VirtualOrder(real_order=True)` は拒否。`units > max_units` で halt（以降ポジション不変）。
 - gmo-public は Public GET のみ・認証ヘッダ無し・Private フォールバックなし・取得失敗は明示エラー。
 
+## 6b. 複数 run の集計（Phase 2D・local-only）
+
+`shadow_exports/` 配下の複数 run の `summary.json` を読み込み、合計/グループ集計・safety 違反検出を行う。
+ネットワーク不要・APIキー不要・実注文なし。入力も出力も `shadow_exports/`（gitignore・**commit 禁止**）。
+
+```bash
+cd backend
+python -m scripts.summarize_shadow_runs --help
+# 標準出力に Markdown レポート
+python -m scripts.summarize_shadow_runs --input-root shadow_exports --format markdown
+# 標準出力に runs CSV
+python -m scripts.summarize_shadow_runs --input-root shadow_exports --format csv
+# ファイル出力（aggregate.json/.md, runs.csv, by_symbol.csv, by_date.csv）
+python -m scripts.summarize_shadow_runs --input-root shadow_exports --out shadow_exports/aggregate
+```
+
+- 集計: runs_count / sources / symbols / intervals / total_* (steps/events/orders/buy/sell/flat) /
+  total_final_unrealized_pnl / halted_runs_count / max_abs_units_overall / created_at 範囲 /
+  by_source・by_symbol・by_interval・by_date。
+- **safety 違反検出**: 各 run の safety が read-only 期待値（real_order=false / private_api_used=false /
+  api_key_used=false / no_order_execution=true / live_trading_environment_enabled=false /
+  gmo_order_enabled=false）を満たさないと `safety_violations` に記録し、CLI は警告＋exit code 2。
+- 0 件・壊れた summary（JSON 破損/非オブジェクト）はスキップして件数を報告。入力 root 不在は明示エラー。
+- 注: この集計は**安全性の継続確認が主目的**で、**収益性判断にはまだ不十分**（SignalFn は demo）。
+
 ## 7. 次フェーズ
 
 - Phase 2D / 2C-2: 1〜2 週間の注文なし運用ログ、run 結果の reports 化、複数日集計、より安全な停止条件。
