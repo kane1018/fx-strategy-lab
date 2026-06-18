@@ -36,6 +36,17 @@ npm run dev
 詳しい手順は [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) と
 [docs/SAFETY.md](docs/SAFETY.md) を参照してください。
 
+## Codexで作業する場合
+
+固定ルールの [AGENTS.md](AGENTS.md) と、現在の引き継ぎ
+[docs/CODEX_HANDOFF.md](docs/CODEX_HANDOFF.md) を最初に確認してください。現在地と安全な運用の詳細は以下です。
+
+- [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)
+- [docs/SHADOW_RUNBOOK.md](docs/SHADOW_RUNBOOK.md)
+- [docs/PUBLICATION_POLICY.md](docs/PUBLICATION_POLICY.md)
+- [docs/GMO_PUBLIC_API_PLAN.md](docs/GMO_PUBLIC_API_PLAN.md)
+- [docs/PHASE2_SHADOW_TRADING_PLAN.md](docs/PHASE2_SHADOW_TRADING_PLAN.md)
+
 ## 現在の接続範囲
 
 - 市場データ: バックテスト等は再現可能な合成OHLC、Phase 4はOANDA practice価格
