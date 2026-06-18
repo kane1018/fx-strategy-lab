@@ -82,8 +82,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **優先候補: Phase 2D-2** — gmo-public shadow run の注文なし・local-only 運用手順と蓄積確認。
-  実行上限を設け、生成物は `shadow_exports/` から git add しない。収益性判断や次フェーズ移行は含めない。
+- **進行中: Phase 2D-2** — gmo-public shadow run の注文なし・local-only運用ガイドを整備済み。
+  次は1〜2週間の手動ログ蓄積と日別集計確認。生成物は `shadow_exports/` からgit addせず、
+  収益性判断や次フェーズ移行は含めない（[SHADOW_RUNBOOK.md](SHADOW_RUNBOOK.md)）。
 
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
 - 認証 / アクセス制御（現状ローカル read-only 前提、認証なし）。

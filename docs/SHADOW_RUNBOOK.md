@@ -1,35 +1,67 @@
-# Shadow Run Runbook（Phase 2C・local-only）
+# Shadow Run Runbook（Phase 2C〜2D-2・local-only）
 
 GMO Public（または mock）の相場データで **注文なし**の shadow run をローカル実行し、events/summary を
 保存する手順。実注文・実資金・Private API・APIキー・`.env` は使わない。出力 `shadow_exports/` は
 **コミット禁止**（gitignore 済み）。設計は [PHASE2_SHADOW_TRADING_PLAN.md](PHASE2_SHADOW_TRADING_PLAN.md)、
 Public API 仕様は [GMO_PUBLIC_API_PLAN.md](GMO_PUBLIC_API_PLAN.md)。
 
-## 1. Phase 2C の範囲
+## 1. 対象範囲
 
 - local shadow run CLI（mock / gmo-public）、最小 SignalFn、shadow log 保存、summary 集計、offline テスト。
+- Phase 2D-2 では、1〜2週間の手動運用でログ品質・継続実行性・safetyを確認する。
 - 本番公開なし（`app.main_readonly:app` に追加しない）。注文なし・Private API/APIキー禁止。
+- 収益性評価、SignalFn 開発、パラメータ最適化、自動実行、reports/UI公開は行わない。
 
-## 2. 実行方法
+## 2. 実行前チェック
 
 ```bash
-cd backend
-
-# ヘルプ
-python -m scripts.run_shadow_session --help
-
-# mock（ネットワーク不要・deterministic）
-python -m scripts.run_shadow_session --source mock --symbol USD_JPY --interval M1 --steps 20
-
-# GMO Public（read-only・認証不要。市場時間/日付により失敗しうる。失敗時は mock を使う）
-python -m scripts.run_shadow_session --source gmo-public --symbol USD_JPY \
-    --interval M1 --date 20260618 --steps 5
+cd /Users/naoikansui/Desktop/トレード
+git branch --show-current
+git status --short
+git check-ignore backend/shadow_exports
+git ls-files | grep shadow_exports || true
 ```
 
-- `--steps` で必ず上限を持つ（無限ループなし）。`--units` / `--max-units` で virtual ロットと停止閾値。
-- `--out-root` 既定 `shadow_exports`（=`backend/shadow_exports/`）。**生成物は git add しない**。
+- branch と既存差分を把握し、`backend/shadow_exports/` が ignore 対象で、追跡ファイルがないことを確認する。
+- gmo-public は認証不要の Public GET のみ。Private API、APIキー、`.env`、注文送信は使わない。
+- 出力はローカル限定であり、実 API レスポンスの生データは保存しない。
 
-## 3. 出力ファイル構成
+## 3. mock run（事前・切り分け用）
+
+ネットワークを使わない deterministic run。初回確認、CLI変更後、gmo-public失敗時の切り分けに使う。
+
+```bash
+cd /Users/naoikansui/Desktop/トレード/backend
+
+# ヘルプ
+python3 -m scripts.run_shadow_session --help
+
+python3 -m scripts.run_shadow_session --source mock --symbol USD_JPY --interval M1 --steps 20
+```
+
+mockが成功してgmo-publicだけ失敗する場合は、市場時間、日付、Public API、ネットワークを確認する。
+Private APIやAPIキーへ進んではならない。
+
+## 4. gmo-public run（手動・1回ずつ）
+
+```bash
+cd /Users/naoikansui/Desktop/トレード/backend
+python3 -m scripts.run_shadow_session --source gmo-public --symbol USD_JPY \
+    --interval M1 --date YYYYMMDD --steps 5
+```
+
+- `--date`: UTC基準の `YYYYMMDD`。省略時はUTC当日。取引日の指定を基本とし、未来日や形式違いを避ける。
+- `--symbol`: GMO形式の `BASE_QUOTE`。暫定運用は `USD_JPY` を基本とする。
+- `--interval`: 内部表記 `M1` / `M5` / `M15` / `M30` / `H1` / `H4` / `D`、または対応する
+  GMO表記 `1min` / `5min` / `15min` / `30min` / `1hour` / `4hour` / `1day`。
+- `--steps`: 必ず正の上限を指定する。初回は5、通常は5〜50を目安とし、無限実行しない。
+- `--units` / `--max-units`: virtual数量と停止閾値。初期値を基本とし、収益最適化に使わない。
+- `--out-root`: 既定 `shadow_exports`（=`backend/shadow_exports/`）。別の追跡対象パスへ変更しない。
+
+市場時間、指定日、klines提供状況、rate limit、ネットワークにより失敗しうる。失敗時は原因を記録して
+そのrunを終了し、必要ならmockで切り分ける。認証付き経路への切替、APIキー追加、無限retryは禁止。
+
+## 5. 出力ファイル構成
 
 ```text
 shadow_exports/<run_id>/
@@ -41,19 +73,47 @@ shadow_exports/<run_id>/
 - run_id 例: `YYYYMMDD_HHMMSS_shadow_USD_JPY_mock`。
 - **実 API レスポンスの生データは保存しない**（内部正規化済みの event/summary のみ）。
 
-## 4. summary の主項目
+## 6. summary の主項目
 
 run_id / source / symbol / interval / steps_requested / steps_executed / events_count /
 virtual_orders_count / buy_count / sell_count / flat_count / max_abs_units /
 final_position_side / final_position_units / final_average_price / final_unrealized_pnl /
 last_price / data_points / halted / halt_reason / safety / created_at。
 
-## 5. SignalFn について
+## 7. SignalFn について
 
 `app/shadow/signals.py` の `momentum_signal`（last close > prev → buy、< → sell、== → flat）は
 **動作確認用の最小シグナルであり、収益性判断のための戦略ではない**。パラメータ最適化や戦略研究はしない。
 
-## 6. safety 制約
+## 8. 集計とsafety確認
+
+run後は毎回Markdown集計を実行する。数日分をファイル出力する場合も出力先は必ず
+`shadow_exports/` 配下に置く。
+
+```bash
+cd /Users/naoikansui/Desktop/トレード/backend
+python3 -m scripts.summarize_shadow_runs --help
+python3 -m scripts.summarize_shadow_runs --input-root shadow_exports --format markdown
+python3 -m scripts.summarize_shadow_runs --input-root shadow_exports --format csv
+python3 -m scripts.summarize_shadow_runs --input-root shadow_exports --format csv \
+    --out shadow_exports/aggregate
+```
+
+集計では合計に加え、source / symbol / interval / date別のrun数、注文なしのvirtual集計、haltを確認できる。
+`safety_violation_runs_count` が **0** であり、各summaryのsafetyが次を満たすことを確認する。
+
+- `real_order=false`
+- `private_api_used=false`
+- `api_key_used=false`
+- `no_order_execution=true`
+- `live_trading_environment_enabled=false`
+- `gmo_order_enabled=false`
+
+1件でもsafety violationがある場合、CLIは警告してexit code 2を返す。その日の運用を直ちに止め、
+`safety_violations` のrun_id / field / value / expectedを確認する。該当runを安全扱いに書き換えず、
+原因が解消してofflineテストと安全レビューが完了するまでgmo-public runを再開しない。
+
+補足する構造上の制約:
 
 - 各 event/summary に `shadow_safety()`: `real_order=false` / `private_api_used=false` /
   `api_key_used=false` / `no_order_execution=true` / `live_trading_environment_enabled=false` /
@@ -61,33 +121,48 @@ last_price / data_points / halted / halt_reason / safety / created_at。
 - 注文送信関数なし。`VirtualOrder(real_order=True)` は拒否。`units > max_units` で halt（以降ポジション不変）。
 - gmo-public は Public GET のみ・認証ヘッダ無し・Private フォールバックなし・取得失敗は明示エラー。
 
-## 6b. 複数 run の集計（Phase 2D・local-only）
+## 9. よくある失敗と対処
 
-`shadow_exports/` 配下の複数 run の `summary.json` を読み込み、合計/グループ集計・safety 違反検出を行う。
-ネットワーク不要・APIキー不要・実注文なし。入力も出力も `shadow_exports/`（gitignore・**commit 禁止**）。
+| 症状 | 確認・対処 |
+| --- | --- |
+| 市場時間外・メンテナンス | そのrunを終了し、取引時間内または既知の取引日で後ほど手動再実行する。mockでCLI自体を確認する。 |
+| `--date` 指定ミス | UTC基準の8桁 `YYYYMMDD`、実在する過去または当日の取引日か確認する。 |
+| `no klines` | symbol / interval / dateを確認する。データがない日はスキップし、認証付きAPIへ切り替えない。 |
+| interval不正 | `M1/M5/M15/M30/H1/H4/D` または対応するGMO表記を使う。 |
+| rate limit（HTTP 429 / `ERR-5003`） | 連続実行を止め、時間を置いて1回だけ手動再実行する。retryループを追加しない。 |
+| network timeout / parse error | 接続状況とPublic APIの稼働を確認し、そのrunを終了する。mockでローカル処理を切り分ける。 |
+| input root不在 | backendから実行しているか、`shadow_exports/` が存在するか確認する。先にmock runを1回実行する。 |
+| safety violation | 直ちに当日の運用を停止し、§8の手順で原因確認・offlineテスト・安全レビューを行う。 |
+| `.venv/bin/pytest` が起動しない | 移動前パスの古いshebangが原因なら `python3 -m pytest -q` を使う。`.env`やコードで回避しない。 |
+
+失敗をPrivate API、APIキー、`.env`、実注文で解決しようとしてはならない。
+
+## 10. 1〜2週間の暫定運用ルール
+
+1. 最初は `USD_JPY`、intervalは `M1` または `M5`、stepsは5〜50に固定する。
+2. 1日1〜3回、コマンドを人が確認して手動実行する。cron / schedule / 常駐botは使わない。
+3. 各run後にsummarizeを実行し、`safety_violation_runs_count=0` とhalt / broken summaryを確認する。
+4. 日付・symbol・interval・steps、成功/失敗理由だけを運用メモに残す。secretや生レスポンスは残さない。
+5. 出力はローカルの `backend/shadow_exports/` のみに蓄積し、commitもreports/UI公開もしない。
+6. 目的は継続動作、ログ品質、集計可能性、安全性の確認であり、PnLを収益性の根拠にしない。
+7. safety violationが1件でも出た日、または予期しない出力が出た日はそこで停止する。
+
+## 11. commit禁止の最終確認
 
 ```bash
-cd backend
-python -m scripts.summarize_shadow_runs --help
-# 標準出力に Markdown レポート
-python -m scripts.summarize_shadow_runs --input-root shadow_exports --format markdown
-# 標準出力に runs CSV
-python -m scripts.summarize_shadow_runs --input-root shadow_exports --format csv
-# ファイル出力（aggregate.json/.md, runs.csv, by_symbol.csv, by_date.csv）
-python -m scripts.summarize_shadow_runs --input-root shadow_exports --out shadow_exports/aggregate
+cd /Users/naoikansui/Desktop/トレード
+git status --short
+git check-ignore backend/shadow_exports
+git ls-files | grep shadow_exports || true
+git diff --cached --name-only
 ```
 
-- 集計: runs_count / sources / symbols / intervals / total_* (steps/events/orders/buy/sell/flat) /
-  total_final_unrealized_pnl / halted_runs_count / max_abs_units_overall / created_at 範囲 /
-  by_source・by_symbol・by_interval・by_date。
-- **safety 違反検出**: 各 run の safety が read-only 期待値（real_order=false / private_api_used=false /
-  api_key_used=false / no_order_execution=true / live_trading_environment_enabled=false /
-  gmo_order_enabled=false）を満たさないと `safety_violations` に記録し、CLI は警告＋exit code 2。
-- 0 件・壊れた summary（JSON 破損/非オブジェクト）はスキップして件数を報告。入力 root 不在は明示エラー。
-- 注: この集計は**安全性の継続確認が主目的**で、**収益性判断にはまだ不十分**（SignalFn は demo）。
+- `git check-ignore` が `backend/shadow_exports` を示し、`git ls-files` は何も返さないことを確認する。
+- `shadow_exports/`、`shadow_exports/aggregate/`、実APIレスポンス、集計CSV/JSON/Markdownはgit addしない。
+- 既存のローカル生成物は勝手に削除・移動・編集しない。
 
-## 7. 次フェーズ
+## 12. Phase 2D-2の完了判断
 
-- Phase 2D / 2C-2: 1〜2 週間の注文なし運用ログ、run 結果の reports 化、複数日集計、より安全な停止条件。
-- Phase 3: Private API の **read-only** 設計（残高/建玉の参照のみ・まだ注文なし）。APIキーの扱いは
-  [PUBLICATION_POLICY.md](PUBLICATION_POLICY.md) の基準＋明示承認のうえ別フェーズ管理。
+- 運用ガイド整備は完了。実運用の完了判断には、1〜2週間の手動ログと日別集計の確認が別途必要。
+- 期間中のsafety violation、壊れたsummary、継続的な取得失敗を整理してから停止条件をレビューする。
+- 次フェーズへ自動的に進まない。Private API、実資金、実注文、本番公開は必ず別タスク・事前レビューとする。
