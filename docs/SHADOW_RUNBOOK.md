@@ -128,6 +128,7 @@ python3 -m scripts.summarize_shadow_runs --input-root shadow_exports --format cs
 | 市場時間外・メンテナンス | そのrunを終了し、取引時間内または既知の取引日で後ほど手動再実行する。mockでCLI自体を確認する。 |
 | `--date` 指定ミス | UTC基準の8桁 `YYYYMMDD`、実在する過去または当日の取引日か確認する。 |
 | `no klines` | symbol / interval / dateを確認する。データがない日はスキップし、認証付きAPIへ切り替えない。 |
+| ticker/kline skew reject | `--enable-shadow-risk`時、現在tickerとBUY/SELL対象klineのtimestamp差が大きい場合はcandidate生成前に`NO_TRADE`へ倒れる。これは安全fail closedであり、skew閾値を安易に緩めない。直近足で再確認する場合も1回ずつ手動で行い、生成物はcommitしない。 |
 | interval不正 | `M1/M5/M15/M30/H1/H4/D` または対応するGMO表記を使う。 |
 | rate limit（HTTP 429 / `ERR-5003`） | 連続実行を止め、時間を置いて1回だけ手動再実行する。retryループを追加しない。 |
 | network timeout / parse error | 接続状況とPublic APIの稼働を確認し、そのrunを終了する。mockでローカル処理を切り分ける。 |
