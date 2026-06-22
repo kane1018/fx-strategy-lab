@@ -381,3 +381,28 @@ Phase 2E-5では、gmo-public risk/audit runを闇雲に増やさず、次の方
 - HOLD、skew、wide spread、stale、fetch error fail closedは保留/追加観察に分類する。
 - safety violation、broken summary、raw response保存、Private/APIキー/broker/実注文痕跡、相関不整合は停止条件にする。
 - Phase 2FはPublic shadow risk/auditのレビュー・安定性評価・運用計画であり、Private APIや実注文ではない。
+
+## 15. Phase 2E-5 1回目レビュー結果
+
+Phase 2E-5 1回目 run `20260622_103430_shadow_USD_JPY_gmo-public` をレビューした。
+
+結果:
+
+- `REAL_PUBLIC_BID_ASK` 2件。
+- candidate 2件。
+- `ALLOW_SHADOW` 1件。
+- `REJECT_SHADOW` 1件。
+- REJECT理由は `cooldown_active`。
+- ALLOW時のみvirtual result生成。
+- REJECT時virtual resultなし。
+- ticker/kline skew 2件は `NO_TRADE` へ安全に倒れた。
+- safety violation、broken/skipped、invalid risk row、raw response保存、Private API/APIキー/broker/実注文はなし。
+- 同日2回目は1日1回ルールにより未実行で停止。
+
+短期3回確認の進捗:
+
+- 1回目: 完了。
+- 2回目: 同日未実行で停止。別日に1回だけ実行する。
+- 3回目: 未実行。
+
+詳細は [PHASE2E5_RUN1_REVIEW_AND_NEXT_RUN_PREP.md](PHASE2E5_RUN1_REVIEW_AND_NEXT_RUN_PREP.md)。

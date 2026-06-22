@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 2E-5 1回目レビュー / 2回目実行前整理完了** — run
+  `20260622_103430_shadow_USD_JPY_gmo-public` をレビューし、`REAL_PUBLIC_BID_ASK` 2件、candidate 2件、
+  `ALLOW_SHADOW` 1件、`REJECT_SHADOW` 1件、ALLOW時のみvirtual result、REJECT時virtual resultなしを確認した。
+  REJECT理由は `cooldown_active`。ticker/kline skew 2件は`NO_TRADE`へ安全に倒れた。safety violation /
+  broken / invalid risk row / raw response保存 / Private API / APIキー / broker / 実注文はなし。同日2回目は
+  1日1回ルールにより未実行で停止し、次は別日に2回目を1回だけ行う。詳細は
+  [PHASE2E5_RUN1_REVIEW_AND_NEXT_RUN_PREP.md](PHASE2E5_RUN1_REVIEW_AND_NEXT_RUN_PREP.md)。
 - **Phase 2E-5 gmo-public risk/audit継続確認計画 設計完了** — Phase 2E-4Rで確認済みの
   `REAL_PUBLIC_BID_ASK` candidate、`ALLOW_SHADOW`、virtual result、ID相関を前提に、次回以降の
   gmo-public risk/audit runをmanual onlyで継続確認する計画を整理した。初期条件は
