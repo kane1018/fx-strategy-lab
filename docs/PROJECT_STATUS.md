@@ -82,7 +82,7 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Phase 2E-2 local-only risk/audit最小統合完了** — `app/shadow/`内にimmutable
+- **Phase 2E-2.5 session統合監査完了（B判定）** — `app/shadow/`内にimmutable
   OrderCandidate、RiskPolicy、pure risk評価、sticky KillSwitchState、deterministic ID、fail-closed JSONL writerを
   追加した。Phase 2E-1.5監査のD-1〜D-4に対し、spread provenance必須化、malformed inputのfail closed、
   typed audit schema/root containment、unsafe risk row summary検出を実装した。集計はversioned schema validatorで
@@ -93,7 +93,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   session ownership、pre-gate、監査ログ失敗時exit 2、STOPファイル、candidate/decision/virtual result相関、
   summary互換、integration test方針を整理した。実装ではSTOP pre-gate、BUY/SELL candidate、pure risk evaluate、
   typed audit JSONL、REJECT時virtual result抑止、audit失敗時exit code 2、summary/metadata risk fields、
-  virtual_result_log相関集計を追加した。設計は
+  virtual_result_log相関集計を追加した。Phase 2E-2.5監査ではdefault legacy互換、risk有効run、STOP/audit failure、
+  candidate/decision/virtual result相関、summarize互換、禁止import境界を確認し、修正必須事項なしと判定した。
+  監査結果は [PHASE2E2_INTEGRATION_AUDIT.md](PHASE2E2_INTEGRATION_AUDIT.md)。設計は
   [PHASE2E2_SESSION_INTEGRATION_DESIGN.md](PHASE2E2_SESSION_INTEGRATION_DESIGN.md)、再監査結果は
   [PHASE2E1H_REAUDIT.md](PHASE2E1H_REAUDIT.md)。
   設計は [PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md) と

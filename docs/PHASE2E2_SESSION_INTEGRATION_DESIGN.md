@@ -521,3 +521,19 @@ Phase 2E-2のlocal-only risk/audit最小統合を実施した。
 
 今回もbackend公開API、`main_readonly.py`、frontend、Render/Vercel、Private API、APIキー、broker、実注文、
 実資金、自動売買には接続していない。
+
+## 20. Phase 2E-2.5監査結果
+
+Phase 2E-2統合結果のレビュー・安全監査を
+[PHASE2E2_INTEGRATION_AUDIT.md](PHASE2E2_INTEGRATION_AUDIT.md) に整理した。
+
+監査結果:
+
+- 総合判定はB。
+- default legacy互換、`--enable-shadow-risk`限定有効化、STOP/audit failure時exit code 2、
+  synthetic spread reject、explicit bid/ask allow、REJECT時virtual resultなし、candidate/decision/virtual result相関、
+  summarize互換を確認した。
+- Phase 2E変更対象経路ではPrivate API、broker、OrderRequest、`.env`参照はない。
+- 修正必須事項はなし。
+- Phase 2E-3設計へは進めるが、Phase 2E-3実装、Public ticker bid/ask連携実装、Private API、broker、実注文へは
+  まだ進まない。
