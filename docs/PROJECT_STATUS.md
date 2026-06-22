@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 2E-4R REAL_PUBLIC_BID_ASK runレビュー完了** — 直近kline条件の
+  `20260622_100540_shadow_USD_JPY_gmo-public` をレビューし、実runで
+  `REAL_PUBLIC_BID_ASK` candidate、`ALLOW_SHADOW` decision、対応するvirtual result、candidate/decision/
+  virtual resultのID相関を確認した。古い3 stepはticker/kline skewにより安全に`NO_TRADE`へ倒れた。
+  safety violation / broken / raw response保存 / Private API / APIキー / broker / 実注文はなし。
+  これによりPhase 2E-5**設計**へ進める。ただしPhase 2E-5実装、Private API、実注文には進まない。
+  詳細は [PHASE2E4R_GMO_PUBLIC_REAL_BID_ASK_REVIEW.md](PHASE2E4R_GMO_PUBLIC_REAL_BID_ASK_REVIEW.md)。
 - **Phase 2E-4.5 gmo-public risk/audit結果レビュー完了** — Phase 2E-4の
   `20260622_094837_shadow_USD_JPY_gmo-public` をレビューし、`ticker_kline_skew_reject_count=2` は
   ticker/kline timestamp skewの安全fail closedであり、safety violationやPublic ticker fetch failureではないと整理した。

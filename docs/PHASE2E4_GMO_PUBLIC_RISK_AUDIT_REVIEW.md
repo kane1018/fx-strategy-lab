@@ -215,3 +215,20 @@ public_ticker_fetch_error_count: 0
 - `git ls-files | grep shadow_exports` は出力なし。
 - Phase 2E-4の実run生成物はcommitしない。
 - raw API response、secret、APIキー、Private情報は保存しない。
+
+## 13. Phase 2E-4R follow-up
+
+Phase 2E-4.5の推奨方針に従い、直近kline条件でPhase 2E-4R再確認を行った。
+
+結果:
+
+- run_id: `20260622_100540_shadow_USD_JPY_gmo-public`
+- `REAL_PUBLIC_BID_ASK` candidate: 1件
+- `ALLOW_SHADOW`: 1件
+- virtual result: 1件
+- candidate / decision / virtual result相関: 確認済み
+- 古い3 step: ticker/kline skewにより`NO_TRADE`
+- safety violation / broken / raw response保存 / Private API / APIキー / broker / 実注文: なし
+
+Phase 2E-4.5時点で未確認だった実runの`REAL_PUBLIC_BID_ASK`到達、ALLOW、virtual result相関は確認済みとなった。
+詳細は [PHASE2E4R_GMO_PUBLIC_REAL_BID_ASK_REVIEW.md](PHASE2E4R_GMO_PUBLIC_REAL_BID_ASK_REVIEW.md)。
