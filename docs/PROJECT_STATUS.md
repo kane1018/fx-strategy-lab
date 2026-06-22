@@ -82,10 +82,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Phase 2E-0設計完了** — steps 10を3回連続で完了後、BUY / SELL / HOLD、OrderCandidate、
-  shadow専用RiskManager、Kill switch、local監査ログ、安全契約を設計した
-  （[PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md)）。
-  次候補は明示レビュー後のPhase 2E-1最小実装。Private API、APIキー、実注文には進まない。
+- **Phase 2E-0 / 2E-0.5設計レビュー完了** — BUY / SELL / HOLD、OrderCandidate、shadow専用RiskManager、
+  Kill switch、安全契約に加え、RiskPolicy初期値、reason code、deterministic ID、JSONL schema、STOP運用、
+  手動再開手順を確定した（[PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md)、
+  [PHASE2E0_5_SAFETY_REVIEW.md](PHASE2E0_5_SAFETY_REVIEW.md)）。
+  次候補は明示承認後のPhase 2E-1最小実装。Private API、APIキー、実注文には進まない。
 
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
 - 認証 / アクセス制御（現状ローカル read-only 前提、認証なし）。

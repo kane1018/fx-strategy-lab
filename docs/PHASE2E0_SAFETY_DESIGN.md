@@ -1,5 +1,9 @@
 # Phase 2E-0: Shadow candidate / risk / kill switch 安全設計
 
+> Phase 2E-1向けのRiskPolicy初期値、reason code、ID/schema、停止・手動再開手順は
+> [PHASE2E0_5_SAFETY_REVIEW.md](PHASE2E0_5_SAFETY_REVIEW.md) で確定した。
+> 両文書が競合する場合、Phase 2E-1のshadow safety policyにはPhase 2E-0.5を優先する。
+
 ## 1. 目的と範囲
 
 本書は、GMO Public APIによる注文なしshadow runの次段階として、実資金検証前に必要な安全契約を定義する。
