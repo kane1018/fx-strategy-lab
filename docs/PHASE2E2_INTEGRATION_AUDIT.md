@@ -366,3 +366,19 @@ Phase 2E-3設計で扱うべき論点:
 
 Phase 2E-3実装、Public ticker bid/ask連携実装、Private API、APIキー、broker、実注文、実資金、自動売買、
 本番公開API追加にはまだ進まない。
+
+## 17. Phase 2E-3設計への引き継ぎ結果
+
+Phase 2E-3の設計は [PHASE2E3_PUBLIC_TICKER_BID_ASK_DESIGN.md](PHASE2E3_PUBLIC_TICKER_BID_ASK_DESIGN.md)
+に整理した。
+
+整理済み論点:
+
+- GMO Public `/v1/ticker`由来bid/askだけを`REAL_PUBLIC_BID_ASK`として扱う条件。
+- kline-only runを引き続きsynthetic spread rejectに倒す境界。
+- MarketSnapshot案、timestamp/freshness/skew、spread_pips、fail closed方針。
+- raw response非保存、session no-network、Private API/APIキー/broker/注文系非接続の境界。
+- audit/summary metadata案、実装対象/非対象、test方針、acceptance criteria。
+
+この追記時点でもPhase 2E-3実装、GMO Public run、Private API、APIキー、broker、実注文、実資金、
+自動売買、本番公開API追加には進んでいない。

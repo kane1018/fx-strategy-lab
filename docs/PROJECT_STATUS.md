@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 2E-3 Public ticker bid/ask provenance連携設計完了（docs-only）** — Phase 2E-2.5監査は
+  B判定で修正必須事項なし。次の実装前に、GMO Public `/v1/ticker`由来bid/askだけを
+  `REAL_PUBLIC_BID_ASK`として扱う条件、kline-onlyをsynthetic spread rejectに倒す境界、
+  timestamp/freshness/spread検証、raw response非保存、sessionをno-networkに保つ責務分離、fail closed、
+  audit/summary metadata、実装時test方針を設計した。今回の作業はdocs-onlyで、Public ticker bid/ask連携実装、
+  GMO Public run、Private API、APIキー、broker、実注文、本番公開API追加は行っていない。
+  詳細は [PHASE2E3_PUBLIC_TICKER_BID_ASK_DESIGN.md](PHASE2E3_PUBLIC_TICKER_BID_ASK_DESIGN.md)。
 - **Phase 2E-2.5 session統合監査完了（B判定）** — `app/shadow/`内にimmutable
   OrderCandidate、RiskPolicy、pure risk評価、sticky KillSwitchState、deterministic ID、fail-closed JSONL writerを
   追加した。Phase 2E-1.5監査のD-1〜D-4に対し、spread provenance必須化、malformed inputのfail closed、
