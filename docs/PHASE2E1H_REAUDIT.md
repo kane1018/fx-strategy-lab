@@ -338,3 +338,19 @@ Phase 2E-2設計で扱うべき論点:
 - legacy run互換を保ったまま新risk JSONLを保存する運用境界。
 
 Phase 2E-2実装、Private API、APIキー、broker、実注文、実資金、自動売買、本番公開API追加にはまだ進まない。
+
+## 16. Phase 2E-2設計結果
+
+Phase 2E-2のsession統合前安全接続設計を
+[PHASE2E2_SESSION_INTEGRATION_DESIGN.md](PHASE2E2_SESSION_INTEGRATION_DESIGN.md) に整理した。
+
+設計で確定した境界:
+
+- KillSwitchStateはrun lifecycle orchestratorがrun単位で1つだけ所有する。
+- STOPファイル、audit log write failure、safety violationはkill switch activeとCLI exit code 2へ接続する。
+- candidate、RiskDecision、virtual resultはrun_id / step_index / candidate_id / decision_idで相関させる。
+- risk JSONLがないlegacy runは引き続き壊さない。
+- Phase 2E-2実装は、設計レビューと明示承認後に別タスクとして行う。
+
+この追記時点では、既存shadow session、backend code、tests、frontend、公開API、Private API、broker、実注文には
+接続していない。
