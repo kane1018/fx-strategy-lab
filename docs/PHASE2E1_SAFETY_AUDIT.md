@@ -328,3 +328,12 @@ summarize: runs 11 / broken 0 / safety violation 0 / invalid risk row 0
 
 今回も既存shadow session、本番API/UI、broker、Private API、APIキー、実注文、実資金には接続していない。
 Phase 2E-2へは、このcorrective hardeningの再監査と明示承認まで進まない。
+
+## 15. Phase 2E-1H再監査結果
+
+2026-06-22の再監査ではD-1〜D-4の修正をadversarial probe、targeted test、backend全test、ruff、
+legacy summarizeで確認し、総合 **B判定** とした。統合前必須修正はなく、Phase 2E-2の設計着手は可。
+
+ただしPhase 2E-2実装は未許可である。KillSwitchStateのsession ownership、監査ログ失敗時exit 2、
+session統合境界とintegration testを設計レビューし、明示承認を得るまで既存shadow sessionへ統合しない。
+再監査の詳細とChatGPT引き継ぎ要約は [PHASE2E1H_REAUDIT.md](PHASE2E1H_REAUDIT.md) を参照する。

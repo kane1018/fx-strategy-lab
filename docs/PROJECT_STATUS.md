@@ -82,16 +82,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Phase 2E-1 local-only安全基盤実装済み / corrective hardening完了** — `app/shadow/`内にimmutable
+- **Phase 2E-1H corrective hardening再監査完了（B判定）** — `app/shadow/`内にimmutable
   OrderCandidate、RiskPolicy、pure risk評価、sticky KillSwitchState、deterministic ID、fail-closed JSONL writerを
   追加した。Phase 2E-1.5監査のD-1〜D-4に対し、spread provenance必須化、malformed inputのfail closed、
   typed audit schema/root containment、unsafe risk row summary検出を実装した。集計はversioned schema validatorで
   `shadow-risk-v1`ログを検証し、validなcandidate/allow/reject/kill/reasonだけをlegacy互換で集計する。
   既存sessionのデフォルト挙動には未統合で、本番API/UI、broker、Private API、APIキー、実注文への接続はない。
+  再監査では統合前必須修正なし、Phase 2E-2の設計着手可と判定した。Phase 2E-2実装は、KillSwitchStateの
+  session ownership、監査ログ失敗時exit 2、session統合境界とintegration testを設計レビューし、明示承認を得るまで
+  開始しない。再監査結果は [PHASE2E1H_REAUDIT.md](PHASE2E1H_REAUDIT.md)。
   設計は [PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md) と
   [PHASE2E0_5_SAFETY_REVIEW.md](PHASE2E0_5_SAFETY_REVIEW.md) を参照する。
-  Phase 2E-2統合へは、corrective hardeningの再監査と明示承認まで進まない。詳細は
-  [PHASE2E1_SAFETY_AUDIT.md](PHASE2E1_SAFETY_AUDIT.md)。
+  初回監査とhardening追記は [PHASE2E1_SAFETY_AUDIT.md](PHASE2E1_SAFETY_AUDIT.md)。
 
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
 - 認証 / アクセス制御（現状ローカル read-only 前提、認証なし）。
