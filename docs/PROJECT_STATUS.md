@@ -82,6 +82,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 2E-5 gmo-public risk/audit継続確認計画 設計完了** — Phase 2E-4Rで確認済みの
+  `REAL_PUBLIC_BID_ASK` candidate、`ALLOW_SHADOW`、virtual result、ID相関を前提に、次回以降の
+  gmo-public risk/audit runをmanual onlyで継続確認する計画を整理した。初期条件は
+  `gmo-public / USD_JPY / M1 / steps 5 / --enable-shadow-risk`、1日1回まで。短期3回・中期5〜10回を目安に、
+  success / hold / stop条件、ticker/kline skew評価、評価指標、Phase 2Fへ進む条件を定義した。
+  Phase 2FはPrivate APIではなくPublic shadow risk/auditのレビュー・安定性評価・運用計画として扱う。
+  詳細は [PHASE2E5_GMO_PUBLIC_RISK_AUDIT_CONTINUATION_PLAN.md](PHASE2E5_GMO_PUBLIC_RISK_AUDIT_CONTINUATION_PLAN.md)。
+  今回は設計のみで、gmo-public再実行、コード変更、Private API、APIキー、broker、実注文には進んでいない。
 - **Phase 2E-4R REAL_PUBLIC_BID_ASK runレビュー完了** — 直近kline条件の
   `20260622_100540_shadow_USD_JPY_gmo-public` をレビューし、実runで
   `REAL_PUBLIC_BID_ASK` candidate、`ALLOW_SHADOW` decision、対応するvirtual result、candidate/decision/

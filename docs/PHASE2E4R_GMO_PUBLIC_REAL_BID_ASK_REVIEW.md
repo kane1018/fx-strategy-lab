@@ -221,6 +221,21 @@ Phase 2E-5設計でまだ扱わないもの:
 - frontend / reports公開
 - cron / schedule / 常駐bot
 
+## 10.1 Phase 2E-5設計結果
+
+Phase 2E-5では、gmo-public risk/audit継続確認計画をdocs化した。
+
+要点:
+
+- 初期条件は `gmo-public / USD_JPY / M1 / steps 5 / --enable-shadow-risk`。
+- manual only、1日1回まで。
+- 短期3回・中期5〜10回を目安に、安全性、ログ品質、相関、fail closed、summary互換を確認する。
+- HOLD、ticker/kline skew、spread too wide、ticker stale、fetch error fail closedは保留/追加観察として扱う。
+- safety violation、broken summary、raw response保存、Private/APIキー/broker/実注文痕跡、相関不整合は停止条件とする。
+- Phase 2FはPublic shadow risk/auditのレビュー・安定性評価・運用計画であり、Private APIや実注文ではない。
+
+詳細は [PHASE2E5_GMO_PUBLIC_RISK_AUDIT_CONTINUATION_PLAN.md](PHASE2E5_GMO_PUBLIC_RISK_AUDIT_CONTINUATION_PLAN.md)。
+
 ## 11. Git / 生成物境界
 
 - `backend/shadow_exports/` はgitignore対象。

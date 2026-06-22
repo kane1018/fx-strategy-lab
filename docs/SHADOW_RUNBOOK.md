@@ -148,6 +148,21 @@ python3 -m scripts.summarize_shadow_runs --input-root shadow_exports --format cs
 6. 目的は継続動作、ログ品質、集計可能性、安全性の確認であり、PnLを収益性の根拠にしない。
 7. safety violationが1件でも出た日、または予期しない出力が出た日はそこで停止する。
 
+### Phase 2E-5 gmo-public risk/audit継続確認
+
+Phase 2E-5で `--enable-shadow-risk` を使うgmo-public risk/audit確認は、上記の暫定運用より狭い条件で行う。
+
+- `source=gmo-public`、`symbol=USD_JPY`、`interval=M1`、`steps=5`、`--enable-shadow-risk`に固定する。
+- manual only、1日1回までにする。
+- 当日の日付を使い、原則として市場時間中に実行する。
+- 各run後にsummary、metadata、signal/candidate/risk/virtual audit logs、aggregateを確認する。
+- `REAL_PUBLIC_BID_ASK`、ALLOW、REJECT、virtual result、ticker/kline skew、fetch error、safetyを確認する。
+- HOLD中心、ticker/kline skew、spread too wide、ticker stale、fetch error fail closedは保留/追加観察として扱える。
+- safety violation、broken summary、invalid risk row、raw response保存、Private API/APIキー/broker/実注文痕跡、
+  candidate/decision/virtual result相関不整合、`shadow_exports/`追跡対象混入があれば停止してレビューへ戻る。
+- PnLは収益性判断に使わない。
+- 詳細は [PHASE2E5_GMO_PUBLIC_RISK_AUDIT_CONTINUATION_PLAN.md](PHASE2E5_GMO_PUBLIC_RISK_AUDIT_CONTINUATION_PLAN.md)。
+
 ## 11. commit禁止の最終確認
 
 ```bash
