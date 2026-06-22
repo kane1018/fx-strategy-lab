@@ -1,6 +1,7 @@
 """Tests for shadow-run aggregation (app/shadow/aggregate.py). Offline, fixture-based."""
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -12,6 +13,19 @@ from app.shadow.aggregate import (
     render_runs_csv,
     safety_violations,
 )
+from app.shadow.audit import write_audit_event
+from app.shadow.audit_schema import KillSwitchAuditRecord
+from app.shadow.risk import (
+    KillSwitchReason,
+    RiskContext,
+    SignalLabel,
+    SpreadProvenance,
+    create_order_candidate,
+    evaluate,
+)
+
+NOW = datetime(2026, 6, 22, 3, 0, tzinfo=UTC)
+MARKET_TIME = NOW - timedelta(seconds=30)
 
 
 def _safe():
@@ -45,6 +59,58 @@ def _write(root, run_id, summary):
 def _write_risk_log(root, run_id, event_type, rows):
     path = root / run_id / f"{event_type}.jsonl"
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+
+def _risk_file(root, run_id, event_type):
+    return root / run_id / f"{event_type}.jsonl"
+
+
+def _read_jsonl(path):
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def _write_jsonl(path, rows):
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+
+def _candidate(run_id, step_index=0):
+    candidate = create_order_candidate(
+        signal_label=SignalLabel.BUY,
+        run_id=run_id,
+        step_index=step_index,
+        timestamp=NOW,
+        market_data_timestamp=MARKET_TIME + timedelta(seconds=step_index),
+        source="mock",
+        symbol="USD_JPY",
+        interval="M1",
+        quantity=100,
+        bid=154.100 + step_index * 0.001,
+        ask=154.104 + step_index * 0.001,
+        spread_provenance=SpreadProvenance.REAL_PUBLIC_BID_ASK,
+        signal_name="summary_test",
+        signal_reason="fixture",
+        confidence=0.8,
+    )
+    assert candidate is not None
+    return candidate
+
+
+def _context(**overrides):
+    values = {
+        "evaluation_time": NOW,
+        "spread_provenance": SpreadProvenance.REAL_PUBLIC_BID_ASK,
+    }
+    values.update(overrides)
+    return RiskContext(**values)
+
+
+def _write_valid_risk_pair(root, run_id, step_index=0, *, reject=False):
+    candidate = _candidate(run_id, step_index)
+    context = _context(market_closed=True) if reject else _context()
+    decision = evaluate(candidate, context)
+    write_audit_event(root, run_id=run_id, event_type="candidate_log", payload=candidate)
+    write_audit_event(root, run_id=run_id, event_type="risk_decision_log", payload=decision)
+    return candidate, decision
 
 
 def test_load_and_aggregate_multiple_runs(tmp_path) -> None:
@@ -138,20 +204,17 @@ def test_missing_root_raises(tmp_path) -> None:
 def test_phase2e_risk_logs_are_aggregated_without_breaking_legacy(tmp_path) -> None:
     _write(tmp_path, "legacy", _summary("legacy"))
     _write(tmp_path, "risk", _summary("risk"))
-    base = {"schema_version": "shadow-risk-v1", "run_id": "risk", "timestamp": "t"}
-    _write_risk_log(tmp_path, "risk", "candidate_log", [
-        {**base, "event_type": "candidate_log", "candidate_id": "c1"},
-        {**base, "event_type": "candidate_log", "candidate_id": "c2"},
-    ])
-    _write_risk_log(tmp_path, "risk", "risk_decision_log", [
-        {**base, "event_type": "risk_decision_log", "status": "ALLOW_SHADOW", "reasons": []},
-        {**base, "event_type": "risk_decision_log", "status": "REJECT_SHADOW",
-         "reasons": ["spread_too_wide"]},
-    ])
-    _write_risk_log(tmp_path, "risk", "kill_switch_log", [
-        {**base, "event_type": "kill_switch_log", "active": True,
-         "reasons": ["manual_stop_file_exists"]},
-    ])
+    _write_valid_risk_pair(tmp_path, "risk", 0)
+    _write_valid_risk_pair(tmp_path, "risk", 1, reject=True)
+    kill = KillSwitchAuditRecord(
+        run_id="risk",
+        timestamp=NOW.isoformat(),
+        active=True,
+        reasons=(KillSwitchReason.MANUAL_STOP_FILE_EXISTS,),
+        activated_at=NOW.isoformat(),
+        trigger="manual_stop_file_exists",
+    )
+    write_audit_event(tmp_path, run_id="risk", event_type="kill_switch_log", payload=kill)
 
     summaries, broken = load_run_summaries(tmp_path)
     assert broken == [] and len(summaries) == 2
@@ -162,7 +225,7 @@ def test_phase2e_risk_logs_are_aggregated_without_breaking_legacy(tmp_path) -> N
     assert agg["kill_switch_count"] == 1
     assert agg["kill_switch_active_runs_count"] == 1
     assert agg["shadow_risk_schema_versions"] == ["shadow-risk-v1"]
-    assert agg["reject_reasons"] == {"spread_too_wide": 1}
+    assert agg["reject_reasons"] == {"market_closed": 1}
     assert agg["kill_switch_reasons"] == {"manual_stop_file_exists": 1}
     md = render_markdown(agg, summaries, broken)
     assert "## Shadow Risk Pipeline" in md
@@ -177,6 +240,103 @@ def test_invalid_new_schema_is_safety_violation_not_broken_legacy(tmp_path) -> N
     summaries, broken = load_run_summaries(tmp_path)
     assert broken == []
     agg = aggregate_summaries(summaries)
-    assert agg["candidate_count"] == 1
+    assert agg["candidate_count"] == 0
+    assert agg["invalid_risk_row_count"] == 1
     assert agg["safety_violation_runs_count"] == 1
-    assert any(v["field"] == "risk_pipeline" for v in agg["safety_violations"])
+    assert any("candidate_log" in v["field"] for v in agg["safety_violations"])
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("real_order", True),
+        ("private_api_used", True),
+        ("api_key_used", True),
+        ("no_order_execution", False),
+        ("live_trading_environment_enabled", True),
+        ("gmo_order_enabled", True),
+    ],
+)
+def test_unsafe_candidate_risk_row_is_violation_and_not_counted(tmp_path, field, value) -> None:
+    _write(tmp_path, "risk", _summary("risk"))
+    _write_valid_risk_pair(tmp_path, "risk")
+    path = _risk_file(tmp_path, "risk", "candidate_log")
+    rows = _read_jsonl(path)
+    rows[0][field] = value
+    _write_jsonl(path, rows)
+
+    agg = aggregate_summaries(load_run_summaries(tmp_path)[0])
+    assert agg["candidate_count"] == 0
+    assert agg["risk_allow_count"] == 0
+    assert agg["safety_violation_runs_count"] == 1
+    assert any(v["field"] == f"candidate_log.{field}" for v in agg["safety_violations"])
+
+
+@pytest.mark.parametrize(
+    ("event_type", "mutate", "expected_field"),
+    [
+        ("candidate_log", lambda row: row.update({"unexpected": True}), "unexpected"),
+        ("candidate_log", lambda row: row.pop("candidate_id"), "candidate_id"),
+        ("candidate_log", lambda row: row.update({"schema_version": "bad"}), "schema_version"),
+        ("candidate_log", lambda row: row.update({"event_type": "bad_event"}), "event_type"),
+        ("candidate_log", lambda row: row.update({"run_id": "other"}), "run_id"),
+        ("risk_decision_log", lambda row: row.update({"reasons": ["not_a_reason"]}), "reasons"),
+        (
+            "risk_decision_log",
+            lambda row: row.update({"decision_id": "risk_cand_other_0_buy_abc_bad"}),
+            "decision_id",
+        ),
+    ],
+)
+def test_invalid_risk_row_schema_is_violation_and_not_counted(
+    tmp_path, event_type, mutate, expected_field
+) -> None:
+    _write(tmp_path, "risk", _summary("risk"))
+    _write_valid_risk_pair(tmp_path, "risk", reject=True)
+    path = _risk_file(tmp_path, "risk", event_type)
+    rows = _read_jsonl(path)
+    mutate(rows[0])
+    _write_jsonl(path, rows)
+
+    agg = aggregate_summaries(load_run_summaries(tmp_path)[0])
+    assert agg["candidate_count"] == 0
+    assert agg["risk_reject_count"] == 0
+    assert agg["safety_violation_runs_count"] == 1
+    assert any(expected_field in v["field"] for v in agg["safety_violations"])
+
+
+def test_decision_without_candidate_is_violation_and_not_counted(tmp_path) -> None:
+    _write(tmp_path, "risk", _summary("risk"))
+    candidate = _candidate("risk")
+    decision = evaluate(candidate, _context())
+    write_audit_event(tmp_path, run_id="risk", event_type="risk_decision_log", payload=decision)
+
+    agg = aggregate_summaries(load_run_summaries(tmp_path)[0])
+    assert agg["candidate_count"] == 0
+    assert agg["risk_allow_count"] == 0
+    assert agg["safety_violation_runs_count"] == 1
+    assert any("candidate_id" in v["field"] for v in agg["safety_violations"])
+
+
+def test_candidate_without_decision_is_violation_and_not_counted(tmp_path) -> None:
+    _write(tmp_path, "risk", _summary("risk"))
+    candidate = _candidate("risk")
+    write_audit_event(tmp_path, run_id="risk", event_type="candidate_log", payload=candidate)
+
+    agg = aggregate_summaries(load_run_summaries(tmp_path)[0])
+    assert agg["candidate_count"] == 0
+    assert agg["risk_allow_count"] == 0
+    assert agg["safety_violation_runs_count"] == 1
+    assert any("candidate_id" in v["field"] for v in agg["safety_violations"])
+
+
+def test_duplicate_decision_is_violation_and_not_counted(tmp_path) -> None:
+    _write(tmp_path, "risk", _summary("risk"))
+    _candidate, decision = _write_valid_risk_pair(tmp_path, "risk")
+    write_audit_event(tmp_path, run_id="risk", event_type="risk_decision_log", payload=decision)
+
+    agg = aggregate_summaries(load_run_summaries(tmp_path)[0])
+    assert agg["candidate_count"] == 0
+    assert agg["risk_allow_count"] == 0
+    assert agg["safety_violation_runs_count"] == 1
+    assert any("decision_id" in v["field"] for v in agg["safety_violations"])

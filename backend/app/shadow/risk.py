@@ -85,6 +85,13 @@ class RiskStatus(str, Enum):
     REJECT_SHADOW = "REJECT_SHADOW"
 
 
+class SpreadProvenance(str, Enum):
+    REAL_PUBLIC_BID_ASK = "REAL_PUBLIC_BID_ASK"
+    SYNTHETIC_ZERO = "SYNTHETIC_ZERO"
+    CANDLE_DERIVED = "CANDLE_DERIVED"
+    UNKNOWN = "UNKNOWN"
+
+
 def signal_label_from_side(side: str) -> SignalLabel:
     """Convert the existing buy/sell/flat boundary explicitly into Phase 2E labels."""
     normalized = side.strip().lower()
@@ -160,6 +167,74 @@ def make_decision_id(candidate_id: str, policy_id: str = POLICY_ID) -> str:
     return f"risk_{candidate_id}_{suffix}"
 
 
+def _is_bool(value: Any) -> bool:
+    return type(value) is bool
+
+
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_finite_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _policy_validation_errors(policy: Any) -> list[RejectReason]:
+    if not isinstance(policy, RiskPolicy):
+        return [RejectReason.UNKNOWN_STATE]
+
+    errors: list[RejectReason] = []
+    try:
+        if not isinstance(policy.policy_id, str) or policy.policy_id != POLICY_ID:
+            errors.append(RejectReason.UNKNOWN_STATE)
+        for collection in (policy.allowed_symbols, policy.allowed_intervals):
+            if (
+                not isinstance(collection, tuple | list | frozenset)
+                or not collection
+                or any(not isinstance(value, str) or not value.strip() for value in collection)
+            ):
+                errors.append(RejectReason.UNKNOWN_STATE)
+        positive_int_fields = (
+            policy.max_candidates_per_run,
+            policy.max_daily_candidates,
+            policy.max_quantity,
+            policy.max_consecutive_api_errors,
+        )
+        if any(not _is_int(value) or value <= 0 for value in positive_int_fields):
+            errors.append(RejectReason.UNKNOWN_STATE)
+        non_negative_int_fields = (
+            policy.max_data_age_seconds,
+            policy.max_future_skew_seconds,
+            policy.cooldown_seconds,
+        )
+        if any(not _is_int(value) or value < 0 for value in non_negative_int_fields):
+            errors.append(RejectReason.UNKNOWN_STATE)
+        if not _is_int(policy.max_log_write_failures) or policy.max_log_write_failures != 0:
+            errors.append(RejectReason.UNKNOWN_STATE)
+        if policy.quantity_mode != "fixed":
+            errors.append(RejectReason.UNKNOWN_STATE)
+        if not _is_finite_number(policy.max_spread_pips) or policy.max_spread_pips < 0:
+            errors.append(RejectReason.UNKNOWN_STATE)
+        safety_booleans = (
+            policy.allow_synthetic_zero_spread,
+            policy.allow_private_api,
+            policy.allow_api_key,
+            policy.allow_real_order,
+            policy.allow_broker_call,
+        )
+        if any(not _is_bool(value) or value for value in safety_booleans):
+            errors.append(RejectReason.SAFETY_FLAG_VIOLATION)
+    except (AttributeError, TypeError):
+        errors.append(RejectReason.UNKNOWN_STATE)
+    return list(dict.fromkeys(errors))
+
+
+def _validate_policy(policy: Any) -> None:
+    errors = _policy_validation_errors(policy)
+    if errors:
+        raise ValueError("invalid RiskPolicy invariant")
+
+
 @dataclass(frozen=True)
 class RiskPolicy:
     policy_id: str = POLICY_ID
@@ -181,6 +256,9 @@ class RiskPolicy:
     allow_real_order: bool = False
     allow_broker_call: bool = False
 
+    def __post_init__(self) -> None:
+        _validate_policy(self)
+
 
 @dataclass(frozen=True)
 class KillSwitchState:
@@ -191,6 +269,27 @@ class KillSwitchState:
     activated_at: str | None = None
     safety_snapshot: tuple[tuple[str, bool], ...] = ()
     consecutive_api_errors: int = 0
+
+    def __post_init__(self) -> None:
+        if type(self.active) is not bool:
+            raise ValueError("KillSwitchState.active must be bool")
+        if not isinstance(self.reasons, tuple) or any(
+            not isinstance(reason, KillSwitchReason) for reason in self.reasons
+        ):
+            raise ValueError("KillSwitchState.reasons must contain KillSwitchReason values")
+        if not isinstance(self.consecutive_api_errors, int) or self.consecutive_api_errors < 0:
+            raise ValueError("KillSwitchState.consecutive_api_errors must be non-negative")
+        if self.active:
+            if not self.reasons or self.activated_at is None:
+                raise ValueError("active KillSwitchState requires reasons and activated_at")
+            canonical_timestamp(self.activated_at)
+        elif self.reasons or self.activated_at is not None or self.safety_snapshot:
+            raise ValueError("inactive KillSwitchState cannot hold active-only fields")
+        if not isinstance(self.safety_snapshot, tuple):
+            raise ValueError("KillSwitchState.safety_snapshot must be a tuple")
+        for field_name, value in self.safety_snapshot:
+            if not isinstance(field_name, str) or type(value) is not bool:
+                raise ValueError("KillSwitchState.safety_snapshot entries must be str/bool pairs")
 
     def activate(
         self,
@@ -244,6 +343,7 @@ class OrderCandidate:
     quantity: int
     entry_reference_price: float
     spread_pips: float | None
+    spread_provenance: SpreadProvenance
     signal_name: str
     signal_reason: str
     confidence: float
@@ -252,27 +352,68 @@ class OrderCandidate:
     real_order: bool
     private_api_used: bool
     api_key_used: bool
+    no_order_execution: bool
+    live_trading_environment_enabled: bool
+    gmo_order_enabled: bool
     created_by: str
 
     def __post_init__(self) -> None:
         if self.schema_version != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
-        if self.side not in (SignalLabel.BUY, SignalLabel.SELL):
+        if not isinstance(self.side, SignalLabel) or self.side not in (
+            SignalLabel.BUY,
+            SignalLabel.SELL,
+        ):
             raise ValueError("OrderCandidate side must be BUY or SELL")
+        if not isinstance(self.spread_provenance, SpreadProvenance):
+            raise ValueError("OrderCandidate spread_provenance must be explicit")
+        safety_flags = (
+            self.real_order,
+            self.private_api_used,
+            self.api_key_used,
+            self.no_order_execution,
+            self.live_trading_environment_enabled,
+            self.gmo_order_enabled,
+        )
+        if any(not _is_bool(value) for value in safety_flags):
+            raise ValueError("OrderCandidate safety flags must be bool")
         if self.real_order or self.private_api_used or self.api_key_used:
             raise ValueError("OrderCandidate safety flags must remain false")
+        if not self.no_order_execution:
+            raise ValueError("OrderCandidate.no_order_execution must remain true")
+        if self.live_trading_environment_enabled or self.gmo_order_enabled:
+            raise ValueError("OrderCandidate live/order flags must remain false")
 
 
 @dataclass(frozen=True)
 class RiskContext:
     evaluation_time: datetime
+    spread_provenance: SpreadProvenance = SpreadProvenance.UNKNOWN
     candidates_in_run: int = 0
     candidates_today: int = 0
     existing_candidate_ids: frozenset[str] = field(default_factory=frozenset)
     last_candidate_timestamp: str | None = None
     market_closed: bool = False
-    synthetic_spread: bool = False
     kill_switch: KillSwitchState = field(default_factory=KillSwitchState)
+
+    def __post_init__(self) -> None:
+        canonical_timestamp(self.evaluation_time)
+        if not isinstance(self.spread_provenance, SpreadProvenance):
+            raise ValueError("RiskContext.spread_provenance must be SpreadProvenance")
+        if not _is_int(self.candidates_in_run) or self.candidates_in_run < 0:
+            raise ValueError("RiskContext.candidates_in_run must be non-negative")
+        if not _is_int(self.candidates_today) or self.candidates_today < 0:
+            raise ValueError("RiskContext.candidates_today must be non-negative")
+        if not isinstance(self.existing_candidate_ids, frozenset) or any(
+            not isinstance(candidate_id, str) for candidate_id in self.existing_candidate_ids
+        ):
+            raise ValueError("RiskContext.existing_candidate_ids must be frozenset[str]")
+        if self.last_candidate_timestamp is not None:
+            canonical_timestamp(self.last_candidate_timestamp)
+        if type(self.market_closed) is not bool:
+            raise ValueError("RiskContext.market_closed must be bool")
+        if not isinstance(self.kill_switch, KillSwitchState):
+            raise ValueError("RiskContext.kill_switch must be KillSwitchState")
 
 
 @dataclass(frozen=True)
@@ -296,10 +437,26 @@ class RiskDecision:
     def __post_init__(self) -> None:
         if self.schema_version != SCHEMA_VERSION:
             raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
+        if not isinstance(self.status, RiskStatus):
+            raise ValueError("RiskDecision.status must be RiskStatus")
+        if not isinstance(self.reasons, tuple) or any(
+            not isinstance(reason, RejectReason) for reason in self.reasons
+        ):
+            raise ValueError("RiskDecision.reasons must contain RejectReason values")
         if self.status is RiskStatus.REJECT_SHADOW and not self.reasons:
             raise ValueError("REJECT_SHADOW requires at least one reason")
         if self.status is RiskStatus.ALLOW_SHADOW and self.reasons:
             raise ValueError("ALLOW_SHADOW cannot contain reject reasons")
+        safety_flags = (
+            self.real_order,
+            self.private_api_used,
+            self.api_key_used,
+            self.no_order_execution,
+            self.live_trading_environment_enabled,
+            self.gmo_order_enabled,
+        )
+        if any(not _is_bool(value) for value in safety_flags):
+            raise ValueError("RiskDecision safety flags must be bool")
         if self.real_order or self.private_api_used or self.api_key_used:
             raise ValueError("RiskDecision unsafe flag detected")
         if not self.no_order_execution:
@@ -329,6 +486,7 @@ def create_order_candidate(
     quantity: int,
     bid: float,
     ask: float,
+    spread_provenance: SpreadProvenance,
     signal_name: str,
     signal_reason: str,
     confidence: float,
@@ -365,6 +523,7 @@ def create_order_candidate(
         quantity=quantity,
         entry_reference_price=entry_price,
         spread_pips=calculate_spread_pips(symbol=symbol, bid=bid, ask=ask),
+        spread_provenance=spread_provenance,
         signal_name=signal_name,
         signal_reason=signal_reason,
         confidence=confidence,
@@ -373,49 +532,81 @@ def create_order_candidate(
         real_order=False,
         private_api_used=False,
         api_key_used=False,
+        no_order_execution=True,
+        live_trading_environment_enabled=False,
+        gmo_order_enabled=False,
         created_by="shadow_candidate_factory",
     )
 
 
 def _decision(
     candidate: Any,
-    context: RiskContext,
-    policy: RiskPolicy,
+    context: Any,
+    policy: Any,
     reasons: list[RejectReason],
 ) -> RiskDecision:
-    unique_reasons = tuple(dict.fromkeys(reasons))
-    candidate_id = str(getattr(candidate, "candidate_id", "unknown"))
-    run_id = str(getattr(candidate, "run_id", "unknown"))
-    step_index = getattr(candidate, "step_index", -1)
-    if not isinstance(step_index, int):
-        step_index = -1
+    unique_reasons = tuple(
+        dict.fromkeys(
+            reason if isinstance(reason, RejectReason) else RejectReason.UNKNOWN_STATE
+            for reason in reasons
+        )
+    )
+    candidate_id_raw = getattr(candidate, "candidate_id", None)
+    candidate_id = candidate_id_raw if isinstance(candidate_id_raw, str) else "unknown"
+    run_id_raw = getattr(candidate, "run_id", None)
+    run_id = run_id_raw if isinstance(run_id_raw, str) else "unknown"
+    step_index_raw = getattr(candidate, "step_index", -1)
+    step_index = step_index_raw if _is_int(step_index_raw) else -1
+    policy_id_raw = getattr(policy, "policy_id", None)
+    policy_id = policy_id_raw if isinstance(policy_id_raw, str) else POLICY_ID
     try:
         timestamp = canonical_timestamp(context.evaluation_time)
-    except (TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError):
         timestamp = "1970-01-01T00:00:00.000000Z"
     status = RiskStatus.REJECT_SHADOW if unique_reasons else RiskStatus.ALLOW_SHADOW
-    return RiskDecision(
-        schema_version=SCHEMA_VERSION,
-        decision_id=make_decision_id(candidate_id, policy.policy_id),
-        candidate_id=candidate_id,
-        run_id=run_id,
-        step_index=step_index,
-        timestamp=timestamp,
-        status=status,
-        reasons=unique_reasons,
-        checked_policy_id=policy.policy_id,
-    )
+    try:
+        decision_id = make_decision_id(candidate_id, policy_id)
+        return RiskDecision(
+            schema_version=SCHEMA_VERSION,
+            decision_id=decision_id,
+            candidate_id=candidate_id,
+            run_id=run_id,
+            step_index=step_index,
+            timestamp=timestamp,
+            status=status,
+            reasons=unique_reasons,
+            checked_policy_id=policy_id,
+        )
+    except Exception:
+        fallback_candidate_id = "unknown"
+        fallback_policy_id = POLICY_ID
+        return RiskDecision(
+            schema_version=SCHEMA_VERSION,
+            decision_id=make_decision_id(fallback_candidate_id, fallback_policy_id),
+            candidate_id=fallback_candidate_id,
+            run_id="unknown",
+            step_index=-1,
+            timestamp="1970-01-01T00:00:00.000000Z",
+            status=RiskStatus.REJECT_SHADOW,
+            reasons=(RejectReason.UNKNOWN_STATE,),
+            checked_policy_id=fallback_policy_id,
+        )
 
 
 def evaluate(
     candidate: OrderCandidate | Any,
-    context: RiskContext,
-    policy: RiskPolicy | None = None,
+    context: RiskContext | Any,
+    policy: RiskPolicy | Any | None = None,
 ) -> RiskDecision:
     """Pure fail-closed shadow risk evaluation. It never permits a real order."""
-    policy = policy or RiskPolicy()
+    policy = RiskPolicy() if policy is None else policy
     reasons: list[RejectReason] = []
     try:
+        policy_errors = _policy_validation_errors(policy)
+        if policy_errors:
+            return _decision(candidate, context, policy, policy_errors)
+        if not isinstance(context, RiskContext):
+            return _decision(candidate, context, policy, [RejectReason.UNKNOWN_STATE])
         if not isinstance(candidate, OrderCandidate):
             return _decision(
                 candidate,
@@ -441,6 +632,8 @@ def evaluate(
             reasons.append(RejectReason.MISSING_REQUIRED_FIELDS)
         if candidate.schema_version != SCHEMA_VERSION:
             reasons.append(RejectReason.SAFETY_FLAG_VIOLATION)
+        if not isinstance(candidate.side, SignalLabel):
+            reasons.append(RejectReason.UNKNOWN_STATE)
         if not isinstance(candidate.step_index, int) or candidate.step_index < 0:
             reasons.append(RejectReason.INVALID_DATA)
         if (
@@ -469,8 +662,18 @@ def evaluate(
             reasons.append(RejectReason.INVALID_DATA)
         elif candidate.spread_pips > policy.max_spread_pips:
             reasons.append(RejectReason.SPREAD_TOO_WIDE)
-        if context.synthetic_spread and not policy.allow_synthetic_zero_spread:
+        provenances = (candidate.spread_provenance, context.spread_provenance)
+        if any(not isinstance(value, SpreadProvenance) for value in provenances):
+            reasons.append(RejectReason.UNKNOWN_STATE)
+        elif any(
+            value in (SpreadProvenance.SYNTHETIC_ZERO, SpreadProvenance.CANDLE_DERIVED)
+            for value in provenances
+        ):
             reasons.append(RejectReason.SYNTHETIC_SPREAD_NOT_ALLOWED)
+        elif SpreadProvenance.UNKNOWN in provenances:
+            reasons.append(RejectReason.INVALID_DATA)
+        elif any(value is not SpreadProvenance.REAL_PUBLIC_BID_ASK for value in provenances):
+            reasons.append(RejectReason.UNKNOWN_STATE)
         if context.market_closed:
             reasons.append(RejectReason.MARKET_CLOSED)
         if context.kill_switch.active:
@@ -512,11 +715,15 @@ def evaluate(
         if candidate.candidate_id != expected_candidate_id:
             reasons.append(RejectReason.SAFETY_FLAG_VIOLATION)
 
-        unsafe_policy = policy != RiskPolicy()
         unsafe_candidate = (
-            candidate.real_order or candidate.private_api_used or candidate.api_key_used
+            candidate.real_order
+            or candidate.private_api_used
+            or candidate.api_key_used
+            or not candidate.no_order_execution
+            or candidate.live_trading_environment_enabled
+            or candidate.gmo_order_enabled
         )
-        if unsafe_policy or unsafe_candidate:
+        if unsafe_candidate:
             reasons.append(RejectReason.SAFETY_FLAG_VIOLATION)
     except (AttributeError, TypeError, ValueError, OverflowError):
         reasons.append(RejectReason.UNKNOWN_STATE)

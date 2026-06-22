@@ -19,7 +19,7 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 2. 完了済み検証（ローカル直近）
 
-- backend: `pytest` 272 passed / `ruff check .` clean
+- backend: `pytest` 327 passed / `ruff check .` clean
 - frontend: `npm run lint` clean / `npm run test`（Vitest）36 passed / `npm run build` 成功
 - E2E: `npm run e2e`（Playwright Chromium）E2E-01〜10 passed
 - 注: 数値は直近ローカル実行時のもの。最新は各検証コマンドで再確認すること。
@@ -82,14 +82,15 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Phase 2E-1 local-only安全基盤実装済み** — `app/shadow/`内にimmutable OrderCandidate、RiskPolicy、
-  pure risk評価、sticky KillSwitchState、deterministic ID、fail-closed JSONL writerを追加した。集計は任意の
-  `shadow-risk-v1`ログからcandidate/allow/reject/kill/reasonを読み、legacy runとの後方互換を維持する。
+- **Phase 2E-1 local-only安全基盤実装済み / corrective hardening完了** — `app/shadow/`内にimmutable
+  OrderCandidate、RiskPolicy、pure risk評価、sticky KillSwitchState、deterministic ID、fail-closed JSONL writerを
+  追加した。Phase 2E-1.5監査のD-1〜D-4に対し、spread provenance必須化、malformed inputのfail closed、
+  typed audit schema/root containment、unsafe risk row summary検出を実装した。集計はversioned schema validatorで
+  `shadow-risk-v1`ログを検証し、validなcandidate/allow/reject/kill/reasonだけをlegacy互換で集計する。
   既存sessionのデフォルト挙動には未統合で、本番API/UI、broker、Private API、APIキー、実注文への接続はない。
   設計は [PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md) と
   [PHASE2E0_5_SAFETY_REVIEW.md](PHASE2E0_5_SAFETY_REVIEW.md) を参照する。
-  **Phase 2E-1.5監査はD判定（統合前修正必須）**。provenance、malformed policyのfail closed、typed audit schema、
-  出力root制限、unsafe risk row検出を修正するまでPhase 2E-2へ進まない。詳細は
+  Phase 2E-2統合へは、corrective hardeningの再監査と明示承認まで進まない。詳細は
   [PHASE2E1_SAFETY_AUDIT.md](PHASE2E1_SAFETY_AUDIT.md)。
 
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。

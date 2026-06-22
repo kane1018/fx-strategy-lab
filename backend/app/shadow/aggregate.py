@@ -15,17 +15,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from app.shadow.risk import SCHEMA_VERSION
-
-# The read-only safety contract every shadow summary must keep (value each flag must hold).
-SAFE_EXPECTED = {
-    "real_order": False,
-    "private_api_used": False,
-    "api_key_used": False,
-    "no_order_execution": True,
-    "live_trading_environment_enabled": False,
-    "gmo_order_enabled": False,
-}
+from app.shadow.audit_schema import (
+    AUDIT_EVENT_TYPES,
+    AuditSchemaError,
+    validate_audit_row,
+)
+from app.shadow.audit_schema import (
+    SAFETY_EXPECTED as SAFE_EXPECTED,
+)
 
 _NUMERIC_TOTALS = {
     "total_steps_executed": "steps_executed",
@@ -36,13 +33,39 @@ _NUMERIC_TOTALS = {
     "total_flat_count": "flat_count",
 }
 
-_RISK_LOG_EVENT_TYPES = (
-    "signal_decision_log",
-    "candidate_log",
-    "risk_decision_log",
-    "virtual_result_log",
-    "kill_switch_log",
-)
+_RISK_LOG_EVENT_TYPES = tuple(sorted(AUDIT_EVENT_TYPES))
+
+
+def _risk_log_error(
+    *,
+    event_type: str,
+    line_number: int | None,
+    error: AuditSchemaError,
+) -> dict[str, Any]:
+    return {
+        "event_type": event_type,
+        "line": line_number,
+        "field": error.field,
+        "value": error.value,
+        "expected": error.expected,
+    }
+
+
+def _plain_risk_log_error(
+    *,
+    event_type: str,
+    line_number: int | None,
+    field: str,
+    value: Any,
+    expected: Any,
+) -> dict[str, Any]:
+    return {
+        "event_type": event_type,
+        "line": line_number,
+        "field": field,
+        "value": value,
+        "expected": expected,
+    }
 
 
 def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
@@ -57,11 +80,16 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
         "reject_reasons": {},
         "kill_switch_reasons": {},
         "log_errors": [],
+        "invalid_risk_row_count": 0,
     }
     found = False
     versions: set[str] = set()
-    reject_reasons: Counter[str] = Counter()
     kill_reasons: Counter[str] = Counter()
+    candidates: dict[str, dict[str, Any]] = {}
+    duplicate_candidate_ids: set[str] = set()
+    decisions_by_id: dict[str, dict[str, Any]] = {}
+    duplicate_decision_ids: set[str] = set()
+    decisions_by_candidate: dict[str, list[dict[str, Any]]] = {}
     for event_type in _RISK_LOG_EVENT_TYPES:
         path = run_dir / f"{event_type}.jsonl"
         if not path.exists():
@@ -70,7 +98,16 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
         try:
             lines = path.read_text(encoding="utf-8").splitlines()
         except OSError as error:
-            result["log_errors"].append(f"{path.name}: unreadable ({error.__class__.__name__})")
+            result["invalid_risk_row_count"] += 1
+            result["log_errors"].append(
+                _plain_risk_log_error(
+                    event_type=event_type,
+                    line_number=None,
+                    field=path.name,
+                    value=error.__class__.__name__,
+                    expected="readable JSONL file",
+                )
+            )
             continue
         for line_number, line in enumerate(lines, start=1):
             if not line.strip():
@@ -80,30 +117,43 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
                 if not isinstance(row, dict):
                     raise ValueError("row is not an object")
             except (ValueError, json.JSONDecodeError):
-                result["log_errors"].append(f"{path.name}:{line_number}: invalid_json")
-                continue
-            version = row.get("schema_version")
-            if version != SCHEMA_VERSION:
-                result["log_errors"].append(f"{path.name}:{line_number}: invalid_schema_version")
-            elif isinstance(version, str):
-                versions.add(version)
-            if row.get("event_type") != event_type:
-                result["log_errors"].append(f"{path.name}:{line_number}: invalid_event_type")
-                continue
-            if event_type == "candidate_log":
-                result["candidate_count"] += 1
-            elif event_type == "risk_decision_log":
-                status = row.get("status")
-                if status == "ALLOW_SHADOW":
-                    result["risk_allow_count"] += 1
-                elif status == "REJECT_SHADOW":
-                    result["risk_reject_count"] += 1
-                    for reason in row.get("reasons") or []:
-                        reject_reasons[str(reason)] += 1
-                else:
-                    result["log_errors"].append(
-                        f"{path.name}:{line_number}: invalid_risk_status"
+                result["invalid_risk_row_count"] += 1
+                result["log_errors"].append(
+                    _plain_risk_log_error(
+                        event_type=event_type,
+                        line_number=line_number,
+                        field="row",
+                        value="invalid_json",
+                        expected="JSON object",
                     )
+                )
+                continue
+            try:
+                row = validate_audit_row(event_type, row, expected_run_id=run_dir.name)
+            except AuditSchemaError as error:
+                result["invalid_risk_row_count"] += 1
+                result["log_errors"].append(
+                    _risk_log_error(
+                        event_type=event_type,
+                        line_number=line_number,
+                        error=error,
+                    )
+                )
+                continue
+            versions.add(row["schema_version"])
+            if event_type == "candidate_log":
+                candidate_id = row["candidate_id"]
+                if candidate_id in candidates:
+                    duplicate_candidate_ids.add(candidate_id)
+                    continue
+                candidates[candidate_id] = row
+            elif event_type == "risk_decision_log":
+                decision_id = row["decision_id"]
+                if decision_id in decisions_by_id:
+                    duplicate_decision_ids.add(decision_id)
+                    continue
+                decisions_by_id[decision_id] = row
+                decisions_by_candidate.setdefault(row["candidate_id"], []).append(row)
             elif event_type == "kill_switch_log":
                 result["kill_switch_count"] += 1
                 result["kill_switch_active"] = result["kill_switch_active"] or bool(
@@ -111,6 +161,108 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
                 )
                 for reason in row.get("reasons") or []:
                     kill_reasons[str(reason)] += 1
+
+    invalid_candidate_ids = set(duplicate_candidate_ids)
+    for candidate_id in sorted(duplicate_candidate_ids):
+        result["invalid_risk_row_count"] += 1
+        result["log_errors"].append(
+            _plain_risk_log_error(
+                event_type="candidate_log",
+                line_number=None,
+                field="candidate_id",
+                value=candidate_id,
+                expected="unique candidate_id",
+            )
+        )
+
+    invalid_decision_ids = set(duplicate_decision_ids)
+    for decision_id in sorted(duplicate_decision_ids):
+        result["invalid_risk_row_count"] += 1
+        result["log_errors"].append(
+            _plain_risk_log_error(
+                event_type="risk_decision_log",
+                line_number=None,
+                field="decision_id",
+                value=decision_id,
+                expected="unique decision_id",
+            )
+        )
+
+    for candidate_id in sorted(set(decisions_by_candidate) - set(candidates)):
+        invalid_decision_ids.update(
+            row["decision_id"] for row in decisions_by_candidate[candidate_id]
+        )
+        result["invalid_risk_row_count"] += 1
+        result["log_errors"].append(
+            _plain_risk_log_error(
+                event_type="risk_decision_log",
+                line_number=None,
+                field="candidate_id",
+                value=candidate_id,
+                expected="matching candidate_log row",
+            )
+        )
+
+    for candidate_id, decisions in sorted(decisions_by_candidate.items()):
+        if candidate_id not in candidates:
+            continue
+        if len(decisions) != 1:
+            invalid_candidate_ids.add(candidate_id)
+            invalid_decision_ids.update(row["decision_id"] for row in decisions)
+            result["invalid_risk_row_count"] += 1
+            result["log_errors"].append(
+                _plain_risk_log_error(
+                    event_type="risk_decision_log",
+                    line_number=None,
+                    field="candidate_id",
+                    value=candidate_id,
+                    expected="exactly one risk decision",
+                )
+            )
+
+    for candidate_id in sorted(set(candidates) - set(decisions_by_candidate)):
+        invalid_candidate_ids.add(candidate_id)
+        result["invalid_risk_row_count"] += 1
+        result["log_errors"].append(
+            _plain_risk_log_error(
+                event_type="candidate_log",
+                line_number=None,
+                field="candidate_id",
+                value=candidate_id,
+                expected="matching risk_decision_log row",
+            )
+        )
+
+    reject_reasons: Counter[str] = Counter()
+    for candidate_id, candidate in candidates.items():
+        decisions = decisions_by_candidate.get(candidate_id) or []
+        if candidate_id in invalid_candidate_ids or len(decisions) != 1:
+            continue
+        decision = decisions[0]
+        if decision["decision_id"] in invalid_decision_ids:
+            continue
+        if (
+            decision["run_id"] != candidate["run_id"]
+            or decision["step_index"] != candidate["step_index"]
+        ):
+            result["invalid_risk_row_count"] += 1
+            result["log_errors"].append(
+                _plain_risk_log_error(
+                    event_type="risk_decision_log",
+                    line_number=None,
+                    field="candidate_correlation",
+                    value=decision["decision_id"],
+                    expected="same run_id and step_index as candidate",
+                )
+            )
+            continue
+        result["candidate_count"] += 1
+        if decision["status"] == "ALLOW_SHADOW":
+            result["risk_allow_count"] += 1
+        else:
+            result["risk_reject_count"] += 1
+            reject_reasons.update(decision["reasons"])
+
     if not found:
         return None
     result["shadow_risk_schema_versions"] = sorted(versions)
@@ -177,12 +329,24 @@ def safety_violations(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 })
         risk_pipeline = s.get("risk_pipeline") or {}
         for error in risk_pipeline.get("log_errors") or []:
-            out.append({
-                "run_id": s.get("run_id"),
-                "field": "risk_pipeline",
-                "value": error,
-                "expected": "valid shadow-risk-v1 JSONL",
-            })
+            if isinstance(error, dict):
+                event_type = error.get("event_type") or "risk_pipeline"
+                field = error.get("field") or "row"
+                out.append({
+                    "run_id": s.get("run_id"),
+                    "event_type": event_type,
+                    "field": f"{event_type}.{field}",
+                    "value": error.get("value"),
+                    "expected": error.get("expected"),
+                })
+            else:
+                out.append({
+                    "run_id": s.get("run_id"),
+                    "event_type": "risk_pipeline",
+                    "field": "risk_pipeline",
+                    "value": error,
+                    "expected": "valid shadow-risk-v1 JSONL",
+                })
     return out
 
 
@@ -243,6 +407,9 @@ def aggregate_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "risk_allow_count": sum(int(_num(p.get("risk_allow_count"))) for p in risk_pipelines),
         "risk_reject_count": sum(int(_num(p.get("risk_reject_count"))) for p in risk_pipelines),
         "kill_switch_count": sum(int(_num(p.get("kill_switch_count"))) for p in risk_pipelines),
+        "invalid_risk_row_count": sum(
+            int(_num(p.get("invalid_risk_row_count"))) for p in risk_pipelines
+        ),
         "kill_switch_active_runs_count": sum(
             1 for p in risk_pipelines if p.get("kill_switch_active")
         ),
@@ -299,6 +466,7 @@ def render_markdown(agg: dict[str, Any], summaries: list[dict[str, Any]], broken
         f"- risk_allow_count: {agg['risk_allow_count']}",
         f"- risk_reject_count: {agg['risk_reject_count']}",
         f"- kill_switch_count: {agg['kill_switch_count']}",
+        f"- invalid_risk_row_count: {agg['invalid_risk_row_count']}",
         f"- kill_switch_active_runs_count: {agg['kill_switch_active_runs_count']}",
         "- shadow_risk_schema_versions: "
         f"{', '.join(agg['shadow_risk_schema_versions']) or '-'}",
