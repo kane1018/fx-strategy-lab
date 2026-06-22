@@ -42,6 +42,11 @@ def _write(root, run_id, summary):
     (d / "summary.json").write_text(json.dumps(summary))
 
 
+def _write_risk_log(root, run_id, event_type, rows):
+    path = root / run_id / f"{event_type}.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+
 def test_load_and_aggregate_multiple_runs(tmp_path) -> None:
     _write(tmp_path, "r1", _summary("r1"))
     _write(tmp_path, "r2", _summary("r2", symbol="EUR_JPY", source="gmo-public",
@@ -54,6 +59,8 @@ def test_load_and_aggregate_multiple_runs(tmp_path) -> None:
     assert agg["total_final_unrealized_pnl"] == pytest.approx(1.0)
     assert set(agg["symbols"]) == {"USD_JPY", "EUR_JPY"}
     assert set(agg["sources"]) == {"mock", "gmo-public"}
+    assert agg["candidate_count"] == 0  # legacy summaries remain valid
+    assert agg["shadow_risk_schema_versions"] == []
 
 
 def test_grouping_by_symbol_source_interval_date(tmp_path) -> None:
@@ -126,3 +133,50 @@ def test_zero_runs(tmp_path) -> None:
 def test_missing_root_raises(tmp_path) -> None:
     with pytest.raises(FileNotFoundError):
         load_run_summaries(tmp_path / "nope")
+
+
+def test_phase2e_risk_logs_are_aggregated_without_breaking_legacy(tmp_path) -> None:
+    _write(tmp_path, "legacy", _summary("legacy"))
+    _write(tmp_path, "risk", _summary("risk"))
+    base = {"schema_version": "shadow-risk-v1", "run_id": "risk", "timestamp": "t"}
+    _write_risk_log(tmp_path, "risk", "candidate_log", [
+        {**base, "event_type": "candidate_log", "candidate_id": "c1"},
+        {**base, "event_type": "candidate_log", "candidate_id": "c2"},
+    ])
+    _write_risk_log(tmp_path, "risk", "risk_decision_log", [
+        {**base, "event_type": "risk_decision_log", "status": "ALLOW_SHADOW", "reasons": []},
+        {**base, "event_type": "risk_decision_log", "status": "REJECT_SHADOW",
+         "reasons": ["spread_too_wide"]},
+    ])
+    _write_risk_log(tmp_path, "risk", "kill_switch_log", [
+        {**base, "event_type": "kill_switch_log", "active": True,
+         "reasons": ["manual_stop_file_exists"]},
+    ])
+
+    summaries, broken = load_run_summaries(tmp_path)
+    assert broken == [] and len(summaries) == 2
+    agg = aggregate_summaries(summaries)
+    assert agg["candidate_count"] == 2
+    assert agg["risk_allow_count"] == 1
+    assert agg["risk_reject_count"] == 1
+    assert agg["kill_switch_count"] == 1
+    assert agg["kill_switch_active_runs_count"] == 1
+    assert agg["shadow_risk_schema_versions"] == ["shadow-risk-v1"]
+    assert agg["reject_reasons"] == {"spread_too_wide": 1}
+    assert agg["kill_switch_reasons"] == {"manual_stop_file_exists": 1}
+    md = render_markdown(agg, summaries, broken)
+    assert "## Shadow Risk Pipeline" in md
+    assert "candidate_count: 2" in md
+
+
+def test_invalid_new_schema_is_safety_violation_not_broken_legacy(tmp_path) -> None:
+    _write(tmp_path, "risk", _summary("risk"))
+    _write_risk_log(tmp_path, "risk", "candidate_log", [
+        {"event_type": "candidate_log", "run_id": "risk", "timestamp": "t"},
+    ])
+    summaries, broken = load_run_summaries(tmp_path)
+    assert broken == []
+    agg = aggregate_summaries(summaries)
+    assert agg["candidate_count"] == 1
+    assert agg["safety_violation_runs_count"] == 1
+    assert any(v["field"] == "risk_pipeline" for v in agg["safety_violations"])

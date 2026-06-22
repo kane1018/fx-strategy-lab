@@ -11,8 +11,11 @@ from __future__ import annotations
 import csv
 import io
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
+
+from app.shadow.risk import SCHEMA_VERSION
 
 # The read-only safety contract every shadow summary must keep (value each flag must hold).
 SAFE_EXPECTED = {
@@ -32,6 +35,88 @@ _NUMERIC_TOTALS = {
     "total_sell_count": "sell_count",
     "total_flat_count": "flat_count",
 }
+
+_RISK_LOG_EVENT_TYPES = (
+    "signal_decision_log",
+    "candidate_log",
+    "risk_decision_log",
+    "virtual_result_log",
+    "kill_switch_log",
+)
+
+
+def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
+    """Read optional Phase 2E-1 JSONL logs without penalizing legacy runs."""
+    result: dict[str, Any] = {
+        "candidate_count": 0,
+        "risk_allow_count": 0,
+        "risk_reject_count": 0,
+        "kill_switch_count": 0,
+        "kill_switch_active": False,
+        "shadow_risk_schema_versions": [],
+        "reject_reasons": {},
+        "kill_switch_reasons": {},
+        "log_errors": [],
+    }
+    found = False
+    versions: set[str] = set()
+    reject_reasons: Counter[str] = Counter()
+    kill_reasons: Counter[str] = Counter()
+    for event_type in _RISK_LOG_EVENT_TYPES:
+        path = run_dir / f"{event_type}.jsonl"
+        if not path.exists():
+            continue
+        found = True
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError as error:
+            result["log_errors"].append(f"{path.name}: unreadable ({error.__class__.__name__})")
+            continue
+        for line_number, line in enumerate(lines, start=1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+                if not isinstance(row, dict):
+                    raise ValueError("row is not an object")
+            except (ValueError, json.JSONDecodeError):
+                result["log_errors"].append(f"{path.name}:{line_number}: invalid_json")
+                continue
+            version = row.get("schema_version")
+            if version != SCHEMA_VERSION:
+                result["log_errors"].append(f"{path.name}:{line_number}: invalid_schema_version")
+            elif isinstance(version, str):
+                versions.add(version)
+            if row.get("event_type") != event_type:
+                result["log_errors"].append(f"{path.name}:{line_number}: invalid_event_type")
+                continue
+            if event_type == "candidate_log":
+                result["candidate_count"] += 1
+            elif event_type == "risk_decision_log":
+                status = row.get("status")
+                if status == "ALLOW_SHADOW":
+                    result["risk_allow_count"] += 1
+                elif status == "REJECT_SHADOW":
+                    result["risk_reject_count"] += 1
+                    for reason in row.get("reasons") or []:
+                        reject_reasons[str(reason)] += 1
+                else:
+                    result["log_errors"].append(
+                        f"{path.name}:{line_number}: invalid_risk_status"
+                    )
+            elif event_type == "kill_switch_log":
+                result["kill_switch_count"] += 1
+                result["kill_switch_active"] = result["kill_switch_active"] or bool(
+                    row.get("active")
+                )
+                for reason in row.get("reasons") or []:
+                    kill_reasons[str(reason)] += 1
+    if not found:
+        return None
+    result["shadow_risk_schema_versions"] = sorted(versions)
+    result["reject_reasons"] = dict(sorted(reject_reasons.items()))
+    result["kill_switch_reasons"] = dict(sorted(kill_reasons.items()))
+    return result
 
 
 def load_run_summaries(input_root: str | Path) -> tuple[list[dict[str, Any]], list[str]]:
@@ -56,6 +141,9 @@ def load_run_summaries(input_root: str | Path) -> tuple[list[dict[str, Any]], li
             if not isinstance(data, dict):
                 raise ValueError("summary.json is not an object")
             data.setdefault("run_id", child.name)
+            risk_pipeline = _load_risk_pipeline(child)
+            if risk_pipeline is not None:
+                data["risk_pipeline"] = risk_pipeline
             summaries.append(data)
         except (OSError, ValueError):
             broken.append(child.name)
@@ -87,6 +175,14 @@ def safety_violations(summaries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "value": safety.get(field),
                     "expected": expected,
                 })
+        risk_pipeline = s.get("risk_pipeline") or {}
+        for error in risk_pipeline.get("log_errors") or []:
+            out.append({
+                "run_id": s.get("run_id"),
+                "field": "risk_pipeline",
+                "value": error,
+                "expected": "valid shadow-risk-v1 JSONL",
+            })
     return out
 
 
@@ -113,6 +209,14 @@ def aggregate_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:
         for agg, src in _NUMERIC_TOTALS.items()
     }
     created = sorted(str(s.get("created_at") or "") for s in summaries if s.get("created_at"))
+    risk_pipelines = [s.get("risk_pipeline") or {} for s in summaries]
+    reject_reasons: Counter[str] = Counter()
+    kill_reasons: Counter[str] = Counter()
+    schema_versions: set[str] = set()
+    for pipeline in risk_pipelines:
+        reject_reasons.update(pipeline.get("reject_reasons") or {})
+        kill_reasons.update(pipeline.get("kill_switch_reasons") or {})
+        schema_versions.update(pipeline.get("shadow_risk_schema_versions") or [])
     return {
         "runs_count": len(summaries),
         "sources": sorted({str(s.get("source") or "unknown") for s in summaries}),
@@ -135,6 +239,16 @@ def aggregate_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "by_date": _group(summaries, "date"),
         "safety_violations": violations,
         "safety_violation_run_ids": violated_run_ids,
+        "candidate_count": sum(int(_num(p.get("candidate_count"))) for p in risk_pipelines),
+        "risk_allow_count": sum(int(_num(p.get("risk_allow_count"))) for p in risk_pipelines),
+        "risk_reject_count": sum(int(_num(p.get("risk_reject_count"))) for p in risk_pipelines),
+        "kill_switch_count": sum(int(_num(p.get("kill_switch_count"))) for p in risk_pipelines),
+        "kill_switch_active_runs_count": sum(
+            1 for p in risk_pipelines if p.get("kill_switch_active")
+        ),
+        "shadow_risk_schema_versions": sorted(schema_versions),
+        "reject_reasons": dict(sorted(reject_reasons.items())),
+        "kill_switch_reasons": dict(sorted(kill_reasons.items())),
     }
 
 
@@ -178,6 +292,20 @@ def render_markdown(agg: dict[str, Any], summaries: list[dict[str, Any]], broken
     lines += _group_md("By Symbol", agg["by_symbol"])
     lines += _group_md("By Interval", agg["by_interval"])
     lines += _group_md("By Date", agg["by_date"])
+
+    lines += [
+        "## Shadow Risk Pipeline", "",
+        f"- candidate_count: {agg['candidate_count']}",
+        f"- risk_allow_count: {agg['risk_allow_count']}",
+        f"- risk_reject_count: {agg['risk_reject_count']}",
+        f"- kill_switch_count: {agg['kill_switch_count']}",
+        f"- kill_switch_active_runs_count: {agg['kill_switch_active_runs_count']}",
+        "- shadow_risk_schema_versions: "
+        f"{', '.join(agg['shadow_risk_schema_versions']) or '-'}",
+        f"- reject_reasons: {json.dumps(agg['reject_reasons'], sort_keys=True)}",
+        f"- kill_switch_reasons: {json.dumps(agg['kill_switch_reasons'], sort_keys=True)}",
+        "",
+    ]
 
     lines += ["## Safety Violations", ""]
     if not agg["safety_violations"]:

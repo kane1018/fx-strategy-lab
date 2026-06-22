@@ -19,7 +19,7 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 2. 完了済み検証（ローカル直近）
 
-- backend: `pytest` 253 passed / `ruff check .` clean
+- backend: `pytest` 272 passed / `ruff check .` clean
 - frontend: `npm run lint` clean / `npm run test`（Vitest）36 passed / `npm run build` 成功
 - E2E: `npm run e2e`（Playwright Chromium）E2E-01〜10 passed
 - 注: 数値は直近ローカル実行時のもの。最新は各検証コマンドで再確認すること。
@@ -82,11 +82,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Phase 2E-0 / 2E-0.5設計レビュー完了** — BUY / SELL / HOLD、OrderCandidate、shadow専用RiskManager、
-  Kill switch、安全契約に加え、RiskPolicy初期値、reason code、deterministic ID、JSONL schema、STOP運用、
-  手動再開手順を確定した（[PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md)、
-  [PHASE2E0_5_SAFETY_REVIEW.md](PHASE2E0_5_SAFETY_REVIEW.md)）。
-  次候補は明示承認後のPhase 2E-1最小実装。Private API、APIキー、実注文には進まない。
+- **Phase 2E-1 local-only安全基盤実装済み** — `app/shadow/`内にimmutable OrderCandidate、RiskPolicy、
+  pure risk評価、sticky KillSwitchState、deterministic ID、fail-closed JSONL writerを追加した。集計は任意の
+  `shadow-risk-v1`ログからcandidate/allow/reject/kill/reasonを読み、legacy runとの後方互換を維持する。
+  既存sessionのデフォルト挙動には未統合で、本番API/UI、broker、Private API、APIキー、実注文への接続はない。
+  設計は [PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md) と
+  [PHASE2E0_5_SAFETY_REVIEW.md](PHASE2E0_5_SAFETY_REVIEW.md) を参照する。
 
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
 - 認証 / アクセス制御（現状ローカル read-only 前提、認証なし）。
