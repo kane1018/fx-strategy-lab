@@ -14,7 +14,7 @@ from app.shadow.aggregate import (
     safety_violations,
 )
 from app.shadow.audit import write_audit_event
-from app.shadow.audit_schema import KillSwitchAuditRecord
+from app.shadow.audit_schema import KillSwitchAuditRecord, VirtualResultAuditRecord
 from app.shadow.risk import (
     KillSwitchReason,
     RiskContext,
@@ -340,3 +340,29 @@ def test_duplicate_decision_is_violation_and_not_counted(tmp_path) -> None:
     assert agg["risk_allow_count"] == 0
     assert agg["safety_violation_runs_count"] == 1
     assert any("decision_id" in v["field"] for v in agg["safety_violations"])
+
+
+def test_virtual_result_without_allow_is_violation_and_not_counted(tmp_path) -> None:
+    _write(tmp_path, "risk", _summary("risk"))
+    candidate, decision = _write_valid_risk_pair(tmp_path, "risk", reject=True)
+    virtual_result = VirtualResultAuditRecord(
+        run_id="risk",
+        timestamp=NOW.isoformat(),
+        candidate_id=candidate.candidate_id,
+        decision_id=decision.decision_id,
+        status="VIRTUAL_RESULT",
+        position_side="flat",
+        units=0,
+        unrealized_pnl=0.0,
+    )
+    write_audit_event(
+        tmp_path,
+        run_id="risk",
+        event_type="virtual_result_log",
+        payload=virtual_result,
+    )
+
+    agg = aggregate_summaries(load_run_summaries(tmp_path)[0])
+    assert agg["virtual_result_count"] == 0
+    assert agg["safety_violation_runs_count"] == 1
+    assert any("virtual_result_log.decision_id" == v["field"] for v in agg["safety_violations"])

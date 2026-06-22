@@ -501,3 +501,23 @@ Phase 2E-2実装時の受け入れ条件:
 
 実装プロンプトでは、まずoffline integration testで受け入れ条件を固定し、その後にsession最小接続を行う。
 Private API、APIキー、broker、実注文、実資金、自動売買、本番公開API追加には進まない。
+
+## 19. Phase 2E-2実装結果
+
+Phase 2E-2のlocal-only risk/audit最小統合を実施した。
+
+実装内容:
+
+- CLIに`--enable-shadow-risk`を追加し、指定時のみrisk/audit JSONLを生成する。
+- デフォルトでは既存のshadow run挙動とsummary互換を維持する。
+- `run_shadow_session()`がrisk有効時にrun単位で1つの`KillSwitchState`を所有する。
+- `<out_root>/STOP`をrun開始前、CLIのPublic取得前、各step前、virtual fill前に確認する。
+- BUY/SELLのみ`OrderCandidate`を生成し、HOLD/NO_TRADEではcandidateを生成しない。
+- kline-onlyのsynthetic zero spreadはrisk rejectに倒し、virtual resultへ進めない。
+- explicit bid/askが渡された場合のみ`REAL_PUBLIC_BID_ASK`としてALLOW候補にできる。
+- `evaluate()`のALLOW時のみvirtual resultへ進み、candidate_id/decision_idを`virtual_result_log`へ記録する。
+- `AuditLogWriteError`時はkill switch active、halt、summary/metadata記録、exit code 2へ倒す。
+- `aggregate.py`は`virtual_result_log`がALLOW済みdecisionに紐づくことを検出し、不整合をsafety violationにする。
+
+今回もbackend公開API、`main_readonly.py`、frontend、Render/Vercel、Private API、APIキー、broker、実注文、
+実資金、自動売買には接続していない。

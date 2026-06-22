@@ -74,6 +74,7 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
         "candidate_count": 0,
         "risk_allow_count": 0,
         "risk_reject_count": 0,
+        "virtual_result_count": 0,
         "kill_switch_count": 0,
         "kill_switch_active": False,
         "shadow_risk_schema_versions": [],
@@ -90,6 +91,8 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
     decisions_by_id: dict[str, dict[str, Any]] = {}
     duplicate_decision_ids: set[str] = set()
     decisions_by_candidate: dict[str, list[dict[str, Any]]] = {}
+    virtual_results_by_decision: dict[str, dict[str, Any]] = {}
+    duplicate_virtual_decision_ids: set[str] = set()
     for event_type in _RISK_LOG_EVENT_TYPES:
         path = run_dir / f"{event_type}.jsonl"
         if not path.exists():
@@ -154,6 +157,12 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
                     continue
                 decisions_by_id[decision_id] = row
                 decisions_by_candidate.setdefault(row["candidate_id"], []).append(row)
+            elif event_type == "virtual_result_log":
+                decision_id = row["decision_id"]
+                if decision_id in virtual_results_by_decision:
+                    duplicate_virtual_decision_ids.add(decision_id)
+                    continue
+                virtual_results_by_decision[decision_id] = row
             elif event_type == "kill_switch_log":
                 result["kill_switch_count"] += 1
                 result["kill_switch_active"] = result["kill_switch_active"] or bool(
@@ -185,6 +194,19 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
                 field="decision_id",
                 value=decision_id,
                 expected="unique decision_id",
+            )
+        )
+
+    invalid_virtual_decision_ids = set(duplicate_virtual_decision_ids)
+    for decision_id in sorted(duplicate_virtual_decision_ids):
+        result["invalid_risk_row_count"] += 1
+        result["log_errors"].append(
+            _plain_risk_log_error(
+                event_type="virtual_result_log",
+                line_number=None,
+                field="decision_id",
+                value=decision_id,
+                expected="unique virtual result per decision_id",
             )
         )
 
@@ -262,6 +284,43 @@ def _load_risk_pipeline(run_dir: Path) -> dict[str, Any] | None:
         else:
             result["risk_reject_count"] += 1
             reject_reasons.update(decision["reasons"])
+
+    for decision_id, virtual_result in sorted(virtual_results_by_decision.items()):
+        if decision_id in invalid_virtual_decision_ids:
+            continue
+        decision = decisions_by_id.get(decision_id)
+        if decision is None:
+            invalid_virtual_decision_ids.add(decision_id)
+            result["invalid_risk_row_count"] += 1
+            result["log_errors"].append(
+                _plain_risk_log_error(
+                    event_type="virtual_result_log",
+                    line_number=None,
+                    field="decision_id",
+                    value=decision_id,
+                    expected="matching risk_decision_log row",
+                )
+            )
+            continue
+        if (
+            decision_id in invalid_decision_ids
+            or decision["candidate_id"] in invalid_candidate_ids
+            or decision["status"] != "ALLOW_SHADOW"
+            or virtual_result["candidate_id"] != decision["candidate_id"]
+        ):
+            invalid_virtual_decision_ids.add(decision_id)
+            result["invalid_risk_row_count"] += 1
+            result["log_errors"].append(
+                _plain_risk_log_error(
+                    event_type="virtual_result_log",
+                    line_number=None,
+                    field="decision_id",
+                    value=decision_id,
+                    expected="matching ALLOW_SHADOW decision and candidate",
+                )
+            )
+            continue
+        result["virtual_result_count"] += 1
 
     if not found:
         return None
@@ -406,6 +465,9 @@ def aggregate_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "candidate_count": sum(int(_num(p.get("candidate_count"))) for p in risk_pipelines),
         "risk_allow_count": sum(int(_num(p.get("risk_allow_count"))) for p in risk_pipelines),
         "risk_reject_count": sum(int(_num(p.get("risk_reject_count"))) for p in risk_pipelines),
+        "virtual_result_count": sum(
+            int(_num(p.get("virtual_result_count"))) for p in risk_pipelines
+        ),
         "kill_switch_count": sum(int(_num(p.get("kill_switch_count"))) for p in risk_pipelines),
         "invalid_risk_row_count": sum(
             int(_num(p.get("invalid_risk_row_count"))) for p in risk_pipelines
@@ -465,6 +527,7 @@ def render_markdown(agg: dict[str, Any], summaries: list[dict[str, Any]], broken
         f"- candidate_count: {agg['candidate_count']}",
         f"- risk_allow_count: {agg['risk_allow_count']}",
         f"- risk_reject_count: {agg['risk_reject_count']}",
+        f"- virtual_result_count: {agg['virtual_result_count']}",
         f"- kill_switch_count: {agg['kill_switch_count']}",
         f"- invalid_risk_row_count: {agg['invalid_risk_row_count']}",
         f"- kill_switch_active_runs_count: {agg['kill_switch_active_runs_count']}",

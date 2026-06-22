@@ -14,8 +14,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
+from app.shadow.risk import RiskPolicy
 from app.shadow.session import make_mock_candles, run_shadow_session
 
 
@@ -31,11 +33,43 @@ def main() -> int:
     parser.add_argument("--units", type=int, default=1)
     parser.add_argument("--max-units", type=int, default=100)
     parser.add_argument("--out-root", default="shadow_exports", help="output dir (gitignored)")
+    parser.add_argument(
+        "--enable-shadow-risk",
+        action="store_true",
+        help="enable local-only Phase 2E risk/audit JSONL integration",
+    )
     args = parser.parse_args()
 
     if args.steps <= 0:
         print("ERROR: --steps must be positive")
         return 1
+
+    if args.enable_shadow_risk:
+        policy = RiskPolicy()
+        if args.symbol not in policy.allowed_symbols:
+            print(f"ERROR: --enable-shadow-risk supports symbols: {policy.allowed_symbols}")
+            return 1
+        if args.interval not in policy.allowed_intervals:
+            print(f"ERROR: --enable-shadow-risk supports intervals: {policy.allowed_intervals}")
+            return 1
+        stop_path = Path(args.out_root) / "STOP"
+        if stop_path.exists():
+            summary = run_shadow_session(
+                symbol=args.symbol,
+                interval=args.interval,
+                source=args.source,
+                candles=[],
+                out_root=args.out_root,
+                steps=args.steps,
+                units=args.units,
+                max_units=args.max_units,
+                enable_shadow_risk=True,
+            )
+            print(f"run_id: {summary['run_id']}")
+            print(f"output: {args.out_root}/{summary['run_id']}/")
+            print("files: events.jsonl, summary.json, metadata.json, risk/audit JSONL")
+            print(f"halted={summary['halted']} halt_reason={summary['halt_reason']}")
+            return int(summary["exit_code"])
 
     if args.source == "mock":
         candles = make_mock_candles(args.steps)
@@ -59,17 +93,27 @@ def main() -> int:
         steps=args.steps,
         units=args.units,
         max_units=args.max_units,
+        enable_shadow_risk=args.enable_shadow_risk,
     )
     print(f"run_id: {summary['run_id']}")
     print(f"output: {args.out_root}/{summary['run_id']}/")
-    print("files: events.jsonl, summary.json, metadata.json")
+    if args.enable_shadow_risk:
+        print("files: events.jsonl, summary.json, metadata.json, risk/audit JSONL")
+    else:
+        print("files: events.jsonl, summary.json, metadata.json")
     print(
         f"steps_executed={summary['steps_executed']} orders={summary['virtual_orders_count']} "
         f"final_position={summary['final_position_side']}:{summary['final_position_units']} "
         f"pnl={summary['final_unrealized_pnl']:.5f} halted={summary['halted']}"
     )
+    if args.enable_shadow_risk:
+        print(
+            f"shadow_risk candidates={summary['candidate_count']} "
+            f"allow={summary['risk_allow_count']} reject={summary['risk_reject_count']} "
+            f"kill_switch={summary['kill_switch_active']} exit_code={summary['exit_code']}"
+        )
     print(f"safety.real_order={summary['safety']['real_order']} (no-order shadow run)")
-    return 0
+    return int(summary.get("exit_code", 0))
 
 
 if __name__ == "__main__":
