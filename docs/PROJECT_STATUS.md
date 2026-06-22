@@ -82,12 +82,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Phase 2E-3 Public ticker bid/ask provenance連携設計完了（docs-only）** — Phase 2E-2.5監査は
-  B判定で修正必須事項なし。次の実装前に、GMO Public `/v1/ticker`由来bid/askだけを
-  `REAL_PUBLIC_BID_ASK`として扱う条件、kline-onlyをsynthetic spread rejectに倒す境界、
-  timestamp/freshness/spread検証、raw response非保存、sessionをno-networkに保つ責務分離、fail closed、
-  audit/summary metadata、実装時test方針を設計した。今回の作業はdocs-onlyで、Public ticker bid/ask連携実装、
-  GMO Public run、Private API、APIキー、broker、実注文、本番公開API追加は行っていない。
+- **Phase 2E-3 Public ticker bid/ask provenance連携実装完了（local-only）** — Phase 2E-2.5監査と
+  Phase 2E-3設計に基づき、GMO Public `/v1/ticker`由来bid/askだけを`REAL_PUBLIC_BID_ASK`として扱う
+  `MarketSnapshot` validationを追加し、`--enable-shadow-risk`経路へ最小接続した。kline-onlyはsynthetic
+  spread rejectを維持し、missing/invalid/stale/future/skew tickerはfail closedに倒す。summary/metadataには
+  ticker optional countsと`raw_response_saved=false`を追加し、legacy summary互換を維持した。今回の作業では
+  GMO Public実run、Private API、APIキー、broker、実注文、本番公開API追加は行っていない。
   詳細は [PHASE2E3_PUBLIC_TICKER_BID_ASK_DESIGN.md](PHASE2E3_PUBLIC_TICKER_BID_ASK_DESIGN.md)。
 - **Phase 2E-2.5 session統合監査完了（B判定）** — `app/shadow/`内にimmutable
   OrderCandidate、RiskPolicy、pure risk評価、sticky KillSwitchState、deterministic ID、fail-closed JSONL writerを

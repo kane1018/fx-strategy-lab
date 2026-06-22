@@ -25,6 +25,9 @@ from app.shadow.risk import (
     Disposition,
     KillSwitchReason,
     KillSwitchState,
+    MarketSnapshot,
+    MarketSnapshotValidationError,
+    RejectReason,
     RiskContext,
     RiskPolicy,
     RiskStatus,
@@ -40,6 +43,8 @@ from app.shadow.service import ShadowTrader, SignalFn
 from app.shadow.signals import momentum_signal
 
 RiskTickerFn = Callable[[Candle], Ticker]
+RiskSnapshotFn = Callable[[Candle, datetime], MarketSnapshot | None]
+NowFn = Callable[[], datetime]
 
 
 def make_mock_candles(count: int, *, start: float = 150.0, step: float = 0.1) -> list[Candle]:
@@ -73,6 +78,13 @@ def _canonical_or_fallback(value: str, fallback: datetime) -> str:
         return canonical_timestamp(value)
     except (TypeError, ValueError):
         return canonical_timestamp(fallback)
+
+
+def _current_utc(now_fn: NowFn | None = None) -> datetime:
+    now = now_fn() if now_fn is not None else datetime.now(UTC)
+    if now.tzinfo is None:
+        raise ValueError("now_fn must return timezone-aware datetime")
+    return now.astimezone(UTC)
 
 
 def _event_without_order(
@@ -114,13 +126,16 @@ def run_shadow_session(
     signal_fn: SignalFn = momentum_signal,
     enable_shadow_risk: bool = False,
     risk_ticker_fn: RiskTickerFn | None = None,
+    risk_snapshot_fn: RiskSnapshotFn | None = None,
+    public_ticker_fetch_error_count: int = 0,
     stop_file: str | Path | None = None,
+    now_fn: NowFn | None = None,
 ) -> dict:
     """Run a bounded, no-order shadow session and persist events + summary. Returns summary."""
-    created_at_dt = datetime.now(UTC)
+    created_at_dt = _current_utc(now_fn)
     created_at = created_at_dt.isoformat()
     run_id = run_id or (
-        f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_shadow_{symbol}_{source}"
+        f"{created_at_dt.strftime('%Y%m%d_%H%M%S')}_shadow_{symbol}_{source}"
     )
     steps_requested = steps
     usable = candles[: max(0, steps)]
@@ -168,6 +183,14 @@ def run_shadow_session(
         risk_reject_count = 0
         kill_switch_count = 0
         audit_log_write_error_count = 0
+        ticker_bid_ask_used_count = 0
+        real_public_bid_ask_count = 0
+        synthetic_spread_reject_count = 0
+        ticker_missing_count = 0
+        ticker_stale_count = 0
+        ticker_invalid_count = 0
+        ticker_kline_skew_reject_count = 0
+        spread_too_wide_count = 0
         existing_candidate_ids: set[str] = set()
         last_candidate_timestamp: str | None = None
         kill_switch_reason = ""
@@ -262,9 +285,62 @@ def run_shadow_session(
             else:
                 flat += 1
 
+            evaluation_time_dt = _current_utc(now_fn)
+            risk_ticker = ticker
+            risk_market_timestamp = market_timestamp
+            spread_provenance = SpreadProvenance.SYNTHETIC_ZERO
+            no_candidate_reasons: tuple[RejectReason, ...] = ()
+
+            if signal_label is not SignalLabel.HOLD:
+                if risk_snapshot_fn is not None:
+                    try:
+                        snapshot = risk_snapshot_fn(candle, evaluation_time_dt)
+                    except MarketSnapshotValidationError as error:
+                        if error.counter_name == "ticker_stale_count":
+                            ticker_stale_count += 1
+                        elif error.counter_name == "ticker_kline_skew_reject_count":
+                            ticker_kline_skew_reject_count += 1
+                        elif error.counter_name == "ticker_missing_count":
+                            ticker_missing_count += 1
+                        else:
+                            ticker_invalid_count += 1
+                        no_candidate_reasons = (error.reason,)
+                    except (TypeError, ValueError, OverflowError):
+                        ticker_invalid_count += 1
+                        no_candidate_reasons = (RejectReason.INVALID_DATA,)
+                    else:
+                        if snapshot is None:
+                            ticker_missing_count += 1
+                            no_candidate_reasons = (RejectReason.MISSING_REQUIRED_FIELDS,)
+                        elif not isinstance(snapshot, MarketSnapshot):
+                            ticker_invalid_count += 1
+                            no_candidate_reasons = (RejectReason.INVALID_DATA,)
+                        else:
+                            risk_ticker = Ticker(
+                                symbol=snapshot.symbol,
+                                bid=float(snapshot.bid),
+                                ask=float(snapshot.ask),
+                                time=snapshot.ticker_timestamp,
+                            )
+                            risk_market_timestamp = snapshot.ticker_timestamp
+                            spread_provenance = snapshot.spread_provenance
+                elif risk_ticker_fn is not None:
+                    try:
+                        risk_ticker = risk_ticker_fn(candle)
+                        risk_market_timestamp = _canonical_or_fallback(
+                            risk_ticker.time, fallback_time
+                        )
+                    except (TypeError, ValueError, OverflowError):
+                        ticker_invalid_count += 1
+                        no_candidate_reasons = (RejectReason.INVALID_DATA,)
+                    else:
+                        # A bare Ticker hook is explicit bid/ask, but not verified
+                        # Public provenance. Keep it fail-closed.
+                        spread_provenance = SpreadProvenance.UNKNOWN
+
             disposition = (
                 Disposition.NO_TRADE
-                if signal_label is SignalLabel.HOLD
+                if signal_label is SignalLabel.HOLD or no_candidate_reasons
                 else Disposition.CANDIDATE_CREATED
             )
             signal_record = SignalDecisionAuditRecord(
@@ -273,8 +349,8 @@ def run_shadow_session(
                 step_index=i,
                 signal_label=signal_label,
                 disposition=disposition,
-                reason_codes=(),
-                market_data_timestamp=market_timestamp,
+                reason_codes=no_candidate_reasons,
+                market_data_timestamp=risk_market_timestamp,
                 source=source,
                 symbol=symbol,
                 interval=interval,
@@ -289,7 +365,7 @@ def run_shadow_session(
                 )
                 break
 
-            if signal_label is SignalLabel.HOLD:
+            if signal_label is SignalLabel.HOLD or no_candidate_reasons:
                 event = _event_without_order(trader, signal=signal, ticker=ticker)
                 max_abs_units = max(max_abs_units, event.position_units)
                 event_rows.append({
@@ -300,31 +376,36 @@ def run_shadow_session(
                 })
                 continue
 
-            risk_ticker = risk_ticker_fn(candle) if risk_ticker_fn is not None else ticker
-            risk_market_timestamp = _canonical_or_fallback(risk_ticker.time, fallback_time)
-            spread_provenance = (
-                SpreadProvenance.REAL_PUBLIC_BID_ASK
-                if risk_ticker_fn is not None
-                else SpreadProvenance.SYNTHETIC_ZERO
-            )
-            candidate = create_order_candidate(
-                signal_label=signal_label,
-                run_id=run_id,
-                step_index=i,
-                timestamp=market_timestamp,
-                market_data_timestamp=risk_market_timestamp,
-                source=source,
-                symbol=symbol,
-                interval=interval,
-                quantity=units,
-                bid=risk_ticker.bid,
-                ask=risk_ticker.ask,
-                spread_provenance=spread_provenance,
-                signal_name=getattr(signal_fn, "__name__", "signal_fn"),
-                signal_reason=signal.reason or "signal",
-                confidence=0.5,
-                kill_switch=kill_switch,
-            )
+            try:
+                candidate = create_order_candidate(
+                    signal_label=signal_label,
+                    run_id=run_id,
+                    step_index=i,
+                    timestamp=market_timestamp,
+                    market_data_timestamp=risk_market_timestamp,
+                    source=source,
+                    symbol=symbol,
+                    interval=interval,
+                    quantity=units,
+                    bid=risk_ticker.bid,
+                    ask=risk_ticker.ask,
+                    spread_provenance=spread_provenance,
+                    signal_name=getattr(signal_fn, "__name__", "signal_fn"),
+                    signal_reason=signal.reason or "signal",
+                    confidence=0.5,
+                    kill_switch=kill_switch,
+                )
+            except (TypeError, ValueError, OverflowError):
+                ticker_invalid_count += 1
+                event = _event_without_order(trader, signal=signal, ticker=ticker)
+                max_abs_units = max(max_abs_units, event.position_units)
+                event_rows.append({
+                    "run_id": run_id,
+                    "source": source,
+                    "interval": interval,
+                    **asdict(event),
+                })
+                continue
             if candidate is None:
                 event = _event_without_order(trader, signal=signal, ticker=ticker)
                 max_abs_units = max(max_abs_units, event.position_units)
@@ -345,11 +426,12 @@ def run_shadow_session(
                 )
                 break
             candidate_count += 1
+            if spread_provenance is SpreadProvenance.REAL_PUBLIC_BID_ASK:
+                ticker_bid_ask_used_count += 1
+                real_public_bid_ask_count += 1
 
             context = RiskContext(
-                evaluation_time=datetime.fromisoformat(
-                    market_timestamp.replace("Z", "+00:00")
-                ).astimezone(UTC),
+                evaluation_time=evaluation_time_dt,
                 spread_provenance=spread_provenance,
                 candidates_in_run=candidate_count - 1,
                 candidates_today=candidate_count - 1,
@@ -372,6 +454,10 @@ def run_shadow_session(
 
             if decision.status is RiskStatus.REJECT_SHADOW:
                 risk_reject_count += 1
+                if RejectReason.SYNTHETIC_SPREAD_NOT_ALLOWED in decision.reasons:
+                    synthetic_spread_reject_count += 1
+                if RejectReason.SPREAD_TOO_WIDE in decision.reasons:
+                    spread_too_wide_count += 1
                 event = _event_without_order(trader, signal=signal, ticker=ticker)
                 max_abs_units = max(max_abs_units, event.position_units)
                 event_rows.append({
@@ -448,6 +534,18 @@ def run_shadow_session(
             "audit_log_write_error_count": audit_log_write_error_count,
             "safety_violation_count": 1 if exit_code == 2 else 0,
             "exit_code": exit_code,
+            "ticker_bid_ask_used_count": ticker_bid_ask_used_count,
+            "real_public_bid_ask_count": real_public_bid_ask_count,
+            "synthetic_spread_reject_count": synthetic_spread_reject_count,
+            "ticker_missing_count": ticker_missing_count,
+            "ticker_stale_count": ticker_stale_count,
+            "ticker_invalid_count": ticker_invalid_count,
+            "ticker_kline_skew_reject_count": ticker_kline_skew_reject_count,
+            "public_ticker_fetch_error_count": public_ticker_fetch_error_count,
+            "spread_too_wide_count": spread_too_wide_count,
+            "raw_response_saved": False,
+            "private_api_used": False,
+            "api_key_used": False,
         }
 
     with (run_dir / "events.jsonl").open("w") as fh:
@@ -502,6 +600,16 @@ def run_shadow_session(
             "shadow_risk_enabled": True,
             "exit_code": exit_code,
             "halt_reason": summary["halt_reason"],
+            "ticker_bid_ask_used_count": risk_summary["ticker_bid_ask_used_count"],
+            "real_public_bid_ask_count": risk_summary["real_public_bid_ask_count"],
+            "synthetic_spread_reject_count": risk_summary["synthetic_spread_reject_count"],
+            "ticker_missing_count": risk_summary["ticker_missing_count"],
+            "ticker_stale_count": risk_summary["ticker_stale_count"],
+            "ticker_invalid_count": risk_summary["ticker_invalid_count"],
+            "ticker_kline_skew_reject_count": risk_summary["ticker_kline_skew_reject_count"],
+            "public_ticker_fetch_error_count": risk_summary["public_ticker_fetch_error_count"],
+            "spread_too_wide_count": risk_summary["spread_too_wide_count"],
+            "raw_response_saved": False,
         })
     with (run_dir / "metadata.json").open("w") as fh:
         json.dump(metadata, fh, ensure_ascii=False, indent=2)

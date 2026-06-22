@@ -34,6 +34,17 @@ _NUMERIC_TOTALS = {
 }
 
 _RISK_LOG_EVENT_TYPES = tuple(sorted(AUDIT_EVENT_TYPES))
+_TICKER_SUMMARY_TOTALS = (
+    "ticker_bid_ask_used_count",
+    "real_public_bid_ask_count",
+    "synthetic_spread_reject_count",
+    "ticker_missing_count",
+    "ticker_stale_count",
+    "ticker_invalid_count",
+    "ticker_kline_skew_reject_count",
+    "public_ticker_fetch_error_count",
+    "spread_too_wide_count",
+)
 
 
 def _risk_log_error(
@@ -478,6 +489,10 @@ def aggregate_summaries(summaries: list[dict[str, Any]]) -> dict[str, Any]:
         "shadow_risk_schema_versions": sorted(schema_versions),
         "reject_reasons": dict(sorted(reject_reasons.items())),
         "kill_switch_reasons": dict(sorted(kill_reasons.items())),
+        **{
+            field: sum(int(_num(s.get(field))) for s in summaries)
+            for field in _TICKER_SUMMARY_TOTALS
+        },
     }
 
 
@@ -535,6 +550,17 @@ def render_markdown(agg: dict[str, Any], summaries: list[dict[str, Any]], broken
         f"{', '.join(agg['shadow_risk_schema_versions']) or '-'}",
         f"- reject_reasons: {json.dumps(agg['reject_reasons'], sort_keys=True)}",
         f"- kill_switch_reasons: {json.dumps(agg['kill_switch_reasons'], sort_keys=True)}",
+        "",
+        "## Public Ticker Bid/Ask", "",
+        f"- ticker_bid_ask_used_count: {agg['ticker_bid_ask_used_count']}",
+        f"- real_public_bid_ask_count: {agg['real_public_bid_ask_count']}",
+        f"- synthetic_spread_reject_count: {agg['synthetic_spread_reject_count']}",
+        f"- ticker_missing_count: {agg['ticker_missing_count']}",
+        f"- ticker_stale_count: {agg['ticker_stale_count']}",
+        f"- ticker_invalid_count: {agg['ticker_invalid_count']}",
+        f"- ticker_kline_skew_reject_count: {agg['ticker_kline_skew_reject_count']}",
+        f"- public_ticker_fetch_error_count: {agg['public_ticker_fetch_error_count']}",
+        f"- spread_too_wide_count: {agg['spread_too_wide_count']}",
         "",
     ]
 

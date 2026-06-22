@@ -11,13 +11,17 @@ import json
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any
 
 SCHEMA_VERSION = "shadow-risk-v1"
+MARKET_SNAPSHOT_SCHEMA_VERSION = "market-snapshot-v1"
 POLICY_ID = "shadow-risk-policy-v1"
 DEFAULT_STOP_FILE = "shadow_exports/STOP"
+DEFAULT_MAX_TICKER_AGE_SECONDS = 30
+DEFAULT_MAX_TICKER_KLINE_SKEW_SECONDS = 90
+USD_JPY_PIP = Decimal("0.01")
 
 
 class SignalLabel(str, Enum):
@@ -92,6 +96,81 @@ class SpreadProvenance(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class MarketSnapshotValidationError(ValueError):
+    """A sanitized public market snapshot could not be trusted for risk evaluation."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: RejectReason,
+        counter_name: str = "ticker_invalid_count",
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.counter_name = counter_name
+
+
+@dataclass(frozen=True)
+class MarketSnapshot:
+    """Sanitized local-only public ticker/kline snapshot.
+
+    This DTO intentionally stores only normalized values required for shadow risk. It
+    never carries raw responses, headers, account identifiers, broker order ids, or
+    credential material.
+    """
+
+    schema_version: str
+    source: str
+    symbol: str
+    interval: str
+    kline_timestamp: str
+    ticker_timestamp: str
+    bid: Decimal
+    ask: Decimal
+    mid: Decimal
+    spread_pips: Decimal
+    spread_provenance: SpreadProvenance
+    private_api_used: bool = False
+    api_key_used: bool = False
+    raw_response_saved: bool = False
+    validation_status: str = "valid"
+    reject_reason: RejectReason | None = None
+
+    def __post_init__(self) -> None:
+        if self.schema_version != MARKET_SNAPSHOT_SCHEMA_VERSION:
+            raise ValueError(f"schema_version must be {MARKET_SNAPSHOT_SCHEMA_VERSION}")
+        if self.source != "gmo-public":
+            raise ValueError("MarketSnapshot source must be gmo-public")
+        text_fields = (
+            self.symbol,
+            self.interval,
+            self.kline_timestamp,
+            self.ticker_timestamp,
+        )
+        if any(not isinstance(value, str) or not value.strip() for value in text_fields):
+            raise ValueError("MarketSnapshot text fields must be non-empty")
+        canonical_timestamp(self.kline_timestamp)
+        canonical_timestamp(self.ticker_timestamp)
+        if self.spread_provenance is not SpreadProvenance.REAL_PUBLIC_BID_ASK:
+            raise ValueError("MarketSnapshot requires REAL_PUBLIC_BID_ASK provenance")
+        if self.private_api_used or self.api_key_used or self.raw_response_saved:
+            raise ValueError("MarketSnapshot safety flags must stay false")
+        for value in (self.bid, self.ask, self.mid, self.spread_pips):
+            if not isinstance(value, Decimal) or not value.is_finite():
+                raise ValueError("MarketSnapshot numeric values must be finite Decimals")
+        if self.bid <= 0 or self.ask <= 0 or self.ask < self.bid:
+            raise ValueError("MarketSnapshot bid/ask must be positive and ask >= bid")
+        if self.spread_pips < 0:
+            raise ValueError("MarketSnapshot spread_pips must be non-negative")
+        if self.mid != (self.bid + self.ask) / Decimal("2"):
+            raise ValueError("MarketSnapshot mid must equal (bid + ask) / 2")
+        if self.spread_pips != (self.ask - self.bid) / USD_JPY_PIP:
+            raise ValueError("MarketSnapshot spread_pips mismatch")
+        if self.validation_status != "valid" or self.reject_reason is not None:
+            raise ValueError("MarketSnapshot represents valid snapshots only")
+
+
 def signal_label_from_side(side: str) -> SignalLabel:
     """Convert the existing buy/sell/flat boundary explicitly into Phase 2E labels."""
     normalized = side.strip().lower()
@@ -131,6 +210,16 @@ def _canonical_decimal(value: float | Decimal | str) -> str:
     if "." in rendered:
         rendered = rendered.rstrip("0").rstrip(".")
     return rendered or "0"
+
+
+def _parse_finite_decimal(value: float | Decimal | str) -> Decimal:
+    try:
+        decimal = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError) as error:
+        raise ValueError("numeric value must be Decimal-compatible") from error
+    if not decimal.is_finite():
+        raise ValueError("numeric value must be finite")
+    return decimal
 
 
 def _short_hash(payload: dict[str, Any]) -> str:
@@ -465,12 +554,137 @@ class RiskDecision:
             raise ValueError("RiskDecision live/order flags must remain false")
 
 
-def calculate_spread_pips(*, symbol: str, bid: float, ask: float) -> float:
+def create_public_market_snapshot(
+    *,
+    symbol: str,
+    interval: str,
+    kline_timestamp: str | datetime,
+    ticker_symbol: str,
+    ticker_bid: float | Decimal | str,
+    ticker_ask: float | Decimal | str,
+    ticker_timestamp: str | datetime,
+    evaluation_time: str | datetime,
+    source: str = "gmo-public",
+    max_ticker_age_seconds: int = DEFAULT_MAX_TICKER_AGE_SECONDS,
+    max_ticker_kline_skew_seconds: int = DEFAULT_MAX_TICKER_KLINE_SKEW_SECONDS,
+    max_future_skew_seconds: int = 5,
+    private_api_used: bool = False,
+    api_key_used: bool = False,
+    raw_response_saved: bool = False,
+) -> MarketSnapshot:
+    """Validate public ticker bid/ask and return a sanitized risk snapshot.
+
+    Raises MarketSnapshotValidationError when any provenance, timestamp, or numeric
+    condition fails. The caller should fail closed and never fall back to Private/auth.
+    """
+    if source != "gmo-public" or private_api_used or api_key_used or raw_response_saved:
+        raise MarketSnapshotValidationError(
+            "unsafe public ticker provenance",
+            reason=RejectReason.SAFETY_FLAG_VIOLATION,
+        )
+    if ticker_symbol != symbol:
+        raise MarketSnapshotValidationError(
+            "ticker symbol mismatch",
+            reason=RejectReason.INVALID_DATA,
+        )
+    if ticker_bid is None or ticker_ask is None or ticker_timestamp in (None, ""):
+        raise MarketSnapshotValidationError(
+            "missing public ticker bid/ask/timestamp",
+            reason=RejectReason.MISSING_REQUIRED_FIELDS,
+            counter_name="ticker_missing_count",
+        )
+    try:
+        kline_time = _as_utc(kline_timestamp)
+        ticker_time = _as_utc(ticker_timestamp)
+        evaluated_at = _as_utc(evaluation_time)
+    except (TypeError, ValueError) as error:
+        raise MarketSnapshotValidationError(
+            "invalid public ticker timestamp",
+            reason=RejectReason.INVALID_DATA,
+        ) from error
+    if not isinstance(max_ticker_age_seconds, int) or max_ticker_age_seconds < 0:
+        raise MarketSnapshotValidationError(
+            "invalid ticker age policy",
+            reason=RejectReason.UNKNOWN_STATE,
+        )
+    if not isinstance(max_ticker_kline_skew_seconds, int) or max_ticker_kline_skew_seconds < 0:
+        raise MarketSnapshotValidationError(
+            "invalid ticker/kline skew policy",
+            reason=RejectReason.UNKNOWN_STATE,
+        )
+    if not isinstance(max_future_skew_seconds, int) or max_future_skew_seconds < 0:
+        raise MarketSnapshotValidationError(
+            "invalid future skew policy",
+            reason=RejectReason.UNKNOWN_STATE,
+        )
+    try:
+        bid = _parse_finite_decimal(ticker_bid)
+        ask = _parse_finite_decimal(ticker_ask)
+    except ValueError as error:
+        raise MarketSnapshotValidationError(
+            "invalid public ticker bid/ask",
+            reason=RejectReason.INVALID_DATA,
+        ) from error
+    if bid <= 0 or ask <= 0 or ask < bid:
+        raise MarketSnapshotValidationError(
+            "public ticker bid/ask failed bounds",
+            reason=RejectReason.INVALID_DATA,
+        )
+    age_seconds = (evaluated_at - ticker_time).total_seconds()
+    if age_seconds > max_ticker_age_seconds:
+        raise MarketSnapshotValidationError(
+            "stale public ticker",
+            reason=RejectReason.STALE_DATA,
+            counter_name="ticker_stale_count",
+        )
+    if age_seconds < -max_future_skew_seconds:
+        raise MarketSnapshotValidationError(
+            "future public ticker timestamp",
+            reason=RejectReason.INVALID_DATA,
+        )
+    if abs((ticker_time - kline_time).total_seconds()) > max_ticker_kline_skew_seconds:
+        raise MarketSnapshotValidationError(
+            "ticker/kline timestamp skew exceeded",
+            reason=RejectReason.STALE_DATA,
+            counter_name="ticker_kline_skew_reject_count",
+        )
+    spread_pips = (ask - bid) / USD_JPY_PIP
+    if not spread_pips.is_finite() or spread_pips < 0:
+        raise MarketSnapshotValidationError(
+            "invalid public ticker spread",
+            reason=RejectReason.INVALID_DATA,
+        )
+    return MarketSnapshot(
+        schema_version=MARKET_SNAPSHOT_SCHEMA_VERSION,
+        source=source,
+        symbol=symbol,
+        interval=interval,
+        kline_timestamp=canonical_timestamp(kline_time),
+        ticker_timestamp=canonical_timestamp(ticker_time),
+        bid=bid,
+        ask=ask,
+        mid=(bid + ask) / Decimal("2"),
+        spread_pips=spread_pips,
+        spread_provenance=SpreadProvenance.REAL_PUBLIC_BID_ASK,
+        private_api_used=False,
+        api_key_used=False,
+        raw_response_saved=False,
+    )
+
+
+def calculate_spread_pips(
+    *,
+    symbol: str,
+    bid: float | Decimal | str,
+    ask: float | Decimal | str,
+) -> float:
     if symbol != "USD_JPY":
         raise ValueError("spread conversion is defined only for USD_JPY in Phase 2E-1")
-    if not all(math.isfinite(value) and value > 0 for value in (bid, ask)) or ask < bid:
+    bid_decimal = _parse_finite_decimal(bid)
+    ask_decimal = _parse_finite_decimal(ask)
+    if bid_decimal <= 0 or ask_decimal <= 0 or ask_decimal < bid_decimal:
         raise ValueError("bid/ask must be finite, positive, and ask >= bid")
-    return (ask - bid) / 0.01
+    return float((ask_decimal - bid_decimal) / USD_JPY_PIP)
 
 
 def create_order_candidate(

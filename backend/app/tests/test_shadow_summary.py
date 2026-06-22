@@ -232,6 +232,43 @@ def test_phase2e_risk_logs_are_aggregated_without_breaking_legacy(tmp_path) -> N
     assert "candidate_count: 2" in md
 
 
+def test_public_ticker_optional_summary_counts_are_backward_compatible(tmp_path) -> None:
+    _write(tmp_path, "legacy", _summary("legacy"))
+    _write(
+        tmp_path,
+        "ticker",
+        _summary(
+            "ticker",
+            shadow_risk_enabled=True,
+            ticker_bid_ask_used_count=2,
+            real_public_bid_ask_count=2,
+            synthetic_spread_reject_count=1,
+            ticker_missing_count=1,
+            ticker_stale_count=1,
+            ticker_invalid_count=1,
+            ticker_kline_skew_reject_count=1,
+            public_ticker_fetch_error_count=1,
+            spread_too_wide_count=1,
+        ),
+    )
+
+    summaries, broken = load_run_summaries(tmp_path)
+    agg = aggregate_summaries(summaries)
+    assert broken == []
+    assert agg["ticker_bid_ask_used_count"] == 2
+    assert agg["real_public_bid_ask_count"] == 2
+    assert agg["synthetic_spread_reject_count"] == 1
+    assert agg["ticker_missing_count"] == 1
+    assert agg["ticker_stale_count"] == 1
+    assert agg["ticker_invalid_count"] == 1
+    assert agg["ticker_kline_skew_reject_count"] == 1
+    assert agg["public_ticker_fetch_error_count"] == 1
+    assert agg["spread_too_wide_count"] == 1
+    md = render_markdown(agg, summaries, broken)
+    assert "## Public Ticker Bid/Ask" in md
+    assert "real_public_bid_ask_count: 2" in md
+
+
 def test_invalid_new_schema_is_safety_violation_not_broken_legacy(tmp_path) -> None:
     _write(tmp_path, "risk", _summary("risk"))
     _write_risk_log(tmp_path, "risk", "candidate_log", [

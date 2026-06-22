@@ -17,7 +17,7 @@ import argparse
 from pathlib import Path
 
 from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
-from app.shadow.risk import RiskPolicy
+from app.shadow.risk import RiskPolicy, create_public_market_snapshot
 from app.shadow.session import make_mock_candles, run_shadow_session
 
 
@@ -71,6 +71,9 @@ def main() -> int:
             print(f"halted={summary['halted']} halt_reason={summary['halt_reason']}")
             return int(summary["exit_code"])
 
+    risk_snapshot_fn = None
+    public_ticker_fetch_error_count = 0
+
     if args.source == "mock":
         candles = make_mock_candles(args.steps)
     else:
@@ -79,6 +82,32 @@ def main() -> int:
             candles = client.fetch_candles(
                 args.symbol, args.interval, limit=args.steps, date=args.date
             )
+            if args.enable_shadow_risk:
+                try:
+                    public_ticker = client.fetch_ticker(args.symbol)
+                except GmoPublicError as error:
+                    public_ticker_fetch_error_count = 1
+                    print(
+                        "WARNING: Public ticker unavailable; fail closed without "
+                        f"REAL_PUBLIC_BID_ASK: {error}"
+                    )
+                else:
+                    policy = RiskPolicy()
+
+                    def public_risk_snapshot(candle, evaluation_time):
+                        return create_public_market_snapshot(
+                            symbol=args.symbol,
+                            interval=args.interval,
+                            kline_timestamp=candle.time,
+                            ticker_symbol=public_ticker.symbol,
+                            ticker_bid=public_ticker.bid,
+                            ticker_ask=public_ticker.ask,
+                            ticker_timestamp=public_ticker.time,
+                            evaluation_time=evaluation_time,
+                            max_future_skew_seconds=policy.max_future_skew_seconds,
+                        )
+
+                    risk_snapshot_fn = public_risk_snapshot
         except GmoPublicError as error:
             # Do not fall back to any authenticated/Private path.
             print(f"ERROR: {error}")
@@ -94,6 +123,8 @@ def main() -> int:
         units=args.units,
         max_units=args.max_units,
         enable_shadow_risk=args.enable_shadow_risk,
+        risk_snapshot_fn=risk_snapshot_fn,
+        public_ticker_fetch_error_count=public_ticker_fetch_error_count,
     )
     print(f"run_id: {summary['run_id']}")
     print(f"output: {args.out_root}/{summary['run_id']}/")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import FrozenInstanceError, fields, replace
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 
@@ -13,6 +14,7 @@ from app.shadow.risk import (
     SCHEMA_VERSION,
     KillSwitchReason,
     KillSwitchState,
+    MarketSnapshotValidationError,
     OrderCandidate,
     RejectReason,
     RiskContext,
@@ -20,8 +22,10 @@ from app.shadow.risk import (
     RiskStatus,
     SignalLabel,
     SpreadProvenance,
+    calculate_spread_pips,
     can_process_virtual_result,
     create_order_candidate,
+    create_public_market_snapshot,
     evaluate,
     signal_label_from_side,
 )
@@ -71,6 +75,80 @@ def _malformed_candidate(**overrides):
     for key, value in overrides.items():
         object.__setattr__(clone, key, value)
     return clone
+
+
+def _public_snapshot(**overrides):
+    values = {
+        "symbol": "USD_JPY",
+        "interval": "M1",
+        "kline_timestamp": MARKET_TIME,
+        "ticker_symbol": "USD_JPY",
+        "ticker_bid": "154.100",
+        "ticker_ask": "154.104",
+        "ticker_timestamp": MARKET_TIME,
+        "evaluation_time": NOW,
+    }
+    values.update(overrides)
+    return create_public_market_snapshot(**values)
+
+
+def test_public_market_snapshot_validates_real_public_bid_ask() -> None:
+    snapshot = _public_snapshot()
+    assert snapshot.source == "gmo-public"
+    assert snapshot.symbol == "USD_JPY"
+    assert snapshot.bid == Decimal("154.100")
+    assert snapshot.ask == Decimal("154.104")
+    assert snapshot.spread_pips == Decimal("0.4")
+    assert snapshot.spread_provenance is SpreadProvenance.REAL_PUBLIC_BID_ASK
+    assert snapshot.private_api_used is False
+    assert snapshot.api_key_used is False
+    assert snapshot.raw_response_saved is False
+
+
+@pytest.mark.parametrize(
+    ("changes", "reason", "counter"),
+    [
+        ({"ticker_bid": None}, RejectReason.MISSING_REQUIRED_FIELDS, "ticker_missing_count"),
+        ({"ticker_ask": None}, RejectReason.MISSING_REQUIRED_FIELDS, "ticker_missing_count"),
+        ({"ticker_bid": "0"}, RejectReason.INVALID_DATA, "ticker_invalid_count"),
+        ({"ticker_ask": "0"}, RejectReason.INVALID_DATA, "ticker_invalid_count"),
+        ({"ticker_bid": "154.2", "ticker_ask": "154.1"}, RejectReason.INVALID_DATA,
+         "ticker_invalid_count"),
+        ({"ticker_bid": "NaN"}, RejectReason.INVALID_DATA, "ticker_invalid_count"),
+        ({"ticker_ask": "Infinity"}, RejectReason.INVALID_DATA, "ticker_invalid_count"),
+        ({"ticker_timestamp": NOW - timedelta(seconds=31)}, RejectReason.STALE_DATA,
+         "ticker_stale_count"),
+        ({"ticker_timestamp": NOW + timedelta(seconds=6)}, RejectReason.INVALID_DATA,
+         "ticker_invalid_count"),
+        (
+            {
+                "kline_timestamp": NOW - timedelta(seconds=121),
+                "ticker_timestamp": NOW - timedelta(seconds=30),
+            },
+            RejectReason.STALE_DATA,
+            "ticker_kline_skew_reject_count",
+        ),
+        ({"ticker_symbol": "EUR_JPY"}, RejectReason.INVALID_DATA, "ticker_invalid_count"),
+        ({"raw_response_saved": True}, RejectReason.SAFETY_FLAG_VIOLATION,
+         "ticker_invalid_count"),
+        ({"private_api_used": True}, RejectReason.SAFETY_FLAG_VIOLATION,
+         "ticker_invalid_count"),
+        ({"api_key_used": True}, RejectReason.SAFETY_FLAG_VIOLATION, "ticker_invalid_count"),
+    ],
+)
+def test_public_market_snapshot_fail_closed_boundaries(changes, reason, counter) -> None:
+    with pytest.raises(MarketSnapshotValidationError) as exc_info:
+        _public_snapshot(**changes)
+    assert exc_info.value.reason is reason
+    assert exc_info.value.counter_name == counter
+
+
+def test_public_market_snapshot_allows_real_zero_spread_but_calculator_rejects_synthetic() -> None:
+    snapshot = _public_snapshot(ticker_bid="154.100", ticker_ask="154.100")
+    assert snapshot.spread_pips == 0
+    assert calculate_spread_pips(symbol="USD_JPY", bid="154.100", ask="154.104") == 0.4
+    with pytest.raises(ValueError, match="ask >= bid"):
+        calculate_spread_pips(symbol="USD_JPY", bid="154.104", ask="154.100")
 
 
 def test_signal_boundary_and_candidate_factory() -> None:
