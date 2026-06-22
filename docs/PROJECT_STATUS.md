@@ -88,6 +88,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   既存sessionのデフォルト挙動には未統合で、本番API/UI、broker、Private API、APIキー、実注文への接続はない。
   設計は [PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md) と
   [PHASE2E0_5_SAFETY_REVIEW.md](PHASE2E0_5_SAFETY_REVIEW.md) を参照する。
+  **Phase 2E-1.5監査はD判定（統合前修正必須）**。provenance、malformed policyのfail closed、typed audit schema、
+  出力root制限、unsafe risk row検出を修正するまでPhase 2E-2へ進まない。詳細は
+  [PHASE2E1_SAFETY_AUDIT.md](PHASE2E1_SAFETY_AUDIT.md)。
 
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
 - 認証 / アクセス制御（現状ローカル read-only 前提、認証なし）。
