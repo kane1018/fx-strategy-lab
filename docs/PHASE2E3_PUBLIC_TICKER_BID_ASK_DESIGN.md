@@ -391,3 +391,22 @@ Phase 2E-3実装では、設計に基づいてlocal-onlyの最小接続を完了
 - legacy summary、risk log schema、backend公開API、`main_readonly.py`、frontendは変更していない。
 
 今回もGMO Public実run、Private API、APIキー、broker、実注文、実資金、自動売買、本番公開API追加には進んでいない。
+
+## 18. 実装監査結果
+
+Phase 2E-3.5監査では、Public ticker bid/ask provenance連携実装をレビューし、B判定とした。
+
+確認済み:
+
+- GMO Public ticker由来のbid/askだけが`REAL_PUBLIC_BID_ASK`になる。
+- kline-onlyはsynthetic spread rejectを維持する。
+- invalid / missing / stale / future / skew tickerはfail closedになる。
+- raw API responseやheadersを保存しない。
+- summary / metadata / aggregateはlegacy互換を維持する。
+- Private API、APIキー、broker、OrderRequest、`.env`、実注文経路に接続していない。
+- 関連テスト、backend全体pytest、ruff、summarize、mock run確認が通った。
+
+修正必須事項はなく、次はPhase 2E-4設計または実行指示作成へ進める。ただし、Phase 2E-4実行、gmo-public実run、
+Private API、APIキー、broker、実注文、実資金、自動売買、本番公開API追加は、別タスクで明示承認を得てから行う。
+
+詳細は [PHASE2E3_PUBLIC_TICKER_BID_ASK_AUDIT.md](PHASE2E3_PUBLIC_TICKER_BID_ASK_AUDIT.md)。

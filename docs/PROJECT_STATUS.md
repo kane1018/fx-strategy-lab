@@ -19,7 +19,7 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 2. 完了済み検証（ローカル直近）
 
-- backend: `pytest` 327 passed / `ruff check .` clean
+- backend: `pytest` 354 passed / `ruff check .` clean
 - frontend: `npm run lint` clean / `npm run test`（Vitest）36 passed / `npm run build` 成功
 - E2E: `npm run e2e`（Playwright Chromium）E2E-01〜10 passed
 - 注: 数値は直近ローカル実行時のもの。最新は各検証コマンドで再確認すること。
@@ -82,6 +82,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 2E-3.5 Public ticker bid/ask provenance連携監査完了（B判定）** — Phase 2E-3実装を
+  レビューし、GMO Public ticker由来bid/askだけが`REAL_PUBLIC_BID_ASK`になること、kline-onlyがsynthetic
+  spread rejectを維持すること、invalid/missing/stale/future/skew tickerがfail closedになること、raw responseを
+  保存しないこと、summary/metadata互換を壊していないことを確認した。修正必須事項はなく、Phase 2E-4設計または
+  実行指示作成へ進める。ただし今回もGMO Public実run、Private API、APIキー、broker、実注文、本番公開API追加は
+  行っていない。詳細は [PHASE2E3_PUBLIC_TICKER_BID_ASK_AUDIT.md](PHASE2E3_PUBLIC_TICKER_BID_ASK_AUDIT.md)。
 - **Phase 2E-3 Public ticker bid/ask provenance連携実装完了（local-only）** — Phase 2E-2.5監査と
   Phase 2E-3設計に基づき、GMO Public `/v1/ticker`由来bid/askだけを`REAL_PUBLIC_BID_ASK`として扱う
   `MarketSnapshot` validationを追加し、`--enable-shadow-risk`経路へ最小接続した。kline-onlyはsynthetic
