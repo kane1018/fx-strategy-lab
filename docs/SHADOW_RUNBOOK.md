@@ -169,6 +169,11 @@ REJECT時virtual resultなしを確認した。同日2回目は1日1回ルール
 1回だけ実行する。詳細は
 [PHASE2E5_RUN1_REVIEW_AND_NEXT_RUN_PREP.md](PHASE2E5_RUN1_REVIEW_AND_NEXT_RUN_PREP.md)。
 
+Phase 3A準備ロードマップでは、将来のPrivate API read-only、APIキー / secret管理、Live Verification Mode、
+極小実資金検証の条件をdocs-onlyで整理した。ただし、このrunbookの運用範囲は引き続きPublic APIのみ、
+local-only、注文なしである。Phase 3B read-only実装はPhase 2E-5短期確認とPhase 2Fレビュー後の別タスクに限定する。
+詳細は [PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md](PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md)。
+
 ## 11. commit禁止の最終確認
 
 ```bash

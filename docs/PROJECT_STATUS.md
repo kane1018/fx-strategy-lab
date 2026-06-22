@@ -82,6 +82,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3A準備ロードマップ設計完了** — Private API read-only、APIキー / secret管理、
+  Live Verification Mode、極小実資金検証までの段階的ロードマップをdocs-onlyで整理した。これは実装ではなく、
+  Private API接続、APIキー入力・表示・保存、`.env`変更、broker、注文API、実注文、実資金検証には進んでいない。
+  次に行うべき作業は引き続きPhase 2E-5の別日2回目/3回目とPhase 2F Public shadow risk/audit安定性レビューであり、
+  Phase 3B read-only実装はそれらの完了と別途レビュー後に限る。詳細は
+  [PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md](PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md)。
 - **Phase 2E-5 1回目レビュー / 2回目実行前整理完了** — run
   `20260622_103430_shadow_USD_JPY_gmo-public` をレビューし、`REAL_PUBLIC_BID_ASK` 2件、candidate 2件、
   `ALLOW_SHADOW` 1件、`REJECT_SHADOW` 1件、ALLOW時のみvirtual result、REJECT時virtual resultなしを確認した。

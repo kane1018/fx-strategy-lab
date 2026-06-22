@@ -303,3 +303,14 @@ Phase 2E-5 1回目は、継続確認として良い結果だった。
 - 同日2回目は1日1回ルールにより未実行で停止し、計画どおりの運用判断だった。
 
 次は別日にPhase 2E-5 2回目を1回だけ実行する。
+
+## 12. Phase 3A準備ロードマップとの関係
+
+Phase 3A準備として、将来のPrivate API read-only、APIキー / secret管理、Live Verification Mode、
+100通貨・1回だけの極小実資金検証までのロードマップをdocs-onlyで整理した。
+
+詳細は [PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md](PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md)。
+
+ただし、次に行うべき作業は変わらない。Phase 2E-5 2回目は別日に1回だけ実行し、生成物はcommitしない。
+Phase 3B read-only実装、Private API接続、APIキー入力・表示・保存、`.env`変更、broker、注文API、実注文、
+実資金検証には進まない。
