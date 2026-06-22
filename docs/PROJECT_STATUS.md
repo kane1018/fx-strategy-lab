@@ -82,9 +82,10 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Phase 2D-4レビュー完了** — Day 1〜4で平日run成功、週末`no klines`安全停止、月曜復帰、
-  safety violation / broken / haltがすべて0であることを確認した（[PHASE2D4_SHADOW_LOG_REVIEW.md](PHASE2D4_SHADOW_LOG_REVIEW.md)）。
-  次候補は`USD_JPY / M1 / steps 10`の手動Public shadow run。M5は同時に変えず、収益性判断もしない。
+- **Phase 2E-0設計完了** — steps 10を3回連続で完了後、BUY / SELL / HOLD、OrderCandidate、
+  shadow専用RiskManager、Kill switch、local監査ログ、安全契約を設計した
+  （[PHASE2E0_SAFETY_DESIGN.md](PHASE2E0_SAFETY_DESIGN.md)）。
+  次候補は明示レビュー後のPhase 2E-1最小実装。Private API、APIキー、実注文には進まない。
 
 - レポート閲覧 UI の拡張: CSV プレビュー / CSV ダウンロード（別 endpoint 設計が必要）。
 - 認証 / アクセス制御（現状ローカル read-only 前提、認証なし）。
