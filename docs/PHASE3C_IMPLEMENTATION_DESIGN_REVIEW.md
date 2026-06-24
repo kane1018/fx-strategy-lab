@@ -773,5 +773,7 @@ Phase 3C実装設計レビューでは、Live Verification Mode実装を3つのm
 - Phase 3C-1 mocked core実装は後続タスクで完了済み。
 - Phase 3C-2 ID相関テストも後続タスクで完了済み。
 - Phase 3C-3 dry-run統合テストも後続タスクで完了済み。
-- ただし、Phase 3D、broker、OrderRequest、注文API、
+- Phase 3D前 broker / order API実装前レビューも後続タスクで完了済み。判定は
+  **A: Phase 3D-0 公式仕様・危険endpoint再レビューへ進んでよい**。
+- ただし、Phase 3D-0、broker、OrderRequest、注文API、
   実注文、実資金検証には進んでいない。

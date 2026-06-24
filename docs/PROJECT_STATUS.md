@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D前 broker / order API実装前レビュー完了** — `docs/PHASE3D_PRE_ORDER_API_REVIEW.md` を作成し、
+  Phase 3C-3 dry-run統合後の現在地、broker / order API実装前の必須条件、禁止境界、
+  100通貨・`USD_JPY`・1回限定・manual only維持方針、Phase 3D-0〜3D-5分割案、
+  実注文前の明示承認条件をdocs-onlyで整理した。判定は
+  **A: Phase 3D-0 公式仕様・危険endpoint再レビューへ進んでよい**。ただし、broker、
+  OrderRequest、注文API、注文payload builder、Private API追加接続、APIキー確認、`.env`確認、
+  実注文、実資金検証には進んでいない。
 - **Phase 3C-3 Live Verification dry-run統合テスト完了** — `backend/app/live_verification/dry_run.py` と
   `backend/app/tests/test_live_verification_dry_run.py` を追加し、read-only precheck、risk decision、
   ID correlation、order intent、state transitionをpure mocked flowとして接続した。成功系は
