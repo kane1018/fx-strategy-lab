@@ -616,3 +616,43 @@ A: Phase 3D-14 signature / headers / request body plan実装へ進んでよい
 ただし、Phase 3D-14でも作ってよいのはplan-only objectまでである。actual body、actual headers、
 actual signature、HTTP request、HTTP POST、Private API接続、broker、`OrderRequest`、実注文、
 実資金検証には進まない。
+
+## 13. Phase 3D-14実装結果メモ
+
+Phase 3D-14では、Phase 3D-13の設計に基づき、`DisabledHttpRequestClientSkeletonPlan` の後段に
+`SignatureHeadersBodyPlan` を追加した。
+
+実装内容:
+
+- `backend/app/live_verification/signature_headers_body_plan.py` を追加。
+- `SignatureHeadersBodyPlan` を追加。
+- `build_signature_headers_body_plan()` を追加。
+- `signature_headers_body_plan_id` を決定論的に生成。
+- `body_plan_created=true`、`headers_plan_created=true`、`signature_plan_created=true` をplan-only markerとして固定。
+- actual body、actual headers、actual signature、HTTP POST、credential exposure、raw request /
+  raw response、headers / signature保存、HMAC、real order attemptはfalseで固定。
+- unsafe skeletonまたはplan flagは `plan_passed=false` と `fail_reasons` でfail closed。
+- `backend/app/tests/test_live_verification_signature_headers_body_plan.py` を追加。
+
+維持した境界:
+
+- APIキー値表示なし。
+- secret値表示なし。
+- `.env`確認なし。
+- 実署名生成なし。
+- HMAC処理なし。
+- headers生成なし。
+- request body生成なし。
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Phase 3D-14B no-secret guard hardening。
+- ただしPhase 3D-14Bでも、実署名、headers生成、request body生成、HTTP request、実注文、実資金検証には進まない。

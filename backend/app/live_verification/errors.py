@@ -51,5 +51,9 @@ class LiveVerificationHttpRequestSkeletonError(LiveVerificationValidationError):
     """Raised when a disabled HTTP skeleton plan crosses a safety boundary."""
 
 
+class LiveVerificationSignatureHeadersBodyPlanError(LiveVerificationValidationError):
+    """Raised when a plan-only body/header/signing boundary is unsafe."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

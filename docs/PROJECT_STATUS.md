@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-14 署名 / headers / request body plan実装完了** —
+  `backend/app/live_verification/signature_headers_body_plan.py` と
+  `backend/app/tests/test_live_verification_signature_headers_body_plan.py` を追加し、
+  `DisabledHttpRequestClientSkeletonPlan` の後段に plan-only / local-only の
+  `SignatureHeadersBodyPlan` と `build_signature_headers_body_plan()` を実装した。
+  `body_plan_created=true`、`headers_plan_created=true`、`signature_plan_created=true` のplan markerだけを許可し、
+  actual body、actual headers、actual signature、HTTP POST、credential value exposure、raw request /
+  raw response、headers / signature保存、HMAC、real order attemptはすべてfalseで固定する。
+  unsafe skeletonまたはplan flagは `plan_passed=false` と `fail_reasons` でfail closedする。
+  APIキー値表示、secret値表示、`.env`確認、実署名生成、HMAC処理、headers生成、request body生成、
+  HTTP request実装、HTTP client import、HTTP POST、broker、OrderRequest、real order API client、
+  注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-14B no-secret guard hardening。ここでも実署名、headers生成、request body生成、
+  HTTP request、実注文なしでguard強化として扱う。
 - **Phase 3D-13 署名 / headers / request body 実装前レビュー完了** —
   `docs/PHASE3D13_SIGNATURE_HEADERS_BODY_PRE_IMPLEMENTATION_REVIEW.md` を作成し、
   Phase 3D-12でAPIキー環境変数が `set` とだけ確認済みであることを前提に、署名責務、
