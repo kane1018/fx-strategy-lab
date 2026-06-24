@@ -82,6 +82,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3C Live Verification Mode設計完了** — Phase 3D極小実資金検証前の安全設計として、
+  Live Verification Modeの定義、許可範囲、禁止範囲、注文前read-onlyチェック、risk decision /
+  candidate / order intent相関、order intent設計、kill switch / STOP / fail closed条件、実注文前後の
+  チェックリスト、Phase 3Dへ進む条件をdocs-onlyで整理した。Phase 3CではLive Verification Mode実装、
+  order intent実装、broker、OrderRequest、注文API、実注文、実資金検証には進んでいない。詳細は
+  [PHASE3C_LIVE_VERIFICATION_MODE_DESIGN.md](PHASE3C_LIVE_VERIFICATION_MODE_DESIGN.md)。
 - **Phase 3B-4 Private API read-onlyローカル接続確認 総合レビュー完了** — `account/assets`、
   `openPositions`、`activeOrders` の3 endpointについて、read-onlyローカル接続確認結果を総合レビューした。
   3 endpointはいずれも最終successで、raw response、headers、signature、credentialsの保存・表示なし、
