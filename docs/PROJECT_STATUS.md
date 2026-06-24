@@ -82,6 +82,25 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 3 独立した最終監査・preflight完了（今回実行はNO_GO）** —
+  `backend/app/live_verification/live_order_preflight.py` と
+  `backend/app/tests/test_live_verification_live_order_preflight.py`、
+  `docs/STEP3_LIVE_ORDER_PREFLIGHT_REVIEW.md` を追加し、Step 4直前の
+  `LiveOrderPreflightSnapshot` / `LiveOrderPreflightDecision` /
+  `evaluate_live_order_preflight` をlocal-onlyで実装した。`api_key_present` /
+  `api_secret_present` はset/missing相当のpresence flagのみを扱い、credential値、
+  headers値、signature値、raw request、raw response、request URL、口座詳細、建玉詳細、
+  注文詳細は保持しない。`live_order_allowed_now=false` と
+  `requires_separate_user_approval=true` を固定し、Step 3中の
+  `manual_approval_present_for_execution=true` はfail closedで拒否する。
+  初回実注文前preflightとして `max_daily_attempts=1`、session/daily attempt 0、
+  retry禁止、loop禁止、result unknown停止、open positions / active orders存在時停止を評価する。
+  このCodex実行環境では `GMO_FX_API_KEY: missing` /
+  `GMO_FX_API_SECRET: missing` だったため、既存read-only接続手順は実行せず、
+  Step 3判定は **NO_GO**。HTTP POST、実注文、実資金検証、Private API書き込み、
+  broker、`OrderRequest`、real order API client、本番公開API追加には進んでいない。
+  Step 4へ進むには、別タスクでAPIキーpresenceがsetである環境からread-only preflightを再実行し、
+  `READY_FOR_STEP4_PROMPT` を得たうえで、さらにユーザーの明示承認が必要。
 - **Step 2 HTTP client / 注文送信skeleton + 安全機構統合完了** —
   `backend/app/live_verification/order_submission_skeleton.py` を追加し、
   `ActualHeadersSignatureBundle` の後段に `OrderSubmissionSafetyContext` /

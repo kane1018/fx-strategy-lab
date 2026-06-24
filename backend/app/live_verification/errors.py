@@ -71,5 +71,9 @@ class LiveVerificationOrderSubmissionSkeletonError(LiveVerificationValidationErr
     """Raised when a disabled order submission skeleton is unsafe."""
 
 
+class LiveVerificationLiveOrderPreflightError(LiveVerificationValidationError):
+    """Raised when Step 3 live order preflight audit state is invalid."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

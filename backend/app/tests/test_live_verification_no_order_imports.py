@@ -67,6 +67,9 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
         "aiohttp",
         "urllib",
         "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
         "hmac",
     }
     blocked_names = {
@@ -233,6 +236,9 @@ def test_order_submission_skeleton_has_no_http_or_secret_imports() -> None:
         "aiohttp",
         "urllib",
         "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
         "dotenv",
         "app." + "brokers",
     }
@@ -248,6 +254,46 @@ def test_order_submission_skeleton_has_no_http_or_secret_imports() -> None:
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
+
+
+def test_live_order_preflight_has_no_http_or_secret_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    path = PACKAGE_ROOT / "live_order_preflight.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
 
 
 def test_live_verification_package_has_no_execution_function_defs_or_calls() -> None:
@@ -729,3 +775,91 @@ def test_order_submission_skeleton_exposes_only_safe_public_fields() -> None:
     assert field_names.isdisjoint(blocked_fields)
     assert allowed_safe_flags.issubset(field_names)
     assert allowed_metadata.issubset(field_names)
+
+
+def test_live_order_preflight_exposes_only_safe_public_fields() -> None:
+    allowed_presence_fields = {
+        "api_key_present",
+        "api_secret_present",
+    }
+    allowed_preflight_flags = {
+        "readonly_assets_check_passed",
+        "readonly_open_positions_check_passed",
+        "readonly_active_orders_check_passed",
+        "previous_result_known",
+        "result_unknown",
+        "step2_skeleton_passed",
+        "mock_submission_passed",
+        "tests_passed",
+        "ruff_passed",
+        "git_clean",
+        "market_window_allowed",
+        "maintenance_active",
+        "important_event_window_active",
+        "initial_live_order_only",
+        "manual_approval_required",
+        "manual_approval_present_for_execution",
+        "retry_enabled",
+        "loop_enabled",
+        "kill_switch_active",
+        "safety_violation_detected",
+        "http_post_enabled",
+        "real_order_attempted",
+        "preflight_passed",
+        "ready_for_step4_prompt",
+        "live_order_allowed_now",
+        "requires_separate_user_approval",
+    }
+    allowed_counts = {
+        "open_positions_count",
+        "active_orders_count",
+        "max_daily_attempts",
+        "session_attempt_count",
+        "daily_attempt_count",
+    }
+    blocked_fields = {
+        "api_key",
+        "api_secret",
+        "secret",
+        "token",
+        "authorization",
+        "headers",
+        "actual_headers",
+        "header_values",
+        "signature",
+        "signature_value",
+        "actual_signature",
+        "api_sign",
+        "hmac_digest",
+        "raw_headers",
+        "raw_signature",
+        "raw_request",
+        "raw_response",
+        "request_url",
+        "url",
+        "http_client",
+        "response",
+        "endpoint",
+        "method",
+        "path",
+        "status_code",
+        "response_body",
+        "request_body",
+        "request_headers",
+        "body",
+        "payload",
+        "account_balance",
+        "account_assets",
+        "open_positions",
+        "active_orders",
+        "position_detail",
+        "order_detail",
+    }
+    path = PACKAGE_ROOT / "live_order_preflight.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_presence_fields.issubset(field_names)
+    assert allowed_preflight_flags.issubset(field_names)
+    assert allowed_counts.issubset(field_names)
