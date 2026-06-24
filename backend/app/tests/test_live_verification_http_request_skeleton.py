@@ -279,6 +279,8 @@ def test_disabled_http_request_client_skeleton_has_only_safe_fields() -> None:
         "authorization",
         "http_client",
         "response",
+        "status_code",
+        "response_body",
     }
 
     assert model_fields == EXPECTED_SKELETON_FIELDS
@@ -288,59 +290,94 @@ def test_disabled_http_request_client_skeleton_has_only_safe_fields() -> None:
 
 
 @pytest.mark.parametrize(
-    "overrides",
+    "overrides,expected_reason",
     [
-        {"disabled_by_default": False},
-        {"network_enabled": True},
-        {"credential_access_enabled": True},
-        {"actual_signature_created": True},
-        {"headers_created": True},
-        {"request_body_created": True},
-        {"http_request_created": True},
-        {"api_key_used": True},
-        {"api_secret_used": True},
-        {"hmac_used": True},
-        {"network_used": True},
-        {"real_order_attempted": True},
-        {"signature_request_design_id": ""},
-        {"order_client_plan_id": ""},
-        {"mocked_payload_candidate_id": ""},
-        {"verification_run_id": ""},
+        ({"disabled_by_default": False}, "signature_design:disabled_by_default"),
+        ({"network_enabled": True}, "signature_design:network_enabled"),
+        (
+            {"credential_access_enabled": True},
+            "signature_design:credential_access_enabled",
+        ),
+        (
+            {"actual_signature_created": True},
+            "signature_design:actual_signature_created",
+        ),
+        ({"headers_created": True}, "signature_design:headers_created"),
+        ({"request_body_created": True}, "signature_design:request_body_created"),
+        ({"http_request_created": True}, "signature_design:http_request_created"),
+        ({"api_key_used": True}, "signature_design:api_key_used"),
+        ({"api_secret_used": True}, "signature_design:api_secret_used"),
+        ({"hmac_used": True}, "signature_design:hmac_used"),
+        ({"network_used": True}, "signature_design:network_used"),
+        ({"real_order_attempted": True}, "signature_design:real_order_attempted"),
+        ({"signature_request_design_id": ""}, "signature_request_design_id_missing"),
+        ({"order_client_plan_id": ""}, "order_client_plan_id_missing"),
+        ({"mocked_payload_candidate_id": ""}, "mocked_payload_candidate_id_missing"),
+        ({"verification_run_id": ""}, "verification_run_id_missing"),
     ],
 )
-def test_disabled_http_request_client_skeleton_rejects_unsafe_signature_design(
+def test_disabled_http_request_client_skeleton_fails_closed_for_unsafe_signature_design(
     overrides: dict[str, object],
+    expected_reason: str,
 ) -> None:
-    with pytest.raises(LiveVerificationHttpRequestSkeletonError):
-        _skeleton(signature_design=_unchecked_design(**overrides))
+    skeleton = _skeleton(signature_design=_unchecked_design(**overrides))
+
+    assert skeleton.skeleton_passed is False
+    assert expected_reason in skeleton.fail_reasons
 
 
 @pytest.mark.parametrize(
-    "kwargs",
+    "kwargs,expected_reason",
     [
-        {"client_mode": "network_http_client"},
-        {"disabled_by_default": False},
-        {"network_enabled": True},
-        {"credential_access_enabled": True},
-        {"http_client_enabled": True},
-        {"http_post_enabled": True},
-        {"headers_created": True},
-        {"request_body_created": True},
-        {"actual_signature_created": True},
-        {"raw_request_created": True},
-        {"raw_response_saved": True},
-        {"signature_saved": True},
-        {"api_key_used": True},
-        {"api_secret_used": True},
-        {"hmac_used": True},
-        {"real_order_attempted": True},
+        ({"client_mode": "network_http_client"}, "client_mode"),
+        ({"disabled_by_default": False}, "disabled_by_default"),
+        ({"network_enabled": True}, "network_enabled"),
+        ({"credential_access_enabled": True}, "credential_access_enabled"),
+        ({"http_client_enabled": True}, "http_client_enabled"),
+        ({"http_post_enabled": True}, "http_post_enabled"),
+        ({"headers_created": True}, "headers_created"),
+        ({"request_body_created": True}, "request_body_created"),
+        ({"actual_signature_created": True}, "actual_signature_created"),
+        ({"raw_request_created": True}, "raw_request_created"),
+        ({"raw_response_saved": True}, "raw_response_saved"),
+        ({"signature_saved": True}, "signature_saved"),
+        ({"api_key_used": True}, "api_key_used"),
+        ({"api_secret_used": True}, "api_secret_used"),
+        ({"hmac_used": True}, "hmac_used"),
+        ({"real_order_attempted": True}, "real_order_attempted"),
     ],
 )
-def test_disabled_http_request_client_skeleton_rejects_unsafe_skeleton_flags(
+def test_disabled_http_request_client_skeleton_fails_closed_for_unsafe_skeleton_flags(
     kwargs: dict[str, object],
+    expected_reason: str,
 ) -> None:
-    with pytest.raises(LiveVerificationHttpRequestSkeletonError):
-        _skeleton(**kwargs)
+    skeleton = _skeleton(**kwargs)
+
+    assert skeleton.skeleton_passed is False
+    assert expected_reason in skeleton.fail_reasons
+
+
+def test_disabled_http_request_client_skeleton_keeps_multiple_fail_reasons() -> None:
+    skeleton = _skeleton(
+        signature_design=_unchecked_design(
+            network_enabled=True,
+            api_key_used=True,
+            real_order_attempted=True,
+        ),
+        http_client_enabled=True,
+        http_post_enabled=True,
+        raw_response_saved=True,
+    )
+
+    assert skeleton.skeleton_passed is False
+    assert {
+        "signature_design:network_enabled",
+        "signature_design:api_key_used",
+        "signature_design:real_order_attempted",
+        "http_client_enabled",
+        "http_post_enabled",
+        "raw_response_saved",
+    }.issubset(set(skeleton.fail_reasons))
 
 
 @pytest.mark.parametrize(
@@ -375,11 +412,12 @@ def test_disabled_http_request_client_skeleton_rejects_non_bool_safety_flags(
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"skeleton_passed": False},
-        {"fail_reasons": ("unsafe",)},
+        {"skeleton_passed": True, "fail_reasons": ("unsafe",)},
+        {"skeleton_passed": False, "fail_reasons": ()},
+        {"network_enabled": True, "skeleton_passed": True},
     ],
 )
-def test_disabled_http_request_client_skeleton_rejects_failed_result_state(
+def test_disabled_http_request_client_skeleton_rejects_inconsistent_result_state(
     overrides: dict[str, object],
 ) -> None:
     values = asdict(_skeleton())

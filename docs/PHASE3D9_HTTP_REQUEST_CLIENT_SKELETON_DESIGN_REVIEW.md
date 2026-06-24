@@ -475,3 +475,45 @@ Phase 3D-10では、Phase 3D-9の設計に基づき、`SignatureHttpRequestDesig
 
 - Phase 3D-10B HTTP request skeleton no-network / no-secret guard hardening。
 - ただし、Phase 3D-10BでもHTTP request実装、実署名、APIキー確認、実注文、実資金検証には進まない。
+
+## 12. Phase 3D-10B hardening結果メモ
+
+Phase 3D-10Bでは、Phase 3D-10で追加した `DisabledHttpRequestClientSkeletonPlan` が
+HTTP request、credential、broker、real order clientへ変質しないことを追加で固定した。
+
+実施内容:
+
+- unsafeな `SignatureHttpRequestDesignModel` を例外だけでなくfailed skeletonとして扱い、
+  `skeleton_passed=false` と `fail_reasons` に理由を保持するよう強化。
+- skeleton側の `http_client_enabled`、`http_post_enabled`、headers / request body /
+  actual signature / raw request / raw response / credential / HMAC / real order flagsがtrueの場合、
+  `skeleton_passed=false` と理由保持でfail closed。
+- 複数unsafe flagが同時にtrueの場合、複数 `fail_reasons` を保持するテストを追加。
+- `endpoint`、`method`、`path`、`url`、headers、request body、raw request、raw response、
+  credential、response系fieldを保持しないテストを強化。
+- 実装コードにHTTP client import、`hmac` import、注文endpoint、credential参照、HTTP / response系fieldが
+  混入しないAST guardを強化。
+
+維持した境界:
+
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- headers生成なし。
+- request body生成なし。
+- actual signature生成なし。
+- APIキー確認なし。
+- API secret参照なし。
+- `.env`確認なし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 注文API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Phase 3D-11 実注文直前preflightレビュー。
+- ただし、Phase 3D-11もレビューとして扱い、HTTP request実装、実署名、APIキー確認、
+  実注文、実資金検証には進まない。
