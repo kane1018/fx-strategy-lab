@@ -82,6 +82,16 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-9 HTTP request client skeleton disabled-by-default設計レビュー完了** —
+  `docs/PHASE3D9_HTTP_REQUEST_CLIENT_SKELETON_DESIGN_REVIEW.md` を作成し、
+  HTTP request client skeletonの定義、disabled-by-default不変条件、既存modelとの関係、
+  Phase 3D-10で作ってよい候補、Phase 3D-10でも作らないもの、fail closed条件、
+  no-order / no-secret / no-network guard方針、Phase 3D-10以降の分割案をdocs-onlyで整理した。
+  HTTP request client skeleton実装、HTTP client import、HTTP POST、headers生成、request body生成、
+  実署名生成、APIキー確認、API secret参照、`.env`確認、broker、OrderRequest、real order API client、
+  注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-10 HTTP request client skeleton no-network実装。ただしHTTP client import、POST、
+  headers、request body、credential、実注文なし。
 - **Phase 3D-8B no-secret / no-network guard hardening完了** —
   `backend/app/tests/test_live_verification_signature_request_design.py` と
   `backend/app/tests/test_live_verification_no_order_imports.py` を強化し、

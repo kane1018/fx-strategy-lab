@@ -451,3 +451,37 @@ Phase 3D-8Bでは、`SignatureHttpRequestDesignModel` の no-secret / no-network
 注文API client、実注文、実資金検証には進んでいない。
 
 次候補はPhase 3D-9 HTTP request client skeleton disabled-by-default設計レビューである。
+
+## 18. Phase 3D-9設計レビュー結果メモ
+
+Phase 3D-9では、HTTP request client skeleton disabled-by-default設計レビューをdocs-onlyで完了した。
+
+整理したもの:
+
+- HTTP request client skeletonは、将来のreal HTTP clientに近い責務を
+  disabled-by-default / no-network / no-credential / no-POSTで設計するための骨格であること。
+- Phase 3D-10で作ってよい候補は `DisabledHttpRequestClientSkeletonPlan` に限定すること。
+- `network_enabled=false`、`credential_access_enabled=false`、`http_client_enabled=false`、
+  `http_post_enabled=false`、`headers_created=false`、`request_body_created=false`、
+  `actual_signature_created=false`、`real_order_attempted=false` を必須にすること。
+- HTTP client import、POST、headers、request body、actual signature、API key / secret参照、
+  `.env`参照、broker、`OrderRequest`、real order API client、実注文、実資金検証を引き続き禁止すること。
+
+実装していないもの:
+
+- HTTP request client skeleton。
+- HTTP client import。
+- HTTP POST。
+- headers生成。
+- request body生成。
+- actual signature生成。
+- APIキー確認。
+- `.env`確認。
+- broker。
+- `OrderRequest`。
+- real order API client。
+- 実注文。
+- 実資金検証。
+
+次候補はPhase 3D-10 HTTP request client skeleton no-network実装である。ただし、Phase 3D-10でも
+実HTTP通信、credential access、headers、request body、signature生成、実注文、実資金検証には進まない。
