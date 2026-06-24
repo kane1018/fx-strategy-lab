@@ -82,6 +82,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3B-3 private readonly preconnect review完了** — Private API read-onlyローカル接続前レビューとして、
+  APIキー / secret管理、read-only権限分離、`.env`安全手順、Phase 3B-4初回接続endpoint、
+  禁止endpoint、接続前後チェックリスト、停止条件をdocs化した。判定は
+  **A: Phase 3B-4 read-onlyローカル接続確認へ進んでよい**。ただしPhase 3B-3ではPrivate API実接続、
+  APIキー入力、`.env`変更、broker、注文API、実注文、実資金には進んでいない。次に進む場合は
+  Phase 3B-4として、別タスクで1回だけread-onlyローカル接続確認を扱う。
 - **Phase 3B-2 mocked private readonly endpoints拡張完了** — `backend/app/private_api/` の
   mocked read-only client / schemas / errorsに、endpoint別mocked tests、error response sanitizer、
   forbidden endpoint guard拡張を追加した。対象は `account/assets`, `openPositions`, `activeOrders`,

@@ -272,6 +272,9 @@ Phase 3B-3:
 - `.env`を使うか、OS環境変数を使うかの運用設計。
 - APIキー権限分離の確認。
 - 実接続なし。
+- 追記: Phase 3B-3は完了済み。APIキー / secret管理、read-only権限分離、`.env`安全手順、
+  Phase 3B-4初回接続endpoint、禁止endpoint、接続前後チェックリスト、停止条件をdocs化した。
+  判定はAだが、Private API実接続、APIキー入力、`.env`変更、broker、注文API、実注文、実資金はなし。
 
 Phase 3B-4:
 
