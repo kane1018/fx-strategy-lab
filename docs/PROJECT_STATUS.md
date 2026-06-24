@@ -82,6 +82,16 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-11 実注文直前preflightレビュー完了** —
+  `docs/PHASE3D11_REAL_ORDER_PREFLIGHT_REVIEW.md` を作成し、実注文に進む前のpreflight定義、
+  現在のno-network chain、直前read-only precheck条件、技術チェックリスト、注文条件チェックリスト、
+  APIキー / secret / `.env` を扱う前の条件、HTTP request / 署名実装へ進む前の条件、
+  ユーザー明示承認の形式、即停止条件、実注文後の停止・確認条件、Phase 3D-12以降の分割案を
+  docs-onlyで整理した。APIキー確認、`.env`確認、HTTP request実装、HTTP client import、HTTP POST、
+  headers生成、request body生成、actual signature生成、broker、OrderRequest、real order API client、
+  注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-12 APIキー確認専用レビュー。ここでも値表示や実注文ではなく、set / missingのみの
+  レビューとして扱う。
 - **Phase 3D-10B HTTP request skeleton no-network / no-secret guard hardening完了** —
   `backend/app/live_verification/http_request_skeleton.py` と
   `backend/app/tests/test_live_verification_http_request_skeleton.py` を更新し、
