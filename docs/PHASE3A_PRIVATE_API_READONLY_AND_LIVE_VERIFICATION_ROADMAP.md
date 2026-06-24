@@ -31,12 +31,15 @@
 - Phase 3B-0 Private API read-only公式仕様確認・実装設計は完了。GMOコイン外国為替FXの公式API docsに基づき、
   REST GETのread-only候補、POSTの注文・変更・取消・決済系禁止endpoint、認証・署名、APIキー / secret管理、
   Phase 3B分割案を整理した。
+- Phase 3B-1 mocked private readonly skeletonは完了。実接続なし・APIキー環境読込なし・`.env`読込なしの
+  read-only skeleton、auth/signing helper、sanitized schemas、errors、forbidden endpoint guard、
+  mocked tests、no-order-import guardを追加した。
 
 Phase 3B以降で未完了のこと:
 
-- Phase 2F Public shadow risk/audit安定性レビューとPhase 2Gオフライン最終デバッグ監査は完了。
-  Phase 3B-0も完了した。ただし、Phase 3B実装、Private API接続、APIキー入力、注文API、実注文は未実施。
-- Private API read-only実装、APIキー設定、Live Verification Mode、注文API、実資金検証は未実施。
+- Phase 2F Public shadow risk/audit安定性レビュー、Phase 2Gオフライン最終デバッグ監査、Phase 3B-0、
+  Phase 3B-1は完了した。ただし、Private API実接続、APIキー入力、注文API、実注文は未実施。
+- APIキー設定、Live Verification Mode、注文API、実資金検証は未実施。
 
 ## 3. Phase 3A〜3Dロードマップ
 
@@ -55,8 +58,8 @@ Phase 3Aでは実装、接続、キー設定、`.env`変更、注文API、broker
 ### Phase 3B: Private API read-only実装・接続確認
 
 将来フェーズ。Phase 3Aレビュー、Phase 2E-5短期確認、Phase 2Fレビュー、Phase 2G監査、Phase 3B-0公式仕様確認を
-通過した後に、別タスクで扱う。次に扱う場合はPhase 3B-1としてmocked read-only skeleton / auth helper /
-schemas / no-order-import testsから始める。
+通過した後に、別タスクで扱う。Phase 3B-1 mocked skeletonは完了済みであり、次に扱う場合は
+Phase 3B-2としてread-only endpointごとのmocked tests / sanitizer拡張から始める。
 
 Phase 3Bで扱ってよい候補:
 

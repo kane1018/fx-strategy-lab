@@ -251,6 +251,9 @@ Phase 3B-1:
 - mocked unit tests。
 - no-order-import guard。
 - 実接続なし。
+- 追記: Phase 3B-1は完了済み。`backend/app/private_api/` と `backend/app/tests/test_private_readonly_*.py` に、
+  mocked skeleton、auth/signing helper、sanitized schemas、errors、forbidden endpoint guard、
+  no-order-import guardを追加した。Private API実接続、APIキー入力、`.env`読込、broker、注文API、実注文はなし。
 
 Phase 3B-2:
 

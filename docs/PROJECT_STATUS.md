@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3B-1 mocked private readonly skeleton実装完了** — `backend/app/private_api/` に
+  実接続なし・APIキー環境読込なし・`.env`読込なしのread-only skeleton、auth/signing helper、
+  sanitized schemas、errors、forbidden endpoint guardを追加し、mocked testsを整備した。GET read-only候補だけを
+  whitelistし、POST/PUT/DELETEの注文・変更・取消・決済系endpointは例外で拒否する。`app.brokers`、
+  `OrderRequest`、`submit/send/place/cancel/amend`、`dotenv`、`os.environ`、`getenv`、`ENABLE_LIVE_TRADING`
+  の混入をAST testで監視する。Private API実接続、APIキー入力、`.env`変更、broker、注文API、実注文、
+  実資金には進んでいない。
 - **Phase 3B-0 Private API read-only公式仕様確認・実装設計完了** — GMOコイン外国為替FXの公式API docs
   （`https://api.coin.z.com/fxdocs/`）を確認し、Private REST APIのread-only候補GET endpoint、禁止する
   注文・変更・取消・決済系POST endpoint、認証・署名仕様、APIキー / secret管理、Phase 3B分割案を
