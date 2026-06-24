@@ -12,7 +12,7 @@
 - Private API read-onlyの対象と禁止境界を明確にする。
 - APIキー / secret管理の原則を、実装前に文書化する。
 - Live Verification Modeと極小実資金検証の前提条件を整理する。
-- Phase 2E-5 / Phase 2FのPublic shadow確認が完了するまで、Private API実装や実注文へ進まない理由を明文化する。
+- Phase 2E-5 / Phase 2F / Phase 2GのPublic shadow確認が完了するまで、Private API実装や実注文へ進まない理由を明文化する。
 
 ## 2. 現在地
 
@@ -25,11 +25,14 @@
 - safety violation、broken/skipped、invalid risk rowは0。
 - raw response保存なし。
 - Private API、APIキー、broker、実注文、実資金は未使用。
+- Phase 2G Public shadow risk/auditオフライン最終デバッグ監査は完了。既存テスト、focused test、
+  offline mock run、summarize、禁止参照確認により、判定は
+  **A: Phase 3B read-only公式仕様確認・実装設計へ進んでよい**。
 
-未完了のこと:
+Phase 3B以降で未完了のこと:
 
-- Phase 2F Public shadow risk/audit安定性レビューは完了。判定はAで、Public shadow risk/auditは
-  Phase 3B準備へ進める水準。ただし、Phase 3B実装前にPhase 2Gオフライン最終デバッグ監査を挟むことを推奨。
+- Phase 2F Public shadow risk/audit安定性レビューとPhase 2Gオフライン最終デバッグ監査は完了。
+  ただし、Phase 3Bはまずread-only公式仕様確認・実装設計を別タスクで行う。
 - Private API read-only実装、APIキー設定、Live Verification Mode、注文API、実資金検証は未実施。
 
 ## 3. Phase 3A〜3Dロードマップ
@@ -48,8 +51,8 @@ Phase 3Aでは実装、接続、キー設定、`.env`変更、注文API、broker
 
 ### Phase 3B: Private API read-only実装・接続確認
 
-将来フェーズ。Phase 3Aレビュー、Phase 2E-5短期確認、Phase 2Fレビューを通過した後に、別タスクで扱う。
-Phase 2Fレビュー後の推奨として、実装前にPhase 2G Public shadow risk/auditオフライン最終デバッグ監査を挟む。
+将来フェーズ。Phase 3Aレビュー、Phase 2E-5短期確認、Phase 2Fレビュー、Phase 2G監査を通過した後に、
+別タスクで扱う。次に扱う場合も、まずread-only公式仕様確認・実装設計に限定する。
 
 Phase 3Bで扱ってよい候補:
 
@@ -196,7 +199,7 @@ Phase 3Bに進む前に最低限満たす条件:
 Phase 2E-5短期確認で少なくとも2回以上の安全runを確認
 Phase 2E-5短期3回の完了、または未完了理由が安全に説明済み
 Phase 2F Public shadow risk/audit安定性レビュー完了
-Phase 2G Public shadow risk/auditオフライン最終デバッグ監査完了を推奨
+Phase 2G Public shadow risk/auditオフライン最終デバッグ監査完了
 safety violation 0
 broken/skipped 0
 invalid_risk_row_count 0

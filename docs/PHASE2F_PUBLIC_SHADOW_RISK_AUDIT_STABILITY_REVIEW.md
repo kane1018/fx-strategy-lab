@@ -236,6 +236,12 @@ spread_too_wide_count: 0
 ただし、A判定はPhase 3B実装へ即進むという意味ではない。次はPhase 3B実装ではなく、
 Phase 3B read-only公式仕様確認・実装設計、またはPhase 2Gオフライン最終デバッグ監査を別タスクで扱う。
 
+追記: Phase 2Gオフライン最終デバッグ監査は完了済みである。既存テスト、focused test、offline mock run、
+summarize、禁止参照確認により、Public shadow risk/auditのSTOP / kill switch / audit failure /
+safety violation / duplicate / cooldown / 相関検出を確認した。判定は
+**A: Phase 3B read-only公式仕様確認・実装設計へ進んでよい**。詳細は
+[PHASE2G_PUBLIC_SHADOW_RISK_AUDIT_OFFLINE_DEBUG_AUDIT.md](PHASE2G_PUBLIC_SHADOW_RISK_AUDIT_OFFLINE_DEBUG_AUDIT.md)。
+
 ## 11. Phase 3B前に挟むべき作業
 
 推奨: **Phase 3B実装の前に、Phase 2G: Public shadow risk/audit オフライン最終デバッグ監査を半日程度で挟む。**
@@ -309,10 +315,11 @@ cron / schedule / 常駐bot
 
 ## 14. 結論
 
-Phase 2Fの結論は次のとおり。
+Phase 2Fの結論とPhase 2G追記は次のとおり。
 
 - Public shadow risk/auditは、Phase 3B準備へ進める水準にある。
 - `REAL_PUBLIC_BID_ASK`、ALLOW、REJECT、virtual result相関、安全fail closed、summary互換は短期3回で安定している。
 - skew / stale_dataは修正必須ではなく、古いklineと現在tickerを混ぜない安全制約として許容する。
-- ただし、Phase 3B実装へ即進むのではなく、先にPhase 2Gオフライン最終デバッグ監査を挟むことを推奨する。
+- Phase 2Gオフライン最終デバッグ監査は完了し、Phase 3B read-only公式仕様確認・実装設計へ進める水準と判定した。
+- ただし、Phase 3B実装へ即進むのではなく、次も公式仕様確認・実装設計を別タスクで扱う。
 - 本レビューでは、Phase 3B、Private API、APIキー、broker、実注文、実資金には進まない。
