@@ -388,3 +388,37 @@ no-network / disabled-by-default のmock skeletonだけを実装した。
 
 次候補はPhase 3D-7 署名・HTTP request設計レビューである。ただし、Phase 3D-7でも実送信、
 APIキー確認、`.env`確認、実注文、実資金検証には進まない。
+
+## 15. Phase 3D-7レビュー結果メモ
+
+Phase 3D-7では、署名・HTTP requestに関する設計レビューをdocs-onlyで完了した。
+
+整理したもの:
+
+- GMO Private API署名仕様。
+- `API-KEY` / `API-TIMESTAMP` / `API-SIGN` の扱い。
+- GET / POSTの署名対象文字列。
+- request body生成と署名責務の分離。
+- APIキー / secret / `.env` をまだ扱わない境界。
+- HTTP request / HTTP POSTをまだ作らない境界。
+- Phase 3D-8以降の分割案。
+- no-order / no-secret guard方針。
+
+実装していないもの:
+
+- 署名生成。
+- HMAC処理。
+- timestamp生成。
+- HTTP request builder。
+- HTTP client。
+- HTTP POST。
+- APIキー確認。
+- `.env`確認。
+- broker。
+- `OrderRequest`。
+- 注文API client。
+- 実注文。
+- 実資金検証。
+
+次候補はPhase 3D-8 signature / request design model mocked実装である。ただし、Phase 3D-8でも
+実署名、APIキー確認、`.env`確認、HTTP request、HTTP POST、実注文、実資金検証には進まない。
