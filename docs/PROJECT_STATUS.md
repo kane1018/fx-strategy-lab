@@ -82,6 +82,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3C-1 Live Verification mocked core実装完了** — `backend/app/live_verification/` に
+  order intent、read-only precheck result、live verification state、errorsのpure mocked / dry-run coreを追加し、
+  mocked unit testsとno-order-import guardを整備した。`USD_JPY`、100通貨、ALLOW相当、precheck passed、
+  manual confirmation必須の条件を満たす場合だけorder intentを作れる。READY_FOR_ORDER_REVIEWまでで停止し、
+  broker、OrderRequest、注文API、実注文、実資金検証、Private API追加接続、APIキー確認、`.env`確認には
+  進んでいない。次候補はPhase 3C-2 ID相関テスト。
 - **Phase 3C Live Verification Mode実装設計レビュー完了** — Phase 3C設計を前提に、
   Phase 3C-1 mocked core、Phase 3C-2 ID相関テスト、Phase 3C-3 dry-run統合、Phase 3D前
   broker / order API実装前レビューへ分割した。order intent、read-only precheck、live verification state、

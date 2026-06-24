@@ -621,6 +621,42 @@ broker / order API実装前レビュー
 - Git差分にsecretや実データがない。
 - `shadow_exports/` / `analysis_exports/` がtrackedされていない。
 
+## 15a. Phase 3C-1実装結果
+
+Phase 3C-1では、設計レビューで候補化したmocked coreを最小実装した。
+
+追加した範囲:
+
+```text
+backend/app/live_verification/
+backend/app/tests/test_live_verification_*.py
+```
+
+実装したもの:
+
+- order intentの型、決定論的ID、生成関数、validation。
+- read-only precheck resultの型、fail closed reason、validation。
+- live verification stateの状態定義と遷移ルール。
+- Live Verification用errors。
+- no-order-import guard。
+
+実装していないもの:
+
+- broker。
+- OrderRequest。
+- 注文API。
+- 注文payload builder。
+- Private API追加接続。
+- APIキー確認。
+- `.env`確認。
+- 実注文。
+- 実資金検証。
+- frontend。
+- 本番公開API。
+
+Phase 3C-1は、READY_FOR_ORDER_REVIEWまでのmocked coreで停止する。
+Phase 3C-2、Phase 3C-3、Phase 3Dへは別タスクの明示指示なしに進まない。
+
 ## 16. まだ進まない範囲
 
 今回も次へ進まない。
@@ -657,3 +693,9 @@ Phase 3C実装設計レビューでは、Live Verification Mode実装を3つのm
 - Phase 3D前には、broker / order API実装前レビューと100通貨・1回限定の明示承認が必須である。
 - このレビューでは、Live Verification Mode実装、order intent実装、broker、OrderRequest、注文API、実注文、
   実資金検証には進まない。
+
+追記:
+
+- Phase 3C-1 mocked core実装は後続タスクで完了済み。
+- ただし、Phase 3C-2 ID相関テスト、Phase 3C-3 dry-run統合、Phase 3D、broker、OrderRequest、注文API、
+  実注文、実資金検証には進んでいない。
