@@ -599,3 +599,58 @@ A: Phase 3D-16 actual body / headers / signature 最小実装へ進んでよい
 ただし、Phase 3D-16でもHTTP POST、HTTP request送信、Private API追加接続、broker、`OrderRequest`、
 real order API client、実注文、実資金検証には進まない。Phase 3D-16は別タスクであり、今回このまま
 実装へ進まない。
+
+## 13. Phase 3D-16A actual request body最小実装結果メモ
+
+Phase 3D-16Aでは、Phase 3D-15で整理した責務分離に基づき、actual body / headers / signature のうち
+actual request body modelだけを最小実装した。
+
+追加したもの:
+
+- `backend/app/live_verification/actual_order_body.py`
+- `ActualOrderRequestBody`
+- `build_actual_order_request_body()`
+- `make_actual_order_body_id()`
+- `backend/app/tests/test_live_verification_actual_order_body.py`
+
+固定した条件:
+
+- `symbol=USD_JPY`
+- `side=BUY|SELL`
+- `size=100`
+- `executionType=MARKET`
+- `timeInForce=FAK`
+- `settleType=OPEN`
+- `body_created=true`
+- `http_post_enabled=false`
+- `headers_created=false`
+- `signature_created=false`
+- `raw_request_saved=false`
+- `raw_response_saved=false`
+- `credential_values_logged=false`
+- `real_order_attempted=false`
+
+維持した境界:
+
+- actual headers生成なし。
+- actual signature生成なし。
+- HMAC処理なし。
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- APIキー値表示なし。
+- secret値表示なし。
+- `.env`確認なし。
+- Private API追加接続なし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 注文API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Phase 3D-16B actual body no-leak hardening。
+- ただしPhase 3D-16Bでも、actual headers生成、actual signature生成、HTTP request実装、HTTP POST、
+  実注文、実資金検証には進まない。

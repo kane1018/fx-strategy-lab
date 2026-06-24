@@ -1,5 +1,13 @@
 """Phase 3C-1 live verification mocked core."""
 
+from app.live_verification.actual_order_body import (
+    ACTUAL_ORDER_EXECUTION_TYPE,
+    ACTUAL_ORDER_SETTLE_TYPE,
+    ACTUAL_ORDER_TIME_IN_FORCE,
+    ActualOrderRequestBody,
+    build_actual_order_request_body,
+    make_actual_order_body_id,
+)
 from app.live_verification.broker_boundary import (
     NoNetworkBrokerBoundaryResult,
     evaluate_no_network_broker_boundary,
@@ -20,6 +28,7 @@ from app.live_verification.dry_run import (
     run_live_verification_dry_run,
 )
 from app.live_verification.errors import (
+    LiveVerificationActualOrderBodyError,
     LiveVerificationBrokerBoundaryError,
     LiveVerificationCorrelationError,
     LiveVerificationError,
@@ -105,6 +114,9 @@ from app.live_verification.state import (
 
 __all__ = [
     "ALLOWED_TRANSITIONS",
+    "ACTUAL_ORDER_EXECUTION_TYPE",
+    "ACTUAL_ORDER_SETTLE_TYPE",
+    "ACTUAL_ORDER_TIME_IN_FORCE",
     "LIVE_VERIFICATION_MODE",
     "SUPPORTED_SYMBOL",
     "SUPPORTED_UNITS",
@@ -115,6 +127,7 @@ __all__ = [
     "CandidateReference",
     "LiveVerificationDryRunResult",
     "LiveVerificationError",
+    "LiveVerificationActualOrderBodyError",
     "LiveVerificationBrokerBoundaryError",
     "LiveVerificationCorrelationError",
     "LiveVerificationForbiddenActionError",
@@ -145,6 +158,7 @@ __all__ = [
     "TIMESTAMP_PLACEHOLDER",
     "DisabledOrderClientPlan",
     "DisabledHttpRequestClientSkeletonPlan",
+    "ActualOrderRequestBody",
     "FinalOrderChecklist",
     "MockedOrderPayloadCandidate",
     "NoNetworkBrokerBoundaryResult",
@@ -153,6 +167,7 @@ __all__ = [
     "SignatureHeadersBodyPlan",
     "assert_single_intent_per_run",
     "build_correlated_order_intent",
+    "build_actual_order_request_body",
     "build_disabled_order_client_plan",
     "build_disabled_http_request_client_skeleton_plan",
     "build_order_intent_from_allowed_decision",
@@ -164,6 +179,7 @@ __all__ = [
     "evaluate_readonly_precheck",
     "evaluate_final_order_checklist",
     "make_final_checklist_id",
+    "make_actual_order_body_id",
     "make_disabled_order_client_plan_id",
     "make_disabled_http_request_client_skeleton_id",
     "make_mocked_payload_candidate_id",

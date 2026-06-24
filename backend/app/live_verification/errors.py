@@ -55,5 +55,9 @@ class LiveVerificationSignatureHeadersBodyPlanError(LiveVerificationValidationEr
     """Raised when a plan-only body/header/signing boundary is unsafe."""
 
 
+class LiveVerificationActualOrderBodyError(LiveVerificationValidationError):
+    """Raised when an actual body model crosses a safety boundary."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

@@ -145,6 +145,32 @@ def test_signature_headers_body_plan_has_no_crypto_http_or_secret_imports() -> N
             assert not _is_blocked_module(module, blocked_modules)
 
 
+def test_actual_order_body_has_no_crypto_http_or_secret_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "hashlib",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "dotenv",
+        "app." + "brokers",
+    }
+    path = PACKAGE_ROOT / "actual_order_body.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+
+
 def test_live_verification_package_has_no_execution_function_defs_or_calls() -> None:
     blocked_names = {
         "sub" + "mit",
@@ -268,7 +294,14 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
 
     for path in _source_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        assert _field_names(tree).isdisjoint(blocked_fields)
+        field_names = _field_names(tree)
+        if path.name == "actual_order_body.py":
+            field_names = field_names - {
+                "executionType",
+                "timeInForce",
+                "settleType",
+            }
+        assert field_names.isdisjoint(blocked_fields)
 
 
 def test_signature_headers_body_plan_has_no_actual_transport_or_credential_fields() -> None:
@@ -325,3 +358,54 @@ def test_signature_headers_body_plan_has_no_actual_transport_or_credential_field
 
     assert field_names.isdisjoint(blocked_fields)
     assert allowed_safe_flags.issubset(field_names)
+
+
+def test_actual_order_body_has_no_header_signature_http_or_credential_fields() -> None:
+    allowed_safe_flags = {
+        "body_created",
+        "headers_created",
+        "signature_created",
+        "raw_request_saved",
+        "raw_response_saved",
+        "credential_values_logged",
+        "http_post_enabled",
+        "real_order_attempted",
+    }
+    allowed_body_fields = {
+        "executionType",
+        "timeInForce",
+        "settleType",
+    }
+    blocked_fields = {
+        "headers",
+        "request_headers",
+        "actual_headers",
+        "header_values",
+        "signature",
+        "actual_signature",
+        "api_sign",
+        "hmac_digest",
+        "api_key",
+        "api_secret",
+        "secret",
+        "token",
+        "authorization",
+        "raw_request",
+        "raw_response",
+        "http_client",
+        "response",
+        "endpoint",
+        "method",
+        "path",
+        "url",
+        "status_code",
+        "response_body",
+        "request_body",
+    }
+    path = PACKAGE_ROOT / "actual_order_body.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_safe_flags.issubset(field_names)
+    assert allowed_body_fields.issubset(field_names)

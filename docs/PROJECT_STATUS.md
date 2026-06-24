@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-16A actual request body最小実装完了** —
+  `backend/app/live_verification/actual_order_body.py` と
+  `backend/app/tests/test_live_verification_actual_order_body.py` を追加し、
+  `SignatureHeadersBodyPlan` の後段に送信しないlocal-onlyの `ActualOrderRequestBody` と
+  `build_actual_order_request_body()` を実装した。`symbol=USD_JPY`、`size=100`、
+  `executionType=MARKET`、`timeInForce=FAK`、`settleType=OPEN`、`side=BUY|SELL` のみを許可し、
+  `body_created=true`、`http_post_enabled=false`、`headers_created=false`、
+  `signature_created=false`、`raw_request_saved=false`、`raw_response_saved=false`、
+  `credential_values_logged=false`、`real_order_attempted=false` を固定する。unsafe plan、
+  unsupported body fields、安全flag逸脱、未知sideはfail closedで拒否する。actual headers生成、
+  actual signature生成、HMAC処理、HTTP request実装、HTTP client import、HTTP POST、
+  APIキー値表示、secret値表示、`.env`確認、Private API追加接続、broker、`OrderRequest`、
+  real order API client、注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-16B actual body no-leak hardening。ここでもactual headers生成、actual signature生成、
+  HTTP request、HTTP POST、実注文、実資金検証には進まない。
 - **Phase 3D-15 actual body / headers / signature 最小実装前レビュー完了** —
   `docs/PHASE3D15_ACTUAL_BODY_HEADERS_SIGNATURE_PRE_IMPLEMENTATION_REVIEW.md` を作成し、
   Phase 3D-14Bまでで強化した `SignatureHeadersBodyPlan` を前提に、actual request body生成、
