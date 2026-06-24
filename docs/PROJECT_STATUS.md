@@ -82,6 +82,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 2E-5短期3回確認レビュー完了** — `20260622_103430_shadow_USD_JPY_gmo-public`、
+  `20260623_000652_shadow_USD_JPY_gmo-public`、`20260624_001906_shadow_USD_JPY_gmo-public` をレビューし、
+  3回すべてで`REAL_PUBLIC_BID_ASK`、candidate、`ALLOW_SHADOW`、ALLOW時のみvirtual resultを確認した。
+  1回目と3回目では`cooldown_active`による`REJECT_SHADOW`とREJECT時virtual resultなしを確認した。
+  ticker/kline skewは3回とも`stale_data` / `NO_TRADE`へ安全fail closedし、safety violation / broken /
+  invalid risk row / kill switch active / raw response保存 / Private API / APIキー / broker / 実注文はなし。
+  判定は **A: Phase 2Fへ進んでよい**。ただしPhase 2F実行は別タスクとし、Private APIや実注文には進まない。
+  詳細は [PHASE2E5_SHORT_RUNS_REVIEW.md](PHASE2E5_SHORT_RUNS_REVIEW.md)。
 - **Phase 3A準備ロードマップ設計完了** — Private API read-only、APIキー / secret管理、
   Live Verification Mode、極小実資金検証までの段階的ロードマップをdocs-onlyで整理した。これは実装ではなく、
   Private API接続、APIキー入力・表示・保存、`.env`変更、broker、注文API、実注文、実資金検証には進んでいない。

@@ -169,6 +169,12 @@ REJECT時virtual resultなしを確認した。同日2回目は1日1回ルール
 1回だけ実行する。詳細は
 [PHASE2E5_RUN1_REVIEW_AND_NEXT_RUN_PREP.md](PHASE2E5_RUN1_REVIEW_AND_NEXT_RUN_PREP.md)。
 
+Phase 2E-5短期3回確認レビューでは、3回すべてで`REAL_PUBLIC_BID_ASK`、candidate、ALLOW、ALLOW時のみ
+virtual resultを確認し、1回目と3回目で`cooldown_active` REJECTとREJECT時virtual resultなしを確認した。
+skew / stale_dataは`NO_TRADE`へ安全fail closedし、safety violation、broken、invalid risk row、raw response保存、
+Private API/APIキー/broker/実注文はなかった。判定はAで、次は別タスクでPhase 2Fレビューへ進んでよい。
+詳細は [PHASE2E5_SHORT_RUNS_REVIEW.md](PHASE2E5_SHORT_RUNS_REVIEW.md)。
+
 Phase 3A準備ロードマップでは、将来のPrivate API read-only、APIキー / secret管理、Live Verification Mode、
 極小実資金検証の条件をdocs-onlyで整理した。ただし、このrunbookの運用範囲は引き続きPublic APIのみ、
 local-only、注文なしである。Phase 3B read-only実装はPhase 2E-5短期確認とPhase 2Fレビュー後の別タスクに限定する。

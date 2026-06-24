@@ -421,3 +421,37 @@ Phase 3Aレビュー完了後の別タスクに限定する。
 
 本計画の範囲では、Private API接続、APIキー入力・表示・保存、`.env`変更、broker、注文API、実注文、
 実資金検証には進まない。
+
+## 17. Phase 2E-5短期3回確認レビュー結果
+
+Phase 2E-5短期確認として、次の3runをレビューした。
+
+```text
+20260622_103430_shadow_USD_JPY_gmo-public
+20260623_000652_shadow_USD_JPY_gmo-public
+20260624_001906_shadow_USD_JPY_gmo-public
+```
+
+3回合計:
+
+```text
+REAL_PUBLIC_BID_ASK: 5
+candidate: 5
+ALLOW_SHADOW: 3
+REJECT_SHADOW: 2
+virtual result: 3
+ticker/kline skew: 7
+safety violation: 0
+public_ticker_fetch_error: 0
+raw response保存: なし
+Private API / APIキー / broker / 実注文: なし
+```
+
+3回すべてで`REAL_PUBLIC_BID_ASK`、candidate、`ALLOW_SHADOW`、ALLOW時のみvirtual resultを確認した。
+1回目と3回目では`cooldown_active`による`REJECT_SHADOW`とREJECT時virtual resultなしを確認した。
+skew / stale_dataは`NO_TRADE`へ安全fail closedした。判定は **A: Phase 2Fへ進んでよい**。
+
+詳細は [PHASE2E5_SHORT_RUNS_REVIEW.md](PHASE2E5_SHORT_RUNS_REVIEW.md)。
+
+ただし、この判定はPhase 2Fレビューへ進む許可であり、本計画の範囲でPhase 2F実行、Private API、APIキー、
+broker、実注文、実資金へ進むものではない。

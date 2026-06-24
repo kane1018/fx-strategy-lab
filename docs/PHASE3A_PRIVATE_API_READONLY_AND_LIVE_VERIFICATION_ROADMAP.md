@@ -18,8 +18,8 @@
 
 現時点で完了していること:
 
-- Phase 2E-5 1回目で `REAL_PUBLIC_BID_ASK` 2件を確認済み。
-- candidate 2件、`ALLOW_SHADOW` 1件、`REJECT_SHADOW` 1件を確認済み。
+- Phase 2E-5短期3回確認レビューで、3回すべての `REAL_PUBLIC_BID_ASK` を確認済み。
+- 3回合計でcandidate 5件、`ALLOW_SHADOW` 3件、`REJECT_SHADOW` 2件を確認済み。
 - ALLOW時のみvirtual resultが生成され、REJECT時にはvirtual resultが生成されないことを確認済み。
 - ticker/kline skewは `NO_TRADE` へ安全に倒れた。
 - safety violation、broken/skipped、invalid risk rowは0。
@@ -28,7 +28,6 @@
 
 未完了のこと:
 
-- Phase 2E-5短期3回確認は、実runとして1回目のみ完了。
 - Phase 2F Public shadow risk/audit安定性レビューは未実施。
 - Private API read-only実装、APIキー設定、Live Verification Mode、注文API、実資金検証は未実施。
 

@@ -314,3 +314,12 @@ Phase 3A準備として、将来のPrivate API read-only、APIキー / secret管
 ただし、次に行うべき作業は変わらない。Phase 2E-5 2回目は別日に1回だけ実行し、生成物はcommitしない。
 Phase 3B read-only実装、Private API接続、APIキー入力・表示・保存、`.env`変更、broker、注文API、実注文、
 実資金検証には進まない。
+
+## 13. 後続レビュー
+
+その後、Phase 2E-5短期確認として2回目と3回目の別日runも完了し、3runレビューをdocs化した。
+
+詳細は [PHASE2E5_SHORT_RUNS_REVIEW.md](PHASE2E5_SHORT_RUNS_REVIEW.md)。
+
+短期3回レビューの判定は **A: Phase 2Fへ進んでよい**。ただし、Phase 2F実行、Private API、APIキー、
+broker、実注文、実資金へは本書の範囲では進まない。
