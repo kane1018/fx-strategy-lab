@@ -434,3 +434,20 @@ HTTP POST、broker、`OrderRequest`、注文API clientを作らない。`signing
 design-only placeholderだけで構成される。
 
 次候補はPhase 3D-8B no-secret / no-network guard hardeningである。
+
+## 17. Phase 3D-8B実装結果メモ
+
+Phase 3D-8Bでは、`SignatureHttpRequestDesignModel` の no-secret / no-network guardを強化した。
+
+確認したこと:
+
+- `signing_source_candidate` はdesign-only placeholder tokenだけで構成される。
+- 実HTTP method、実endpoint、API header名、secret、request body、raw request、raw responseは保持しない。
+- `actual_signature_created`、`headers_created`、`request_body_created`、`http_request_created`、
+  `api_key_used`、`api_secret_used`、`hmac_used`、`network_used`、`real_order_attempted` はtrue化できない。
+- `signature_request_design.py` に `hmac` / `hashlib` / HTTP client importはない。
+
+実署名生成、HMAC処理、APIキー確認、`.env`確認、HTTP request、HTTP POST、broker、`OrderRequest`、
+注文API client、実注文、実資金検証には進んでいない。
+
+次候補はPhase 3D-9 HTTP request client skeleton disabled-by-default設計レビューである。

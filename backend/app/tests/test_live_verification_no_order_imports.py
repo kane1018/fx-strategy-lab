@@ -94,6 +94,30 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
                 assert node.attr not in blocked_attrs
 
 
+def test_signature_request_design_has_no_crypto_or_http_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "hashlib",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+    }
+    path = PACKAGE_ROOT / "signature_request_design.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+
+
 def test_live_verification_package_has_no_execution_function_defs_or_calls() -> None:
     blocked_names = {
         "sub" + "mit",

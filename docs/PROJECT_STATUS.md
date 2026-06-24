@@ -82,6 +82,16 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-8B no-secret / no-network guard hardening完了** —
+  `backend/app/tests/test_live_verification_signature_request_design.py` と
+  `backend/app/tests/test_live_verification_no_order_imports.py` を強化し、
+  `SignatureHttpRequestDesignModel` が実署名・HMAC・credential・HTTP requestへ変質しないことを追加確認した。
+  `signing_source_candidate` は4つのdesign-only tokenだけで構成され、実HTTP method、実endpoint、
+  API header名、secret、request body、raw request / raw responseを含まない。`signature_request_design.py` 限定で
+  `hmac` / `hashlib` / HTTP client importがないこともAST guardで固定した。実署名生成、HMAC処理、
+  APIキー確認、API secret参照、`.env`確認、HTTP request builder、HTTP client、headers生成、
+  request body生成、HTTP POST、broker、OrderRequest、注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-9 HTTP request client skeleton disabled-by-default設計レビュー。
 - **Phase 3D-8 signature / request design model mocked実装完了** —
   `backend/app/live_verification/signature_request_design.py` と
   `backend/app/tests/test_live_verification_signature_request_design.py` を追加し、

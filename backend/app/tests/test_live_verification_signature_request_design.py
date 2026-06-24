@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -37,6 +37,55 @@ from app.live_verification.state import LiveVerificationState
 
 CREATED_AT = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
 EXPIRES_AT = CREATED_AT + timedelta(minutes=10)
+EXPECTED_DESIGN_FIELDS = {
+    "signature_request_design_id",
+    "order_client_plan_id",
+    "mocked_payload_candidate_id",
+    "verification_run_id",
+    "client_mode",
+    "disabled_by_default",
+    "network_enabled",
+    "credential_access_enabled",
+    "method_label",
+    "path_label",
+    "body_shape_label",
+    "timestamp_placeholder",
+    "signing_source_candidate",
+    "actual_signature_created",
+    "headers_created",
+    "request_body_created",
+    "http_request_created",
+    "api_key_used",
+    "api_secret_used",
+    "hmac_used",
+    "network_used",
+    "real_order_attempted",
+}
+DESIGN_SOURCE_TOKENS = (
+    TIMESTAMP_PLACEHOLDER,
+    ORDER_CREATE_METHOD_LABEL,
+    ORDER_CREATE_PATH_LABEL,
+    ORDER_CREATE_BODY_SHAPE_LABEL,
+)
+FORBIDDEN_ACTUAL_TRANSPORT_VALUES = {
+    "POST",
+    "/private/v1/order",
+    "API-KEY",
+    "API-SIGN",
+    "API-TIMESTAMP",
+    "Authorization",
+    "secret",
+    "api_key",
+    "api_secret",
+    "actual signature",
+    "signature actual value",
+    "hmac digest",
+    '{"symbol":"USD_JPY"}',
+    "headers",
+    "request_body",
+    "raw_request",
+    "raw_response",
+}
 
 
 def _intent(**overrides: object) -> OrderIntent:
@@ -227,27 +276,26 @@ def test_signing_source_candidate_is_placeholder_only() -> None:
         "TIMESTAMP_PLACEHOLDER|ORDER_CREATE_METHOD_LABEL|"
         "ORDER_CREATE_PATH_LABEL|ORDER_CREATE_BODY_SHAPE_LABEL"
     )
-    blocked_values = {
-        "POST",
-        "/private/v1/order",
-        "API-KEY",
-        "API-SIGN",
-        "API-TIMESTAMP",
-        "Authorization",
-        "secret",
-        "api_key",
-        "api_secret",
-        "signature actual value",
-        "hmac digest",
-        '{"symbol":"USD_JPY"}',
-        "headers",
-    }
-    assert all(value not in design.signing_source_candidate for value in blocked_values)
+    assert design.signing_source_candidate.split("|") == list(DESIGN_SOURCE_TOKENS)
+    assert all(
+        value not in design.signing_source_candidate
+        for value in FORBIDDEN_ACTUAL_TRANSPORT_VALUES
+    )
+
+
+def test_signature_http_request_design_string_values_are_design_only() -> None:
+    design = _design()
+    values = asdict(design)
+
+    for value in values.values():
+        if isinstance(value, str):
+            assert all(marker not in value for marker in FORBIDDEN_ACTUAL_TRANSPORT_VALUES)
 
 
 def test_signature_http_request_design_model_does_not_hold_secret_or_transport_fields() -> None:
     design = _design()
-    fields = set(asdict(design))
+    model_fields = {field.name for field in fields(SignatureHttpRequestDesignModel)}
+    fields_from_instance = set(asdict(design))
     blocked_fields = {
         "api_key",
         "api_secret",
@@ -273,7 +321,9 @@ def test_signature_http_request_design_model_does_not_hold_secret_or_transport_f
         "http_client",
     }
 
-    assert fields.isdisjoint(blocked_fields)
+    assert model_fields == EXPECTED_DESIGN_FIELDS
+    assert fields_from_instance == EXPECTED_DESIGN_FIELDS
+    assert model_fields.isdisjoint(blocked_fields)
     assert all(not hasattr(design, field_name) for field_name in blocked_fields)
     assert {
         "signature_request_design_id",
@@ -283,7 +333,7 @@ def test_signature_http_request_design_model_does_not_hold_secret_or_transport_f
         "path_label",
         "body_shape_label",
         "timestamp_placeholder",
-    }.issubset(fields)
+    }.issubset(model_fields)
 
 
 @pytest.mark.parametrize(
@@ -327,6 +377,26 @@ def test_signature_http_request_design_model_rejects_unsafe_candidate_fields(
 
 
 @pytest.mark.parametrize(
+    "plan_overrides,candidate_overrides",
+    [
+        ({"payload_candidate_id": "mocked_payload_run_1_mismatch"}, {}),
+        ({}, {"order_review_id": "review_mismatch"}),
+        ({}, {"final_checklist_id": "checklist_mismatch"}),
+        ({}, {"boundary_check_id": "boundary_mismatch"}),
+    ],
+)
+def test_signature_http_request_design_model_rejects_plan_candidate_mismatches(
+    plan_overrides: dict[str, object],
+    candidate_overrides: dict[str, object],
+) -> None:
+    candidate = _unchecked_candidate(**candidate_overrides)
+    plan = _unchecked_plan(**plan_overrides)
+
+    with pytest.raises(LiveVerificationSignatureRequestDesignError):
+        _design(order_client_plan=plan, mocked_payload_candidate=candidate)
+
+
+@pytest.mark.parametrize(
     "overrides",
     [
         {"method_label": "ORDER_ACTUAL_METHOD_LABEL"},
@@ -365,3 +435,27 @@ def test_signature_http_request_design_model_rejects_actual_secret_or_http_state
 ) -> None:
     with pytest.raises(LiveVerificationSignatureRequestDesignError):
         SignatureHttpRequestDesignModel(**asdict(_unchecked_design(**overrides)))
+
+
+@pytest.mark.parametrize(
+    "flag_name",
+    [
+        "disabled_by_default",
+        "network_enabled",
+        "credential_access_enabled",
+        "actual_signature_created",
+        "headers_created",
+        "request_body_created",
+        "http_request_created",
+        "api_key_used",
+        "api_secret_used",
+        "hmac_used",
+        "network_used",
+        "real_order_attempted",
+    ],
+)
+def test_signature_http_request_design_model_rejects_non_bool_safety_flags(
+    flag_name: str,
+) -> None:
+    with pytest.raises(LiveVerificationSignatureRequestDesignError):
+        SignatureHttpRequestDesignModel(**asdict(_unchecked_design(**{flag_name: "false"})))

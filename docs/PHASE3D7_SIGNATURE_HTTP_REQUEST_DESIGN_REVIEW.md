@@ -525,3 +525,42 @@ mocked design modelだけを実装した。
 
 次候補はPhase 3D-8B no-secret / no-network guard hardeningである。ただし、Phase 3D-8Bでも
 実署名、APIキー確認、`.env`確認、HTTP request、HTTP POST、実注文、実資金検証には進まない。
+
+## 12. Phase 3D-8B実装結果メモ
+
+Phase 3D-8Bでは、Phase 3D-8の `SignatureHttpRequestDesignModel` が no-secret / no-network /
+design-only の境界を維持することを追加テストで固定した。
+
+強化したもの:
+
+- `signing_source_candidate` が `TIMESTAMP_PLACEHOLDER`、`ORDER_CREATE_METHOD_LABEL`、
+  `ORDER_CREATE_PATH_LABEL`、`ORDER_CREATE_BODY_SHAPE_LABEL` の4 tokenだけで構成されること。
+- modelのstring値に実HTTP method、実endpoint、API header名、secret、request body、raw request /
+  raw responseが混入しないこと。
+- model field一覧が許可済みの安全fieldだけであること。
+- safety flagがboolであり、不正値やtrue化を拒否すること。
+- plan / candidateのID相関不整合を拒否すること。
+- `signature_request_design.py` に `hmac` / `hashlib` / HTTP client importがないこと。
+
+実装していないもの:
+
+- 実署名生成。
+- HMAC処理。
+- API-KEY / API-SIGN / API-TIMESTAMP生成。
+- APIキー確認。
+- API secret参照。
+- `.env`確認。
+- HTTP request builder。
+- HTTP client。
+- headers生成。
+- request body生成。
+- HTTP POST。
+- broker。
+- `OrderRequest`。
+- 注文API client。
+- 実注文。
+- 実資金検証。
+
+次候補はPhase 3D-9 HTTP request client skeleton disabled-by-default設計レビューである。ただし、
+Phase 3D-9でも実署名、APIキー確認、`.env`確認、HTTP request実装、HTTP POST、実注文、
+実資金検証には進まない。
