@@ -624,3 +624,55 @@ A: Phase 3D-16D actual headers / signature 最小実装へ進んでよい
 ただし、Phase 3D-16DでもHTTP POST、HTTP request送信、Private API追加接続、broker、`OrderRequest`、
 real order API client、実注文、実資金検証には進まない。Phase 3D-16Dは別タスクであり、今回このまま
 実装へ進まない。
+
+## 13. Step 1統合 / Phase 3D-16D actual headers / signature + mock transport 実装結果メモ
+
+Step 1統合では、Phase 3D-16Cのレビュー結果に基づき、actual headers / actual signature の最小実装、
+署名用body serialization、HMAC署名、no-leak hardening、mock signed transport統合をlocal-onlyで完了した。
+
+追加したもの:
+
+- `backend/app/live_verification/actual_headers_signature.py`
+- `ActualHeadersSignatureBundle`
+- `build_actual_headers_signature_bundle()`
+- `serialize_actual_order_body_for_signing()`
+- `backend/app/live_verification/mock_signed_transport.py`
+- `MockSignedOrderTransportResult`
+- `run_mock_signed_order_transport()`
+- `backend/app/tests/test_live_verification_actual_headers_signature.py`
+- `backend/app/tests/test_live_verification_mock_signed_transport.py`
+
+実装したこと:
+
+- `ActualOrderRequestBody` から署名用のstable JSONをメモリ上で作成する。
+- HMAC-SHA256 hex署名を実装する。
+- 認証headerはheader名summaryだけを公開し、header値は公開fieldに持たせない。
+- signature値は公開field、repr、str、asdict、docs、logs、stdout、Git diffへ出さない。
+- API key / API secret は関数引数で受け取り、関数境界内の一時値とprivate redacted objectに閉じ込める。
+- mock signed transportでbundle passとno-network境界だけを検証する。
+
+維持した境界:
+
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- Private API追加接続なし。
+- APIキー値表示なし。
+- secret値表示なし。
+- signature値表示なし。
+- headers値表示なし。
+- raw request保存なし。
+- raw response保存なし。
+- raw headers保存なし。
+- raw signature保存なし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 注文API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Step 2: HTTP client / 注文送信skeleton + 安全機構統合。
+- ただしStep 2でも、disabled-by-default / mock検証中心とし、実HTTP POST、実注文、実資金検証へは進まない。

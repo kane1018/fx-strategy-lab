@@ -59,5 +59,13 @@ class LiveVerificationActualOrderBodyError(LiveVerificationValidationError):
     """Raised when an actual body model crosses a safety boundary."""
 
 
+class LiveVerificationActualHeadersSignatureError(LiveVerificationValidationError):
+    """Raised when signed header construction crosses a safety boundary."""
+
+
+class LiveVerificationMockSignedTransportError(LiveVerificationValidationError):
+    """Raised when mock signed transport crosses a safety boundary."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

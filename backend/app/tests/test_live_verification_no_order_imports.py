@@ -79,16 +79,19 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
     blocked_attrs = {"en" + "viron", "get" + "env"}
 
     for path in _source_files():
+        path_blocked_modules = set(blocked_modules)
+        if path.name == "actual_headers_signature.py":
+            path_blocked_modules.discard("hmac")
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 assert all(
-                    not _is_blocked_module(alias.name, blocked_modules)
+                    not _is_blocked_module(alias.name, path_blocked_modules)
                     for alias in node.names
                 )
             if isinstance(node, ast.ImportFrom):
                 module = node.module or ""
-                assert not _is_blocked_module(module, blocked_modules)
+                assert not _is_blocked_module(module, path_blocked_modules)
             if isinstance(node, ast.Name):
                 assert node.id not in blocked_names
             if isinstance(node, ast.Attribute):
@@ -158,6 +161,57 @@ def test_actual_order_body_has_no_crypto_http_or_secret_imports() -> None:
         "app." + "brokers",
     }
     path = PACKAGE_ROOT / "actual_order_body.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+
+
+def test_actual_headers_signature_allows_only_crypto_imports() -> None:
+    allowed_modules = {"hmac", "hashlib", "json", "dataclasses"}
+    blocked_modules = {
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "dotenv",
+        "app." + "brokers",
+    }
+    path = PACKAGE_ROOT / "actual_headers_signature.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert alias.name in allowed_modules or not _is_blocked_module(
+                    alias.name,
+                    blocked_modules,
+                )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+
+
+def test_mock_signed_transport_has_no_http_or_secret_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "dotenv",
+        "app." + "brokers",
+    }
+    path = PACKAGE_ROOT / "mock_signed_transport.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
 
     for node in ast.walk(tree):
@@ -246,8 +300,18 @@ def test_live_verification_package_has_no_http_or_private_order_strings() -> Non
     for path in _source_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         strings = _string_constants(tree)
-        assert strings.isdisjoint(blocked_exact_strings)
-        for marker in blocked_substrings:
+        path_blocked_exact_strings = set(blocked_exact_strings)
+        path_blocked_substrings = set(blocked_substrings)
+        if path.name == "actual_headers_signature.py":
+            path_blocked_exact_strings = path_blocked_exact_strings - {
+                "POST",
+                "API-" + "KEY",
+                "API-" + "SIGN",
+                "API-" + "TIMESTAMP",
+            }
+            path_blocked_substrings.discard("/private/v1/" + "order")
+        assert strings.isdisjoint(path_blocked_exact_strings)
+        for marker in path_blocked_substrings:
             assert all(marker not in value for value in strings)
 
 
@@ -304,6 +368,15 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
                 "executionType",
                 "timeInForce",
                 "settleType",
+            }
+        if path.name == "actual_headers_signature.py":
+            field_names = field_names - {
+                "api_key",
+                "api_secret",
+                "timestamp",
+                "method",
+                "path",
+                "body_serialization",
             }
         assert field_names.isdisjoint(blocked_fields)
 
@@ -445,3 +518,120 @@ def test_actual_order_body_has_no_http_payload_conversion_methods() -> None:
 
     assert function_names.isdisjoint(blocked_function_names)
     assert field_names.isdisjoint(blocked_fields)
+
+
+def test_actual_headers_signature_exposes_only_safe_public_fields() -> None:
+    allowed_safe_flags = {
+        "headers_created",
+        "signature_created",
+        "hmac_used",
+        "http_post_enabled",
+        "raw_headers_saved",
+        "raw_signature_saved",
+        "raw_request_saved",
+        "raw_response_saved",
+        "credential_values_logged",
+        "api_key_value_exposed",
+        "api_secret_value_exposed",
+        "signature_value_exposed",
+        "bundle_passed",
+    }
+    allowed_summaries = {
+        "header_names_summary",
+        "signature_algorithm_summary",
+        "body_serialization_summary",
+    }
+    allowed_inputs = {
+        "api_key",
+        "api_secret",
+        "timestamp",
+        "method",
+        "path",
+        "body_serialization",
+    }
+    blocked_fields = {
+        "headers",
+        "actual_headers",
+        "header_values",
+        "signature",
+        "signature_value",
+        "actual_signature",
+        "api_sign",
+        "hmac_digest",
+        "secret",
+        "token",
+        "authorization",
+        "raw_headers",
+        "raw_signature",
+        "raw_request",
+        "raw_response",
+        "http_client",
+        "response",
+        "endpoint",
+        "url",
+        "status_code",
+        "response_body",
+        "request_body",
+        "request_headers",
+        "body",
+        "payload",
+    }
+    path = PACKAGE_ROOT / "actual_headers_signature.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_safe_flags.issubset(field_names)
+    assert allowed_summaries.issubset(field_names)
+    assert allowed_inputs.issubset(field_names)
+
+
+def test_mock_signed_transport_exposes_only_safe_public_fields() -> None:
+    allowed_safe_flags = {
+        "network_enabled",
+        "http_client_enabled",
+        "http_post_enabled",
+        "real_order_attempted",
+        "raw_request_saved",
+        "raw_response_saved",
+        "credential_values_logged",
+        "bundle_passed",
+        "transport_passed",
+    }
+    blocked_fields = {
+        "headers",
+        "actual_headers",
+        "header_values",
+        "signature",
+        "signature_value",
+        "actual_signature",
+        "api_sign",
+        "hmac_digest",
+        "api_key",
+        "api_secret",
+        "secret",
+        "token",
+        "authorization",
+        "raw_headers",
+        "raw_signature",
+        "raw_request",
+        "raw_response",
+        "http_client",
+        "response",
+        "endpoint",
+        "method",
+        "path",
+        "url",
+        "status_code",
+        "response_body",
+        "request_body",
+        "request_headers",
+        "body",
+        "payload",
+    }
+    path = PACKAGE_ROOT / "mock_signed_transport.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_safe_flags.issubset(field_names)

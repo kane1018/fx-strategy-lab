@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 1統合 / Phase 3D-16D actual headers / signature + mock transport完了** —
+  `backend/app/live_verification/actual_headers_signature.py` と
+  `backend/app/live_verification/mock_signed_transport.py` を追加し、
+  `ActualOrderRequestBody` の後段に `ActualHeadersSignatureBundle` と
+  `MockSignedOrderTransportResult` をlocal-onlyで実装した。署名用body serializationは安定JSONとして
+  メモリ上でのみ作成し、HMAC-SHA256 hex署名と認証headerは関数境界内の一時値とprivate redacted objectに
+  閉じ込める。公開bundle / transport resultにはheader名、algorithm名、summary flagだけを保持し、
+  APIキー値、secret値、signature値、headers値、raw request、raw responseは保持しない。
+  `backend/app/tests/test_live_verification_actual_headers_signature.py`、
+  `backend/app/tests/test_live_verification_mock_signed_transport.py`、
+  `backend/app/tests/test_live_verification_no_order_imports.py` でno-leak / no-secret / no-network /
+  no-order guardを追加・更新した。HTTP client import、HTTP POST、Private API追加接続、broker、
+  `OrderRequest`、real order API client、注文API client、実注文、実資金検証には進んでいない。
+  次候補はStep 2: HTTP client / 注文送信skeleton + 安全機構統合。ただしStep 2でもdisabled-by-default /
+  mock検証中心とし、実HTTP POST、実注文、実資金検証には進まない。
 - **Phase 3D-16C actual headers / signature 最小実装前レビュー完了** —
   `docs/PHASE3D16C_ACTUAL_HEADERS_SIGNATURE_PRE_IMPLEMENTATION_REVIEW.md` を作成し、
   Phase 3D-16Bまでで安全固定した `ActualOrderRequestBody` の後段として、actual headers生成、
