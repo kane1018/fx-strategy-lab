@@ -513,3 +513,13 @@ Phase 3D-4B追記:
 - broker、OrderRequest、注文API client、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、
   実注文、実資金検証には進んでいない。
 - 次候補はPhase 3D-5 real order API client実装前レビューである。
+
+Phase 3D-5追記:
+
+- Phase 3D-5 real order API client実装前レビューは後続タスクで完了した。
+- `docs/PHASE3D5_REAL_ORDER_API_CLIENT_PRE_IMPLEMENTATION_REVIEW.md` に、real order API client実装前の
+  必須条件、まだ作らない範囲、将来扱う可能性のある最小範囲、禁止endpoint、APIキー / secret / `.env`
+  の扱い、実HTTP POST禁止方針、Phase 3D-6以降の分割案、実装前・実注文前の明示承認条件を整理した。
+- 判定は **A: Phase 3D-6 real order API client no-network skeleton / disabled-by-default設計・mock実装へ進んでよい**。
+- ただしreal order API client、broker、OrderRequest、注文API client、HTTP POST、Private API追加接続、
+  APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
