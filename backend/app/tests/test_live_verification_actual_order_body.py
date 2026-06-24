@@ -321,6 +321,29 @@ def test_actual_order_request_body_rejects_unsafe_or_incomplete_plan(
         _body(signature_headers_body_plan=_unchecked_plan(**overrides))
 
 
+def test_actual_order_request_body_rejects_multiple_unsafe_plan_flags() -> None:
+    unsafe_plan = _unchecked_plan(
+        plan_passed=True,
+        fail_reasons=(),
+        actual_body_created=True,
+        actual_headers_created=True,
+        actual_signature_created=True,
+        http_post_enabled=True,
+        credential_values_exposed=True,
+        raw_request_saved=True,
+        raw_response_saved=True,
+        headers_saved=True,
+        signature_saved=True,
+        api_key_value_exposed=True,
+        api_secret_value_exposed=True,
+        hmac_used=True,
+        real_order_attempted=True,
+    )
+
+    with pytest.raises(LiveVerificationActualOrderBodyError):
+        _body(signature_headers_body_plan=unsafe_plan)
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -344,6 +367,19 @@ def test_actual_order_request_body_rejects_unsafe_body_inputs(
 ) -> None:
     with pytest.raises(LiveVerificationActualOrderBodyError):
         _body(**kwargs)
+
+
+def test_actual_order_request_body_rejects_multiple_unsafe_body_flags() -> None:
+    with pytest.raises(LiveVerificationActualOrderBodyError):
+        _body(
+            http_post_enabled=True,
+            headers_created=True,
+            signature_created=True,
+            raw_request_saved=True,
+            raw_response_saved=True,
+            credential_values_logged=True,
+            real_order_attempted=True,
+        )
 
 
 @pytest.mark.parametrize(
@@ -372,12 +408,18 @@ def test_actual_order_request_body_has_no_transport_header_or_credential_fields(
     fields_from_instance = set(asdict(body))
     blocked_fields = {
         "headers",
+        "actual_headers",
+        "header_values",
         "api_key",
         "api_secret",
         "secret",
         "token",
+        "credential",
+        "credentials",
         "authorization",
         "signature",
+        "actual_signature",
+        "signature_value",
         "api_sign",
         "hmac_digest",
         "raw_request",
@@ -392,11 +434,18 @@ def test_actual_order_request_body_has_no_transport_header_or_credential_fields(
         "response_body",
         "request_body",
         "request_headers",
+        "body",
+        "payload",
+    }
+    blocked_serializers = {
+        "to_json",
+        "json",
+        "to_http_payload",
+        "to_request_body",
     }
 
     assert model_fields == EXPECTED_BODY_FIELDS
     assert fields_from_instance == EXPECTED_BODY_FIELDS
     assert model_fields.isdisjoint(blocked_fields)
     assert all(not hasattr(body, field_name) for field_name in blocked_fields)
-    assert not hasattr(body, "to_json")
-    assert not hasattr(body, "json")
+    assert all(not hasattr(body, name) for name in blocked_serializers)

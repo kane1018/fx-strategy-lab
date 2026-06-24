@@ -654,3 +654,43 @@ actual request body modelだけを最小実装した。
 - Phase 3D-16B actual body no-leak hardening。
 - ただしPhase 3D-16Bでも、actual headers生成、actual signature生成、HTTP request実装、HTTP POST、
   実注文、実資金検証には進まない。
+
+## 14. Phase 3D-16B actual body no-leak hardening結果メモ
+
+Phase 3D-16Bでは、Phase 3D-16Aで追加した `ActualOrderRequestBody` の no-leak / no-secret /
+no-network / no-order guardを強化した。
+
+強化した内容:
+
+- unsafeな `SignatureHeadersBodyPlan` flagを複数同時に指定してもfail closedすることを確認。
+- actual body側の複数unsafe flag同時指定をfail closedで拒否することを確認。
+- `ActualOrderRequestBody` がactual headers、actual signature、credential値、raw request、
+  raw response、HTTP client、endpoint、responseを保持しないことを確認。
+- `to_json`、`to_http_payload`、`to_request_body` など、HTTP payload化の導線を持たないことを確認。
+- no-order / no-secret / no-network guardで、実装コードにHTTP client、credential参照、
+  order endpoint、raw request / raw response fieldが混入しないことを確認。
+
+変更しなかった境界:
+
+- `actual_order_body.py` 本体は変更していない。
+- actual headers生成なし。
+- actual signature生成なし。
+- HMAC処理なし。
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- APIキー値表示なし。
+- secret値表示なし。
+- `.env`確認なし。
+- Private API追加接続なし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 注文API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Phase 3D-16C actual headers / signature最小実装前レビュー。
+- ただしPhase 3D-16Cでも、HTTP request実装、HTTP POST、実注文、実資金検証には進まない。

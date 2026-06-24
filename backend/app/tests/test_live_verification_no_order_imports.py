@@ -278,11 +278,15 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
         "response_headers",
         "status_code",
         "headers",
+        "header_values",
         "signature",
+        "signature_value",
         "api_sign",
         "actual_signature",
         "api_key",
         "api_secret",
+        "credential",
+        "credentials",
         "hmac_digest",
         "secret",
         "token",
@@ -382,6 +386,7 @@ def test_actual_order_body_has_no_header_signature_http_or_credential_fields() -
         "actual_headers",
         "header_values",
         "signature",
+        "signature_value",
         "actual_signature",
         "api_sign",
         "hmac_digest",
@@ -389,6 +394,8 @@ def test_actual_order_body_has_no_header_signature_http_or_credential_fields() -
         "api_secret",
         "secret",
         "token",
+        "credential",
+        "credentials",
         "authorization",
         "raw_request",
         "raw_response",
@@ -409,3 +416,32 @@ def test_actual_order_body_has_no_header_signature_http_or_credential_fields() -
     assert field_names.isdisjoint(blocked_fields)
     assert allowed_safe_flags.issubset(field_names)
     assert allowed_body_fields.issubset(field_names)
+
+
+def test_actual_order_body_has_no_http_payload_conversion_methods() -> None:
+    blocked_function_names = {
+        "to_json",
+        "to_http_payload",
+        "to_request_body",
+    }
+    blocked_fields = {
+        "request_body",
+        "raw_request",
+        "headers",
+        "signature",
+        "header_values",
+        "signature_value",
+        "credential",
+        "credentials",
+    }
+    path = PACKAGE_ROOT / "actual_order_body.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    function_names = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
+    field_names = _field_names(tree)
+
+    assert function_names.isdisjoint(blocked_function_names)
+    assert field_names.isdisjoint(blocked_fields)

@@ -82,6 +82,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-16B actual body no-leak hardening完了** —
+  `backend/app/tests/test_live_verification_actual_order_body.py` と
+  `backend/app/tests/test_live_verification_no_order_imports.py` を強化し、
+  `ActualOrderRequestBody` がactual headers、actual signature、HTTP payload、raw request / raw response、
+  credential値、HTTP client、endpoint、responseを保持しないことを追加確認した。unsafeな
+  `SignatureHeadersBodyPlan` flagや、actual body側の複数unsafe flag同時指定はfail closedで拒否する。
+  `actual_order_body.py` 本体は変更せず、local-only / no-HTTP / no-secret / no-orderの境界を維持した。
+  actual headers生成、actual signature生成、HMAC処理、HTTP request実装、HTTP client import、HTTP POST、
+  APIキー値表示、secret値表示、`.env`確認、Private API追加接続、broker、`OrderRequest`、
+  real order API client、注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-16C actual headers / signature最小実装前レビュー。ここでもHTTP POST、
+  実注文、実資金検証には進まない。
 - **Phase 3D-16A actual request body最小実装完了** —
   `backend/app/live_verification/actual_order_body.py` と
   `backend/app/tests/test_live_verification_actual_order_body.py` を追加し、
