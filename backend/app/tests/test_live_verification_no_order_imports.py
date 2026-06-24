@@ -225,6 +225,31 @@ def test_mock_signed_transport_has_no_http_or_secret_imports() -> None:
             assert not _is_blocked_module(module, blocked_modules)
 
 
+def test_order_submission_skeleton_has_no_http_or_secret_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "dotenv",
+        "app." + "brokers",
+    }
+    path = PACKAGE_ROOT / "order_submission_skeleton.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+
+
 def test_live_verification_package_has_no_execution_function_defs_or_calls() -> None:
     blocked_names = {
         "sub" + "mit",
@@ -302,14 +327,18 @@ def test_live_verification_package_has_no_http_or_private_order_strings() -> Non
         strings = _string_constants(tree)
         path_blocked_exact_strings = set(blocked_exact_strings)
         path_blocked_substrings = set(blocked_substrings)
+        if path.name in {
+            "actual_headers_signature.py",
+            "order_submission_skeleton.py",
+        }:
+            path_blocked_exact_strings.discard("POST")
+            path_blocked_substrings.discard("/private/v1/" + "order")
         if path.name == "actual_headers_signature.py":
             path_blocked_exact_strings = path_blocked_exact_strings - {
-                "POST",
                 "API-" + "KEY",
                 "API-" + "SIGN",
                 "API-" + "TIMESTAMP",
             }
-            path_blocked_substrings.discard("/private/v1/" + "order")
         assert strings.isdisjoint(path_blocked_exact_strings)
         for marker in path_blocked_substrings:
             assert all(marker not in value for value in strings)
@@ -635,3 +664,68 @@ def test_mock_signed_transport_exposes_only_safe_public_fields() -> None:
 
     assert field_names.isdisjoint(blocked_fields)
     assert allowed_safe_flags.issubset(field_names)
+
+
+def test_order_submission_skeleton_exposes_only_safe_public_fields() -> None:
+    allowed_safe_flags = {
+        "endpoint_allowlisted",
+        "manual_approval_confirmed",
+        "safety_passed",
+        "network_enabled",
+        "http_client_enabled",
+        "http_post_enabled",
+        "mock_transport_only",
+        "retry_enabled",
+        "loop_enabled",
+        "result_unknown",
+        "real_order_attempted",
+        "raw_request_saved",
+        "raw_response_saved",
+        "raw_headers_saved",
+        "raw_signature_saved",
+        "credential_values_logged",
+        "skeleton_passed",
+        "mock_transport_passed",
+    }
+    allowed_metadata = {
+        "endpoint_path",
+        "http_method",
+    }
+    blocked_fields = {
+        "headers",
+        "actual_headers",
+        "header_values",
+        "signature",
+        "signature_value",
+        "actual_signature",
+        "api_sign",
+        "hmac_digest",
+        "api_key",
+        "api_secret",
+        "secret",
+        "token",
+        "authorization",
+        "raw_headers",
+        "raw_signature",
+        "raw_request",
+        "raw_response",
+        "http_client",
+        "response",
+        "endpoint",
+        "method",
+        "path",
+        "url",
+        "status_code",
+        "response_body",
+        "request_body",
+        "request_headers",
+        "body",
+        "payload",
+    }
+    path = PACKAGE_ROOT / "order_submission_skeleton.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_safe_flags.issubset(field_names)
+    assert allowed_metadata.issubset(field_names)

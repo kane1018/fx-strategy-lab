@@ -67,5 +67,9 @@ class LiveVerificationMockSignedTransportError(LiveVerificationValidationError):
     """Raised when mock signed transport crosses a safety boundary."""
 
 
+class LiveVerificationOrderSubmissionSkeletonError(LiveVerificationValidationError):
+    """Raised when a disabled order submission skeleton is unsafe."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

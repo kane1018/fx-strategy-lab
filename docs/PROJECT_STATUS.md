@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 2 HTTP client / 注文送信skeleton + 安全機構統合完了** —
+  `backend/app/live_verification/order_submission_skeleton.py` を追加し、
+  `ActualHeadersSignatureBundle` の後段に `OrderSubmissionSafetyContext` /
+  `OrderSubmissionSafetyDecision`、`DisabledOrderSubmissionSkeletonResult`、
+  `MockOrderSubmissionSkeletonResult` をlocal-onlyで実装した。manual approval必須、
+  open positionsなし、active ordersなし、previous result known、result unknown時停止、
+  session attempt 0、daily attempt上限、retry禁止、loop禁止をfail closedで評価する。
+  `/private/v1/order` と `POST` はallowlist metadataとしてのみ保持し、HTTP client import、
+  HTTP POST、Private API追加接続、broker、`OrderRequest`、real order API client、注文API client、
+  実注文、実資金検証には進んでいない。公開resultにはAPIキー値、secret値、signature値、
+  headers値、raw request、raw response、status code、response bodyを保持しない。
+  `backend/app/tests/test_live_verification_order_submission_skeleton.py` と
+  `backend/app/tests/test_live_verification_no_order_imports.py` でno-leak / no-secret /
+  no-network / no-order guardを追加・更新した。次候補はStep 3: 独立した最終監査・preflight。
 - **Step 1統合 / Phase 3D-16D actual headers / signature + mock transport完了** —
   `backend/app/live_verification/actual_headers_signature.py` と
   `backend/app/live_verification/mock_signed_transport.py` を追加し、

@@ -676,3 +676,54 @@ Step 1統合では、Phase 3D-16Cのレビュー結果に基づき、actual head
 
 - Step 2: HTTP client / 注文送信skeleton + 安全機構統合。
 - ただしStep 2でも、disabled-by-default / mock検証中心とし、実HTTP POST、実注文、実資金検証へは進まない。
+
+## 14. Step 2 HTTP client / 注文送信skeleton + 安全機構統合 結果メモ
+
+Step 2では、Step 1統合で追加した `ActualHeadersSignatureBundle` の後段に、
+disabled-by-default の注文送信skeletonと実注文前の安全判定をlocal-onlyで追加した。
+
+追加したもの:
+
+- `backend/app/live_verification/order_submission_skeleton.py`
+- `OrderSubmissionSafetyContext`
+- `OrderSubmissionSafetyDecision`
+- `evaluate_order_submission_safety()`
+- `DisabledOrderSubmissionSkeletonResult`
+- `build_disabled_order_submission_skeleton()`
+- `MockOrderSubmissionSkeletonResult`
+- `run_mock_order_submission_skeleton()`
+- `backend/app/tests/test_live_verification_order_submission_skeleton.py`
+
+実装したこと:
+
+- manual approval必須、既存建玉なし、未約定注文なし、previous result known、result unknown時停止を評価する。
+- session attempt 0、daily attempt上限、retry禁止、loop禁止をfail closedで評価する。
+- `/private/v1/order` と `POST` をallowlist metadataとしてのみ保持する。
+- mock submission skeletonでno-network境界だけを検証する。
+- 公開resultにAPIキー値、secret値、signature値、headers値、raw request、raw response、status code、response bodyを保持しない。
+
+維持した境界:
+
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- Private API追加接続なし。
+- APIキー値表示なし。
+- secret値表示なし。
+- signature値表示なし。
+- headers値表示なし。
+- raw request保存なし。
+- raw response保存なし。
+- raw headers保存なし。
+- raw signature保存なし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 注文API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Step 3: 独立した最終監査・preflight。
+- ただしStep 3でも、Private API追加接続、HTTP POST、実注文、実資金検証へは明示承認なしに進まない。

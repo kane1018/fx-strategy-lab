@@ -781,3 +781,46 @@ Phase 3D-16Dでは、Phase 3D-16A/B/Cの成果を統合し、`ActualOrderRequest
 
 - Step 2: HTTP client / 注文送信skeleton + 安全機構統合。
 - ただしStep 2でも、実HTTP POST、実注文、実資金検証には進まない。
+
+## 17. Step 2 HTTP client / 注文送信skeleton + 安全機構統合 結果メモ
+
+Step 2では、Step 1統合で追加した `ActualHeadersSignatureBundle` の後段に
+`OrderSubmissionSafetyDecision`、`DisabledOrderSubmissionSkeletonResult`、
+`MockOrderSubmissionSkeletonResult` を追加した。
+
+完了した範囲:
+
+- 実注文前の安全判定model。
+- manual approval必須。
+- 既存建玉なし、未約定注文なし。
+- previous result known必須。
+- result unknown時停止。
+- retry禁止、loop禁止、session attempt 0、daily attempt上限。
+- `/private/v1/order` / `POST` のallowlist metadata。
+- mock submission skeletonによるno-network境界確認。
+- no-leak / no-secret / no-network / no-order tests。
+
+維持した境界:
+
+- APIキー値表示なし。
+- secret値表示なし。
+- signature値表示なし。
+- headers値表示なし。
+- `.env`確認なし。
+- Private API追加接続なし。
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- raw request / raw response保存なし。
+- raw headers / raw signature保存なし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 注文API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Step 3: 独立した最終監査・preflight。
+- ただしStep 3でも、Private API追加接続、HTTP POST、実注文、実資金検証には進まない。
