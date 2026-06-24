@@ -82,6 +82,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-15 actual body / headers / signature 最小実装前レビュー完了** —
+  `docs/PHASE3D15_ACTUAL_BODY_HEADERS_SIGNATURE_PRE_IMPLEMENTATION_REVIEW.md` を作成し、
+  Phase 3D-14Bまでで強化した `SignatureHeadersBodyPlan` を前提に、actual request body生成、
+  actual headers生成、actual signature生成の責務分離、APIキー / secret値非表示、raw request /
+  raw response / headers / signature非保存、HTTP POSTへ進まない境界、fail closed条件、
+  Phase 3D-16以降の分割案をdocs-onlyで整理した。Phase 3D-12で
+  `GMO_FX_API_KEY: set`、`GMO_FX_API_SECRET: set` と確認済みだが、APIキー値、secret値、
+  `.env`内容は表示していない。actual body生成、actual headers生成、actual signature生成、
+  HMAC処理、HTTP request実装、HTTP client import、HTTP POST、Private API追加接続、broker、
+  `OrderRequest`、real order API client、注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-16 actual body / headers / signature 最小実装。Phase 3D-16でもHTTP POST、
+  HTTP request送信、実注文、実資金検証には進まない。
 - **Phase 3D-14B SignatureHeadersBodyPlan no-secret / no-network / no-order guard hardening完了** —
   `backend/app/tests/test_live_verification_signature_headers_body_plan.py` と
   `backend/app/tests/test_live_verification_no_order_imports.py` を強化し、
