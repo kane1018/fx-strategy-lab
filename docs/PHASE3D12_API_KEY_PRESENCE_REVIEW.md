@@ -227,5 +227,7 @@ GMO_FX_API_SECRET: set
 値は表示していない。`.env`は読んでいない。Private API接続、HTTP request実装、署名実装、
 HTTP POST、broker、`OrderRequest`、real order API client、実注文、実資金検証には進んでいない。
 
-次候補は Phase 3D-13 署名 / headers / request body 実装前レビューである。ただし、Phase 3D-13でも
-実注文、実資金検証、自動売買、本番公開API追加には進まない。
+Phase 3D-13では、署名 / headers / request body 実装前レビューをdocs-onlyで完了した。
+次候補は Phase 3D-14 signature / headers / request body plan実装である。ただし、Phase 3D-14でも
+actual signature、actual headers、actual request body、HTTP POST、実注文、実資金検証、自動売買、
+本番公開API追加には進まない。

@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-13 署名 / headers / request body 実装前レビュー完了** —
+  `docs/PHASE3D13_SIGNATURE_HEADERS_BODY_PRE_IMPLEMENTATION_REVIEW.md` を作成し、
+  Phase 3D-12でAPIキー環境変数が `set` とだけ確認済みであることを前提に、署名責務、
+  headers責務、request body責務、責務分離、Phase 3D-14で作ってよいplan-only候補、
+  Phase 3D-14でも作らないもの、fail closed条件、Phase 3D-14以降の分割案をdocs-onlyで整理した。
+  署名生成、HMAC処理、headers生成、request body生成、HTTP request実装、HTTP client import、
+  HTTP POST、Private API接続、APIキー値表示、API secret値表示、`.env`確認、broker、OrderRequest、
+  real order API client、注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-14 signature / headers / request body plan実装。ただしactual body、actual headers、
+  actual signature、HTTP POST、実注文なしのplan-onlyとして扱う。
+- **Phase 3D-12 APIキー確認専用レビュー完了** —
+  `docs/PHASE3D12_API_KEY_PRESENCE_REVIEW.md` を作成し、`GMO_FX_API_KEY` と
+  `GMO_FX_API_SECRET` の存在有無を `set` / `missing` だけで確認した。結果は
+  `GMO_FX_API_KEY: set`、`GMO_FX_API_SECRET: set`。APIキー値、secret値、`.env`内容、
+  環境変数一覧は表示していない。Private API接続、HTTP request実装、署名実装、headers生成、
+  request body生成、HTTP POST、broker、OrderRequest、real order API client、実注文、実資金検証には
+  進んでいない。
 - **Phase 3D-11 実注文直前preflightレビュー完了** —
   `docs/PHASE3D11_REAL_ORDER_PREFLIGHT_REVIEW.md` を作成し、実注文に進む前のpreflight定義、
   現在のno-network chain、直前read-only precheck条件、技術チェックリスト、注文条件チェックリスト、
