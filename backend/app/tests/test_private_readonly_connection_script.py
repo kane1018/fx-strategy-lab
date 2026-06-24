@@ -85,6 +85,127 @@ def test_run_connection_check_uses_only_three_get_readonly_endpoints() -> None:
     assert requests[0].headers["API-SIGN"] == expected_signature
 
 
+def test_diagnose_open_positions_stops_before_active_orders() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/account/assets":
+            return httpx.Response(200, json={"status": 0, "data": {"actualAmount": "1000000"}})
+        if request.url.path == "/private/v1/openPositions":
+            return httpx.Response(200, json={"status": 0, "data": []})
+        raise AssertionError("diagnostic mode must not call activeOrders")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_open_positions=True,
+    )
+
+    assert summary.connection_result == "success"
+    assert summary.account_assets == "success"
+    assert summary.open_positions == "success"
+    assert summary.active_orders == "not_run"
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("GET", "/private/v1/account/assets"),
+        ("GET", "/private/v1/openPositions"),
+    ]
+
+
+def test_open_positions_failure_returns_sanitized_diagnostics_only() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/account/assets":
+            return httpx.Response(200, json={"status": 0, "data": {"actualAmount": "1000000"}})
+        if request.url.path == "/private/v1/openPositions":
+            return httpx.Response(
+                403,
+                json={
+                    "status": 1,
+                    "messages": [
+                        {
+                            "message_code": "ERR-PERMISSION",
+                            "message_string": "permission denied",
+                            "API-KEY": "dummy-key",
+                        }
+                    ],
+                    "API-SIGN": "dummy-signature",
+                },
+            )
+        raise AssertionError("diagnostic mode must not call activeOrders")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_open_positions=True,
+    )
+
+    assert summary.connection_result == "failure"
+    assert summary.account_assets == "success"
+    assert summary.open_positions == "failure"
+    assert summary.active_orders == "not_run"
+    assert summary.failed_endpoint == "open_positions"
+    assert summary.failed_method == "GET"
+    assert summary.failed_path == "/private/v1/openPositions"
+    assert summary.sanitized_http_status == "403"
+    assert summary.sanitized_error_code == "ERR-PERMISSION"
+    assert summary.sanitized_error_message == "permission denied"
+    assert summary.diagnostic_reason_category == "permission_error"
+    assert summary.raw_response_saved is False
+    assert summary.headers_saved is False
+    assert summary.credentials_printed is False
+    assert summary.retry_attempted is False
+    assert len(requests) == 2
+    dumped = "\n".join(summary.to_stdout_lines())
+    assert "dummy-key" not in dumped
+    assert "dummy-signature" not in dumped
+    assert "API-SIGN" not in dumped
+    assert "API-KEY" not in dumped
+
+
+def test_open_positions_schema_failure_returns_local_sanitized_message() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/account/assets":
+            return httpx.Response(200, json={"status": 0, "data": {"actualAmount": "1000000"}})
+        if request.url.path == "/private/v1/openPositions":
+            return httpx.Response(200, json={"status": 0, "data": {"unexpected": []}})
+        raise AssertionError("diagnostic mode must not call activeOrders")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_open_positions=True,
+    )
+
+    assert summary.connection_result == "failure"
+    assert summary.failed_endpoint == "open_positions"
+    assert summary.sanitized_http_status == "unknown"
+    assert summary.sanitized_error_code == "schema_error"
+    assert summary.sanitized_error_message == "response data must be a list"
+    assert summary.diagnostic_reason_category == "schema_error"
+    assert len(requests) == 2
+
+
 def test_connection_check_does_not_retry_after_error() -> None:
     requests: list[httpx.Request] = []
 
@@ -106,6 +227,9 @@ def test_connection_check_does_not_retry_after_error() -> None:
 
     assert summary.connection_result == "failure"
     assert summary.account_assets == "failure"
+    assert summary.failed_endpoint == "account_assets"
+    assert summary.failed_method == "GET"
+    assert summary.sanitized_error_code == "ERR-MOCK"
     assert len(requests) == 1
     assert requests[0].method == "GET"
     assert requests[0].url.path == "/private/v1/account/assets"
@@ -137,6 +261,7 @@ def test_stdout_summary_is_sanitized(monkeypatch, capsys) -> None:
     assert "raw_response_saved: false" in out
     assert "headers_saved: false" in out
     assert "credentials_printed: false" in out
+    assert "retry_attempted: false" in out
     assert "dummy-key" not in out
     assert "dummy-secret" not in out
     assert "positionId" not in out

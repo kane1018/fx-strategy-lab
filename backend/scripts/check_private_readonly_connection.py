@@ -30,6 +30,7 @@ from app.private_api.schemas import (
 
 DEFAULT_SYMBOL = "USD_JPY"
 REQUEST_TIMEOUT_SECONDS = 10.0
+MESSAGE_MAX_LENGTH = 120
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,13 @@ class SanitizedConnectionSummary:
     account_assets: str
     open_positions: str
     active_orders: str
+    failed_endpoint: str = "unknown"
+    failed_method: str = "unknown"
+    failed_path: str = "unknown"
+    sanitized_http_status: str = "unknown"
+    sanitized_error_code: str = "unknown"
+    sanitized_error_message: str = "unknown"
+    diagnostic_reason_category: str = "unknown"
     account_assets_count: int = 0
     open_positions_count: int = 0
     active_orders_count: int = 0
@@ -46,6 +54,7 @@ class SanitizedConnectionSummary:
     raw_response_saved: bool = False
     headers_saved: bool = False
     credentials_printed: bool = False
+    retry_attempted: bool = False
 
     def to_stdout_lines(self) -> list[str]:
         return [
@@ -53,6 +62,13 @@ class SanitizedConnectionSummary:
             f"account_assets: {self.account_assets}",
             f"open_positions: {self.open_positions}",
             f"active_orders: {self.active_orders}",
+            f"failed_endpoint: {self.failed_endpoint}",
+            f"failed_method: {self.failed_method}",
+            f"failed_path: {self.failed_path}",
+            f"sanitized_http_status: {self.sanitized_http_status}",
+            f"sanitized_error_code: {self.sanitized_error_code}",
+            f"sanitized_error_message: {self.sanitized_error_message}",
+            f"diagnostic_reason_category: {self.diagnostic_reason_category}",
             f"account_assets_count: {self.account_assets_count}",
             f"open_positions_count: {self.open_positions_count}",
             f"active_orders_count: {self.active_orders_count}",
@@ -61,7 +77,25 @@ class SanitizedConnectionSummary:
             f"raw_response_saved: {_bool_text(self.raw_response_saved)}",
             f"headers_saved: {_bool_text(self.headers_saved)}",
             f"credentials_printed: {_bool_text(self.credentials_printed)}",
+            f"retry_attempted: {_bool_text(self.retry_attempted)}",
         ]
+
+
+@dataclass(frozen=True)
+class SanitizedFailureDetail:
+    failed_endpoint: str
+    failed_method: str
+    failed_path: str
+    sanitized_http_status: str = "unknown"
+    sanitized_error_code: str = "unknown"
+    sanitized_error_message: str = "unknown"
+    diagnostic_reason_category: str = "unknown"
+
+
+class SanitizedPrivateApiFailure(RuntimeError):
+    def __init__(self, detail: SanitizedFailureDetail) -> None:
+        super().__init__(detail.sanitized_error_code)
+        self.detail = detail
 
 
 def run_connection_check(
@@ -71,6 +105,7 @@ def run_connection_check(
     symbol: str = DEFAULT_SYMBOL,
     http_client: httpx.Client | None = None,
     timestamp_factory: Callable[[], str] | None = None,
+    diagnose_open_positions: bool = False,
 ) -> SanitizedConnectionSummary:
     """Run one manual read-only check against the three Phase 3B-4 endpoints."""
     owns_client = http_client is None
@@ -114,6 +149,17 @@ def run_connection_check(
         open_positions = [
             open_position_from_api(row) for row in _ensure_rows(open_position_payload)
         ]
+        if diagnose_open_positions:
+            return SanitizedConnectionSummary(
+                connection_result="success",
+                account_assets="success",
+                open_positions="success",
+                active_orders="not_run",
+                account_assets_count=1,
+                open_positions_count=len(open_positions),
+                has_open_positions=bool(open_positions),
+            )
+
         summary = SanitizedConnectionSummary(
             connection_result="failure",
             account_assets="success",
@@ -144,8 +190,14 @@ def run_connection_check(
             has_open_positions=bool(open_positions),
             has_active_orders=bool(active_orders),
         )
-    except (PrivateApiResponseError, httpx.HTTPError, ValueError):
-        return summary
+    except SanitizedPrivateApiFailure as exc:
+        return _with_failure(summary, exc.detail)
+    except PrivateApiResponseError as exc:
+        return _with_failure(summary, _schema_failure(summary, str(exc)))
+    except ValueError as exc:
+        return _with_failure(summary, _schema_failure(summary, str(exc)))
+    except httpx.HTTPError:
+        return _with_failure(summary, _schema_failure(summary, "transport_error"))
     finally:
         if owns_client:
             client.close()
@@ -167,7 +219,12 @@ def main(
         _print_summary(_not_run_summary(connection_result="failure"))
         return 2
 
-    summary = runner(api_key=api_key, api_secret=api_secret, symbol=args.symbol)
+    summary = runner(
+        api_key=api_key,
+        api_secret=api_secret,
+        symbol=args.symbol,
+        diagnose_open_positions=args.diagnose_open_positions,
+    )
     _print_summary(summary)
     return 0 if summary.connection_result == "success" else 1
 
@@ -202,9 +259,14 @@ def _get_private_api_data(
         raise PrivateApiResponseError("Private API response must be an object")
     if response.status_code >= 400 or payload.get("status") != 0:
         api_error = private_api_error_from_payload(payload)
-        raise PrivateApiResponseError(
-            f"Private API sanitized response error: {api_error.code}",
-            api_error=api_error,
+        raise SanitizedPrivateApiFailure(
+            _failure_detail(
+                method=method,
+                path=path,
+                http_status=response.status_code,
+                error_code=api_error.code,
+                error_message=api_error.message,
+            )
         )
     return payload.get("data")
 
@@ -246,6 +308,11 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         choices=[DEFAULT_SYMBOL],
         help="symbol parameter for read-only collection endpoints",
     )
+    parser.add_argument(
+        "--diagnose-open-positions",
+        action="store_true",
+        help="stop after account/assets and openPositions with sanitized diagnostics",
+    )
     return parser.parse_args(argv)
 
 
@@ -261,6 +328,124 @@ def _signing_path_for_endpoint(path: str) -> str:
     if path.startswith("/private/v1/"):
         return path.removeprefix("/private")
     return path
+
+
+def _with_failure(
+    summary: SanitizedConnectionSummary,
+    detail: SanitizedFailureDetail,
+) -> SanitizedConnectionSummary:
+    return SanitizedConnectionSummary(
+        connection_result=summary.connection_result,
+        account_assets=summary.account_assets,
+        open_positions=summary.open_positions,
+        active_orders=summary.active_orders,
+        failed_endpoint=detail.failed_endpoint,
+        failed_method=detail.failed_method,
+        failed_path=detail.failed_path,
+        sanitized_http_status=detail.sanitized_http_status,
+        sanitized_error_code=detail.sanitized_error_code,
+        sanitized_error_message=detail.sanitized_error_message,
+        diagnostic_reason_category=detail.diagnostic_reason_category,
+        account_assets_count=summary.account_assets_count,
+        open_positions_count=summary.open_positions_count,
+        active_orders_count=summary.active_orders_count,
+        has_open_positions=summary.has_open_positions,
+        has_active_orders=summary.has_active_orders,
+        raw_response_saved=summary.raw_response_saved,
+        headers_saved=summary.headers_saved,
+        credentials_printed=summary.credentials_printed,
+        retry_attempted=summary.retry_attempted,
+    )
+
+
+def _failure_detail(
+    *,
+    method: str,
+    path: str,
+    http_status: int | str,
+    error_code: str,
+    error_message: str,
+) -> SanitizedFailureDetail:
+    sanitized_message = _sanitize_error_message(error_message)
+    return SanitizedFailureDetail(
+        failed_endpoint=_endpoint_name(path),
+        failed_method=method.upper(),
+        failed_path=path,
+        sanitized_http_status=str(http_status),
+        sanitized_error_code=_sanitize_error_token(error_code),
+        sanitized_error_message=sanitized_message,
+        diagnostic_reason_category=_reason_category(
+            http_status=str(http_status),
+            error_code=error_code,
+            error_message=sanitized_message,
+        ),
+    )
+
+
+def _schema_failure(
+    summary: SanitizedConnectionSummary,
+    error_message: str,
+) -> SanitizedFailureDetail:
+    if summary.account_assets != "success":
+        path = GET_ACCOUNT_ASSETS
+    elif summary.open_positions != "success":
+        path = GET_OPEN_POSITIONS
+    else:
+        path = GET_ACTIVE_ORDERS
+    return SanitizedFailureDetail(
+        failed_endpoint=_endpoint_name(path),
+        failed_method="GET",
+        failed_path=path,
+        sanitized_error_code="schema_error",
+        sanitized_error_message=_sanitize_error_message(error_message),
+        diagnostic_reason_category="schema_error",
+    )
+
+
+def _endpoint_name(path: str) -> str:
+    if path == GET_ACCOUNT_ASSETS:
+        return "account_assets"
+    if path == GET_OPEN_POSITIONS:
+        return "open_positions"
+    if path == GET_ACTIVE_ORDERS:
+        return "active_orders"
+    return "unknown"
+
+
+def _sanitize_error_token(value: str) -> str:
+    token = " ".join(str(value or "unknown").split())
+    if not token:
+        return "unknown"
+    return token[:MESSAGE_MAX_LENGTH]
+
+
+def _sanitize_error_message(value: str) -> str:
+    message = " ".join(str(value or "unknown").split())
+    if not message:
+        return "unknown"
+    sensitive_markers = ("API-KEY:", "API-SIGN:", "Authorization:", "Bearer ")
+    if any(marker.lower() in message.lower() for marker in sensitive_markers):
+        return "redacted_sensitive_error_message"
+    return message[:MESSAGE_MAX_LENGTH]
+
+
+def _reason_category(*, http_status: str, error_code: str, error_message: str) -> str:
+    text = f"{error_code} {error_message}".lower()
+    if http_status in {"400", "422"}:
+        return "parameter_error"
+    if http_status == "401":
+        return "auth_error"
+    if http_status == "403":
+        return "permission_error"
+    if any(marker in text for marker in ("permission", "forbidden", "scope", "not allowed")):
+        return "permission_error"
+    if any(marker in text for marker in ("auth", "signature", "timestamp", "api key", "api-key")):
+        return "auth_error"
+    if any(marker in text for marker in ("parameter", "param", "symbol", "invalid request")):
+        return "parameter_error"
+    if "schema" in text:
+        return "schema_error"
+    return "unknown"
 
 
 def _timestamp_ms() -> str:
