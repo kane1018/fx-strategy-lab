@@ -67,6 +67,28 @@ def test_account_assets_open_positions_and_active_orders_use_mocked_payloads() -
     assert client.get_active_orders()[0].order_id == "ord-1"
 
 
+def test_open_positions_accepts_object_wrapped_list_payload() -> None:
+    client = _client(
+        {
+            GET_OPEN_POSITIONS: {
+                "list": [
+                    {
+                        "positionId": "pos-1",
+                        "symbol": "USD_JPY",
+                        "side": "BUY",
+                        "size": "100",
+                    }
+                ]
+            }
+        }
+    )
+
+    positions = client.get_open_positions(symbol="USD_JPY")
+
+    assert len(positions) == 1
+    assert positions[0].position_id == "pos-1"
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [

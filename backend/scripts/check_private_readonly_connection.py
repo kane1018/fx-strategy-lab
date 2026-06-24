@@ -7,7 +7,7 @@ import os
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
@@ -24,13 +24,29 @@ from app.private_api.readonly_client import (
 from app.private_api.schemas import (
     account_assets_from_api,
     active_order_from_api,
-    open_position_from_api,
+    open_positions_from_api_data,
     private_api_error_from_payload,
 )
 
 DEFAULT_SYMBOL = "USD_JPY"
 REQUEST_TIMEOUT_SECONDS = 10.0
 MESSAGE_MAX_LENGTH = 120
+KEYS_MAX_COUNT = 24
+OPEN_POSITION_LIST_KEYS = ("list", "positions", "openPositions", "open_positions", "data")
+
+
+@dataclass(frozen=True)
+class SanitizedResponseShape:
+    response_data_shape: str = "unknown"
+    response_top_level_keys: str = "unknown"
+    response_data_keys: str = "unknown"
+    response_data_item_keys: str = "unknown"
+
+
+@dataclass(frozen=True)
+class PrivateApiData:
+    data: Any
+    shape: SanitizedResponseShape
 
 
 @dataclass(frozen=True)
@@ -46,6 +62,10 @@ class SanitizedConnectionSummary:
     sanitized_error_code: str = "unknown"
     sanitized_error_message: str = "unknown"
     diagnostic_reason_category: str = "unknown"
+    response_data_shape: str = "unknown"
+    response_top_level_keys: str = "unknown"
+    response_data_keys: str = "unknown"
+    response_data_item_keys: str = "unknown"
     account_assets_count: int = 0
     open_positions_count: int = 0
     active_orders_count: int = 0
@@ -69,6 +89,10 @@ class SanitizedConnectionSummary:
             f"sanitized_error_code: {self.sanitized_error_code}",
             f"sanitized_error_message: {self.sanitized_error_message}",
             f"diagnostic_reason_category: {self.diagnostic_reason_category}",
+            f"response_data_shape: {self.response_data_shape}",
+            f"response_top_level_keys: {self.response_top_level_keys}",
+            f"response_data_keys: {self.response_data_keys}",
+            f"response_data_item_keys: {self.response_data_item_keys}",
             f"account_assets_count: {self.account_assets_count}",
             f"open_positions_count: {self.open_positions_count}",
             f"active_orders_count: {self.active_orders_count}",
@@ -90,6 +114,7 @@ class SanitizedFailureDetail:
     sanitized_error_code: str = "unknown"
     sanitized_error_message: str = "unknown"
     diagnostic_reason_category: str = "unknown"
+    response_shape: SanitizedResponseShape = field(default_factory=SanitizedResponseShape)
 
 
 class SanitizedPrivateApiFailure(RuntimeError):
@@ -117,6 +142,7 @@ def run_connection_check(
         open_positions="not_run",
         active_orders="not_run",
     )
+    last_response_shape = SanitizedResponseShape()
 
     try:
         account_payload = _get_private_api_data(
@@ -127,9 +153,10 @@ def run_connection_check(
             params={},
             timestamp_factory=timestamp,
         )
-        if not isinstance(account_payload, Mapping):
+        last_response_shape = account_payload.shape
+        if not isinstance(account_payload.data, Mapping):
             raise PrivateApiResponseError("account assets data must be an object")
-        account_assets_from_api(account_payload)
+        account_assets_from_api(account_payload.data)
         summary = SanitizedConnectionSummary(
             connection_result="failure",
             account_assets="success",
@@ -146,15 +173,18 @@ def run_connection_check(
             params={"symbol": symbol},
             timestamp_factory=timestamp,
         )
-        open_positions = [
-            open_position_from_api(row) for row in _ensure_rows(open_position_payload)
-        ]
+        last_response_shape = open_position_payload.shape
+        open_positions = open_positions_from_api_data(open_position_payload.data)
         if diagnose_open_positions:
             return SanitizedConnectionSummary(
                 connection_result="success",
                 account_assets="success",
                 open_positions="success",
                 active_orders="not_run",
+                response_data_shape=open_position_payload.shape.response_data_shape,
+                response_top_level_keys=open_position_payload.shape.response_top_level_keys,
+                response_data_keys=open_position_payload.shape.response_data_keys,
+                response_data_item_keys=open_position_payload.shape.response_data_item_keys,
                 account_assets_count=1,
                 open_positions_count=len(open_positions),
                 has_open_positions=bool(open_positions),
@@ -178,7 +208,10 @@ def run_connection_check(
             params={"symbol": symbol},
             timestamp_factory=timestamp,
         )
-        active_orders = [active_order_from_api(row) for row in _ensure_rows(active_order_payload)]
+        last_response_shape = active_order_payload.shape
+        active_orders = [
+            active_order_from_api(row) for row in _ensure_rows(active_order_payload.data)
+        ]
         return SanitizedConnectionSummary(
             connection_result="success",
             account_assets="success",
@@ -193,9 +226,9 @@ def run_connection_check(
     except SanitizedPrivateApiFailure as exc:
         return _with_failure(summary, exc.detail)
     except PrivateApiResponseError as exc:
-        return _with_failure(summary, _schema_failure(summary, str(exc)))
+        return _with_failure(summary, _schema_failure(summary, str(exc), last_response_shape))
     except ValueError as exc:
-        return _with_failure(summary, _schema_failure(summary, str(exc)))
+        return _with_failure(summary, _schema_failure(summary, str(exc), last_response_shape))
     except httpx.HTTPError:
         return _with_failure(summary, _schema_failure(summary, "transport_error"))
     finally:
@@ -237,7 +270,7 @@ def _get_private_api_data(
     path: str,
     params: Mapping[str, str],
     timestamp_factory: Callable[[], str],
-) -> Any:
+) -> PrivateApiData:
     method = "GET"
     assert_readonly_endpoint(method, path)
     response = client.get(
@@ -257,6 +290,7 @@ def _get_private_api_data(
         raise PrivateApiResponseError("Private API response was not JSON") from exc
     if not isinstance(payload, Mapping):
         raise PrivateApiResponseError("Private API response must be an object")
+    response_shape = _response_shape(payload)
     if response.status_code >= 400 or payload.get("status") != 0:
         api_error = private_api_error_from_payload(payload)
         raise SanitizedPrivateApiFailure(
@@ -266,9 +300,10 @@ def _get_private_api_data(
                 http_status=response.status_code,
                 error_code=api_error.code,
                 error_message=api_error.message,
+                response_shape=response_shape,
             )
         )
-    return payload.get("data")
+    return PrivateApiData(data=payload.get("data"), shape=response_shape)
 
 
 def _ensure_rows(data: Any) -> list[Mapping[str, Any]]:
@@ -282,6 +317,92 @@ def _ensure_rows(data: Any) -> list[Mapping[str, Any]]:
             raise PrivateApiResponseError("response row must be an object")
         rows.append(row)
     return rows
+
+
+def _response_shape(payload: Mapping[str, Any]) -> SanitizedResponseShape:
+    data_is_missing = "data" not in payload
+    data = payload.get("data")
+    data_for_shape = _MissingData if data_is_missing else data
+    return SanitizedResponseShape(
+        response_data_shape=_shape_label(data_for_shape),
+        response_top_level_keys=_key_names(payload),
+        response_data_keys=_key_names(data) if isinstance(data, Mapping) else "unknown",
+        response_data_item_keys=_data_item_key_names(data),
+    )
+
+
+class _MissingData:
+    pass
+
+
+def _shape_label(value: Any) -> str:
+    if value is _MissingData:
+        return "missing"
+    if value is None:
+        return "null"
+    if isinstance(value, list):
+        return "list"
+    if isinstance(value, Mapping):
+        return "object"
+    return "unknown"
+
+
+def _data_item_key_names(data: Any) -> str:
+    if isinstance(data, list):
+        return _first_mapping_item_keys(data)
+    if isinstance(data, Mapping):
+        nested = _first_nested_list(data)
+        if nested is not None:
+            return _first_mapping_item_keys(nested)
+    return "unknown"
+
+
+def _first_nested_list(data: Mapping[str, Any]) -> list[Any] | None:
+    for key in OPEN_POSITION_LIST_KEYS:
+        value = data.get(key)
+        if isinstance(value, list):
+            return value
+    return None
+
+
+def _first_mapping_item_keys(rows: list[Any]) -> str:
+    if not rows:
+        return "none"
+    first = rows[0]
+    if not isinstance(first, Mapping):
+        return "unknown"
+    return _key_names(first)
+
+
+def _key_names(mapping: Mapping[str, Any]) -> str:
+    names: list[str] = []
+    for key in mapping:
+        sanitized = _sanitize_key_name(str(key))
+        if sanitized not in names:
+            names.append(sanitized)
+    if not names:
+        return "none"
+    names = sorted(names)
+    if len(names) > KEYS_MAX_COUNT:
+        names = [*names[:KEYS_MAX_COUNT], "truncated"]
+    return _sanitize_error_token(",".join(names))
+
+
+def _sanitize_key_name(value: str) -> str:
+    normalized = value.lower().translate({ord("_"): "-"})
+    sensitive_markers = (
+        "api-key",
+        "api-sign",
+        "api-timestamp",
+        "authorization",
+        "secret",
+        "token",
+        "password",
+        "private-key",
+    )
+    if any(marker in normalized for marker in sensitive_markers):
+        return "redacted_key"
+    return value
 
 
 def _not_run_summary(*, connection_result: str) -> SanitizedConnectionSummary:
@@ -346,6 +467,10 @@ def _with_failure(
         sanitized_error_code=detail.sanitized_error_code,
         sanitized_error_message=detail.sanitized_error_message,
         diagnostic_reason_category=detail.diagnostic_reason_category,
+        response_data_shape=detail.response_shape.response_data_shape,
+        response_top_level_keys=detail.response_shape.response_top_level_keys,
+        response_data_keys=detail.response_shape.response_data_keys,
+        response_data_item_keys=detail.response_shape.response_data_item_keys,
         account_assets_count=summary.account_assets_count,
         open_positions_count=summary.open_positions_count,
         active_orders_count=summary.active_orders_count,
@@ -365,6 +490,7 @@ def _failure_detail(
     http_status: int | str,
     error_code: str,
     error_message: str,
+    response_shape: SanitizedResponseShape | None = None,
 ) -> SanitizedFailureDetail:
     sanitized_message = _sanitize_error_message(error_message)
     return SanitizedFailureDetail(
@@ -379,12 +505,14 @@ def _failure_detail(
             error_code=error_code,
             error_message=sanitized_message,
         ),
+        response_shape=response_shape or SanitizedResponseShape(),
     )
 
 
 def _schema_failure(
     summary: SanitizedConnectionSummary,
     error_message: str,
+    response_shape: SanitizedResponseShape | None = None,
 ) -> SanitizedFailureDetail:
     if summary.account_assets != "success":
         path = GET_ACCOUNT_ASSETS
@@ -399,6 +527,7 @@ def _schema_failure(
         sanitized_error_code="schema_error",
         sanitized_error_message=_sanitize_error_message(error_message),
         diagnostic_reason_category="schema_error",
+        response_shape=response_shape or SanitizedResponseShape(),
     )
 
 

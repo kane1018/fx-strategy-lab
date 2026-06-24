@@ -117,6 +117,95 @@ def test_diagnose_open_positions_stops_before_active_orders() -> None:
     ]
 
 
+def test_diagnose_open_positions_accepts_object_list_shape() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/account/assets":
+            return httpx.Response(200, json={"status": 0, "data": {"actualAmount": "1000000"}})
+        if request.url.path == "/private/v1/openPositions":
+            return httpx.Response(
+                200,
+                json={
+                    "status": 0,
+                    "data": {
+                        "list": [
+                            {
+                                "positionId": "pos-1",
+                                "symbol": "USD_JPY",
+                                "side": "BUY",
+                                "size": "100",
+                                "API-KEY": "dummy-key",
+                            }
+                        ],
+                    },
+                },
+            )
+        raise AssertionError("diagnostic mode must not call activeOrders")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_open_positions=True,
+    )
+
+    assert summary.connection_result == "success"
+    assert summary.open_positions == "success"
+    assert summary.active_orders == "not_run"
+    assert summary.open_positions_count == 1
+    assert summary.response_data_shape == "object"
+    assert summary.response_top_level_keys == "data,status"
+    assert summary.response_data_keys == "list"
+    assert summary.response_data_item_keys == "positionId,redacted_key,side,size,symbol"
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("GET", "/private/v1/account/assets"),
+        ("GET", "/private/v1/openPositions"),
+    ]
+    dumped = "\n".join(summary.to_stdout_lines())
+    assert "dummy-key" not in dumped
+    assert "API-KEY" not in dumped
+    assert "pos-1" not in dumped
+    assert "USD_JPY" not in dumped
+
+
+def test_diagnose_open_positions_missing_data_returns_empty_shape_summary() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/account/assets":
+            return httpx.Response(200, json={"status": 0, "data": {"actualAmount": "1000000"}})
+        if request.url.path == "/private/v1/openPositions":
+            return httpx.Response(200, json={"status": 0})
+        raise AssertionError("diagnostic mode must not call activeOrders")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_open_positions=True,
+    )
+
+    assert summary.connection_result == "success"
+    assert summary.open_positions == "success"
+    assert summary.open_positions_count == 0
+    assert summary.response_data_shape == "missing"
+    assert summary.response_top_level_keys == "status"
+    assert summary.response_data_keys == "unknown"
+    assert summary.response_data_item_keys == "unknown"
+    assert len(requests) == 2
+
+
 def test_open_positions_failure_returns_sanitized_diagnostics_only() -> None:
     requests: list[httpx.Request] = []
 
@@ -163,6 +252,10 @@ def test_open_positions_failure_returns_sanitized_diagnostics_only() -> None:
     assert summary.sanitized_error_code == "ERR-PERMISSION"
     assert summary.sanitized_error_message == "permission denied"
     assert summary.diagnostic_reason_category == "permission_error"
+    assert summary.response_data_shape == "missing"
+    assert summary.response_top_level_keys == "messages,redacted_key,status"
+    assert summary.response_data_keys == "unknown"
+    assert summary.response_data_item_keys == "unknown"
     assert summary.raw_response_saved is False
     assert summary.headers_saved is False
     assert summary.credentials_printed is False
@@ -201,8 +294,12 @@ def test_open_positions_schema_failure_returns_local_sanitized_message() -> None
     assert summary.failed_endpoint == "open_positions"
     assert summary.sanitized_http_status == "unknown"
     assert summary.sanitized_error_code == "schema_error"
-    assert summary.sanitized_error_message == "response data must be a list"
+    assert summary.sanitized_error_message == "openPositions data object has no list field"
     assert summary.diagnostic_reason_category == "schema_error"
+    assert summary.response_data_shape == "object"
+    assert summary.response_top_level_keys == "data,status"
+    assert summary.response_data_keys == "unexpected"
+    assert summary.response_data_item_keys == "unknown"
     assert len(requests) == 2
 
 
