@@ -175,9 +175,15 @@ skew / stale_dataは`NO_TRADE`へ安全fail closedし、safety violation、broke
 Private API/APIキー/broker/実注文はなかった。判定はAで、次は別タスクでPhase 2Fレビューへ進んでよい。
 詳細は [PHASE2E5_SHORT_RUNS_REVIEW.md](PHASE2E5_SHORT_RUNS_REVIEW.md)。
 
+Phase 2F Public shadow risk/audit安定性レビューでは、Phase 2E-5短期3runをPublic shadow risk/auditとして
+Phase 3B準備へ進める水準と判定した。ただし、Phase 3B実装へ即進まず、Private API/APIキーを入れる前に
+Phase 2G Public shadow risk/auditオフライン最終デバッグ監査を半日程度で挟むことを推奨する。
+詳細は [PHASE2F_PUBLIC_SHADOW_RISK_AUDIT_STABILITY_REVIEW.md](PHASE2F_PUBLIC_SHADOW_RISK_AUDIT_STABILITY_REVIEW.md)。
+
 Phase 3A準備ロードマップでは、将来のPrivate API read-only、APIキー / secret管理、Live Verification Mode、
 極小実資金検証の条件をdocs-onlyで整理した。ただし、このrunbookの運用範囲は引き続きPublic APIのみ、
-local-only、注文なしである。Phase 3B read-only実装はPhase 2E-5短期確認とPhase 2Fレビュー後の別タスクに限定する。
+local-only、注文なしである。Phase 3B read-only実装は、Phase 2Gオフライン最終デバッグ監査と
+公式仕様確認・実装設計後の別タスクに限定する。
 詳細は [PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md](PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md)。
 
 ## 11. commit禁止の最終確認

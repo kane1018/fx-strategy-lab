@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 2F Public shadow risk/audit安定性レビュー完了** — Phase 2E-5短期3runをレビューし、
+  Public shadow risk/auditは **A: Phase 3B準備へ進める水準** と判定した。3回すべてで`REAL_PUBLIC_BID_ASK`、
+  candidate、`ALLOW_SHADOW`、ALLOW時のみvirtual resultを確認し、1回目と3回目では`cooldown_active` REJECTと
+  REJECT時virtual resultなしを確認した。skew / stale_dataは`NO_TRADE`へ安全fail closedし、safety violation /
+  broken / invalid risk row / raw response保存 / Private API / APIキー / broker / 実注文はなし。ただしPhase 3B実装へ
+  即進まず、先に **Phase 2G Public shadow risk/audit オフライン最終デバッグ監査** を半日程度で挟むことを推奨する。
+  詳細は [PHASE2F_PUBLIC_SHADOW_RISK_AUDIT_STABILITY_REVIEW.md](PHASE2F_PUBLIC_SHADOW_RISK_AUDIT_STABILITY_REVIEW.md)。
 - **Phase 2E-5短期3回確認レビュー完了** — `20260622_103430_shadow_USD_JPY_gmo-public`、
   `20260623_000652_shadow_USD_JPY_gmo-public`、`20260624_001906_shadow_USD_JPY_gmo-public` をレビューし、
   3回すべてで`REAL_PUBLIC_BID_ASK`、candidate、`ALLOW_SHADOW`、ALLOW時のみvirtual resultを確認した。
@@ -93,8 +100,8 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 - **Phase 3A準備ロードマップ設計完了** — Private API read-only、APIキー / secret管理、
   Live Verification Mode、極小実資金検証までの段階的ロードマップをdocs-onlyで整理した。これは実装ではなく、
   Private API接続、APIキー入力・表示・保存、`.env`変更、broker、注文API、実注文、実資金検証には進んでいない。
-  次に行うべき作業は引き続きPhase 2E-5の別日2回目/3回目とPhase 2F Public shadow risk/audit安定性レビューであり、
-  Phase 3B read-only実装はそれらの完了と別途レビュー後に限る。詳細は
+  Phase 2Fは完了したが、Phase 3B read-only実装はPhase 2Gオフライン最終デバッグ監査と別途レビュー後に限る。
+  詳細は
   [PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md](PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md)。
 - **Phase 2E-5 1回目レビュー / 2回目実行前整理完了** — run
   `20260622_103430_shadow_USD_JPY_gmo-public` をレビューし、`REAL_PUBLIC_BID_ASK` 2件、candidate 2件、

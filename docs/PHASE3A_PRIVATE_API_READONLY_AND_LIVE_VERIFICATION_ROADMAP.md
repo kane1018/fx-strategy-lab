@@ -28,7 +28,8 @@
 
 未完了のこと:
 
-- Phase 2F Public shadow risk/audit安定性レビューは未実施。
+- Phase 2F Public shadow risk/audit安定性レビューは完了。判定はAで、Public shadow risk/auditは
+  Phase 3B準備へ進める水準。ただし、Phase 3B実装前にPhase 2Gオフライン最終デバッグ監査を挟むことを推奨。
 - Private API read-only実装、APIキー設定、Live Verification Mode、注文API、実資金検証は未実施。
 
 ## 3. Phase 3A〜3Dロードマップ
@@ -48,6 +49,7 @@ Phase 3Aでは実装、接続、キー設定、`.env`変更、注文API、broker
 ### Phase 3B: Private API read-only実装・接続確認
 
 将来フェーズ。Phase 3Aレビュー、Phase 2E-5短期確認、Phase 2Fレビューを通過した後に、別タスクで扱う。
+Phase 2Fレビュー後の推奨として、実装前にPhase 2G Public shadow risk/auditオフライン最終デバッグ監査を挟む。
 
 Phase 3Bで扱ってよい候補:
 
@@ -194,6 +196,7 @@ Phase 3Bに進む前に最低限満たす条件:
 Phase 2E-5短期確認で少なくとも2回以上の安全runを確認
 Phase 2E-5短期3回の完了、または未完了理由が安全に説明済み
 Phase 2F Public shadow risk/audit安定性レビュー完了
+Phase 2G Public shadow risk/auditオフライン最終デバッグ監査完了を推奨
 safety violation 0
 broken/skipped 0
 invalid_risk_row_count 0
