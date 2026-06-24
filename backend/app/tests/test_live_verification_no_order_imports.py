@@ -103,6 +103,12 @@ def test_live_verification_package_has_no_execution_function_defs_or_calls() -> 
         "am" + "end",
         "clo" + "se",
     }
+    blocked_http_call_names = {
+        "post",
+        "put",
+        "delete",
+        "request",
+    }
 
     for path in _source_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -112,6 +118,7 @@ def test_live_verification_package_has_no_execution_function_defs_or_calls() -> 
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
         }
         assert function_names.isdisjoint(blocked_names)
+        assert function_names.isdisjoint(blocked_http_call_names)
         call_names = {
             name
             for node in ast.walk(tree)
@@ -120,10 +127,11 @@ def test_live_verification_package_has_no_execution_function_defs_or_calls() -> 
             if name is not None
         }
         assert call_names.isdisjoint(blocked_names)
+        assert call_names.isdisjoint(blocked_http_call_names)
 
 
-def test_live_verification_package_has_no_private_order_endpoint_strings() -> None:
-    blocked_markers = {
+def test_live_verification_package_has_no_http_or_private_order_strings() -> None:
+    blocked_substrings = {
         "/private/v1/" + "order",
         "/private/v1/" + "speedOrder",
         "/private/v1/" + "cancelOrders",
@@ -137,11 +145,30 @@ def test_live_verification_package_has_no_private_order_endpoint_strings() -> No
         "PRIVATE_" + "ORDER_API",
         "LIVE_" + "ORDER_PLACED",
     }
+    blocked_exact_strings = {
+        "POST",
+        "PUT",
+        "DELETE",
+        "Authorization",
+        "API-" + "KEY",
+        "API-" + "SIGN",
+        "API-" + "TIMESTAMP",
+        "sign" + "ature",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+        "sub" + "mit",
+        "se" + "nd",
+        "pl" + "ace",
+        "can" + "cel",
+        "am" + "end",
+        "clo" + "se",
+    }
 
     for path in _source_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         strings = _string_constants(tree)
-        for marker in blocked_markers:
+        assert strings.isdisjoint(blocked_exact_strings)
+        for marker in blocked_substrings:
             assert all(marker not in value for value in strings)
 
 
@@ -172,6 +199,9 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
         "api_secret",
         "secret",
         "token",
+        "authorization",
+        "timestamp",
+        "sign",
     }
 
     for path in _source_files():

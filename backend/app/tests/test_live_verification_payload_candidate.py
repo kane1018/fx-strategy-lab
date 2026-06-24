@@ -21,6 +21,9 @@ from app.live_verification.order_review import (
     evaluate_final_order_checklist,
 )
 from app.live_verification.payload_candidate import (
+    ALLOWED_MOCKED_EXECUTION_TYPES,
+    ALLOWED_MOCKED_SETTLE_TYPES,
+    ALLOWED_MOCKED_TIME_IN_FORCE,
     MockedOrderPayloadCandidate,
     build_mocked_order_payload_candidate,
 )
@@ -130,6 +133,15 @@ def _unchecked_review(**overrides: object) -> OrderReview:
     return review
 
 
+def _unchecked_checklist(**overrides: object) -> FinalOrderChecklist:
+    values = asdict(_checklist())
+    values.update(overrides)
+    checklist = object.__new__(FinalOrderChecklist)
+    for field_name, value in values.items():
+        object.__setattr__(checklist, field_name, value)
+    return checklist
+
+
 def _unchecked_boundary(**overrides: object) -> NoNetworkBrokerBoundaryResult:
     values = asdict(_boundary())
     values.update(overrides)
@@ -176,7 +188,8 @@ def test_mocked_order_payload_candidate_builds_from_passed_review_checklist_and_
 
 
 def test_mocked_order_payload_candidate_does_not_hold_transport_or_credentials() -> None:
-    fields = set(asdict(_candidate()))
+    candidate = _candidate()
+    fields = set(asdict(candidate))
     blocked_fields = {
         "price",
         "order_price",
@@ -203,10 +216,29 @@ def test_mocked_order_payload_candidate_does_not_hold_transport_or_credentials()
         "api_secret",
         "secret",
         "token",
+        "authorization",
+        "timestamp",
+        "sign",
     }
 
     assert fields.isdisjoint(blocked_fields)
+    assert all(not hasattr(candidate, field_name) for field_name in blocked_fields)
     assert {"execution_type", "time_in_force", "settle_type"}.issubset(fields)
+
+
+def test_mocked_order_payload_candidate_allowed_values_are_fixed() -> None:
+    candidate = _candidate(
+        execution_type="MARKET",
+        time_in_force="FAK",
+        settle_type="OPEN",
+    )
+
+    assert ALLOWED_MOCKED_EXECUTION_TYPES == frozenset({"MARKET"})
+    assert ALLOWED_MOCKED_TIME_IN_FORCE == frozenset({"FAK"})
+    assert ALLOWED_MOCKED_SETTLE_TYPES == frozenset({"OPEN"})
+    assert candidate.execution_type == "MARKET"
+    assert candidate.time_in_force == "FAK"
+    assert candidate.settle_type == "OPEN"
 
 
 def test_mocked_order_payload_candidate_rejects_unpassed_final_checklist() -> None:
@@ -270,6 +302,38 @@ def test_mocked_order_payload_candidate_rejects_verification_run_id_mismatch() -
         _candidate(boundary_result=boundary)
 
 
+def test_mocked_order_payload_candidate_rejects_order_review_id_mismatch() -> None:
+    review = _review()
+    checklist = _checklist(order_review=review)
+    boundary = _unchecked_boundary(order_review_id="review_run_1_other")
+
+    with pytest.raises(LiveVerificationPayloadCandidateError):
+        _candidate(order_review=review, final_checklist=checklist, boundary_result=boundary)
+
+
+def test_mocked_order_payload_candidate_rejects_checklist_order_review_id_mismatch() -> None:
+    review = _review()
+    checklist = _unchecked_checklist(order_review_id="review_run_1_other")
+    boundary = _boundary(order_review=review, final_checklist=_checklist(order_review=review))
+
+    with pytest.raises(LiveVerificationPayloadCandidateError):
+        _candidate(order_review=review, final_checklist=checklist, boundary_result=boundary)
+
+
+def test_mocked_order_payload_candidate_rejects_final_checklist_id_mismatch() -> None:
+    boundary = _unchecked_boundary(final_checklist_id="checklist_run_1_other")
+
+    with pytest.raises(LiveVerificationPayloadCandidateError):
+        _candidate(boundary_result=boundary)
+
+
+def test_mocked_order_payload_candidate_rejects_missing_boundary_check_id() -> None:
+    boundary = _unchecked_boundary(boundary_check_id="")
+
+    with pytest.raises(LiveVerificationPayloadCandidateError):
+        _candidate(boundary_result=boundary)
+
+
 @pytest.mark.parametrize(
     "review",
     [
@@ -300,8 +364,20 @@ def test_mocked_order_payload_candidate_rejects_unsafe_order_review_fields(
     ("field_name", "value"),
     [
         ("execution_type", "LIMIT"),
+        ("execution_type", "market"),
+        ("execution_type", "Market"),
+        ("execution_type", "MARKET "),
+        ("execution_type", "executionType"),
         ("time_in_force", "FAS"),
+        ("time_in_force", "fak"),
+        ("time_in_force", "Fak"),
+        ("time_in_force", "FAK "),
+        ("time_in_force", "timeInForce"),
         ("settle_type", "CLOSE"),
+        ("settle_type", "open"),
+        ("settle_type", "Open"),
+        ("settle_type", "OPEN "),
+        ("settle_type", "settleType"),
     ],
 )
 def test_mocked_order_payload_candidate_rejects_unsupported_local_values(

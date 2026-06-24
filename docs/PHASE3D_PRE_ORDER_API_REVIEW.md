@@ -556,3 +556,7 @@ Phase 3D前レビューでは、broker / order API実装へ進む前の安全境
   pure mocked / local-onlyで実装した。これは送信不可のcandidateであり、endpoint、method、URL、request body、
   raw response、headers、signature、credentialは保持しない。broker、OrderRequest、注文API client、HTTP POST、
   Private API追加接続、APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
+- Phase 3D-4Bでは mocked payload candidate no-send / fail-closed hardeningを完了した。fail closed、
+  許可値固定、非送信・非payload本体、no-order-import guardを追加強化し、candidate層が
+  broker、OrderRequest、注文API client、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、
+  実注文、実資金検証へ進まないことを再確認した。

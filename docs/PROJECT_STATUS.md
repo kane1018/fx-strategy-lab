@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-4B mocked payload candidate no-send / fail-closed hardening完了** —
+  `MockedOrderPayloadCandidate` のfail closed、許可値固定、非送信・非payload本体、
+  no-order-import guardを追加強化した。`execution_type=MARKET`、`time_in_force=FAK`、
+  `settle_type=OPEN` だけをlocal-only値として許可し、表記揺れや他値は拒否する。candidateは
+  endpoint、method、URL、request body、raw response、headers、signature、credentialを保持しない。
+  broker、OrderRequest、注文API client、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、
+  実注文、実資金検証には進んでいない。次候補はPhase 3D-5 real order API client実装前レビュー。
 - **Phase 3D-4 mocked order payload builder実装完了** —
   `backend/app/live_verification/payload_candidate.py` と
   `backend/app/tests/test_live_verification_payload_candidate.py` を追加し、`MockedOrderPayloadCandidate` と

@@ -501,3 +501,15 @@ Phase 3D-4追記:
 - broker、OrderRequest、注文API client、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、
   実注文、実資金検証には進んでいない。
 - 次候補はPhase 3D-4B mocked payload builder fail closed / no-network guard hardeningである。
+
+Phase 3D-4B追記:
+
+- Phase 3D-4B mocked payload candidate no-send / fail-closed hardeningは後続タスクで完了した。
+- `MockedOrderPayloadCandidate` のfail closedテスト、許可値固定テスト、非送信・非payload本体テストを強化した。
+- no-order-import guardを強化し、実装コードにHTTP client import、env参照、Private order endpoint文字列、
+  HTTP method / credential文字列、注文送信系関数名が混入しないことを確認する。
+- `payload_candidate.py` は送信不能なlocal-only candidateのままで、endpoint、method、URL、request body、
+  raw response、headers、signature、credentialを保持しない。
+- broker、OrderRequest、注文API client、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、
+  実注文、実資金検証には進んでいない。
+- 次候補はPhase 3D-5 real order API client実装前レビューである。
