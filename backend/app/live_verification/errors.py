@@ -23,5 +23,9 @@ class LiveVerificationStateError(LiveVerificationValidationError):
     """Raised when a live verification state transition is invalid."""
 
 
+class LiveVerificationCorrelationError(LiveVerificationValidationError):
+    """Raised when mocked live verification IDs do not correlate safely."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

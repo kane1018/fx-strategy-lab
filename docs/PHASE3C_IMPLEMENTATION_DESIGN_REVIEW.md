@@ -657,6 +657,43 @@ backend/app/tests/test_live_verification_*.py
 Phase 3C-1は、READY_FOR_ORDER_REVIEWまでのmocked coreで停止する。
 Phase 3C-2、Phase 3C-3、Phase 3Dへは別タスクの明示指示なしに進まない。
 
+## 15b. Phase 3C-2実装結果
+
+Phase 3C-2では、Phase 3C-1のmocked coreを前提にID相関テストを追加した。
+
+追加した範囲:
+
+```text
+backend/app/live_verification/correlation.py
+backend/app/tests/test_live_verification_id_correlation.py
+```
+
+確認したもの:
+
+- signal、candidate、risk decision、readonly precheck、order intent、verification runのID相関。
+- 必須ID欠損時のfail closed。
+- verification_run_id不整合時のfail closed。
+- ALLOW系以外、precheck failed、USD_JPY以外、100通貨以外、manual confirmationなしの拒否。
+- 同一verification_run_id内の2件目intent拒否と、別runでのintent生成許可。
+- READY_FOR_ORDER_REVIEWまでで停止し、注文送信状態へ進まないこと。
+- no-order-import guard。
+
+実装していないもの:
+
+- broker。
+- OrderRequest。
+- 注文API。
+- Private API追加接続。
+- APIキー確認。
+- `.env`確認。
+- 実注文。
+- 実資金検証。
+- frontend。
+- 本番公開API。
+
+Phase 3C-2は、ID相関のpure mocked testsで停止する。
+Phase 3C-3、Phase 3D、broker、注文API、実注文、実資金検証へは別タスクの明示指示なしに進まない。
+
 ## 16. まだ進まない範囲
 
 今回も次へ進まない。
@@ -697,5 +734,6 @@ Phase 3C実装設計レビューでは、Live Verification Mode実装を3つのm
 追記:
 
 - Phase 3C-1 mocked core実装は後続タスクで完了済み。
-- ただし、Phase 3C-2 ID相関テスト、Phase 3C-3 dry-run統合、Phase 3D、broker、OrderRequest、注文API、
+- Phase 3C-2 ID相関テストも後続タスクで完了済み。
+- ただし、Phase 3C-3 dry-run統合、Phase 3D、broker、OrderRequest、注文API、
   実注文、実資金検証には進んでいない。
