@@ -694,3 +694,51 @@ no-network / no-order guardを強化した。
 
 - Phase 3D-16C actual headers / signature最小実装前レビュー。
 - ただしPhase 3D-16Cでも、HTTP request実装、HTTP POST、実注文、実資金検証には進まない。
+
+## 15. Phase 3D-16C actual headers / signature 最小実装前レビュー結果メモ
+
+Phase 3D-16Cでは、Phase 3D-16Bまでで安全固定した `ActualOrderRequestBody` の後段として、
+actual headers / actual signature の最小実装へ進む前の責務分離と安全境界をdocs-onlyで整理した。
+
+作成したdocs:
+
+- `docs/PHASE3D16C_ACTUAL_HEADERS_SIGNATURE_PRE_IMPLEMENTATION_REVIEW.md`
+
+整理した内容:
+
+- actual headers生成の責務。
+- actual signature生成の責務。
+- API key / API secret の扱い。
+- signer / headers builder / body model の分離方針。
+- headers値、signature値、API key値、API secret値を表示・保存・commitしない運用。
+- raw request / raw response / headers / signatureを保存しない運用。
+- HTTP request / HTTP POSTへ進まない境界。
+- Phase 3D-16Dで作ってよい候補。
+- Phase 3D-16Dでもまだ作らないもの。
+- fail closed条件。
+- Phase 3D-16D以降の分割案。
+
+維持した境界:
+
+- actual headers生成なし。
+- actual signature生成なし。
+- HMAC処理なし。
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- APIキー値確認なし。
+- secret値確認なし。
+- signature値表示なし。
+- `.env`確認なし。
+- Private API追加接続なし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 注文API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Phase 3D-16D actual headers / signature 最小実装。
+- ただしPhase 3D-16Dでも、HTTP request実装、HTTP POST、実注文、実資金検証には進まない。
