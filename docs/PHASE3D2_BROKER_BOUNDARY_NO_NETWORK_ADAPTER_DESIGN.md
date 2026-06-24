@@ -532,3 +532,16 @@ Phase 3D-2では、broker実装前に必要なno-network境界をdocs-onlyで設
 - no-network resultからOrderRequest、broker、注文payload、HTTP POST、実注文へ接続してはいけない。
 - Phase 3D-2Aに進む場合も、実装はpure mocked / no-networkに限定する。
 - 実注文や実資金検証へ進むには、さらに複数のレビューとユーザー明示承認が必要である。
+
+Phase 3D-2A追記:
+
+- Phase 3D-2A no-network broker boundary adapter mocked実装は後続タスクで完了した。
+- `NoNetworkBrokerBoundaryResult` と `evaluate_no_network_broker_boundary()` を
+  `backend/app/live_verification/broker_boundary.py` に追加した。
+- `OrderReview` + `FinalOrderChecklist` + `READY_FOR_ORDER_REVIEW` が安全条件を満たす場合だけ
+  `boundary_passed=true` になる。
+- checklist未pass、READY_FOR_ORDER_REVIEW以外、network/API key/payload/broker/real order flags、
+  `USD_JPY` / 100通貨 / `live_verification` 逸脱、ID不整合は `boundary_passed=false` でfail closedする。
+- broker、OrderRequest、注文API client、注文payload builder、HTTP POST、Private API追加接続、
+  APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
+- 次候補はPhase 3D-2B fail closed / no-order guard hardeningである。

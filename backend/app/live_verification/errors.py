@@ -31,5 +31,9 @@ class LiveVerificationOrderReviewError(LiveVerificationValidationError):
     """Raised when order review or checklist inputs are unsafe."""
 
 
+class LiveVerificationBrokerBoundaryError(LiveVerificationValidationError):
+    """Raised when a no-network broker boundary result is internally invalid."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

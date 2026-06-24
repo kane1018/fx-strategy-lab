@@ -1,5 +1,10 @@
 """Phase 3C-1 live verification mocked core."""
 
+from app.live_verification.broker_boundary import (
+    NoNetworkBrokerBoundaryResult,
+    evaluate_no_network_broker_boundary,
+    make_no_network_boundary_check_id,
+)
 from app.live_verification.correlation import (
     CandidateReference,
     RiskDecisionReference,
@@ -15,6 +20,7 @@ from app.live_verification.dry_run import (
     run_live_verification_dry_run,
 )
 from app.live_verification.errors import (
+    LiveVerificationBrokerBoundaryError,
     LiveVerificationCorrelationError,
     LiveVerificationError,
     LiveVerificationForbiddenActionError,
@@ -68,6 +74,7 @@ __all__ = [
     "CandidateReference",
     "LiveVerificationDryRunResult",
     "LiveVerificationError",
+    "LiveVerificationBrokerBoundaryError",
     "LiveVerificationCorrelationError",
     "LiveVerificationForbiddenActionError",
     "LiveVerificationIntentError",
@@ -81,14 +88,17 @@ __all__ = [
     "SignalReference",
     "TERMINAL_STATES",
     "FinalOrderChecklist",
+    "NoNetworkBrokerBoundaryResult",
     "OrderReview",
     "assert_single_intent_per_run",
     "build_correlated_order_intent",
     "build_order_intent_from_allowed_decision",
     "build_order_review_from_intent",
+    "evaluate_no_network_broker_boundary",
     "evaluate_readonly_precheck",
     "evaluate_final_order_checklist",
     "make_final_checklist_id",
+    "make_no_network_boundary_check_id",
     "make_order_intent_id",
     "make_order_review_id",
     "make_readonly_precheck_id",
