@@ -399,6 +399,13 @@ Phase 3Dへ進まない条件:
 - read-only precheckが直前に成功していない。
 - 実注文前チェックリストに未確認またはNGがある。
 
+追記:
+
+- Phase 3C実装設計レビューは完了済み。詳細は
+  [PHASE3C_IMPLEMENTATION_DESIGN_REVIEW.md](PHASE3C_IMPLEMENTATION_DESIGN_REVIEW.md)。
+- ただし、Live Verification Mode実装、order intent実装、broker、OrderRequest、注文API、実注文、
+  実資金検証には進んでいない。
+
 ## 13. まだ進まない範囲
 
 Phase 3Cでは次へ進まない。
@@ -448,5 +455,6 @@ Phase 3Cでは、Live Verification ModeをPhase 3D極小実資金検証前の安
 - Live Verification Modeは、read-only precheck、risk decision、order intent、停止条件を束ねる設計である。
 - Phase 3Dへ進むには、Phase 3C設計レビューに加え、実装設計レビュー、order intent実装レビュー、
   broker / order API実装前レビュー、100通貨・1回限定の明示承認が必要である。
+- Phase 3C実装設計レビューは後続タスクで完了済みだが、Phase 3C-1 mocked core実装はまだ未実施である。
 - Phase 3Cでは、Live Verification Mode実装、order intent実装、broker、注文API、OrderRequest、
   実注文、実資金検証、自動売買には進まない。
