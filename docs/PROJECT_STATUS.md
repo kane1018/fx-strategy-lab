@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-2 broker boundary / no-network adapter mocked設計完了** —
+  `docs/PHASE3D2_BROKER_BOUNDARY_NO_NETWORK_ADAPTER_DESIGN.md` を作成し、
+  `OrderReview` / `FinalOrderChecklist` の先に置くbroker boundary、no-network adapterの責務、
+  `NoNetworkBrokerBoundaryResult` 候補、fail closed条件、no-order guard policy、Phase 3D-2A以降の分割案を
+  docs-onlyで整理した。no-network adapter実装、broker、OrderRequest、注文API client、注文payload builder、
+  Private API追加接続、APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。次候補は
+  Phase 3D-2A no-network broker boundary adapter mocked実装。
 - **Phase 3D-1 order review model / final checklist mocked実装完了** —
   `backend/app/live_verification/order_review.py` と
   `backend/app/tests/test_live_verification_order_review.py` を追加し、`OrderIntent` からreview-only

@@ -533,3 +533,9 @@ Phase 3D前レビューでは、broker / order API実装へ進む前の安全境
 - Phase 3D-1ではreview-only `OrderReview` と `FinalOrderChecklist` をmocked実装した。
   これらは実注文payloadではなく、broker、OrderRequest、注文API client、Private API追加接続、
   APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
+- Phase 3D-2では
+  [PHASE3D2_BROKER_BOUNDARY_NO_NETWORK_ADAPTER_DESIGN.md](PHASE3D2_BROKER_BOUNDARY_NO_NETWORK_ADAPTER_DESIGN.md)
+  を作成し、broker boundary / no-network adapterの責務、`NoNetworkBrokerBoundaryResult` 候補、
+  fail closed条件、no-order guard policy、Phase 3D-2A以降の分割案をdocs-onlyで整理した。
+  no-network adapter実装、broker、OrderRequest、注文API client、注文payload builder、Private API追加接続、
+  APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。

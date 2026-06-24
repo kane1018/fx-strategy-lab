@@ -783,5 +783,9 @@ Phase 3C実装設計レビューでは、Live Verification Mode実装を3つのm
 - Phase 3C-3 dry-run統合テストも後続タスクで完了済み。
 - Phase 3D前 broker / order API実装前レビューも後続タスクで完了済み。判定は
   **A: Phase 3D-0 公式仕様・危険endpoint再レビューへ進んでよい**。
-- ただし、Phase 3D-0、broker、OrderRequest、注文API、
-  実注文、実資金検証には進んでいない。
+- 当時はPhase 3D-0、broker、OrderRequest、注文API、
+  実注文、実資金検証には進んでいなかった。
+- Phase 3D-0公式仕様・危険endpoint再レビュー、Phase 3D-1 order review model / final checklist mocked実装、
+  Phase 3D-2 broker boundary / no-network adapter mocked設計も後続タスクで完了済み。
+- Phase 3D-2ではno-network adapter実装、broker、OrderRequest、注文API client、注文payload builder、
+  Private API追加接続、APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。

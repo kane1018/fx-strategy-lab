@@ -311,3 +311,14 @@ Phase 3D-1追記:
 - broker、OrderRequest、注文API client、注文payload builder、Private API追加接続、APIキー確認、
   `.env`確認、実注文、実資金検証には進んでいない。
 - 次候補はPhase 3D-2 broker boundary / no-network adapter mocked設計である。
+
+Phase 3D-2追記:
+
+- Phase 3D-2 broker boundary / no-network adapter mocked設計は
+  [PHASE3D2_BROKER_BOUNDARY_NO_NETWORK_ADAPTER_DESIGN.md](PHASE3D2_BROKER_BOUNDARY_NO_NETWORK_ADAPTER_DESIGN.md)
+  として完了した。
+- `OrderReview` / `FinalOrderChecklist` の先に置くno-network境界、`NoNetworkBrokerBoundaryResult` 候補、
+  fail closed条件、no-order guard policyをdocs-onlyで整理した。
+- no-network adapter実装、broker、OrderRequest、注文API client、注文payload builder、Private API追加接続、
+  APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
+- 次候補はPhase 3D-2A no-network broker boundary adapter mocked実装である。
