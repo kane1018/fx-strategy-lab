@@ -39,5 +39,9 @@ class LiveVerificationPayloadCandidateError(LiveVerificationValidationError):
     """Raised when a mocked payload candidate would cross a safety boundary."""
 
 
+class LiveVerificationOrderClientSkeletonError(LiveVerificationValidationError):
+    """Raised when a disabled no-network client plan is unsafe."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

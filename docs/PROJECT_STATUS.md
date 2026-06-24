@@ -82,6 +82,16 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-6 real order API client no-network skeleton / disabled-by-default mock実装完了** —
+  `backend/app/live_verification/order_client_skeleton.py` と
+  `backend/app/tests/test_live_verification_order_client_skeleton.py` を追加し、
+  `DisabledOrderClientPlan` と `build_disabled_order_client_plan()` をpure mocked / local-onlyで実装した。
+  `MockedOrderPayloadCandidate` がpass済みの場合だけ、`USD_JPY`、100通貨、`MARKET`、`FAK`、`OPEN`、
+  `disabled_by_default=true`、`network_enabled=false`、`credential_access_enabled=false`、
+  manual confirmation必須のno-network planを生成する。endpoint、method、path、url、request body、
+  raw response、headers、signature、credentialは保持しない。HTTP client import、HTTP POST、
+  APIキー確認、`.env`確認、broker、OrderRequest、注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-7 署名・HTTP request設計レビュー。ただし実送信なし。
 - **Phase 3D-5 real order API client実装前レビュー完了** —
   `docs/PHASE3D5_REAL_ORDER_API_CLIENT_PRE_IMPLEMENTATION_REVIEW.md` を作成し、real order API client
   実装前の安全条件、まだ作らない範囲、将来扱う可能性のある最小endpoint候補、APIキー / secret /

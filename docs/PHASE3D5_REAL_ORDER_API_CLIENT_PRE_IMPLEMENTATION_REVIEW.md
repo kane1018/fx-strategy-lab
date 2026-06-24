@@ -356,3 +356,35 @@ Phase 3D-5では次へ進まない。
 - 本番公開API追加。
 
 Phase 3D-5は、real order API client実装前のレビューdocsで停止する。
+
+## 14. Phase 3D-6実装結果メモ
+
+Phase 3D-6では、Phase 3D-5の判定Aに従い、real order API clientそのものではなく、
+no-network / disabled-by-default のmock skeletonだけを実装した。
+
+実装したもの:
+
+- `DisabledOrderClientPlan`。
+- `build_disabled_order_client_plan()`。
+- `MockedOrderPayloadCandidate` からlocal-only planへ進むpure function。
+- `network_enabled=false`、`credential_access_enabled=false`、`disabled_by_default=true` の固定。
+- `USD_JPY`、100通貨、`MARKET`、`FAK`、`OPEN` の固定。
+- endpoint / method / path / url / request body / headers / signature / credential非保持のtests。
+- no-order-import guardの継続確認。
+
+実装していないもの:
+
+- real order API client。
+- HTTP POST / PUT / DELETE。
+- API-KEY / API-TIMESTAMP / API-SIGN生成。
+- 署名付きrequest。
+- APIキー確認。
+- `.env`確認。
+- broker。
+- `OrderRequest`。
+- 注文API client。
+- 実注文。
+- 実資金検証。
+
+次候補はPhase 3D-7 署名・HTTP request設計レビューである。ただし、Phase 3D-7でも実送信、
+APIキー確認、`.env`確認、実注文、実資金検証には進まない。
