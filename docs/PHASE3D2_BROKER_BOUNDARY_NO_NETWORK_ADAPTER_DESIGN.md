@@ -560,3 +560,14 @@ Phase 3D-2B追記:
 - broker、OrderRequest、注文API client、注文payload builder、HTTP POST、Private API追加接続、APIキー確認、
   `.env`確認、実注文、実資金検証には進んでいない。
 - 次候補はPhase 3D-3 order payload builder実装前レビューである。
+
+Phase 3D-3追記:
+
+- Phase 3D-3 order payload builder実装前レビューは後続タスクで完了した。
+- `docs/PHASE3D3_ORDER_PAYLOAD_BUILDER_PRE_IMPLEMENTATION_REVIEW.md` で、mocked order payload builderの定義、
+  Phase 3D-4で扱ってよい候補field、扱わない候補、`OrderReview` / `FinalOrderChecklist` /
+  `NoNetworkBrokerBoundaryResult` との関係、mocked payload candidate候補データ、fail closed条件、
+  broker / API client / HTTP POSTとの分離、Phase 3D-4以降の分割案、no-order guard方針を整理した。
+- order payload builder実装、order payload model実装、broker、OrderRequest、注文API client、HTTP POST、
+  Private API追加接続、APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
+- 次候補はPhase 3D-4 mocked order payload builder実装である。

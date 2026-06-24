@@ -548,3 +548,7 @@ Phase 3D前レビューでは、broker / order API実装へ進む前の安全境
   注文endpoint文字列 / 注文送信状態名 / payload field名の実装コード混入検出をテストで強化した。
   broker、OrderRequest、注文API client、注文payload builder、HTTP POST、Private API追加接続、APIキー確認、
   `.env`確認、実注文、実資金検証には進んでいない。
+- Phase 3D-3では order payload builder実装前レビューを完了し、将来のmocked builderで扱ってよい候補field、
+  扱わない注文種別、review-only / no-network境界との接続、fail closed条件、broker / API client / HTTP POSTとの
+  分離をdocs-onlyで整理した。order payload builder実装、order payload model実装、broker、OrderRequest、
+  注文API client、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
