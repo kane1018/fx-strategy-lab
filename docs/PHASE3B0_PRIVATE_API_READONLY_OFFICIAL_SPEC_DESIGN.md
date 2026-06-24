@@ -261,6 +261,9 @@ Phase 3B-2:
 - account assets / open positions / active orders / executions系response sanitizer。
 - error handling test。
 - 実接続なし。
+- 追記: Phase 3B-2は完了済み。GET read-only候補7件のmocked provider変換、空配列・任意項目欠損、
+  sanitized `PrivateApiError`、error時no-retry、forbidden endpoint guard拡張をテストした。Private API実接続、
+  APIキー入力、`.env`読込・変更、broker、注文API、実注文、実資金はなし。
 
 Phase 3B-3:
 

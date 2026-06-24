@@ -82,6 +82,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3B-2 mocked private readonly endpoints拡張完了** — `backend/app/private_api/` の
+  mocked read-only client / schemas / errorsに、endpoint別mocked tests、error response sanitizer、
+  forbidden endpoint guard拡張を追加した。対象は `account/assets`, `openPositions`, `activeOrders`,
+  `orders`, `executions`, `latestExecutions`, `positionSummary` のGET候補のみ。実HTTP接続、APIキー入力、
+  `.env`読込・変更、broker、注文API、実注文、実資金には進んでいない。次に進む場合はPhase 3B-3として
+  ローカル接続前レビュー、APIキー管理手順レビュー、実接続しない運用設計確認を別タスクで扱う。
 - **Phase 3B-1 mocked private readonly skeleton実装完了** — `backend/app/private_api/` に
   実接続なし・APIキー環境読込なし・`.env`読込なしのread-only skeleton、auth/signing helper、
   sanitized schemas、errors、forbidden endpoint guardを追加し、mocked testsを整備した。GET read-only候補だけを

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class PrivateApiReadonlyError(RuntimeError):
     """Base error for Phase 3B read-only skeleton failures."""
@@ -13,6 +15,10 @@ class PrivateApiAuthError(PrivateApiReadonlyError):
 
 class PrivateApiResponseError(PrivateApiReadonlyError):
     """Raised when a mocked response cannot be sanitized."""
+
+    def __init__(self, message: str, *, api_error: Any | None = None) -> None:
+        super().__init__(message)
+        self.api_error = api_error
 
 
 class PrivateApiForbiddenEndpointError(PrivateApiReadonlyError):

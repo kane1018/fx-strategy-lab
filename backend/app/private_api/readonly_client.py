@@ -28,6 +28,7 @@ from app.private_api.schemas import (
     execution_from_api,
     open_position_from_api,
     position_summary_from_api,
+    private_api_error_from_payload,
 )
 
 PRIVATE_API_BASE_URL = "https://forex-api.coin.z.com/private"
@@ -180,16 +181,11 @@ class PrivateReadonlyClient:
 def _extract_data(payload: Mapping[str, Any]) -> Any:
     status = payload.get("status")
     if status != 0:
-        messages = payload.get("messages") or []
-        if isinstance(messages, list) and messages:
-            first = messages[0]
-            if isinstance(first, Mapping):
-                detail = str(first.get("message_code") or first.get("message") or "unknown")
-            else:
-                detail = str(first)
-        else:
-            detail = "unknown"
-        raise PrivateApiResponseError(f"Private API mocked response error: {detail}")
+        api_error = private_api_error_from_payload(payload)
+        raise PrivateApiResponseError(
+            f"Private API mocked response error: {api_error.code}",
+            api_error=api_error,
+        )
     return payload.get("data")
 
 

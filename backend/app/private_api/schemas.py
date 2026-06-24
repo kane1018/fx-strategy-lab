@@ -132,6 +132,33 @@ def position_summary_from_api(raw: Mapping[str, Any]) -> PositionSummary:
     )
 
 
+def private_api_error_from_payload(raw: Mapping[str, Any]) -> PrivateApiError:
+    """Build a sanitized error model from a mocked API error payload."""
+    messages = raw.get("messages")
+    first_message: Mapping[str, Any] | None = None
+    fallback_message: str | None = None
+    if isinstance(messages, list) and messages:
+        first = messages[0]
+        if isinstance(first, Mapping):
+            first_message = first
+        elif first is not None:
+            fallback_message = str(first)
+
+    return PrivateApiError(
+        code=(
+            _string(first_message, "message_code", "code", default="unknown")
+            if first_message is not None
+            else "unknown"
+        ),
+        message=(
+            _string(first_message, "message_string", "message", default="unknown")
+            if first_message is not None
+            else fallback_message or _string(raw, "message", "error", default="unknown")
+        ),
+        status=_int_or_none(raw.get("status")),
+    )
+
+
 def _decimal(raw: Mapping[str, Any], *keys: str) -> Decimal | None:
     value = _first(raw, *keys)
     if value is None or value == "":
@@ -158,3 +185,12 @@ def _first(raw: Mapping[str, Any], *keys: str) -> Any:
         if key in raw:
             return raw[key]
     return None
+
+
+def _int_or_none(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
