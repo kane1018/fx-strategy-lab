@@ -303,3 +303,11 @@ Phase 3D-0では、GMOコイン外国為替FXの公式API docsに基づき、注
 - Phase 3D-1では、order review model / final checklist のmocked設計・実装までに限定する。
 - Phase 3D-2でも実HTTP POST / PUT / DELETEは禁止する。
 - 実注文に進むには、別フェーズでの公式仕様再確認、read-only precheck直前成功、明示承認が必須である。
+
+Phase 3D-1追記:
+
+- Phase 3D-1 order review model / final checklist mocked実装は完了した。
+- 実装したのはreview-only objectとfinal checklist評価であり、注文payloadではない。
+- broker、OrderRequest、注文API client、注文payload builder、Private API追加接続、APIキー確認、
+  `.env`確認、実注文、実資金検証には進んでいない。
+- 次候補はPhase 3D-2 broker boundary / no-network adapter mocked設計である。

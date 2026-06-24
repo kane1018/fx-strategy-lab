@@ -54,6 +54,14 @@ broker / 注文API実装前レビュー
 
 この分割は、実装を進める場合でもbrokerや注文APIに直行しないための安全境界である。
 
+追記:
+
+- Phase 3C-1 mocked core、Phase 3C-2 ID相関テスト、Phase 3C-3 dry-run統合、
+  Phase 3D前レビュー、Phase 3D-0公式仕様・危険endpoint再レビュー、Phase 3D-1 order review model /
+  final checklist mocked実装は完了済みである。
+- Phase 3D-1で追加した `OrderReview` と `FinalOrderChecklist` はreview-onlyであり、
+  broker、OrderRequest、注文API client、注文payload builder、Private API追加接続、実注文には進んでいない。
+
 ## 4. Phase 3C-1: mocked core implementation
 
 目的:

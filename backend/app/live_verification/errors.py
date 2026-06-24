@@ -27,5 +27,9 @@ class LiveVerificationCorrelationError(LiveVerificationValidationError):
     """Raised when mocked live verification IDs do not correlate safely."""
 
 
+class LiveVerificationOrderReviewError(LiveVerificationValidationError):
+    """Raised when order review or checklist inputs are unsafe."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

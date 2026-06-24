@@ -530,3 +530,6 @@ Phase 3D前レビューでは、broker / order API実装へ進む前の安全境
   **A: Phase 3D-1 order review model / final checklist mocked設計・実装へ進んでよい**。
 - ただし、Phase 3D-0でもbroker、OrderRequest、注文API client、注文payload builder、Private API追加接続、
   APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
+- Phase 3D-1ではreview-only `OrderReview` と `FinalOrderChecklist` をmocked実装した。
+  これらは実注文payloadではなく、broker、OrderRequest、注文API client、Private API追加接続、
+  APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。

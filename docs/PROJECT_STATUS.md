@@ -82,6 +82,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-1 order review model / final checklist mocked実装完了** —
+  `backend/app/live_verification/order_review.py` と
+  `backend/app/tests/test_live_verification_order_review.py` を追加し、`OrderIntent` からreview-only
+  `OrderReview` を生成するpure functionと、実注文前の `FinalOrderChecklist` 評価を実装した。
+  final checklistは全必須項目がtrueの場合のみpassedとなり、false項目を `fail_reasons` に保持する。
+  broker、OrderRequest、注文API client、注文payload builder、Private API追加接続、APIキー確認、
+  `.env`確認、実注文、実資金検証には進んでいない。次候補は
+  Phase 3D-2 broker boundary / no-network adapter mocked設計。
 - **Phase 3D-0 GMO FX order API公式仕様・危険endpoint再レビュー完了** —
   `docs/PHASE3D0_ORDER_API_OFFICIAL_SPEC_REVIEW.md` を作成し、公式docsと既存Phase 3B / 3C / 3D前docsに基づいて、
   read-only endpointと注文系endpointを分離し、`order`、`speedOrder`、IFD / IFDOCO、change、cancel、
