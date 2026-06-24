@@ -297,6 +297,9 @@ def test_signature_headers_body_plan_has_only_plan_fields() -> None:
         "method",
         "path",
         "url",
+        "status_code",
+        "response_body",
+        "request_headers",
     }
 
     assert model_fields == EXPECTED_PLAN_FIELDS
@@ -410,6 +413,62 @@ def test_signature_headers_body_plan_keeps_multiple_fail_reasons() -> None:
         "actual_signature_created",
         "http_post_enabled",
     }.issubset(set(plan.fail_reasons))
+
+
+def test_signature_headers_body_plan_accumulates_credential_and_raw_artifact_reasons() -> None:
+    plan = _plan(
+        http_request_skeleton=_unchecked_skeleton(
+            credential_access_enabled=True,
+            raw_request_created=True,
+            raw_response_saved=True,
+            signature_saved=True,
+            api_secret_used=True,
+        ),
+        credential_values_exposed=True,
+        raw_request_saved=True,
+        raw_response_saved=True,
+        headers_saved=True,
+        signature_saved=True,
+        api_key_value_exposed=True,
+        api_secret_value_exposed=True,
+    )
+
+    assert plan.plan_passed is False
+    assert {
+        "http_request_skeleton:credential_access_enabled",
+        "http_request_skeleton:raw_request_created",
+        "http_request_skeleton:raw_response_saved",
+        "http_request_skeleton:signature_saved",
+        "http_request_skeleton:api_secret_used",
+        "credential_values_exposed",
+        "raw_request_saved",
+        "raw_response_saved",
+        "headers_saved",
+        "signature_saved",
+        "api_key_value_exposed",
+        "api_secret_value_exposed",
+    }.issubset(set(plan.fail_reasons))
+
+
+@pytest.mark.parametrize(
+    "overrides,expected_reason",
+    [
+        ({"order_client_plan_id": ""}, "order_client_plan_id_missing"),
+        ({"mocked_payload_candidate_id": ""}, "mocked_payload_candidate_id_missing"),
+        (
+            {"http_request_client_skeleton_id": "wrong_skeleton_id"},
+            "http_request_client_skeleton_id_mismatch",
+        ),
+    ],
+)
+def test_signature_headers_body_plan_fails_closed_for_missing_or_mismatched_skeleton_ids(
+    overrides: dict[str, object],
+    expected_reason: str,
+) -> None:
+    plan = _plan(http_request_skeleton=_unchecked_skeleton(**overrides))
+
+    assert plan.plan_passed is False
+    assert expected_reason in plan.fail_reasons
 
 
 @pytest.mark.parametrize(

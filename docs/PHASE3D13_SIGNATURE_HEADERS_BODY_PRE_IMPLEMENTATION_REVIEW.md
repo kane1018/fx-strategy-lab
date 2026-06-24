@@ -656,3 +656,43 @@ Phase 3D-14では、Phase 3D-13の設計に基づき、`DisabledHttpRequestClien
 
 - Phase 3D-14B no-secret guard hardening。
 - ただしPhase 3D-14Bでも、実署名、headers生成、request body生成、HTTP request、実注文、実資金検証には進まない。
+
+## 14. Phase 3D-14B hardening結果メモ
+
+Phase 3D-14Bでは、Phase 3D-14で追加した `SignatureHeadersBodyPlan` が actual body、actual headers、
+actual signature、HTTP request、credential、real order導線へ変質しないことをテストとguardで追加固定した。
+
+実施内容:
+
+- `backend/app/tests/test_live_verification_signature_headers_body_plan.py` を強化。
+- `backend/app/tests/test_live_verification_no_order_imports.py` を強化。
+- credential / raw artifact系の複数unsafe flagが同時に立つ場合でも `plan_passed=false` と複数
+  `fail_reasons` でfail closedすることを確認。
+- `SignatureHeadersBodyPlan` が `status_code`、`response_body`、`request_headers` などの実transport fieldを
+  保持しないことを追加確認。
+- `signature_headers_body_plan.py` 専用に、crypto / HTTP / secret / broker importがないことをAST guardで確認。
+- `signature_headers_body_plan.py` 本体は変更していない。
+
+維持した境界:
+
+- APIキー値表示なし。
+- secret値表示なし。
+- `.env`確認なし。
+- 実署名生成なし。
+- HMAC処理なし。
+- headers生成なし。
+- request body生成なし。
+- HTTP request実装なし。
+- HTTP client importなし。
+- HTTP POSTなし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Phase 3D-15 actual body / headers / signature 最小実装前レビュー。
+- ただしPhase 3D-15でも、まずdocs-onlyレビューとして扱い、実署名、headers生成、request body生成、
+  HTTP request、HTTP POST、実注文、実資金検証には進まない。

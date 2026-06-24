@@ -119,6 +119,32 @@ def test_signature_request_design_has_no_crypto_or_http_imports() -> None:
             assert not _is_blocked_module(module, blocked_modules)
 
 
+def test_signature_headers_body_plan_has_no_crypto_http_or_secret_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "hashlib",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "dotenv",
+        "app." + "brokers",
+    }
+    path = PACKAGE_ROOT / "signature_headers_body_plan.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+
+
 def test_live_verification_package_has_no_execution_function_defs_or_calls() -> None:
     blocked_names = {
         "sub" + "mit",
@@ -243,3 +269,59 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
     for path in _source_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         assert _field_names(tree).isdisjoint(blocked_fields)
+
+
+def test_signature_headers_body_plan_has_no_actual_transport_or_credential_fields() -> None:
+    allowed_safe_flags = {
+        "body_plan_created",
+        "headers_plan_created",
+        "signature_plan_created",
+        "actual_body_created",
+        "actual_headers_created",
+        "actual_signature_created",
+        "headers_saved",
+        "signature_saved",
+        "raw_request_saved",
+        "raw_response_saved",
+        "api_key_value_exposed",
+        "api_secret_value_exposed",
+        "credential_values_exposed",
+        "hmac_used",
+        "http_post_enabled",
+        "real_order_attempted",
+    }
+    blocked_fields = {
+        "actual_body",
+        "body",
+        "request_body",
+        "body_json",
+        "actual_headers",
+        "headers",
+        "header_values",
+        "actual_signature",
+        "signature",
+        "api_sign",
+        "hmac_digest",
+        "api_key",
+        "api_secret",
+        "secret",
+        "token",
+        "authorization",
+        "raw_request",
+        "raw_response",
+        "http_client",
+        "response",
+        "endpoint",
+        "method",
+        "path",
+        "url",
+        "status_code",
+        "response_body",
+        "request_headers",
+    }
+    path = PACKAGE_ROOT / "signature_headers_body_plan.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_safe_flags.issubset(field_names)

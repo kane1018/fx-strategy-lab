@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-14B SignatureHeadersBodyPlan no-secret / no-network / no-order guard hardening完了** —
+  `backend/app/tests/test_live_verification_signature_headers_body_plan.py` と
+  `backend/app/tests/test_live_verification_no_order_imports.py` を強化し、
+  `SignatureHeadersBodyPlan` がactual body、actual headers、actual signature、HTTP request、
+  HTTP POST、credential値、raw request / raw response、headers / signature保存、broker、
+  `OrderRequest`、real order API clientへ変質しないことを追加で固定した。
+  credential / raw artifact系の複数unsafe flagは `plan_passed=false` と複数 `fail_reasons` で
+  fail closedする。`signature_headers_body_plan.py` 本体は変更していない。
+  実署名生成、HMAC処理、headers生成、request body生成、HTTP request実装、HTTP client import、
+  HTTP POST、APIキー値表示、secret値表示、`.env`確認、broker、`OrderRequest`、real order API client、
+  注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-15 actual body / headers / signature 最小実装前レビュー。ここでもまずdocs-onlyで扱い、
+  実署名、headers生成、request body生成、HTTP request、HTTP POST、実注文には進まない。
 - **Phase 3D-14 署名 / headers / request body plan実装完了** —
   `backend/app/live_verification/signature_headers_body_plan.py` と
   `backend/app/tests/test_live_verification_signature_headers_body_plan.py` を追加し、
