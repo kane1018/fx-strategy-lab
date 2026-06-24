@@ -408,6 +408,9 @@ Phase 3Dへ進まない条件:
 - Phase 3C-2 ID相関テストも後続タスクで完了済み。signal、candidate、risk decision、
   readonly precheck、order intent、verification runの相関、同一run内2件目intent拒否、
   READY_FOR_ORDER_REVIEW停止をpure mocked testsで確認した。
+- Phase 3C-3 dry-run統合テストも後続タスクで完了済み。read-only precheck、risk decision、
+  ID correlation、order intent、state transitionを1本のpure mocked flowで確認し、
+  READY_FOR_ORDER_REVIEWまで到達して停止すること、失敗条件ではfail closedすることを確認した。
 - ただし、実注文可能なLive Verification Mode、broker、OrderRequest、注文API、実注文、実資金検証には
   進んでいない。
 
@@ -460,7 +463,7 @@ Phase 3Cでは、Live Verification ModeをPhase 3D極小実資金検証前の安
 - Live Verification Modeは、read-only precheck、risk decision、order intent、停止条件を束ねる設計である。
 - Phase 3Dへ進むには、Phase 3C設計レビューに加え、実装設計レビュー、order intent実装レビュー、
   broker / order API実装前レビュー、100通貨・1回限定の明示承認が必要である。
-- Phase 3C実装設計レビュー、Phase 3C-1 mocked core実装、Phase 3C-2 ID相関テストは後続タスクで
-  完了済みだが、Phase 3C-3以降はまだ未実施である。
-- Phase 3C-1時点では、実注文可能なLive Verification Mode、broker、注文API、OrderRequest、
+- Phase 3C実装設計レビュー、Phase 3C-1 mocked core実装、Phase 3C-2 ID相関テスト、
+  Phase 3C-3 dry-run統合テストは後続タスクで完了済みだが、Phase 3D以降はまだ未実施である。
+- Phase 3C-3時点では、実注文可能なLive Verification Mode、broker、注文API、OrderRequest、
   実注文、実資金検証、自動売買には進まない。

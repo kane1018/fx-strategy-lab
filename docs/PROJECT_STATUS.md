@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3C-3 Live Verification dry-run統合テスト完了** — `backend/app/live_verification/dry_run.py` と
+  `backend/app/tests/test_live_verification_dry_run.py` を追加し、read-only precheck、risk decision、
+  ID correlation、order intent、state transitionをpure mocked flowとして接続した。成功系は
+  READY_FOR_ORDER_REVIEWまで到達し、precheck failed、ALLOW系以外、ID不整合、同一run内2件目intent、
+  unsupported symbol / units、manual confirmationなし、安全フラグ違反はfail closedする。broker、
+  OrderRequest、注文API、実注文、実資金検証、Private API追加接続、APIキー確認、`.env`確認には
+  進んでいない。次候補はPhase 3D前 broker / order API実装前レビュー。
 - **Phase 3C-2 Live Verification ID相関テスト完了** — `backend/app/live_verification/correlation.py` と
   `backend/app/tests/test_live_verification_id_correlation.py` を追加し、signal、candidate、risk decision、
   readonly precheck、order intent、verification runのID相関をpure mocked範囲で検証した。必須ID欠損、

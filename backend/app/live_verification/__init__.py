@@ -9,6 +9,11 @@ from app.live_verification.correlation import (
     transition_after_risk_decision,
     validate_live_verification_correlation,
 )
+from app.live_verification.dry_run import (
+    LiveVerificationDryRunResult,
+    ReadonlyPrecheckInput,
+    run_live_verification_dry_run,
+)
 from app.live_verification.errors import (
     LiveVerificationCorrelationError,
     LiveVerificationError,
@@ -52,6 +57,7 @@ __all__ = [
     "PrecheckFailureReason",
     "ReadonlyPrecheckResult",
     "CandidateReference",
+    "LiveVerificationDryRunResult",
     "LiveVerificationError",
     "LiveVerificationCorrelationError",
     "LiveVerificationForbiddenActionError",
@@ -60,6 +66,7 @@ __all__ = [
     "LiveVerificationState",
     "LiveVerificationStateError",
     "LiveVerificationValidationError",
+    "ReadonlyPrecheckInput",
     "RiskDecisionReference",
     "SignalReference",
     "TERMINAL_STATES",
@@ -70,6 +77,7 @@ __all__ = [
     "make_order_intent_id",
     "make_readonly_precheck_id",
     "normalize_live_verification_state",
+    "run_live_verification_dry_run",
     "transition_after_readonly_precheck",
     "transition_after_risk_decision",
     "transition_live_verification_state",

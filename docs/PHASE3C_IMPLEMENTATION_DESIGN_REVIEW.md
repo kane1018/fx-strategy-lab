@@ -694,6 +694,43 @@ backend/app/tests/test_live_verification_id_correlation.py
 Phase 3C-2は、ID相関のpure mocked testsで停止する。
 Phase 3C-3、Phase 3D、broker、注文API、実注文、実資金検証へは別タスクの明示指示なしに進まない。
 
+## 15c. Phase 3C-3実装結果
+
+Phase 3C-3では、Phase 3C-1 / 3C-2のmocked coreを前提にdry-run統合テストを追加した。
+
+追加した範囲:
+
+```text
+backend/app/live_verification/dry_run.py
+backend/app/tests/test_live_verification_dry_run.py
+```
+
+確認したもの:
+
+- read-only precheck、risk decision、ID correlation、order intent、state transitionの統合。
+- `INIT -> READONLY_PRECHECK -> RISK_DECISION_CONFIRMED -> ORDER_INTENT_CREATED -> MANUAL_CONFIRMATION_REQUIRED -> READY_FOR_ORDER_REVIEW`。
+- READY_FOR_ORDER_REVIEWで停止し、注文送信状態へ進まないこと。
+- precheck failed、ALLOW系以外、verification_run_id不整合、同一run内2件目intentのfail closed。
+- unsupported symbol / units、manual confirmationなし、open position / active orderあり、安全フラグ違反のfail closed。
+- no-order-import guard。
+
+実装していないもの:
+
+- broker。
+- OrderRequest。
+- 注文API。
+- 注文payload builder。
+- Private API追加接続。
+- APIキー確認。
+- `.env`確認。
+- 実注文。
+- 実資金検証。
+- frontend。
+- 本番公開API。
+
+Phase 3C-3は、READY_FOR_ORDER_REVIEWまでのpure mocked dry-run統合テストで停止する。
+Phase 3D、broker、注文API、実注文、実資金検証へは別タスクの明示指示なしに進まない。
+
 ## 16. まだ進まない範囲
 
 今回も次へ進まない。
@@ -735,5 +772,6 @@ Phase 3C実装設計レビューでは、Live Verification Mode実装を3つのm
 
 - Phase 3C-1 mocked core実装は後続タスクで完了済み。
 - Phase 3C-2 ID相関テストも後続タスクで完了済み。
-- ただし、Phase 3C-3 dry-run統合、Phase 3D、broker、OrderRequest、注文API、
+- Phase 3C-3 dry-run統合テストも後続タスクで完了済み。
+- ただし、Phase 3D、broker、OrderRequest、注文API、
   実注文、実資金検証には進んでいない。
