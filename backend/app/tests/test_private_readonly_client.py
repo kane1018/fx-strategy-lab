@@ -89,6 +89,28 @@ def test_open_positions_accepts_object_wrapped_list_payload() -> None:
     assert positions[0].position_id == "pos-1"
 
 
+def test_active_orders_accepts_object_wrapped_list_payload() -> None:
+    client = _client(
+        {
+            GET_ACTIVE_ORDERS: {
+                "list": [
+                    {
+                        "rootOrderId": "active-1",
+                        "symbol": "USD_JPY",
+                        "side": "SELL",
+                        "orderSize": "100",
+                    }
+                ]
+            }
+        }
+    )
+
+    orders = client.get_active_orders(symbol="USD_JPY")
+
+    assert len(orders) == 1
+    assert orders[0].order_id == "active-1"
+
+
 @pytest.mark.parametrize(
     ("method", "path"),
     [

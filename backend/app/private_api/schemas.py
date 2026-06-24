@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 OPEN_POSITION_LIST_KEYS = ("list", "positions", "openPositions", "open_positions", "data")
+ACTIVE_ORDER_LIST_KEYS = ("list", "orders", "activeOrders", "active_orders", "data")
 
 
 class SanitizedModel(BaseModel):
@@ -103,16 +104,11 @@ def open_positions_from_api_data(data: Any) -> list[OpenPosition]:
 
 def open_position_rows_from_api_data(data: Any) -> list[Mapping[str, Any]]:
     """Return open position rows without retaining unsupported raw payload shapes."""
-    if data is None:
-        return []
-    if isinstance(data, list):
-        return _ensure_mapping_rows(data)
-    if isinstance(data, Mapping):
-        nested = _first_list_field(data, OPEN_POSITION_LIST_KEYS)
-        if nested is None:
-            raise ValueError("openPositions data object has no list field")
-        return _ensure_mapping_rows(nested)
-    raise ValueError("openPositions data must be list, object, null, or missing")
+    return _collection_rows_from_api_data(
+        data=data,
+        list_keys=OPEN_POSITION_LIST_KEYS,
+        endpoint_name="openPositions",
+    )
 
 
 def active_order_from_api(raw: Mapping[str, Any]) -> ActiveOrder:
@@ -126,6 +122,20 @@ def active_order_from_api(raw: Mapping[str, Any]) -> ActiveOrder:
         price=_decimal(raw, "price"),
         status=_string_or_none(raw, "status"),
         created_at=_string_or_none(raw, "timestamp", "createdAt"),
+    )
+
+
+def active_orders_from_api_data(data: Any) -> list[ActiveOrder]:
+    """Build sanitized active order models from supported collection shapes."""
+    return [active_order_from_api(row) for row in active_order_rows_from_api_data(data)]
+
+
+def active_order_rows_from_api_data(data: Any) -> list[Mapping[str, Any]]:
+    """Return active order rows without retaining unsupported raw payload shapes."""
+    return _collection_rows_from_api_data(
+        data=data,
+        list_keys=ACTIVE_ORDER_LIST_KEYS,
+        endpoint_name="activeOrders",
     )
 
 
@@ -216,11 +226,29 @@ def _first_list_field(raw: Mapping[str, Any], keys: tuple[str, ...]) -> list[Any
     return None
 
 
-def _ensure_mapping_rows(rows: list[Any]) -> list[Mapping[str, Any]]:
+def _collection_rows_from_api_data(
+    *,
+    data: Any,
+    list_keys: tuple[str, ...],
+    endpoint_name: str,
+) -> list[Mapping[str, Any]]:
+    if data is None:
+        return []
+    if isinstance(data, list):
+        return _ensure_mapping_rows(data, endpoint_name=endpoint_name)
+    if isinstance(data, Mapping):
+        nested = _first_list_field(data, list_keys)
+        if nested is None:
+            raise ValueError(f"{endpoint_name} data object has no list field")
+        return _ensure_mapping_rows(nested, endpoint_name=endpoint_name)
+    raise ValueError(f"{endpoint_name} data must be list, object, null, or missing")
+
+
+def _ensure_mapping_rows(rows: list[Any], *, endpoint_name: str) -> list[Mapping[str, Any]]:
     sanitized_rows: list[Mapping[str, Any]] = []
     for row in rows:
         if not isinstance(row, Mapping):
-            raise ValueError("openPositions row must be an object")
+            raise ValueError(f"{endpoint_name} row must be an object")
         sanitized_rows.append(row)
     return sanitized_rows
 

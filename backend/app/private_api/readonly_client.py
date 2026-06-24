@@ -25,6 +25,7 @@ from app.private_api.schemas import (
     PositionSummary,
     account_assets_from_api,
     active_order_from_api,
+    active_orders_from_api_data,
     execution_from_api,
     open_positions_from_api_data,
     position_summary_from_api,
@@ -134,8 +135,11 @@ class PrivateReadonlyClient:
             raise PrivateApiResponseError(str(exc)) from exc
 
     def get_active_orders(self, *, symbol: str | None = None) -> list[ActiveOrder]:
-        rows = self._request_readonly(GET_ACTIVE_ORDERS, _optional_params(symbol=symbol))
-        return [active_order_from_api(row) for row in _ensure_rows(rows)]
+        data = self._request_readonly(GET_ACTIVE_ORDERS, _optional_params(symbol=symbol))
+        try:
+            return active_orders_from_api_data(data)
+        except ValueError as exc:
+            raise PrivateApiResponseError(str(exc)) from exc
 
     def get_orders(self, *, order_id: str | None = None) -> list[ActiveOrder]:
         rows = self._request_readonly(GET_ORDERS, _optional_params(orderId=order_id))

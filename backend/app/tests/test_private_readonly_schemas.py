@@ -5,6 +5,7 @@ import pytest
 from app.private_api.schemas import (
     account_assets_from_api,
     active_order_from_api,
+    active_orders_from_api_data,
     execution_from_api,
     open_position_from_api,
     open_positions_from_api_data,
@@ -140,6 +141,64 @@ def test_active_order_sanitizer_uses_known_fields_only() -> None:
     assert dumped["status"] == "ORDERED"
     assert "API-KEY" not in dumped
     assert "API-SIGN" not in dumped
+
+
+def test_active_orders_collection_accepts_list_data() -> None:
+    models = active_orders_from_api_data(
+        [
+            {
+                "rootOrderId": "ord-1",
+                "symbol": "USD_JPY",
+                "side": "SELL",
+                "orderSize": "100",
+                "API-KEY": "<API_KEY>",
+            }
+        ]
+    )
+
+    dumped = models[0].model_dump()
+    assert dumped["order_id"] == "ord-1"
+    assert dumped["size"] == Decimal("100")
+    assert "API-KEY" not in dumped
+
+
+def test_active_orders_collection_accepts_object_with_list_field() -> None:
+    models = active_orders_from_api_data(
+        {
+            "list": [
+                {
+                    "rootOrderId": "ord-1",
+                    "symbol": "USD_JPY",
+                    "side": "BUY",
+                    "orderSize": "200",
+                    "API-SIGN": "<SIGNATURE>",
+                }
+            ],
+            "API-KEY": "<API_KEY>",
+        }
+    )
+
+    dumped = models[0].model_dump()
+    assert dumped["order_id"] == "ord-1"
+    assert dumped["side"] == "BUY"
+    assert dumped["size"] == Decimal("200")
+    assert "API-SIGN" not in dumped
+    assert "API-KEY" not in dumped
+
+
+@pytest.mark.parametrize("data", [[], None])
+def test_active_orders_collection_empty_or_null_returns_empty_list(data) -> None:
+    assert active_orders_from_api_data(data) == []
+
+
+def test_active_orders_collection_unknown_object_shape_raises_sanitized_error() -> None:
+    with pytest.raises(ValueError, match="activeOrders data object has no list field"):
+        active_orders_from_api_data({"unexpected": []})
+
+
+def test_active_orders_collection_non_object_rows_raise_sanitized_error() -> None:
+    with pytest.raises(ValueError, match="activeOrders row must be an object"):
+        active_orders_from_api_data(["not-object"])
 
 
 def test_execution_sanitizer_uses_known_fields_only() -> None:

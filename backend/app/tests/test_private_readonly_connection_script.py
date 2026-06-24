@@ -303,6 +303,193 @@ def test_open_positions_schema_failure_returns_local_sanitized_message() -> None
     assert len(requests) == 2
 
 
+def test_diagnose_active_orders_calls_only_active_orders() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/activeOrders":
+            return httpx.Response(
+                200,
+                json={
+                    "status": 0,
+                    "data": {
+                        "list": [
+                            {
+                                "rootOrderId": "active-1",
+                                "symbol": "USD_JPY",
+                                "side": "SELL",
+                                "orderSize": "100",
+                                "API-KEY": "dummy-key",
+                            }
+                        ],
+                    },
+                },
+            )
+        raise AssertionError("activeOrders diagnostic mode must not call other endpoints")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_active_orders=True,
+    )
+
+    assert summary.connection_result == "success"
+    assert summary.account_assets == "not_run"
+    assert summary.open_positions == "not_run"
+    assert summary.active_orders == "success"
+    assert summary.active_orders_count == 1
+    assert summary.has_active_orders is True
+    assert summary.response_data_shape == "object"
+    assert summary.response_top_level_keys == "data,status"
+    assert summary.response_data_keys == "list"
+    assert summary.response_data_item_keys == "orderSize,redacted_key,rootOrderId,side,symbol"
+    assert [(request.method, request.url.path) for request in requests] == [
+        ("GET", "/private/v1/activeOrders")
+    ]
+    assert requests[0].url.params["symbol"] == "USD_JPY"
+    expected_signature = create_signature(
+        api_secret="dummy-secret",
+        timestamp="1700000000000",
+        method="GET",
+        path="/v1/activeOrders",
+    )
+    assert requests[0].headers["API-SIGN"] == expected_signature
+    dumped = "\n".join(summary.to_stdout_lines(active_orders_only=True))
+    assert "account_assets" not in dumped
+    assert "open_positions" not in dumped
+    assert "dummy-key" not in dumped
+    assert "API-KEY" not in dumped
+    assert "active-1" not in dumped
+    assert "USD_JPY" not in dumped
+
+
+def test_diagnose_active_orders_missing_data_returns_empty_shape_summary() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/activeOrders":
+            return httpx.Response(200, json={"status": 0})
+        raise AssertionError("activeOrders diagnostic mode must not call other endpoints")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_active_orders=True,
+    )
+
+    assert summary.connection_result == "success"
+    assert summary.active_orders == "success"
+    assert summary.active_orders_count == 0
+    assert summary.response_data_shape == "missing"
+    assert summary.response_top_level_keys == "status"
+    assert summary.response_data_keys == "unknown"
+    assert summary.response_data_item_keys == "unknown"
+    assert len(requests) == 1
+
+
+def test_active_orders_failure_returns_sanitized_diagnostics_only() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/activeOrders":
+            return httpx.Response(
+                403,
+                json={
+                    "status": 1,
+                    "messages": [
+                        {
+                            "message_code": "ERR-PERMISSION",
+                            "message_string": "permission denied",
+                            "API-KEY": "dummy-key",
+                        }
+                    ],
+                    "API-SIGN": "dummy-signature",
+                },
+            )
+        raise AssertionError("activeOrders diagnostic mode must not call other endpoints")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_active_orders=True,
+    )
+
+    assert summary.connection_result == "failure"
+    assert summary.active_orders == "failure"
+    assert summary.failed_endpoint == "active_orders"
+    assert summary.failed_method == "GET"
+    assert summary.failed_path == "/private/v1/activeOrders"
+    assert summary.sanitized_http_status == "403"
+    assert summary.sanitized_error_code == "ERR-PERMISSION"
+    assert summary.sanitized_error_message == "permission denied"
+    assert summary.diagnostic_reason_category == "permission_error"
+    assert summary.response_data_shape == "missing"
+    assert summary.response_top_level_keys == "messages,redacted_key,status"
+    assert summary.response_data_keys == "unknown"
+    assert summary.response_data_item_keys == "unknown"
+    assert summary.raw_response_saved is False
+    assert summary.headers_saved is False
+    assert summary.credentials_printed is False
+    assert summary.retry_attempted is False
+    assert len(requests) == 1
+    dumped = "\n".join(summary.to_stdout_lines(active_orders_only=True))
+    assert "dummy-key" not in dumped
+    assert "dummy-signature" not in dumped
+    assert "API-SIGN" not in dumped
+    assert "API-KEY" not in dumped
+
+
+def test_active_orders_schema_failure_returns_shape_only_message() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/private/v1/activeOrders":
+            return httpx.Response(200, json={"status": 0, "data": {"unexpected": []}})
+        raise AssertionError("activeOrders diagnostic mode must not call other endpoints")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+
+    summary = script.run_connection_check(
+        api_key="dummy-key",
+        api_secret="dummy-secret",
+        symbol="USD_JPY",
+        http_client=client,
+        timestamp_factory=lambda: "1700000000000",
+        diagnose_active_orders=True,
+    )
+
+    assert summary.connection_result == "failure"
+    assert summary.failed_endpoint == "active_orders"
+    assert summary.sanitized_http_status == "unknown"
+    assert summary.sanitized_error_code == "schema_error"
+    assert summary.sanitized_error_message == "activeOrders data object has no list field"
+    assert summary.diagnostic_reason_category == "schema_error"
+    assert summary.response_data_shape == "object"
+    assert summary.response_top_level_keys == "data,status"
+    assert summary.response_data_keys == "unexpected"
+    assert summary.response_data_item_keys == "unknown"
+    assert len(requests) == 1
+
+
 def test_connection_check_does_not_retry_after_error() -> None:
     requests: list[httpx.Request] = []
 
@@ -363,3 +550,34 @@ def test_stdout_summary_is_sanitized(monkeypatch, capsys) -> None:
     assert "dummy-secret" not in out
     assert "positionId" not in out
     assert "orderId" not in out
+
+
+def test_active_orders_stdout_summary_is_scoped(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("GMO_FX_API_KEY", "dummy-key")
+    monkeypatch.setenv("GMO_FX_API_SECRET", "dummy-secret")
+
+    def runner(**_kwargs):
+        return script.SanitizedConnectionSummary(
+            connection_result="success",
+            account_assets="not_run",
+            open_positions="not_run",
+            active_orders="success",
+            active_orders_count=0,
+            has_active_orders=False,
+        )
+
+    exit_code = script.main(
+        ["--confirm-readonly", "--symbol", "USD_JPY", "--diagnose-active-orders"],
+        runner=runner,
+    )
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "connection_result: success" in out
+    assert "active_orders: success" in out
+    assert "account_assets" not in out
+    assert "open_positions" not in out
+    assert "headers_saved: false" in out
+    assert "credentials_printed: false" in out
+    assert "dummy-key" not in out
+    assert "dummy-secret" not in out

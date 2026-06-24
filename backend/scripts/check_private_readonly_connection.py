@@ -23,7 +23,7 @@ from app.private_api.readonly_client import (
 )
 from app.private_api.schemas import (
     account_assets_from_api,
-    active_order_from_api,
+    active_orders_from_api_data,
     open_positions_from_api_data,
     private_api_error_from_payload,
 )
@@ -32,7 +32,16 @@ DEFAULT_SYMBOL = "USD_JPY"
 REQUEST_TIMEOUT_SECONDS = 10.0
 MESSAGE_MAX_LENGTH = 120
 KEYS_MAX_COUNT = 24
-OPEN_POSITION_LIST_KEYS = ("list", "positions", "openPositions", "open_positions", "data")
+COLLECTION_LIST_KEYS = (
+    "list",
+    "positions",
+    "openPositions",
+    "open_positions",
+    "orders",
+    "activeOrders",
+    "active_orders",
+    "data",
+)
 
 
 @dataclass(frozen=True)
@@ -76,7 +85,29 @@ class SanitizedConnectionSummary:
     credentials_printed: bool = False
     retry_attempted: bool = False
 
-    def to_stdout_lines(self) -> list[str]:
+    def to_stdout_lines(self, *, active_orders_only: bool = False) -> list[str]:
+        if active_orders_only:
+            return [
+                f"connection_result: {self.connection_result}",
+                f"active_orders: {self.active_orders}",
+                f"failed_endpoint: {self.failed_endpoint}",
+                f"failed_method: {self.failed_method}",
+                f"failed_path: {self.failed_path}",
+                f"sanitized_http_status: {self.sanitized_http_status}",
+                f"sanitized_error_code: {self.sanitized_error_code}",
+                f"sanitized_error_message: {self.sanitized_error_message}",
+                f"diagnostic_reason_category: {self.diagnostic_reason_category}",
+                f"response_data_shape: {self.response_data_shape}",
+                f"response_top_level_keys: {self.response_top_level_keys}",
+                f"response_data_keys: {self.response_data_keys}",
+                f"response_data_item_keys: {self.response_data_item_keys}",
+                f"active_orders_count: {self.active_orders_count}",
+                f"has_active_orders: {_bool_text(self.has_active_orders)}",
+                f"raw_response_saved: {_bool_text(self.raw_response_saved)}",
+                f"headers_saved: {_bool_text(self.headers_saved)}",
+                f"credentials_printed: {_bool_text(self.credentials_printed)}",
+                f"retry_attempted: {_bool_text(self.retry_attempted)}",
+            ]
         return [
             f"connection_result: {self.connection_result}",
             f"account_assets: {self.account_assets}",
@@ -131,11 +162,26 @@ def run_connection_check(
     http_client: httpx.Client | None = None,
     timestamp_factory: Callable[[], str] | None = None,
     diagnose_open_positions: bool = False,
+    diagnose_active_orders: bool = False,
 ) -> SanitizedConnectionSummary:
     """Run one manual read-only check against the three Phase 3B-4 endpoints."""
     owns_client = http_client is None
     client = http_client or httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS)
     timestamp = timestamp_factory or _timestamp_ms
+
+    if diagnose_active_orders:
+        try:
+            return _run_active_orders_diagnostic(
+                client=client,
+                api_key=api_key,
+                api_secret=api_secret,
+                symbol=symbol,
+                timestamp_factory=timestamp,
+            )
+        finally:
+            if owns_client:
+                client.close()
+
     summary = SanitizedConnectionSummary(
         connection_result="failure",
         account_assets="failure",
@@ -209,9 +255,7 @@ def run_connection_check(
             timestamp_factory=timestamp,
         )
         last_response_shape = active_order_payload.shape
-        active_orders = [
-            active_order_from_api(row) for row in _ensure_rows(active_order_payload.data)
-        ]
+        active_orders = active_orders_from_api_data(active_order_payload.data)
         return SanitizedConnectionSummary(
             connection_result="success",
             account_assets="success",
@@ -243,13 +287,19 @@ def main(
 ) -> int:
     args = _parse_args(argv)
     if not args.confirm_readonly:
-        _print_summary(_not_run_summary(connection_result="failure"))
+        _print_summary(
+            _not_run_summary(connection_result="failure"),
+            active_orders_only=args.diagnose_active_orders,
+        )
         return 2
 
     api_key = os.environ.get("GMO_FX_API_KEY")
     api_secret = os.environ.get("GMO_FX_API_SECRET")
     if not api_key or not api_secret:
-        _print_summary(_not_run_summary(connection_result="failure"))
+        _print_summary(
+            _not_run_summary(connection_result="failure"),
+            active_orders_only=args.diagnose_active_orders,
+        )
         return 2
 
     summary = runner(
@@ -257,9 +307,77 @@ def main(
         api_secret=api_secret,
         symbol=args.symbol,
         diagnose_open_positions=args.diagnose_open_positions,
+        diagnose_active_orders=args.diagnose_active_orders,
     )
-    _print_summary(summary)
+    _print_summary(summary, active_orders_only=args.diagnose_active_orders)
     return 0 if summary.connection_result == "success" else 1
+
+
+def _run_active_orders_diagnostic(
+    *,
+    client: httpx.Client,
+    api_key: str,
+    api_secret: str,
+    symbol: str,
+    timestamp_factory: Callable[[], str],
+) -> SanitizedConnectionSummary:
+    summary = SanitizedConnectionSummary(
+        connection_result="failure",
+        account_assets="not_run",
+        open_positions="not_run",
+        active_orders="failure",
+    )
+    last_response_shape = SanitizedResponseShape()
+    try:
+        active_order_payload = _get_private_api_data(
+            client=client,
+            api_key=api_key,
+            api_secret=api_secret,
+            path=GET_ACTIVE_ORDERS,
+            params={"symbol": symbol},
+            timestamp_factory=timestamp_factory,
+        )
+        last_response_shape = active_order_payload.shape
+        active_orders = active_orders_from_api_data(active_order_payload.data)
+        return SanitizedConnectionSummary(
+            connection_result="success",
+            account_assets="not_run",
+            open_positions="not_run",
+            active_orders="success",
+            response_data_shape=active_order_payload.shape.response_data_shape,
+            response_top_level_keys=active_order_payload.shape.response_top_level_keys,
+            response_data_keys=active_order_payload.shape.response_data_keys,
+            response_data_item_keys=active_order_payload.shape.response_data_item_keys,
+            active_orders_count=len(active_orders),
+            has_active_orders=bool(active_orders),
+        )
+    except SanitizedPrivateApiFailure as exc:
+        return _with_failure(summary, exc.detail)
+    except PrivateApiResponseError as exc:
+        return _with_failure(
+            summary,
+            _schema_failure(
+                summary,
+                str(exc),
+                last_response_shape,
+                path=GET_ACTIVE_ORDERS,
+            ),
+        )
+    except ValueError as exc:
+        return _with_failure(
+            summary,
+            _schema_failure(
+                summary,
+                str(exc),
+                last_response_shape,
+                path=GET_ACTIVE_ORDERS,
+            ),
+        )
+    except httpx.HTTPError:
+        return _with_failure(
+            summary,
+            _schema_failure(summary, "transport_error", path=GET_ACTIVE_ORDERS),
+        )
 
 
 def _get_private_api_data(
@@ -358,7 +476,7 @@ def _data_item_key_names(data: Any) -> str:
 
 
 def _first_nested_list(data: Mapping[str, Any]) -> list[Any] | None:
-    for key in OPEN_POSITION_LIST_KEYS:
+    for key in COLLECTION_LIST_KEYS:
         value = data.get(key)
         if isinstance(value, list):
             return value
@@ -429,16 +547,26 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         choices=[DEFAULT_SYMBOL],
         help="symbol parameter for read-only collection endpoints",
     )
-    parser.add_argument(
+    diagnostics = parser.add_mutually_exclusive_group()
+    diagnostics.add_argument(
         "--diagnose-open-positions",
         action="store_true",
         help="stop after account/assets and openPositions with sanitized diagnostics",
     )
+    diagnostics.add_argument(
+        "--diagnose-active-orders",
+        action="store_true",
+        help="check only activeOrders with sanitized diagnostics",
+    )
     return parser.parse_args(argv)
 
 
-def _print_summary(summary: SanitizedConnectionSummary) -> None:
-    print("\n".join(summary.to_stdout_lines()))
+def _print_summary(
+    summary: SanitizedConnectionSummary,
+    *,
+    active_orders_only: bool = False,
+) -> None:
+    print("\n".join(summary.to_stdout_lines(active_orders_only=active_orders_only)))
 
 
 def _url_for_path(path: str) -> str:
@@ -513,17 +641,20 @@ def _schema_failure(
     summary: SanitizedConnectionSummary,
     error_message: str,
     response_shape: SanitizedResponseShape | None = None,
+    path: str | None = None,
 ) -> SanitizedFailureDetail:
-    if summary.account_assets != "success":
-        path = GET_ACCOUNT_ASSETS
+    if path is not None:
+        failure_path = path
+    elif summary.account_assets != "success":
+        failure_path = GET_ACCOUNT_ASSETS
     elif summary.open_positions != "success":
-        path = GET_OPEN_POSITIONS
+        failure_path = GET_OPEN_POSITIONS
     else:
-        path = GET_ACTIVE_ORDERS
+        failure_path = GET_ACTIVE_ORDERS
     return SanitizedFailureDetail(
-        failed_endpoint=_endpoint_name(path),
+        failed_endpoint=_endpoint_name(failure_path),
         failed_method="GET",
-        failed_path=path,
+        failed_path=failure_path,
         sanitized_error_code="schema_error",
         sanitized_error_message=_sanitize_error_message(error_message),
         diagnostic_reason_category="schema_error",
