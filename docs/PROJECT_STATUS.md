@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3B-0 Private API read-only公式仕様確認・実装設計完了** — GMOコイン外国為替FXの公式API docs
+  （`https://api.coin.z.com/fxdocs/`）を確認し、Private REST APIのread-only候補GET endpoint、禁止する
+  注文・変更・取消・決済系POST endpoint、認証・署名仕様、APIキー / secret管理、Phase 3B分割案を
+  docs-onlyで整理した。Private API接続、APIキー入力、`.env`変更、backend実装、broker、注文API、実注文、
+  実資金には進んでいない。次に進む場合はPhase 3B-1としてmocked read-only skeleton / auth helper /
+  schemas / no-order-import testsから開始する。詳細は
+  [PHASE3B0_PRIVATE_API_READONLY_OFFICIAL_SPEC_DESIGN.md](PHASE3B0_PRIVATE_API_READONLY_OFFICIAL_SPEC_DESIGN.md)。
 - **Phase 2G Public shadow risk/auditオフライン最終デバッグ監査完了** — gmo-publicは再実行せず、
   既存テスト、focused test、offline mock run、summarize、禁止参照確認でPublic shadow risk/auditの
   STOP / kill switch / audit failure / safety violation / duplicate / cooldown / candidate-decision-virtual result相関を
@@ -109,7 +116,7 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 - **Phase 3A準備ロードマップ設計完了** — Private API read-only、APIキー / secret管理、
   Live Verification Mode、極小実資金検証までの段階的ロードマップをdocs-onlyで整理した。これは実装ではなく、
   Private API接続、APIキー入力・表示・保存、`.env`変更、broker、注文API、実注文、実資金検証には進んでいない。
-  Phase 2FとPhase 2Gは完了したが、Phase 3Bはまずread-only公式仕様確認・実装設計を別タスクで行う。
+  Phase 2F、Phase 2G、Phase 3B-0は完了したが、Phase 3B実装はまだ行っていない。
   詳細は
   [PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md](PHASE3A_PRIVATE_API_READONLY_AND_LIVE_VERIFICATION_ROADMAP.md)。
 - **Phase 2E-5 1回目レビュー / 2回目実行前整理完了** — run

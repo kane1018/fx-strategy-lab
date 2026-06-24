@@ -378,3 +378,13 @@ Phase 3B前の確認として十分維持されていることを確認した。
 
 ただし、Phase 3Bで扱うのはread-only公式仕様確認と実装設計に限定し、Private API接続、APIキー入力、
 broker、注文API、実注文、実資金、自動売買には引き続き進まない。
+
+## 21. Phase 3B-0追記
+
+Phase 3B-0 Private API read-only公式仕様確認・実装設計は完了済みである。
+
+- GMOコイン外国為替FXの公式API docsを確認した。
+- REST GETのread-only候補と、POSTの注文・変更・取消・決済系禁止endpointを整理した。
+- 認証・署名、APIキー / secret管理、Phase 3B分割案をdocs-onlyで整理した。
+- Private API接続、APIキー入力、`.env`変更、backend実装、broker、注文API、実注文、実資金には進んでいない。
+- 詳細は [PHASE3B0_PRIVATE_API_READONLY_OFFICIAL_SPEC_DESIGN.md](PHASE3B0_PRIVATE_API_READONLY_OFFICIAL_SPEC_DESIGN.md)。
