@@ -521,3 +521,12 @@ Phase 3D前レビューでは、broker / order API実装へ進む前の安全境
 - broker / OrderRequest / 注文API / 注文payload builderは、まだ作らない。
 - Phase 3Dへ進む場合も、まずPhase 3D-0公式仕様・危険endpoint再レビューから始める。
 - Phase 3D-5相当の実注文検証には、別途、100通貨・1回限定・manual onlyの明示承認が必須である。
+
+追記:
+
+- Phase 3D-0公式仕様・危険endpoint再レビューは
+  [PHASE3D0_ORDER_API_OFFICIAL_SPEC_REVIEW.md](PHASE3D0_ORDER_API_OFFICIAL_SPEC_REVIEW.md) として完了した。
+- Phase 3D-0の判定は
+  **A: Phase 3D-1 order review model / final checklist mocked設計・実装へ進んでよい**。
+- ただし、Phase 3D-0でもbroker、OrderRequest、注文API client、注文payload builder、Private API追加接続、
+  APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。

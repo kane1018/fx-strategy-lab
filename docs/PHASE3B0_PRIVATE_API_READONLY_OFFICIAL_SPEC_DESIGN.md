@@ -354,3 +354,10 @@ Phase 3B-0では、GMOコイン外国為替FXの公式API docsに基づき、Pri
 - Private WebSocket token系は初期Phase 3B対象外とする。
 - 認証・署名はplaceholder設計までに限定し、実APIキー・secretは扱わない。
 - 次に進む場合は、Phase 3B-1としてmocked read-only skeleton / auth helper / schemas / no-order-import testsから始める。
+
+Phase 3D-0追記:
+
+- Phase 3D-0では、同じ公式docsをbroker / order API実装前の観点で再確認し、
+  注文、スピード注文、IFD / IFDOCO、注文変更、注文取消、決済注文、Private WebSocket token系endpointを
+  High risk / forbidden now / review onlyとして再分類した。
+- 詳細は [PHASE3D0_ORDER_API_OFFICIAL_SPEC_REVIEW.md](PHASE3D0_ORDER_API_OFFICIAL_SPEC_REVIEW.md) を参照する。

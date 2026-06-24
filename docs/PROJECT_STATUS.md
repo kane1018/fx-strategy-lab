@@ -82,6 +82,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-0 GMO FX order API公式仕様・危険endpoint再レビュー完了** —
+  `docs/PHASE3D0_ORDER_API_OFFICIAL_SPEC_REVIEW.md` を作成し、公式docsと既存Phase 3B / 3C / 3D前docsに基づいて、
+  read-only endpointと注文系endpointを分離し、`order`、`speedOrder`、IFD / IFDOCO、change、cancel、
+  `closeOrder`、`ws-auth` 系endpointをHigh risk / review only / forbidden nowとして整理した。判定は
+  **A: Phase 3D-1 order review model / final checklist mocked設計・実装へ進んでよい**。ただし、
+  Phase 3D-0ではbroker、OrderRequest、注文API client、注文payload builder、Private API追加接続、
+  APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
 - **Phase 3D前 broker / order API実装前レビュー完了** — `docs/PHASE3D_PRE_ORDER_API_REVIEW.md` を作成し、
   Phase 3C-3 dry-run統合後の現在地、broker / order API実装前の必須条件、禁止境界、
   100通貨・`USD_JPY`・1回限定・manual only維持方針、Phase 3D-0〜3D-5分割案、
