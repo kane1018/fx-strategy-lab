@@ -422,3 +422,15 @@ Phase 3D-7では、署名・HTTP requestに関する設計レビューをdocs-on
 
 次候補はPhase 3D-8 signature / request design model mocked実装である。ただし、Phase 3D-8でも
 実署名、APIキー確認、`.env`確認、HTTP request、HTTP POST、実注文、実資金検証には進まない。
+
+## 16. Phase 3D-8実装結果メモ
+
+Phase 3D-8では、`SignatureHttpRequestDesignModel` と
+`build_signature_http_request_design_model()` を追加し、署名・HTTP requestへ進む前の設計候補を
+no-secret / no-network / local-onlyで表現した。
+
+このモデルは、実署名値、HMAC処理、APIキー、API secret、headers、request body、HTTP request、
+HTTP POST、broker、`OrderRequest`、注文API clientを作らない。`signing_source_candidate` は
+design-only placeholderだけで構成される。
+
+次候補はPhase 3D-8B no-secret / no-network guard hardeningである。

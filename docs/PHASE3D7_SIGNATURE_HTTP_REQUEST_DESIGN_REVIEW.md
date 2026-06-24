@@ -486,3 +486,42 @@ Phase 3D-7では、次へ進まない。
 - 本番公開API追加。
 
 Phase 3D-7は、署名・HTTP request設計レビューdocsで停止する。
+
+## 11. Phase 3D-8実装結果メモ
+
+Phase 3D-8では、Phase 3D-7の設計レビューに基づき、署名・HTTP requestへ進む前の
+mocked design modelだけを実装した。
+
+実装したもの:
+
+- `SignatureHttpRequestDesignModel`。
+- `build_signature_http_request_design_model()`。
+- `DisabledOrderClientPlan` と `MockedOrderPayloadCandidate` のID・run・安全flag相関確認。
+- `ORDER_CREATE_METHOD_LABEL` / `ORDER_CREATE_PATH_LABEL` /
+  `ORDER_CREATE_BODY_SHAPE_LABEL` / `TIMESTAMP_PLACEHOLDER` のdesign-only許可値。
+- placeholder-onlyの `signing_source_candidate`。
+- fail closed tests。
+- 非secret / 非HTTP / 非署名実値のtests。
+
+実装していないもの:
+
+- 実署名生成。
+- HMAC処理。
+- hmac/hashlib import。
+- API-KEY / API-SIGN / API-TIMESTAMP生成。
+- APIキー確認。
+- API secret参照。
+- `.env`確認。
+- HTTP request builder。
+- HTTP client。
+- headers生成。
+- request body生成。
+- HTTP POST。
+- broker。
+- `OrderRequest`。
+- 注文API client。
+- 実注文。
+- 実資金検証。
+
+次候補はPhase 3D-8B no-secret / no-network guard hardeningである。ただし、Phase 3D-8Bでも
+実署名、APIキー確認、`.env`確認、HTTP request、HTTP POST、実注文、実資金検証には進まない。

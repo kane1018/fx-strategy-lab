@@ -43,5 +43,9 @@ class LiveVerificationOrderClientSkeletonError(LiveVerificationValidationError):
     """Raised when a disabled no-network client plan is unsafe."""
 
 
+class LiveVerificationSignatureRequestDesignError(LiveVerificationValidationError):
+    """Raised when a mocked request design model crosses a safety boundary."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

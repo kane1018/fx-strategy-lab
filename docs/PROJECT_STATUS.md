@@ -82,6 +82,16 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-8 signature / request design model mocked実装完了** —
+  `backend/app/live_verification/signature_request_design.py` と
+  `backend/app/tests/test_live_verification_signature_request_design.py` を追加し、
+  `SignatureHttpRequestDesignModel` と `build_signature_http_request_design_model()` をpure mocked /
+  design-onlyで実装した。`DisabledOrderClientPlan` と `MockedOrderPayloadCandidate` が安全条件を満たす場合だけ、
+  `ORDER_CREATE_*_LABEL` と `TIMESTAMP_PLACEHOLDER` からplaceholder-onlyの
+  `signing_source_candidate` を生成する。実署名生成、HMAC処理、hmac/hashlib import、APIキー確認、
+  API secret参照、`.env`確認、HTTP request builder、HTTP client、headers生成、request body生成、
+  HTTP POST、broker、OrderRequest、注文API client、実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-8B no-secret / no-network guard hardening。
 - **Phase 3D-7 署名・HTTP request設計レビュー完了** —
   `docs/PHASE3D7_SIGNATURE_HTTP_REQUEST_DESIGN_REVIEW.md` を作成し、GMO Private APIの署名仕様、
   `API-KEY` / `API-TIMESTAMP` / `API-SIGN` の扱い、request bodyと署名対象文字列の関係、
