@@ -543,3 +543,8 @@ Phase 3D前レビューでは、broker / order API実装へ進む前の安全境
   pure mocked / no-networkで実装した。これは境界確認結果であり、注文結果ではない。broker、OrderRequest、
   注文API client、注文payload builder、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、
   実注文、実資金検証には進んでいない。
+- Phase 3D-2Bでは fail closed / no-order guard hardening を完了し、複数失敗理由の蓄積、
+  no-network flag横断、payload / transport / credential field非保持、HTTP client import / GMO FX env名 /
+  注文endpoint文字列 / 注文送信状態名 / payload field名の実装コード混入検出をテストで強化した。
+  broker、OrderRequest、注文API client、注文payload builder、HTTP POST、Private API追加接続、APIキー確認、
+  `.env`確認、実注文、実資金検証には進んでいない。

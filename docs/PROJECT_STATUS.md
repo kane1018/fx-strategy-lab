@@ -82,6 +82,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-2B fail closed / no-order guard hardening完了** —
+  `backend/app/tests/test_live_verification_broker_boundary.py` で複数fail closed理由の同時検出、
+  no-network flag横断、ID不整合 + checklist failure + state failureの蓄積、payload / transport / credential
+  フィールド非保持を追加確認した。`test_live_verification_no_order_imports.py` はHTTP client import、
+  GMO FX env名、注文endpoint文字列、注文送信状態名、payload field名を実装コード側で検出するよう強化した。
+  broker、OrderRequest、注文API client、注文payload builder、HTTP POST、Private API追加接続、APIキー確認、
+  `.env`確認、実注文、実資金検証には進んでいない。次候補は
+  Phase 3D-3 order payload builder実装前レビュー。
 - **Phase 3D-2A no-network broker boundary adapter mocked実装完了** —
   `backend/app/live_verification/broker_boundary.py` と
   `backend/app/tests/test_live_verification_broker_boundary.py` を追加し、

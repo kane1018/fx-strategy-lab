@@ -545,3 +545,18 @@ Phase 3D-2A追記:
 - broker、OrderRequest、注文API client、注文payload builder、HTTP POST、Private API追加接続、
   APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
 - 次候補はPhase 3D-2B fail closed / no-order guard hardeningである。
+
+Phase 3D-2B追記:
+
+- Phase 3D-2B fail closed / no-order guard hardeningは後続タスクで完了した。
+- `test_live_verification_broker_boundary.py` で、複数fail closed理由が同時に保持されること、network / API key /
+  order payload / broker / real order flagsがすべてfail closedになること、ID不整合・checklist failure・state
+  failureをまとめて拒否できることを確認した。
+- `NoNetworkBrokerBoundaryResult` がprice、executionType、timeInForce、endpoint、request body、raw response、
+  headers、signature、API key / secret / tokenなどのpayload / transport / credential fieldを持たないことを確認した。
+- `test_live_verification_no_order_imports.py` を強化し、HTTP client import、GMO FX env名、注文endpoint文字列、
+  注文送信状態名、payload field名を実装コード側で検出する。
+- `broker_boundary.py` の境界実装はpure mocked / no-networkのまま維持した。
+- broker、OrderRequest、注文API client、注文payload builder、HTTP POST、Private API追加接続、APIキー確認、
+  `.env`確認、実注文、実資金検証には進んでいない。
+- 次候補はPhase 3D-3 order payload builder実装前レビューである。

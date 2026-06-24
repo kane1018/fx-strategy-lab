@@ -145,6 +145,33 @@ def test_no_network_boundary_fails_when_final_state_is_not_ready() -> None:
     assert "final_state_not_ready_for_order_review" in result.fail_reasons
 
 
+def test_no_network_boundary_accumulates_multiple_fail_closed_reasons() -> None:
+    review = _review()
+    checklist = _checklist(order_review=review, git_clean=False, tests_passed=False)
+
+    result = evaluate_no_network_broker_boundary(
+        order_review=review,
+        final_checklist=checklist,
+        final_state=LiveVerificationState.MANUAL_CONFIRMATION_REQUIRED,
+        network_used=True,
+        api_key_used=True,
+        order_payload_created=True,
+        broker_called=True,
+        real_order_attempted=True,
+    )
+
+    assert result.boundary_passed is False
+    assert "final_checklist_not_passed" in result.fail_reasons
+    assert "final_checklist:git_clean" in result.fail_reasons
+    assert "final_checklist:tests_passed" in result.fail_reasons
+    assert "final_state_not_ready_for_order_review" in result.fail_reasons
+    assert "network_used" in result.fail_reasons
+    assert "api_key_used" in result.fail_reasons
+    assert "order_payload_created" in result.fail_reasons
+    assert "broker_called" in result.fail_reasons
+    assert "real_order_attempted" in result.fail_reasons
+
+
 @pytest.mark.parametrize(
     "flag_name",
     [
@@ -231,6 +258,36 @@ def test_no_network_boundary_fails_when_verification_run_ids_do_not_match() -> N
     assert "order_review_id_mismatch" in result.fail_reasons
 
 
+def test_no_network_boundary_accumulates_id_mismatch_and_checklist_failures() -> None:
+    review = _review()
+    second_intent = _intent(
+        candidate_id="cand_run_2_000001_buy_abc123",
+        decision_id="risk_cand_run_2_000001_buy_abc123_def456",
+        readonly_precheck_id="precheck_run_2_abc123",
+        verification_run_id="run_2",
+    )
+    second_review = _review(intent=second_intent)
+    checklist = _checklist(
+        order_review=second_review,
+        ruff_passed=False,
+        secret_scan_passed=False,
+    )
+
+    result = evaluate_no_network_broker_boundary(
+        order_review=review,
+        final_checklist=checklist,
+        final_state=LiveVerificationState.INIT,
+    )
+
+    assert result.boundary_passed is False
+    assert "verification_run_id_mismatch" in result.fail_reasons
+    assert "order_review_id_mismatch" in result.fail_reasons
+    assert "final_checklist_not_passed" in result.fail_reasons
+    assert "final_checklist:ruff_passed" in result.fail_reasons
+    assert "final_checklist:secret_scan_passed" in result.fail_reasons
+    assert "final_state_not_ready_for_order_review" in result.fail_reasons
+
+
 def test_no_network_boundary_result_does_not_hold_payload_transport_or_credentials() -> None:
     result = evaluate_no_network_broker_boundary(
         order_review=_review(),
@@ -239,15 +296,35 @@ def test_no_network_boundary_result_does_not_hold_payload_transport_or_credentia
     )
     fields = set(asdict(result))
 
-    assert "price" not in fields
-    assert "orderType" not in fields
-    assert "executionType" not in fields
-    assert "timeInForce" not in fields
-    assert "order_payload" not in fields
-    assert "endpoint" not in fields
-    assert "method" not in fields
-    assert "raw_response" not in fields
-    assert "headers" not in fields
-    assert "signature" not in fields
-    assert "api_key" not in fields
-    assert "api_secret" not in fields
+    blocked_fields = {
+        "price",
+        "order_price",
+        "orderType",
+        "order_type",
+        "executionType",
+        "execution_type",
+        "timeInForce",
+        "time_in_force",
+        "settleType",
+        "settle_type",
+        "losscutPrice",
+        "losscut_price",
+        "order_payload",
+        "payload",
+        "request_body",
+        "body",
+        "endpoint",
+        "method",
+        "path",
+        "url",
+        "raw_response",
+        "response_headers",
+        "headers",
+        "signature",
+        "api_key",
+        "api_secret",
+        "secret",
+        "token",
+    }
+
+    assert fields.isdisjoint(blocked_fields)
