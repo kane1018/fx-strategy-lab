@@ -82,6 +82,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3B-4 Private API read-onlyローカル接続確認 総合レビュー完了** — `account/assets`、
+  `openPositions`、`activeOrders` の3 endpointについて、read-onlyローカル接続確認結果を総合レビューした。
+  3 endpointはいずれも最終successで、raw response、headers、signature、credentialsの保存・表示なし、
+  broker、OrderRequest、注文API、実注文、実資金検証なしを確認した。判定は
+  **A: Phase 3B-4 read-onlyローカル接続確認は完了**、
+  **A: Phase 3C Live Verification Mode設計へ進んでよい**。ただしPhase 3C実装、broker、注文API、
+  実注文、実資金検証には進まない。詳細は
+  [PHASE3B4_PRIVATE_READONLY_CONNECTION_REVIEW.md](PHASE3B4_PRIVATE_READONLY_CONNECTION_REVIEW.md)。
 - **Phase 3B-3 private readonly preconnect review完了** — Private API read-onlyローカル接続前レビューとして、
   APIキー / secret管理、read-only権限分離、`.env`安全手順、Phase 3B-4初回接続endpoint、
   禁止endpoint、接続前後チェックリスト、停止条件をdocs化した。判定は
