@@ -47,5 +47,9 @@ class LiveVerificationSignatureRequestDesignError(LiveVerificationValidationErro
     """Raised when a mocked request design model crosses a safety boundary."""
 
 
+class LiveVerificationHttpRequestSkeletonError(LiveVerificationValidationError):
+    """Raised when a disabled HTTP skeleton plan crosses a safety boundary."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

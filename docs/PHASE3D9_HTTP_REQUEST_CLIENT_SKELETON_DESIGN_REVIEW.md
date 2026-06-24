@@ -436,3 +436,42 @@ Phase 3D-9では次へ進まない。
 - 本番公開API追加。
 
 Phase 3D-9は、HTTP request client skeleton disabled-by-default設計レビューdocsで停止する。
+
+## 11. Phase 3D-10実装結果メモ
+
+Phase 3D-10では、Phase 3D-9の設計に基づき、`SignatureHttpRequestDesignModel` の後段に
+`DisabledHttpRequestClientSkeletonPlan` を追加した。
+
+実装内容:
+
+- `backend/app/live_verification/http_request_skeleton.py` を追加。
+- `DisabledHttpRequestClientSkeletonPlan` を追加。
+- `build_disabled_http_request_client_skeleton_plan()` を追加。
+- `SignatureHttpRequestDesignModel` のno-secret / no-network条件が崩れている場合はfail closed。
+- skeleton側のunsafe flagが1つでも安全側から反転した場合はfail closed。
+- `backend/app/tests/test_live_verification_http_request_skeleton.py` を追加。
+- `test_live_verification_no_order_imports.py` で `hmac` importもpackage-wideに禁止。
+
+維持した境界:
+
+- HTTP client importなし。
+- HTTP POSTなし。
+- headers生成なし。
+- request body生成なし。
+- actual signature生成なし。
+- raw request生成なし。
+- raw response保存なし。
+- APIキー確認なし。
+- API secret参照なし。
+- `.env`確認なし。
+- brokerなし。
+- `OrderRequest`なし。
+- real order API clientなし。
+- 注文API clientなし。
+- 実注文なし。
+- 実資金検証なし。
+
+次候補:
+
+- Phase 3D-10B HTTP request skeleton no-network / no-secret guard hardening。
+- ただし、Phase 3D-10BでもHTTP request実装、実署名、APIキー確認、実注文、実資金検証には進まない。

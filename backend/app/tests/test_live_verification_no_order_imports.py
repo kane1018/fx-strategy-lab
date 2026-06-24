@@ -67,6 +67,7 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
         "aiohttp",
         "urllib",
         "urllib3",
+        "hmac",
     }
     blocked_names = {
         "Order" + "Request",

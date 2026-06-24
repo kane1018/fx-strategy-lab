@@ -82,6 +82,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-10 HTTP request client skeleton no-network実装完了** —
+  `backend/app/live_verification/http_request_skeleton.py` と
+  `backend/app/tests/test_live_verification_http_request_skeleton.py` を追加し、
+  `SignatureHttpRequestDesignModel` の後段に `DisabledHttpRequestClientSkeletonPlan` と
+  `build_disabled_http_request_client_skeleton_plan()` をpure mocked / no-network / disabled-by-defaultで実装した。
+  `disabled_by_default=true`、`network_enabled=false`、`credential_access_enabled=false`、
+  `http_client_enabled=false`、`http_post_enabled=false`、headers / request body / actual signature /
+  raw request / raw response / credential / HMAC / real order flags falseだけを許可し、unsafe flagやID欠損は
+  fail closedする。HTTP client import、HTTP POST、headers生成、request body生成、実署名生成、
+  APIキー確認、API secret参照、`.env`確認、broker、OrderRequest、real order API client、注文API client、
+  実注文、実資金検証には進んでいない。
+  次候補はPhase 3D-10B HTTP request skeleton no-network / no-secret guard hardening。
 - **Phase 3D-9 HTTP request client skeleton disabled-by-default設計レビュー完了** —
   `docs/PHASE3D9_HTTP_REQUEST_CLIENT_SKELETON_DESIGN_REVIEW.md` を作成し、
   HTTP request client skeletonの定義、disabled-by-default不変条件、既存modelとの関係、
