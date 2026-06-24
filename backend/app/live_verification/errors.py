@@ -35,5 +35,9 @@ class LiveVerificationBrokerBoundaryError(LiveVerificationValidationError):
     """Raised when a no-network broker boundary result is internally invalid."""
 
 
+class LiveVerificationPayloadCandidateError(LiveVerificationValidationError):
+    """Raised when a mocked payload candidate would cross a safety boundary."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""

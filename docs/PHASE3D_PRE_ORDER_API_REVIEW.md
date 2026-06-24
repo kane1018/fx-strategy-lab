@@ -552,3 +552,7 @@ Phase 3D前レビューでは、broker / order API実装へ進む前の安全境
   扱わない注文種別、review-only / no-network境界との接続、fail closed条件、broker / API client / HTTP POSTとの
   分離をdocs-onlyで整理した。order payload builder実装、order payload model実装、broker、OrderRequest、
   注文API client、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。
+- Phase 3D-4では `MockedOrderPayloadCandidate` と `build_mocked_order_payload_candidate()` を
+  pure mocked / local-onlyで実装した。これは送信不可のcandidateであり、endpoint、method、URL、request body、
+  raw response、headers、signature、credentialは保持しない。broker、OrderRequest、注文API client、HTTP POST、
+  Private API追加接続、APIキー確認、`.env`確認、実注文、実資金検証には進んでいない。

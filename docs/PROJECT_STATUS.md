@@ -82,6 +82,15 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Phase 3D-4 mocked order payload builder実装完了** —
+  `backend/app/live_verification/payload_candidate.py` と
+  `backend/app/tests/test_live_verification_payload_candidate.py` を追加し、`MockedOrderPayloadCandidate` と
+  `build_mocked_order_payload_candidate()` をpure mocked / local-onlyで実装した。`OrderReview` /
+  `FinalOrderChecklist` / `NoNetworkBrokerBoundaryResult` がpassしている場合だけ、`USD_JPY`、100通貨、
+  `live_verification`、manual only、no-network flags falseのcandidateを生成する。endpoint、method、URL、
+  request body、raw response、headers、signature、credentialは保持しない。broker、OrderRequest、
+  注文API client、HTTP POST、Private API追加接続、APIキー確認、`.env`確認、実注文、実資金検証には
+  進んでいない。次候補はPhase 3D-4B mocked payload builder fail closed / no-network guard hardening。
 - **Phase 3D-3 order payload builder実装前レビュー完了** —
   `docs/PHASE3D3_ORDER_PAYLOAD_BUILDER_PRE_IMPLEMENTATION_REVIEW.md` を作成し、将来のmocked
   order payload builderの定義、Phase 3D-4で扱ってよい候補field、扱わない注文種別、
