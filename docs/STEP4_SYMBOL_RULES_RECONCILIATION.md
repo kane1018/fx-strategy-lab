@@ -274,3 +274,23 @@ result_category: api_rejected
 No same-day POST is allowed from Step 4E. Any Step 4F retry preflight must be a
 separate task after user-side permission, IP restriction, account state, margin,
 and unresolved agreement checks are complete.
+
+## 14. Step 4F-A Public Rules Recheck
+
+Step 4F-A rechecked the public symbol rules during a no-POST retry preflight.
+
+Sanitized public extraction:
+
+```text
+symbol: USD_JPY
+minOpenOrderSize: 100
+sizeStep: 1
+maxOrderSize: 500000
+usd_jpy_in_10000_exceptions: false
+exception_symbols_seen: MXN_JPY,TRY_JPY,ZAR_JPY
+```
+
+This confirms that the USD_JPY 100-unit rule remains consistent with the Step 4
+plan at the time of the Step 4F-A check. It does not authorize an order retry.
+The same-day ledger block still applies because the live-order ledger remains
+`POST_COMPLETED` with `attempt_count=1`.

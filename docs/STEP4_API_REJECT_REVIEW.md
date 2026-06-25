@@ -294,3 +294,81 @@ confirm:
 
 Step 4F must be a separate task with fresh preflight and a new explicit approval
 gate. Step 4E does not authorize a retry.
+
+## 12. Step 4F-A Sanitized Retry Preflight / No POST
+
+Step 4F-A was a no-POST retry preflight after the user reported adding the GMO
+Foreign Exchange FX API key `Trade > Order` permission. This task did not retry
+the order and did not issue an approval id or approval gate.
+
+Sanitized environment and ledger checks:
+
+```text
+GMO_FX_API_KEY: set
+GMO_FX_API_SECRET: set
+ledger_exists: true
+ledger_state: POST_COMPLETED
+attempt_count: 1
+post_started_present: true
+post_finished_present: true
+result_category: api_rejected
+```
+
+Because the ledger is already `POST_COMPLETED` with `attempt_count=1`, same-day
+POST is still blocked. Step 4F-A did not reset, delete, edit, or overwrite the
+ledger.
+
+Sanitized read-only Private API checks:
+
+```text
+account/assets: success
+open_positions_count: 0
+active_orders_count: 0
+raw_response_saved: false
+raw_response_displayed: false
+```
+
+This read-only success confirms only that the read-only endpoints are reachable
+with the current key environment. It does not prove that the order permission is
+effective for a future POST.
+
+Sanitized public rules and market snapshot:
+
+```text
+USD_JPY minOpenOrderSize: 100
+USD_JPY sizeStep: 1
+USD_JPY maxOrderSize: 500000
+USD_JPY in TRY/ZAR/MXN 10000 exception set: false
+service_status: OPEN
+maintenance_active: false
+bid: 161.789
+ask: 161.794
+spread_jpy: 0.005
+ticker_age_seconds: 0.650
+current_jst: 2026-06-25T14:54:16+0900 JST
+```
+
+Step 4F-A judgement:
+
+```text
+READY_FOR_LATER_4F_B
+```
+
+This means a later Step 4F-B may be considered only if all of the following are
+true:
+
+- it is a separate task with a fresh preflight
+- it is a different day, or an explicitly reviewed new ledger policy is approved
+- the user-side permission, IP restriction, account state, available margin, and
+  required agreement checks are complete
+- `account/assets`, `openPositions`, and `activeOrders` pass with sanitized
+  output
+- open positions and active orders are both 0
+- USD_JPY public rules still allow 100 units
+- market status is not maintenance and spread remains within the configured
+  threshold
+- the run is inside the project execution window, normally weekday
+  10:00-14:30 JST
+- Step 4F-B stops at a new approval gate before any POST
+
+Step 4F-A does not authorize same-day retry or immediate execution.

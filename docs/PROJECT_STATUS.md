@@ -82,17 +82,25 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4F-A sanitized retry preflight / no POST完了、READY_FOR_LATER_4F_B、本日再POST不可** —
+  ユーザー報告としてGMO外国為替FX APIキーの「トレード > 注文」権限追加後、Codex環境で
+  `GMO_FX_API_KEY: set` / `GMO_FX_API_SECRET: set` を値非表示で確認した。既存read-only runnerで
+  `account/assets=success`、`open_positions_count=0`、`active_orders_count=0` をsanitized確認した。
+  public rulesはUSD_JPY `minOpenOrderSize=100` / `sizeStep=1` / `maxOrderSize=500000`、
+  USD_JPYはTRY_JPY / ZAR_JPY / MXN_JPYの10000通貨例外に含まれない。public tickerは
+  `bid=161.789`、`ask=161.794`、`spread_jpy=0.005`、`ticker_age_seconds=0.650`、service status
+  `OPEN`、maintenance false。ただし確認時刻 `2026-06-25T14:54:16+0900 JST` は10:00-14:30 JST枠外。
+  ledgerは `POST_COMPLETED`、`attempt_count=1`、`result_category=api_rejected` のままなので本日再POST不可。
+  read-only successは注文権限成功を意味しない。Step 4F-Bへ進めるのは別日または明示された新ledger方針があり、
+  ユーザー側permission/IP/account確認が完了し、fresh preflightが全て通る場合のみ。Step 4F-Bでも
+  approval gateで停止し、即POSTしない。Step 4F-AではHTTP POST、実注文、approval id発行、approval gate、
+  retry、loop、追加注文、注文変更、取消、決済、ledger reset / delete / edit / overwrite、raw response表示・保存は未実行。
 - **Step 4E GMO FX API注文権限追加後no POST確認完了 / same-day retry禁止維持** —
   ユーザー報告として、GMO外国為替FX APIキー設定で「トレード > 注文」権限にチェックを入れたことを
   `docs/STEP4_API_REJECT_REVIEW.md` に追記した。これはユーザー報告の記録であり、CodexがGMO管理画面を
-  直接確認したものではなく、API上で注文権限が有効化されたことを確定確認したものでもない。
-  以前の `api_rejected` については「注文権限不足」が有力候補だったが、reject解消は次回の明示承認つき
-  POSTまで確認できない可能性がある。今回のCodex環境では `GMO_FX_API_KEY: missing` /
-  `GMO_FX_API_SECRET: missing` だったため、read-only Private API確認は未実行。ledgerはsanitized確認のみで
-  `POST_COMPLETED`、`attempt_count=1`、`result_category=api_rejected` のまま。HTTP POST、実注文、retry、
-  loop、追加注文、注文変更、取消、決済、approval id発行、BUY/SELL選択、ledger reset / delete / edit /
-  overwrite、raw response表示・保存は未実行。本日再POST不可を維持する。次候補はStep 4F sanitized retry
-  preflightであり、別タスク・後日または明示された新ledger方針・ユーザー側permission/IP/account確認完了後に限る。
+  直接確認したものではなく、API上で注文権限が有効化されたことを確定確認したものでもない。Step 4E自体では
+  `GMO_FX_API_KEY: missing` / `GMO_FX_API_SECRET: missing` だったためread-only確認は未実行で、
+  Step 4F-Aがset環境でのno-POST preflightとして後続実施された。
 - **Step 4D sanitized reject classification + API権限チェックリスト整備完了 / REJECT_CAUSE_PARTIAL** —
   `backend/app/live_verification/live_order_reject_classification.py` と
   `backend/app/tests/test_live_verification_live_order_reject_classification.py`、
