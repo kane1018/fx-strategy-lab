@@ -82,6 +82,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4B準備 one-shot live runner実装完了 / approval gate再発行可能** —
+  `backend/app/live_verification/live_order_once.py` と
+  `backend/app/tests/test_live_verification_live_order_once.py` を追加し、Step 4B用の
+  one-shot live runner、live outbound body serializer、approval phrase exact match、120秒expiry、
+  persistent one-shot ledger、fake transport検証、no-retry / no-loop / no-leak guardを実装した。
+  live outbound bodyは `symbol=USD_JPY`、`side=BUY|SELL`、`size="100"`、`clientOrderId`、
+  `executionType=MARKET` のallowlistのみで、`timeInForce` / `settleType` / price系 /
+  internal metadataは送信bodyに含めない。persistent ledgerはGit管理外の
+  `~/.local/state/fx-strategy-lab/live-order-attempts/YYYY-MM-DD.json` を想定し、credential、
+  headers、signature、raw request / raw response、口座詳細を保存しない。今回の準備では
+  HTTP POST、実注文、BUY/SELL選択、注文取消、決済、追加注文、実資金検証は未実行。
+  Step 4Bは別タスク・別承認で扱う。
 - **Step 4-SPEC USD_JPY最小注文数量 仕様差異解消完了 / READY_FOR_STEP4_RETRY** —
   `docs/STEP4_SYMBOL_RULES_RECONCILIATION.md` を作成し、live public API
   `GET /public/v1/symbols`、公式商品ページ、2025-04-04お知らせ、2025-09-25お知らせ、

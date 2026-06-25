@@ -204,3 +204,21 @@ If continuing, the next task may be Step 4A retry only:
 
 Step 4B live order must still be a separate task and requires the exact user
 approval phrase with BUY or SELL selected by the user.
+
+## 11. Step 4B Preparation Implementation Boundary
+
+Step 4B preparation added a one-shot live runner boundary after this symbol
+rules reconciliation:
+
+- live outbound body allowlist:
+  `symbol`, `side`, `size`, `clientOrderId`, `executionType`
+- fixed live order values: `USD_JPY`, `size="100"`, `executionType=MARKET`
+- approval phrase exact match for BUY or SELL, with 120-second expiry
+- persistent one-shot ledger for PREPARED / POST_STARTED / POST_COMPLETED /
+  RESULT_UNKNOWN / EXPIRED states
+- fake transport tests for one POST attempt, timeout -> RESULT_UNKNOWN,
+  no retry, no loop, and no raw artifact persistence
+
+The preparation does not execute HTTP POST, place a live order, choose BUY or
+SELL, cancel or close orders, or perform real-money verification. Step 4B live
+execution remains a separate task and requires a fresh exact approval phrase.

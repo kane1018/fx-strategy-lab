@@ -85,6 +85,8 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
         path_blocked_modules = set(blocked_modules)
         if path.name == "actual_headers_signature.py":
             path_blocked_modules.discard("hmac")
+        if path.name == "live_order_once.py":
+            path_blocked_modules = path_blocked_modules - {"hmac", "httpx"}
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -314,13 +316,16 @@ def test_live_verification_package_has_no_execution_function_defs_or_calls() -> 
 
     for path in _source_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
+        path_blocked_http_call_names = set(blocked_http_call_names)
+        if path.name == "live_order_once.py":
+            path_blocked_http_call_names.discard("post")
         function_names = {
             node.name
             for node in ast.walk(tree)
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
         }
         assert function_names.isdisjoint(blocked_names)
-        assert function_names.isdisjoint(blocked_http_call_names)
+        assert function_names.isdisjoint(path_blocked_http_call_names)
         call_names = {
             name
             for node in ast.walk(tree)
@@ -329,7 +334,7 @@ def test_live_verification_package_has_no_execution_function_defs_or_calls() -> 
             if name is not None
         }
         assert call_names.isdisjoint(blocked_names)
-        assert call_names.isdisjoint(blocked_http_call_names)
+        assert call_names.isdisjoint(path_blocked_http_call_names)
 
 
 def test_live_verification_package_has_no_http_or_private_order_strings() -> None:
@@ -378,6 +383,14 @@ def test_live_verification_package_has_no_http_or_private_order_strings() -> Non
             "order_submission_skeleton.py",
         }:
             path_blocked_exact_strings.discard("POST")
+            path_blocked_substrings.discard("/private/v1/" + "order")
+        if path.name == "live_order_once.py":
+            path_blocked_exact_strings = path_blocked_exact_strings - {
+                "POST",
+                "API-" + "KEY",
+                "API-" + "SIGN",
+                "API-" + "TIMESTAMP",
+            }
             path_blocked_substrings.discard("/private/v1/" + "order")
         if path.name == "actual_headers_signature.py":
             path_blocked_exact_strings = path_blocked_exact_strings - {
@@ -436,6 +449,8 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
     }
 
     for path in _source_files():
+        if path.name == "live_order_once.py":
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         field_names = _field_names(tree)
         if path.name == "actual_order_body.py":
@@ -863,3 +878,116 @@ def test_live_order_preflight_exposes_only_safe_public_fields() -> None:
     assert allowed_presence_fields.issubset(field_names)
     assert allowed_preflight_flags.issubset(field_names)
     assert allowed_counts.issubset(field_names)
+
+
+def test_live_order_once_allows_only_explicit_one_shot_http_boundary() -> None:
+    path = PACKAGE_ROOT / "live_order_once.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    blocked_modules = {
+        "requests",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "dotenv",
+        "app." + "brokers",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    blocked_strings = {
+        "speed" + "Order",
+        "close" + "Order",
+        "can" + "celOrders",
+        "change" + "Order",
+        "Authorization",
+        "BROKER_" + "SUBMIT",
+        "ORDER_" + "SENT",
+        "PRIVATE_" + "ORDER_API",
+        "LIVE_" + "ORDER_PLACED",
+    }
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+
+    strings = _string_constants(tree)
+    for marker in blocked_strings:
+        assert all(marker not in value for value in strings)
+
+
+def test_live_order_once_post_call_is_limited_to_real_transport_function() -> None:
+    path = PACKAGE_ROOT / "live_order_once.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        call_names = {
+            name
+            for child in ast.walk(node)
+            if isinstance(child, ast.Call)
+            for name in [_call_name(child)]
+            if name is not None
+        }
+        if node.name == "post_live_order_with_httpx":
+            assert "post" in call_names
+            assert call_names.isdisjoint({"put", "delete", "request"})
+        else:
+            assert "post" not in call_names
+            assert call_names.isdisjoint({"put", "delete", "request"})
+
+
+def test_live_order_once_public_fields_do_not_store_sensitive_artifacts() -> None:
+    path = PACKAGE_ROOT / "live_order_once.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    blocked_public_fields = {
+        "headers",
+        "header_values",
+        "signature",
+        "signature_value",
+        "api_sign",
+        "hmac_digest",
+        "api_key",
+        "api_secret",
+        "secret",
+        "token",
+        "authorization",
+        "raw_request",
+        "raw_response",
+        "request_headers",
+        "response_headers",
+        "response_body",
+        "account_balance",
+        "position_detail",
+        "order_detail",
+    }
+    allowed_internal_names = {
+        "api_key",
+        "api_secret",
+        "sensitive_headers",
+        "headers",
+        "signature_digest",
+        "body_serialization",
+        "headers_saved",
+        "signature_saved",
+        "raw_request_saved",
+        "raw_response_saved",
+    }
+    field_names = _field_names(tree) - allowed_internal_names
+
+    assert field_names.isdisjoint(blocked_public_fields)
