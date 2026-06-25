@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4D sanitized reject classification + API権限チェックリスト整備完了 / REJECT_CAUSE_PARTIAL** —
+  `backend/app/live_verification/live_order_reject_classification.py` と
+  `backend/app/tests/test_live_verification_live_order_reject_classification.py`、
+  `docs/STEP4_API_REJECT_REVIEW.md` を追加し、前回Step 4B-Bの
+  `transport_result=api_rejected` をraw responseなしで分類するlocal-only sanitized modelを整備した。
+  ledgerは読み取りのみで `POST_COMPLETED`、`attempt_count=1`、
+  `result_category=api_rejected` をsanitized確認し、ledger reset / delete / edit / overwriteは行っていない。
+  raw error codeがないため判定は **REJECT_CAUSE_PARTIAL** とし、API key scope / order permission /
+  IP restriction / account procedure / account state / margin / signing / timestamp / body / size等を候補群として
+  user-side checklistに分離した。HTTP POST、実注文、retry、loop、追加注文、注文変更、取消、決済、
+  approval id発行、BUY/SELL選択、API key / secret確認、read-only接続、raw response表示・保存は未実行。
+  次候補はStep 4E user-side API permission/account/IP/settings checklist confirmationであり、
+  Step 4D自体は再注文を許可しない。
 - **Step 4B-APPROVAL修正 短い1行approval command化完了 / approval gate再発行可能** —
   `backend/app/live_verification/live_order_once.py` と
   `backend/app/tests/test_live_verification_live_order_once.py` を追加し、Step 4B用の

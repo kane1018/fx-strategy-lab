@@ -233,3 +233,20 @@ rules reconciliation:
 The preparation does not execute HTTP POST, place a live order, choose BUY or
 SELL, cancel or close orders, or perform real-money verification. Step 4B live
 execution remains a separate task and requires a fresh exact approval command.
+
+## 12. Step 4D API Reject Follow-up
+
+After the one-shot Step 4B-B attempt returned sanitized
+`transport_result=api_rejected`, Step 4D added a local-only reject
+classification model and API permission / account / IP settings checklist.
+
+Because no raw response or raw error code is used, the current judgement is:
+
+```text
+REJECT_CAUSE_PARTIAL
+```
+
+Step 4D does not authorize a retry. It does not execute HTTP POST, issue an
+approval id, choose BUY / SELL, reset the ledger, display raw response, or touch
+credential values. Future work should first complete the user-side API
+permission checklist before any separate Step 4 retry preflight.

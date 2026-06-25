@@ -79,5 +79,9 @@ class LiveVerificationLiveOrderOnceError(LiveVerificationValidationError):
     """Raised when the one-shot live order runner crosses a safety boundary."""
 
 
+class LiveVerificationLiveOrderRejectClassificationError(LiveVerificationValidationError):
+    """Raised when sanitized live order reject classification input is unsafe."""
+
+
 class LiveVerificationForbiddenActionError(LiveVerificationError):
     """Raised if mocked core is asked to cross the no-order boundary."""
