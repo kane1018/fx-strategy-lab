@@ -82,20 +82,26 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Step 4B-TTL修正 approval期限300秒統一完了 / approval gate再発行可能** —
+- **Step 4B-APPROVAL修正 短い1行approval command化完了 / approval gate再発行可能** —
   `backend/app/live_verification/live_order_once.py` と
   `backend/app/tests/test_live_verification_live_order_once.py` を追加し、Step 4B用の
-  one-shot live runner、live outbound body serializer、approval phrase exact match、300秒expiry、
+  one-shot live runner、live outbound body serializer、approval command exact match、300秒expiry、
   persistent one-shot ledger、fake transport検証、no-retry / no-loop / no-leak guardを実装した。
   Step 4B-TTL修正では以前の120秒固定を廃止し、`LIVE_ORDER_APPROVAL_TTL_SECONDS=300`、
   `elapsed_seconds <= 300` は有効、`elapsed_seconds > 300` は失効として実装・テスト・docsを統一した。
+  Step 4B-APPROVAL修正では、長い日本語承認文を廃止/非推奨化し、`STEP4_APPROVE <approval_id>
+  SIDE=BUY|SELL SYMBOL=USD_JPY SIZE=100 ACK_...=YES` の短い1行ASCII command形式へ変更した。
+  `ACK_RISK` / `ACK_OPEN_POSITION` / `ACK_API_SCOPE` / `ACK_NO_EVENT` / retry・loop・追加注文・
+  注文変更・取消・決済禁止 / 結果不明時停止のACK tokenをすべて必須とし、欠落、`YES`以外、
+  余分なtoken、改行、余分な空白、旧日本語長文承認文はfail closedする。
   承認後再preflightは引き続き必須であり、最終動的preflightからPOSTまで30秒以内の条件も維持する。
   live outbound bodyは `symbol=USD_JPY`、`side=BUY|SELL`、`size="100"`、`clientOrderId`、
   `executionType=MARKET` のallowlistのみで、`timeInForce` / `settleType` / price系 /
   internal metadataは送信bodyに含めない。persistent ledgerはGit管理外の
   `~/.local/state/fx-strategy-lab/live-order-attempts/YYYY-MM-DD.json` を想定し、credential、
-  headers、signature、raw request / raw response、口座詳細を保存しない。今回の準備では
-  HTTP POST、実注文、BUY/SELL選択、注文取消、決済、追加注文、実資金検証は未実行。
+  headers、signature、raw request / raw response、口座詳細を保存しない。APPROVAL修正では
+  HTTP POST、実注文、approval_id発行、API key / secret確認、read-only接続、BUY/SELL選択、
+  注文取消、決済、追加注文、実資金検証は未実行。
   Step 4Bは別タスク・別承認で扱う。
 - **Step 4-SPEC USD_JPY最小注文数量 仕様差異解消完了 / READY_FOR_STEP4_RETRY** —
   `docs/STEP4_SYMBOL_RULES_RECONCILIATION.md` を作成し、live public API

@@ -213,8 +213,15 @@ rules reconciliation:
 - live outbound body allowlist:
   `symbol`, `side`, `size`, `clientOrderId`, `executionType`
 - fixed live order values: `USD_JPY`, `size="100"`, `executionType=MARKET`
-- approval phrase exact match for BUY or SELL, with 300-second expiry
+- approval command exact match for BUY or SELL, with 300-second expiry
   (`elapsed_seconds <= 300` passes, `elapsed_seconds > 300` fails)
+- the earlier long Japanese approval phrase is retired/deprecated; Step 4 now
+  uses a compact one-line ASCII command:
+  `STEP4_APPROVE <approval_id> SIDE=BUY|SELL SYMBOL=USD_JPY SIZE=100 ACK_...=YES`
+- all ACK tokens for risk, open-position risk, API scope, no-event confirmation,
+  no retry, no loop, no additional order, no change, no cancel, no close, and
+  stop-on-unknown are required; missing ACKs, non-`YES` values, extra tokens,
+  newlines, extra spaces, and the old Japanese phrase fail closed
 - persistent one-shot ledger for PREPARED / POST_STARTED / POST_COMPLETED /
   RESULT_UNKNOWN / EXPIRED states
 - fake transport tests for one POST attempt, timeout -> RESULT_UNKNOWN,
@@ -225,4 +232,4 @@ rules reconciliation:
 
 The preparation does not execute HTTP POST, place a live order, choose BUY or
 SELL, cancel or close orders, or perform real-money verification. Step 4B live
-execution remains a separate task and requires a fresh exact approval phrase.
+execution remains a separate task and requires a fresh exact approval command.

@@ -11,6 +11,7 @@ import pytest
 
 from app.live_verification.errors import LiveVerificationLiveOrderOnceError
 from app.live_verification.live_order_once import (
+    LIVE_ORDER_APPROVAL_ACK_TOKENS,
     LIVE_ORDER_APPROVAL_TTL_SECONDS,
     LIVE_ORDER_BODY_FIELDS,
     LIVE_ORDER_ENDPOINT_URL,
@@ -50,6 +51,23 @@ FIXED_APPROVAL_ID = "STEP4-1234ABCD"
 FIXED_CLIENT_ORDER_ID = "S420260625100000ABCD1234"
 FIXED_NOW = datetime(2026, 6, 25, 10, 0, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
 EXPECTED_APPROVAL_TTL_SECONDS = 300
+EXPECTED_BUY_APPROVAL_COMMAND = (
+    f"STEP4_APPROVE {FIXED_APPROVAL_ID} SIDE=BUY SYMBOL=USD_JPY SIZE=100 "
+    "ACK_RISK=YES ACK_OPEN_POSITION=YES ACK_API_SCOPE=YES ACK_NO_EVENT=YES "
+    "ACK_NO_RETRY=YES ACK_NO_LOOP=YES ACK_NO_ADD=YES ACK_NO_CHANGE=YES "
+    "ACK_NO_CANCEL=YES ACK_NO_CLOSE=YES ACK_STOP_ON_UNKNOWN=YES"
+)
+EXPECTED_SELL_APPROVAL_COMMAND = EXPECTED_BUY_APPROVAL_COMMAND.replace(
+    "SIDE=BUY",
+    "SIDE=SELL",
+)
+OLD_JAPANESE_BUY_APPROVAL_PHRASE = (
+    f"STEP4_APPROVE {FIXED_APPROVAL_ID}: USD_JPY 100通貨 BUY "
+    "の1回限定実注文を承認します。実資金損失、API手数料、スプレッド、OPEN建玉が残る可能性を理解しています。"
+    "外国為替FX専用APIキーの注文に必要な最小権限、IP制限、漏洩疑いなしを確認しました。"
+    "重要経済指標の前後ではないことを確認しました。retry、loop、追加注文、注文変更、取消、決済は禁止し、"
+    "結果不明時は停止します。"
+)
 
 EXPECTED_BODY_FIELDS = {
     "symbol",
@@ -191,7 +209,7 @@ def test_live_order_outbound_body_rejects_invalid_client_order_id(
         )
 
 
-def test_approval_gate_generates_exact_buy_and_sell_phrases() -> None:
+def test_approval_gate_generates_exact_buy_and_sell_commands() -> None:
     gate = _gate()
 
     assert isinstance(gate, Step4ApprovalGate)
@@ -199,10 +217,25 @@ def test_approval_gate_generates_exact_buy_and_sell_phrases() -> None:
     assert gate.approval_id == FIXED_APPROVAL_ID
     assert gate.issued_at_jst == "2026-06-25T10:00:00+09:00"
     assert gate.expires_at_jst == "2026-06-25T10:05:00+09:00"
-    assert "USD_JPY 100通貨 BUY" in gate.buy_approval_phrase
-    assert "USD_JPY 100通貨 SELL" in gate.sell_approval_phrase
-    assert gate.buy_approval_phrase.startswith(f"STEP4_APPROVE {FIXED_APPROVAL_ID}:")
-    assert gate.sell_approval_phrase.startswith(f"STEP4_APPROVE {FIXED_APPROVAL_ID}:")
+    assert LIVE_ORDER_APPROVAL_ACK_TOKENS == (
+        "ACK_RISK=YES",
+        "ACK_OPEN_POSITION=YES",
+        "ACK_API_SCOPE=YES",
+        "ACK_NO_EVENT=YES",
+        "ACK_NO_RETRY=YES",
+        "ACK_NO_LOOP=YES",
+        "ACK_NO_ADD=YES",
+        "ACK_NO_CHANGE=YES",
+        "ACK_NO_CANCEL=YES",
+        "ACK_NO_CLOSE=YES",
+        "ACK_STOP_ON_UNKNOWN=YES",
+    )
+    assert gate.buy_approval_phrase == EXPECTED_BUY_APPROVAL_COMMAND
+    assert gate.sell_approval_phrase == EXPECTED_SELL_APPROVAL_COMMAND
+    assert "\n" not in gate.buy_approval_phrase
+    assert "  " not in gate.buy_approval_phrase
+    assert gate.buy_approval_phrase.isascii()
+    assert gate.sell_approval_phrase.isascii()
     assert set(asdict(gate)) == EXPECTED_GATE_FIELDS
 
 
@@ -269,6 +302,61 @@ def test_approval_id_mismatch_fails() -> None:
     assert decision.approval_passed is False
     assert "approval_phrase_mismatch" in decision.fail_reasons
     assert "approval_id_mismatch" in decision.fail_reasons
+    assert decision.side == "unknown"
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda phrase: phrase.replace("SIDE=BUY", "SIDE=HOLD"),
+        lambda phrase: phrase.replace("SYMBOL=USD_JPY", "SYMBOL=EUR_JPY"),
+        lambda phrase: phrase.replace("SIZE=100", "SIZE=1000"),
+        lambda phrase: phrase.replace("ACK_RISK=YES", "ACK_RISK=NO"),
+        lambda phrase: f"{phrase} EXTRA=YES",
+        lambda phrase: phrase.replace(" SIZE=100 ", "  SIZE=100 "),
+        lambda phrase: phrase.replace(" ACK_RISK=YES ", "\nACK_RISK=YES "),
+    ],
+)
+def test_buy_approval_command_requires_exact_tokens(mutation: object) -> None:
+    gate = _gate()
+    phrase = mutation(gate.buy_approval_phrase)
+
+    decision = evaluate_step4_approval(
+        gate=gate,
+        approval_phrase=phrase,
+        now_jst=FIXED_NOW + timedelta(seconds=30),
+    )
+
+    assert decision.approval_passed is False
+    assert "approval_phrase_mismatch" in decision.fail_reasons
+    assert decision.side == "unknown"
+
+
+@pytest.mark.parametrize("token", LIVE_ORDER_APPROVAL_ACK_TOKENS)
+def test_approval_command_rejects_missing_ack_token(token: str) -> None:
+    gate = _gate()
+    phrase = gate.buy_approval_phrase.replace(f" {token}", "")
+
+    decision = evaluate_step4_approval(
+        gate=gate,
+        approval_phrase=phrase,
+        now_jst=FIXED_NOW + timedelta(seconds=30),
+    )
+
+    assert decision.approval_passed is False
+    assert "approval_phrase_mismatch" in decision.fail_reasons
+    assert decision.side == "unknown"
+
+
+def test_old_japanese_approval_phrase_fails() -> None:
+    decision = evaluate_step4_approval(
+        gate=_gate(),
+        approval_phrase=OLD_JAPANESE_BUY_APPROVAL_PHRASE,
+        now_jst=FIXED_NOW + timedelta(seconds=30),
+    )
+
+    assert decision.approval_passed is False
+    assert "approval_phrase_mismatch" in decision.fail_reasons
     assert decision.side == "unknown"
 
 

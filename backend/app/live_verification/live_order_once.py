@@ -39,6 +39,19 @@ LIVE_ORDER_BODY_FIELDS = frozenset(
     {"symbol", "side", "size", "clientOrderId", "executionType"}
 )
 LIVE_ORDER_HEADER_NAMES = ("API-KEY", "API-TIMESTAMP", "API-SIGN")
+LIVE_ORDER_APPROVAL_ACK_TOKENS = (
+    "ACK_RISK=YES",
+    "ACK_OPEN_POSITION=YES",
+    "ACK_API_SCOPE=YES",
+    "ACK_NO_EVENT=YES",
+    "ACK_NO_RETRY=YES",
+    "ACK_NO_LOOP=YES",
+    "ACK_NO_ADD=YES",
+    "ACK_NO_CHANGE=YES",
+    "ACK_NO_CANCEL=YES",
+    "ACK_NO_CLOSE=YES",
+    "ACK_STOP_ON_UNKNOWN=YES",
+)
 
 
 class LiveOrderSide(str, Enum):
@@ -79,13 +92,13 @@ class Step4ApprovalGate:
         _require_non_empty("approval_id", self.approval_id)
         _parse_jst_datetime(self.issued_at_jst)
         _parse_jst_datetime(self.expires_at_jst)
-        if self.buy_approval_phrase != _approval_phrase(self.approval_id, LiveOrderSide.BUY):
-            raise LiveVerificationLiveOrderOnceError("BUY approval phrase mismatch")
-        if self.sell_approval_phrase != _approval_phrase(
+        if self.buy_approval_phrase != _approval_command(self.approval_id, LiveOrderSide.BUY):
+            raise LiveVerificationLiveOrderOnceError("BUY approval command mismatch")
+        if self.sell_approval_phrase != _approval_command(
             self.approval_id,
             LiveOrderSide.SELL,
         ):
-            raise LiveVerificationLiveOrderOnceError("SELL approval phrase mismatch")
+            raise LiveVerificationLiveOrderOnceError("SELL approval command mismatch")
 
 
 @dataclass(frozen=True)
@@ -341,8 +354,8 @@ def build_step4_approval_gate(
         approval_id=generated_approval_id,
         issued_at_jst=normalized_issued.isoformat(timespec="seconds"),
         expires_at_jst=expires.isoformat(timespec="seconds"),
-        buy_approval_phrase=_approval_phrase(generated_approval_id, LiveOrderSide.BUY),
-        sell_approval_phrase=_approval_phrase(generated_approval_id, LiveOrderSide.SELL),
+        buy_approval_phrase=_approval_command(generated_approval_id, LiveOrderSide.BUY),
+        sell_approval_phrase=_approval_command(generated_approval_id, LiveOrderSide.SELL),
     )
 
 
@@ -365,7 +378,7 @@ def evaluate_step4_approval(
         side = LiveOrderSide.SELL.value
     else:
         fail_reasons.append("approval_phrase_mismatch")
-        if not approval_phrase.startswith(f"STEP4_APPROVE {gate.approval_id}:"):
+        if not approval_phrase.startswith(f"STEP4_APPROVE {gate.approval_id} "):
             fail_reasons.append("approval_id_mismatch")
     fail_reasons = list(dict.fromkeys(fail_reasons))
     return Step4ApprovalDecision(
@@ -692,14 +705,16 @@ def post_live_order_with_httpx(
     )
 
 
-def _approval_phrase(approval_id: str, side: LiveOrderSide) -> str:
-    return (
-        f"STEP4_APPROVE {approval_id}: USD_JPY 100通貨 {side.value} "
-        "の1回限定実注文を承認します。実資金損失、API手数料、スプレッド、OPEN建玉が残る可能性を理解しています。"
-        "外国為替FX専用APIキーの注文に必要な最小権限、IP制限、漏洩疑いなしを確認しました。"
-        "重要経済指標の前後ではないことを確認しました。retry、loop、追加注文、注文変更、取消、決済は禁止し、"
-        "結果不明時は停止します。"
+def _approval_command(approval_id: str, side: LiveOrderSide) -> str:
+    command_tokens = (
+        "STEP4_APPROVE",
+        approval_id,
+        f"SIDE={side.value}",
+        f"SYMBOL={SUPPORTED_SYMBOL}",
+        f"SIZE={LIVE_ORDER_SIZE}",
+        *LIVE_ORDER_APPROVAL_ACK_TOKENS,
     )
+    return " ".join(command_tokens)
 
 
 def _build_sensitive_headers(
