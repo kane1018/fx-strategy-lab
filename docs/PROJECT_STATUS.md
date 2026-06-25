@@ -82,6 +82,17 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4E GMO FX API注文権限追加後no POST確認完了 / same-day retry禁止維持** —
+  ユーザー報告として、GMO外国為替FX APIキー設定で「トレード > 注文」権限にチェックを入れたことを
+  `docs/STEP4_API_REJECT_REVIEW.md` に追記した。これはユーザー報告の記録であり、CodexがGMO管理画面を
+  直接確認したものではなく、API上で注文権限が有効化されたことを確定確認したものでもない。
+  以前の `api_rejected` については「注文権限不足」が有力候補だったが、reject解消は次回の明示承認つき
+  POSTまで確認できない可能性がある。今回のCodex環境では `GMO_FX_API_KEY: missing` /
+  `GMO_FX_API_SECRET: missing` だったため、read-only Private API確認は未実行。ledgerはsanitized確認のみで
+  `POST_COMPLETED`、`attempt_count=1`、`result_category=api_rejected` のまま。HTTP POST、実注文、retry、
+  loop、追加注文、注文変更、取消、決済、approval id発行、BUY/SELL選択、ledger reset / delete / edit /
+  overwrite、raw response表示・保存は未実行。本日再POST不可を維持する。次候補はStep 4F sanitized retry
+  preflightであり、別タスク・後日または明示された新ledger方針・ユーザー側permission/IP/account確認完了後に限る。
 - **Step 4D sanitized reject classification + API権限チェックリスト整備完了 / REJECT_CAUSE_PARTIAL** —
   `backend/app/live_verification/live_order_reject_classification.py` と
   `backend/app/tests/test_live_verification_live_order_reject_classification.py`、

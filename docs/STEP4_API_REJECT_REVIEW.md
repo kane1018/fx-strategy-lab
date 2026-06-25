@@ -235,3 +235,62 @@ Separate sanitized Step 4 retry preflight, only after user-side checks are done.
 ```
 
 Step 4D itself does not authorize another live order attempt.
+
+## 11. Step 4E User-Reported Order Permission Update
+
+User-side update:
+
+```text
+The user reported that the GMO Foreign Exchange FX API key setting now has
+"Trade > Order" permission enabled.
+```
+
+This is recorded as a user report. Codex did not inspect the GMO management UI
+and did not confirm order permission through an API order call.
+
+Interpretation:
+
+- Before this update, missing order permission was one of the strongest
+  candidate causes for the previous `api_rejected` result.
+- Historical read-only checks for account assets, open positions, and active
+  orders had succeeded, so read-only permission was already known to work in a
+  previous approved context.
+- The effective order permission may not be proven through the API until a
+  future explicitly approved POST attempt.
+- Step 4E does not perform that POST.
+
+Step 4E local checks:
+
+```text
+GMO_FX_API_KEY: missing
+GMO_FX_API_SECRET: missing
+ledger_exists: true
+ledger_state: POST_COMPLETED
+attempt_count: 1
+result_category: api_rejected
+```
+
+Because the current Codex process does not have the required key presence,
+Step 4E did not run read-only Private API checks.
+
+Same-day retry decision:
+
+```text
+No same-day retry.
+```
+
+The one-shot ledger is already `POST_COMPLETED` with `attempt_count=1`, so this
+task must not issue an approval id, reset the ledger, or execute another POST.
+
+Before any separate Step 4F retry preflight, the user-side checklist should
+confirm:
+
+- order permission remains enabled
+- IP restriction allows the execution source, if IP allowlisting is enabled
+- account state and available margin permit a 100-unit USD_JPY OPEN attempt
+- no required API usage agreement, fee confirmation, or account procedure is
+  incomplete
+- there is no account restriction, maintenance, or important event window
+
+Step 4F must be a separate task with fresh preflight and a new explicit approval
+gate. Step 4E does not authorize a retry.

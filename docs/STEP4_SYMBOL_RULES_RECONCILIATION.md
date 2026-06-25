@@ -250,3 +250,27 @@ Step 4D does not authorize a retry. It does not execute HTTP POST, issue an
 approval id, choose BUY / SELL, reset the ledger, display raw response, or touch
 credential values. Future work should first complete the user-side API
 permission checklist before any separate Step 4 retry preflight.
+
+## 13. Step 4E Order Permission Update
+
+The user reported that the GMO Foreign Exchange FX API key now has
+`Trade > Order` permission enabled.
+
+This is a user-side report, not an API-confirmed order-permission result. Codex
+did not inspect the GMO management UI and did not perform a POST.
+
+The previous API reject may have been caused by insufficient order permission,
+but this can only be confirmed by a future separately approved retry attempt.
+Step 4E does not authorize that retry.
+
+The current ledger remains already used for the day:
+
+```text
+ledger_state: POST_COMPLETED
+attempt_count: 1
+result_category: api_rejected
+```
+
+No same-day POST is allowed from Step 4E. Any Step 4F retry preflight must be a
+separate task after user-side permission, IP restriction, account state, margin,
+and unresolved agreement checks are complete.
