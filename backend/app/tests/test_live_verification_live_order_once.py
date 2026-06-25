@@ -11,6 +11,7 @@ import pytest
 
 from app.live_verification.errors import LiveVerificationLiveOrderOnceError
 from app.live_verification.live_order_once import (
+    LIVE_ORDER_APPROVAL_TTL_SECONDS,
     LIVE_ORDER_BODY_FIELDS,
     LIVE_ORDER_ENDPOINT_URL,
     LIVE_ORDER_EXECUTION_TYPE,
@@ -48,6 +49,7 @@ DUMMY_RAW_RESPONSE = "DUMMY_RAW_RESPONSE_VALUE"
 FIXED_APPROVAL_ID = "STEP4-1234ABCD"
 FIXED_CLIENT_ORDER_ID = "S420260625100000ABCD1234"
 FIXED_NOW = datetime(2026, 6, 25, 10, 0, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
+EXPECTED_APPROVAL_TTL_SECONDS = 300
 
 EXPECTED_BODY_FIELDS = {
     "symbol",
@@ -193,14 +195,24 @@ def test_approval_gate_generates_exact_buy_and_sell_phrases() -> None:
     gate = _gate()
 
     assert isinstance(gate, Step4ApprovalGate)
+    assert LIVE_ORDER_APPROVAL_TTL_SECONDS == EXPECTED_APPROVAL_TTL_SECONDS
     assert gate.approval_id == FIXED_APPROVAL_ID
     assert gate.issued_at_jst == "2026-06-25T10:00:00+09:00"
-    assert gate.expires_at_jst == "2026-06-25T10:02:00+09:00"
+    assert gate.expires_at_jst == "2026-06-25T10:05:00+09:00"
     assert "USD_JPY 100通貨 BUY" in gate.buy_approval_phrase
     assert "USD_JPY 100通貨 SELL" in gate.sell_approval_phrase
     assert gate.buy_approval_phrase.startswith(f"STEP4_APPROVE {FIXED_APPROVAL_ID}:")
     assert gate.sell_approval_phrase.startswith(f"STEP4_APPROVE {FIXED_APPROVAL_ID}:")
     assert set(asdict(gate)) == EXPECTED_GATE_FIELDS
+
+
+def test_approval_gate_expires_at_issued_plus_300_seconds() -> None:
+    issued_at = datetime(2026, 6, 25, 10, 12, 34, tzinfo=ZoneInfo("Asia/Tokyo"))
+
+    gate = _gate(issued_at_jst=issued_at)
+
+    assert gate.issued_at_jst == "2026-06-25T10:12:34+09:00"
+    assert gate.expires_at_jst == "2026-06-25T10:17:34+09:00"
 
 
 @pytest.mark.parametrize(
@@ -229,6 +241,21 @@ def test_approval_exact_phrase_passes(
     assert set(asdict(decision)) == EXPECTED_DECISION_FIELDS
 
 
+@pytest.mark.parametrize("elapsed_seconds", [121, 299, 300])
+def test_approval_within_300_seconds_passes(elapsed_seconds: int) -> None:
+    gate = _gate()
+
+    decision = evaluate_step4_approval(
+        gate=gate,
+        approval_phrase=gate.buy_approval_phrase,
+        now_jst=FIXED_NOW + timedelta(seconds=elapsed_seconds),
+    )
+
+    assert decision.approval_passed is True
+    assert decision.side == "BUY"
+    assert decision.fail_reasons == ()
+
+
 def test_approval_id_mismatch_fails() -> None:
     gate = _gate()
     phrase = gate.buy_approval_phrase.replace(FIXED_APPROVAL_ID, "STEP4-FFFF0000")
@@ -245,13 +272,13 @@ def test_approval_id_mismatch_fails() -> None:
     assert decision.side == "unknown"
 
 
-def test_approval_expiry_fails() -> None:
+def test_approval_expiry_after_300_seconds_fails() -> None:
     gate = _gate()
 
     decision = evaluate_step4_approval(
         gate=gate,
         approval_phrase=gate.buy_approval_phrase,
-        now_jst=FIXED_NOW + timedelta(seconds=121),
+        now_jst=FIXED_NOW + timedelta(seconds=301),
     )
 
     assert decision.approval_passed is False
@@ -263,6 +290,8 @@ def test_approval_expiry_fails() -> None:
     "phrase",
     [
         "STEP4_APPROVE STEP4-1234ABCD",
+        "OK",
+        "続行",
         "任せる",
         "どちらでも",
         "USD_JPY 100通貨を承認",
@@ -303,7 +332,7 @@ def test_ledger_prepared_expiry_transitions_to_expired(tmp_path: Path) -> None:
 
     expired = expire_prepared_attempt_if_needed(
         ledger_path=_ledger_path(tmp_path),
-        now_jst=FIXED_NOW + timedelta(seconds=121),
+        now_jst=FIXED_NOW + timedelta(seconds=301),
     )
 
     assert expired.state == LiveOrderAttemptState.EXPIRED.value
@@ -311,14 +340,27 @@ def test_ledger_prepared_expiry_transitions_to_expired(tmp_path: Path) -> None:
     assert expired.result_category == "approval_expired"
 
 
+def test_ledger_prepared_at_300_seconds_is_not_expired(tmp_path: Path) -> None:
+    _prepare(tmp_path, issued_at_jst=FIXED_NOW)
+
+    ledger = expire_prepared_attempt_if_needed(
+        ledger_path=_ledger_path(tmp_path),
+        now_jst=FIXED_NOW + timedelta(seconds=300),
+    )
+
+    assert ledger.state == LiveOrderAttemptState.PREPARED.value
+    assert ledger.attempt_count == 0
+    assert ledger.result_category == "prepared"
+
+
 def test_expired_ledger_allows_new_prepare(tmp_path: Path) -> None:
     _prepare(tmp_path, issued_at_jst=FIXED_NOW)
     expire_prepared_attempt_if_needed(
         ledger_path=_ledger_path(tmp_path),
-        now_jst=FIXED_NOW + timedelta(seconds=121),
+        now_jst=FIXED_NOW + timedelta(seconds=301),
     )
     new_gate = build_step4_approval_gate(
-        issued_at_jst=FIXED_NOW + timedelta(seconds=180),
+        issued_at_jst=FIXED_NOW + timedelta(seconds=360),
         approval_id="STEP4-ABCDEF12",
     )
 
@@ -326,7 +368,7 @@ def test_expired_ledger_allows_new_prepare(tmp_path: Path) -> None:
         ledger_path=_ledger_path(tmp_path),
         approval_gate=new_gate,
         client_order_id="S420260625100300ABCD1234",
-        now_jst=FIXED_NOW + timedelta(seconds=180),
+        now_jst=FIXED_NOW + timedelta(seconds=360),
     )
 
     assert ledger.state == LiveOrderAttemptState.PREPARED.value

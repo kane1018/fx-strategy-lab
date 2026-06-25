@@ -213,11 +213,15 @@ rules reconciliation:
 - live outbound body allowlist:
   `symbol`, `side`, `size`, `clientOrderId`, `executionType`
 - fixed live order values: `USD_JPY`, `size="100"`, `executionType=MARKET`
-- approval phrase exact match for BUY or SELL, with 120-second expiry
+- approval phrase exact match for BUY or SELL, with 300-second expiry
+  (`elapsed_seconds <= 300` passes, `elapsed_seconds > 300` fails)
 - persistent one-shot ledger for PREPARED / POST_STARTED / POST_COMPLETED /
   RESULT_UNKNOWN / EXPIRED states
 - fake transport tests for one POST attempt, timeout -> RESULT_UNKNOWN,
   no retry, no loop, and no raw artifact persistence
+- the previous 120-second fixed approval window is retired; approval after the
+  exact phrase still requires a fresh post-approval preflight, and the final
+  dynamic preflight-to-POST window remains within 30 seconds
 
 The preparation does not execute HTTP POST, place a live order, choose BUY or
 SELL, cancel or close orders, or perform real-money verification. Step 4B live
