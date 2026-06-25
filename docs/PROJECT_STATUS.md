@@ -82,6 +82,17 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4-SPEC USD_JPY最小注文数量 仕様差異解消完了 / READY_FOR_STEP4_RETRY** —
+  `docs/STEP4_SYMBOL_RULES_RECONCILIATION.md` を作成し、live public API
+  `GET /public/v1/symbols`、公式商品ページ、2025-04-04お知らせ、2025-09-25お知らせ、
+  API docs response exampleを照合した。live public APIではUSD_JPY
+  `minOpenOrderSize=100` / `sizeStep=1`、TRY_JPY / ZAR_JPY / MXN_JPYは
+  `minOpenOrderSize=10000`。公式商品ページと2025-09-25お知らせも、USD_JPYを
+  100通貨対象に含め、TRY/JPY・ZAR/JPY・MXN/JPYだけを10,000通貨例外としている。
+  API docsのUSD_JPY `minOpenOrderSize=10000` は `responsetime=2022-12-15` の
+  古いresponse exampleであり、2025年以降の公式通知と現在のlive public APIより現行値ではないと分類した。
+  判定は **READY_FOR_STEP4_RETRY**。ただしStep 4 retry、approval id、HTTP POST、実注文、
+  Private API注文系接続、BUY/SELL選択、10000通貨への変更は未実行。
 - **Step 3 独立した最終監査・preflight完了（今回実行はNO_GO）** —
   `backend/app/live_verification/live_order_preflight.py` と
   `backend/app/tests/test_live_verification_live_order_preflight.py`、
