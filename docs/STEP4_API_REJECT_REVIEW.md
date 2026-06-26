@@ -17,6 +17,45 @@ This task does not:
 - display or store raw request, raw response, headers, signature, API key, or
   API secret values
 
+## 1A. Step 4F-B One-Shot Retry Result
+
+Step 4F-B was rerun on 2026-06-26 after the Step 4F approval command alignment.
+
+Sanitized result:
+
+```text
+approval_id_prefix: STEP4F-
+approval_command_exact_match: true
+HTTP_POST_count: 1
+symbol: USD_JPY
+side: BUY
+size: 100
+executionType: MARKET
+transport_result: success
+api_status_success: true
+result_unknown: false
+retry_count: 0
+loop_count: 0
+account_assets_after: success
+open_positions_count_after: 1
+active_orders_count_after: 0
+ledger_state: POST_COMPLETED
+attempt_count: 1
+result_category: success
+raw_request_saved: false
+raw_response_saved: false
+headers_saved: false
+signature_saved: false
+credential_values_logged: false
+```
+
+No raw response, raw request, headers, signature, credential value, order id,
+execution id, or request id was displayed or saved. No additional order, retry,
+loop, order change, cancellation, close order, or auto-close was performed.
+
+Because `open_positions_count_after=1`, an OPEN position may remain. Any further
+action must be handled as a separate task with separate explicit approval.
+
 ## 2. Previous Sanitized State
 
 The previous Step 4B-B outcome was handled only as sanitized facts:

@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4F-B one-shot retry with approval gate 完了 / live order success、OPEN建玉あり** —
+  `dd705dd` 対応後、2026-06-26 11:09 JSTに `STEP4F-` approval gateを発行し、
+  ユーザーが同じCodexセッションで短い1行approval commandを完全一致入力した。承認後再preflightでは
+  `GMO_FX_API_KEY: set` / `GMO_FX_API_SECRET: set`、`account/assets=success`、
+  `open_positions_count_before=0`、`active_orders_count_before=0`、当日one-shot ledger
+  `PREPARED` / `attempt_count=0`、Git clean、market window allowed、maintenance false、
+  `bid=161.8`、`ask=161.805`、`spread_jpy=0.005` を確認した。HTTP POSTは承認後に1回だけ実行し、
+  sanitized結果は `transport_result=success`、`api_status_success=true`、`result_unknown=false`。
+  実行後read-only照合では `account/assets=success`、`open_positions_count_after=1`、
+  `active_orders_count_after=0`。raw request / raw response / headers / signature / credential値 /
+  order ID / execution IDは表示・保存していない。ledgerは `POST_COMPLETED`、`attempt_count=1`、
+  `result_category=success`。retry、loop、追加注文、注文変更、取消、決済、自動クローズは行っていない。
+  OPEN建玉が残っている可能性があるため、以後の操作は別タスク・別承認で扱う。
 - **Step 4F-APPROVAL修正完了 / Step 4F-B approval仕様をrunnerへ反映** —
   Step 4F-B実行前コード確認で、プロンプト要求の `STEP4F-` prefix、
   `ACK_ORDER_PERMISSION=YES`、`ACK_IP_ACCOUNT_CHECK=YES` と、既存runnerの旧Step 4 compact

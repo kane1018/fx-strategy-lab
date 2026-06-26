@@ -1,5 +1,26 @@
 # Step 4 Symbol Rules Reconciliation
 
+## 0. Step 4F-B Outcome Note
+
+On 2026-06-26, Step 4F-B used the reconciled USD_JPY 100-unit rule after a fresh
+public rules check:
+
+```text
+USD_JPY minOpenOrderSize: 100
+USD_JPY sizeStep: 1
+maxOrderSize: 500000
+spread_jpy: 0.005
+HTTP_POST_count: 1
+transport_result: success
+open_positions_count_after: 1
+active_orders_count_after: 0
+```
+
+The run did not display or save raw request, raw response, headers, signature,
+credential values, order id, execution id, or request id. No retry, loop,
+additional order, order change, cancellation, close order, or auto-close was
+performed.
+
 ## 1. Purpose
 
 This review resolves the Step 4 quantity mismatch before any live order retry.
