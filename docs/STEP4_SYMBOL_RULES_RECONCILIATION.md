@@ -294,3 +294,19 @@ This confirms that the USD_JPY 100-unit rule remains consistent with the Step 4
 plan at the time of the Step 4F-A check. It does not authorize an order retry.
 The same-day ledger block still applies because the live-order ledger remains
 `POST_COMPLETED` with `attempt_count=1`.
+
+## 15. Step 4F Approval Alignment Note
+
+The USD_JPY 100-unit symbol rule is unchanged.
+
+Before a Step 4F-B retry can be attempted in a separate task, the runner approval
+command must match the Step 4F-B prompt. The runner now uses `STEP4F-` approval
+ids for Step 4F-B and requires these additional ACK tokens:
+
+- `ACK_ORDER_PERMISSION=YES`
+- `ACK_IP_ACCOUNT_CHECK=YES`
+
+The old compact command without those Step 4F-specific ACK tokens fails closed
+for Step 4F-B. This approval alignment did not perform HTTP POST, place a live
+order, issue an approval id or approval gate, run fresh preflight, or mutate the
+one-shot ledger.

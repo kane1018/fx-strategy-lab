@@ -82,6 +82,17 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4F-APPROVAL修正完了 / Step 4F-B approval仕様をrunnerへ反映** —
+  Step 4F-B実行前コード確認で、プロンプト要求の `STEP4F-` prefix、
+  `ACK_ORDER_PERMISSION=YES`、`ACK_IP_ACCOUNT_CHECK=YES` と、既存runnerの旧Step 4 compact
+  approval仕様が一致していないため安全停止した。今回の修正で、Step 4F-B用approval idは
+  `STEP4F-` prefixに統一し、Step 4F-B用approval commandには
+  `ACK_ORDER_PERMISSION=YES` と `ACK_IP_ACCOUNT_CHECK=YES` を必須化した。追加ACKなしの旧compact
+  commandと `STEP4-` prefixはStep 4F-B用としてfail closedする。approval TTL 300秒、承認後再preflight必須、
+  最終動的preflightからPOSTまで30秒以内、HTTP POST最大1回、retry / loop禁止は維持する。
+  この修正ではHTTP POST、実注文、approval id発行、approval gate発行、fresh preflight、read-only接続、
+  ledger reset / delete / edit / overwrite、credential / headers / signature / raw response表示・保存は未実行。
+  次回Step 4F-Bは別タスクとしてfresh preflightから再実行し、approval gateで必ず停止する。
 - **Step 4F-A sanitized retry preflight / no POST完了、READY_FOR_LATER_4F_B、本日再POST不可** —
   ユーザー報告としてGMO外国為替FX APIキーの「トレード > 注文」権限追加後、Codex環境で
   `GMO_FX_API_KEY: set` / `GMO_FX_API_SECRET: set` を値非表示で確認した。既存read-only runnerで

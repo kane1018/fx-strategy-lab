@@ -372,3 +372,39 @@ true:
 - Step 4F-B stops at a new approval gate before any POST
 
 Step 4F-A does not authorize same-day retry or immediate execution.
+
+## 13. Step 4F Approval Command Alignment
+
+Step 4F-B was stopped during the pre-execution code review because the prompt
+required the Step 4F approval command shape, but the runner still used the
+older Step 4 approval shape:
+
+- required by Step 4F-B: `STEP4F-` approval id prefix
+- required by Step 4F-B: `ACK_ORDER_PERMISSION=YES`
+- required by Step 4F-B: `ACK_IP_ACCOUNT_CHECK=YES`
+- previous runner shape: `STEP4-` approval id prefix and no Step 4F-specific
+  order-permission / IP-account ACK tokens
+
+The runner and tests now align to the Step 4F-B approval command contract:
+
+```text
+STEP4_APPROVE <approval_id> SIDE=BUY SYMBOL=USD_JPY SIZE=100 ACK_RISK=YES ACK_OPEN_POSITION=YES ACK_API_SCOPE=YES ACK_ORDER_PERMISSION=YES ACK_IP_ACCOUNT_CHECK=YES ACK_NO_EVENT=YES ACK_NO_RETRY=YES ACK_NO_LOOP=YES ACK_NO_ADD=YES ACK_NO_CHANGE=YES ACK_NO_CANCEL=YES ACK_NO_CLOSE=YES ACK_STOP_ON_UNKNOWN=YES
+```
+
+For Step 4F-B, `<approval_id>` must use the `STEP4F-XXXXXXXX` form. The old
+compact command without `ACK_ORDER_PERMISSION=YES` and
+`ACK_IP_ACCOUNT_CHECK=YES` fails closed for Step 4F-B.
+
+This approval alignment task did not perform:
+
+- HTTP POST
+- live order
+- approval id issuance
+- approval gate issuance
+- fresh preflight or read-only connection
+- ledger reset, delete, edit, or overwrite
+- raw response display or storage
+- credential, header, or signature value display
+
+The next Step 4F-B attempt must be a separate task, start from fresh preflight,
+and stop at the approval gate before any POST.

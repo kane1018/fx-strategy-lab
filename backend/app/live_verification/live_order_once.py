@@ -33,6 +33,7 @@ LIVE_ORDER_ENDPOINT_BASE = "https://forex-api.coin.z.com/private"
 LIVE_ORDER_SIGNING_PATH = "/v1/order"
 LIVE_ORDER_ENDPOINT_URL = f"{LIVE_ORDER_ENDPOINT_BASE}{LIVE_ORDER_SIGNING_PATH}"
 LIVE_ORDER_APPROVAL_TTL_SECONDS = 300
+LIVE_ORDER_APPROVAL_ID_PREFIX = "STEP4F-"
 LIVE_ORDER_HTTP_TIMEOUT_SECONDS = 10.0
 LIVE_ORDER_LEDGER_DIR = Path.home() / ".local" / "state" / "fx-strategy-lab" / "live-order-attempts"
 LIVE_ORDER_BODY_FIELDS = frozenset(
@@ -43,6 +44,8 @@ LIVE_ORDER_APPROVAL_ACK_TOKENS = (
     "ACK_RISK=YES",
     "ACK_OPEN_POSITION=YES",
     "ACK_API_SCOPE=YES",
+    "ACK_ORDER_PERMISSION=YES",
+    "ACK_IP_ACCOUNT_CHECK=YES",
     "ACK_NO_EVENT=YES",
     "ACK_NO_RETRY=YES",
     "ACK_NO_LOOP=YES",
@@ -791,9 +794,9 @@ def _validate_client_order_id(client_order_id: str) -> None:
 def _validate_approval_id(approval_id: str) -> None:
     if (
         not isinstance(approval_id, str)
-        or not approval_id.startswith("STEP4-")
-        or len(approval_id) != len("STEP4-") + 8
-        or not approval_id.removeprefix("STEP4-").isalnum()
+        or not approval_id.startswith(LIVE_ORDER_APPROVAL_ID_PREFIX)
+        or len(approval_id) != len(LIVE_ORDER_APPROVAL_ID_PREFIX) + 8
+        or not approval_id.removeprefix(LIVE_ORDER_APPROVAL_ID_PREFIX).isalnum()
     ):
         raise LiveVerificationLiveOrderOnceError("approval_id is invalid")
 
@@ -926,7 +929,7 @@ def _approval_id_hash(approval_id: str) -> str:
 
 
 def _generate_approval_id() -> str:
-    return "STEP4-" + secrets.token_hex(4).upper()
+    return LIVE_ORDER_APPROVAL_ID_PREFIX + secrets.token_hex(4).upper()
 
 
 def _generate_client_order_id(*, issued_at_jst: datetime | None = None) -> str:

@@ -12,6 +12,7 @@ import pytest
 from app.live_verification.errors import LiveVerificationLiveOrderOnceError
 from app.live_verification.live_order_once import (
     LIVE_ORDER_APPROVAL_ACK_TOKENS,
+    LIVE_ORDER_APPROVAL_ID_PREFIX,
     LIVE_ORDER_APPROVAL_TTL_SECONDS,
     LIVE_ORDER_BODY_FIELDS,
     LIVE_ORDER_ENDPOINT_URL,
@@ -47,19 +48,27 @@ DUMMY_API_SECRET = "DUMMYAPISECRETVALUE"
 DUMMY_SIGNATURE = "DUMMYSIGNATUREVALUE"
 DUMMY_RAW_REQUEST = "DUMMY_RAW_REQUEST_VALUE"
 DUMMY_RAW_RESPONSE = "DUMMY_RAW_RESPONSE_VALUE"
-FIXED_APPROVAL_ID = "STEP4-1234ABCD"
+FIXED_APPROVAL_ID = "STEP4F-1234ABCD"
+LEGACY_STEP4_APPROVAL_ID = "STEP4-1234ABCD"
 FIXED_CLIENT_ORDER_ID = "S420260625100000ABCD1234"
 FIXED_NOW = datetime(2026, 6, 25, 10, 0, 0, tzinfo=ZoneInfo("Asia/Tokyo"))
 EXPECTED_APPROVAL_TTL_SECONDS = 300
 EXPECTED_BUY_APPROVAL_COMMAND = (
     f"STEP4_APPROVE {FIXED_APPROVAL_ID} SIDE=BUY SYMBOL=USD_JPY SIZE=100 "
-    "ACK_RISK=YES ACK_OPEN_POSITION=YES ACK_API_SCOPE=YES ACK_NO_EVENT=YES "
+    "ACK_RISK=YES ACK_OPEN_POSITION=YES ACK_API_SCOPE=YES "
+    "ACK_ORDER_PERMISSION=YES ACK_IP_ACCOUNT_CHECK=YES ACK_NO_EVENT=YES "
     "ACK_NO_RETRY=YES ACK_NO_LOOP=YES ACK_NO_ADD=YES ACK_NO_CHANGE=YES "
     "ACK_NO_CANCEL=YES ACK_NO_CLOSE=YES ACK_STOP_ON_UNKNOWN=YES"
 )
 EXPECTED_SELL_APPROVAL_COMMAND = EXPECTED_BUY_APPROVAL_COMMAND.replace(
     "SIDE=BUY",
     "SIDE=SELL",
+)
+LEGACY_COMPACT_BUY_APPROVAL_COMMAND = (
+    f"STEP4_APPROVE {FIXED_APPROVAL_ID} SIDE=BUY SYMBOL=USD_JPY SIZE=100 "
+    "ACK_RISK=YES ACK_OPEN_POSITION=YES ACK_API_SCOPE=YES ACK_NO_EVENT=YES "
+    "ACK_NO_RETRY=YES ACK_NO_LOOP=YES ACK_NO_ADD=YES ACK_NO_CHANGE=YES "
+    "ACK_NO_CANCEL=YES ACK_NO_CLOSE=YES ACK_STOP_ON_UNKNOWN=YES"
 )
 OLD_JAPANESE_BUY_APPROVAL_PHRASE = (
     f"STEP4_APPROVE {FIXED_APPROVAL_ID}: USD_JPY 100通貨 BUY "
@@ -214,6 +223,7 @@ def test_approval_gate_generates_exact_buy_and_sell_commands() -> None:
 
     assert isinstance(gate, Step4ApprovalGate)
     assert LIVE_ORDER_APPROVAL_TTL_SECONDS == EXPECTED_APPROVAL_TTL_SECONDS
+    assert LIVE_ORDER_APPROVAL_ID_PREFIX == "STEP4F-"
     assert gate.approval_id == FIXED_APPROVAL_ID
     assert gate.issued_at_jst == "2026-06-25T10:00:00+09:00"
     assert gate.expires_at_jst == "2026-06-25T10:05:00+09:00"
@@ -221,6 +231,8 @@ def test_approval_gate_generates_exact_buy_and_sell_commands() -> None:
         "ACK_RISK=YES",
         "ACK_OPEN_POSITION=YES",
         "ACK_API_SCOPE=YES",
+        "ACK_ORDER_PERMISSION=YES",
+        "ACK_IP_ACCOUNT_CHECK=YES",
         "ACK_NO_EVENT=YES",
         "ACK_NO_RETRY=YES",
         "ACK_NO_LOOP=YES",
@@ -291,7 +303,7 @@ def test_approval_within_300_seconds_passes(elapsed_seconds: int) -> None:
 
 def test_approval_id_mismatch_fails() -> None:
     gate = _gate()
-    phrase = gate.buy_approval_phrase.replace(FIXED_APPROVAL_ID, "STEP4-FFFF0000")
+    phrase = gate.buy_approval_phrase.replace(FIXED_APPROVAL_ID, "STEP4F-FFFF0000")
 
     decision = evaluate_step4_approval(
         gate=gate,
@@ -312,6 +324,8 @@ def test_approval_id_mismatch_fails() -> None:
         lambda phrase: phrase.replace("SYMBOL=USD_JPY", "SYMBOL=EUR_JPY"),
         lambda phrase: phrase.replace("SIZE=100", "SIZE=1000"),
         lambda phrase: phrase.replace("ACK_RISK=YES", "ACK_RISK=NO"),
+        lambda phrase: phrase.replace("ACK_ORDER_PERMISSION=YES", "ACK_ORDER_PERMISSION=NO"),
+        lambda phrase: phrase.replace("ACK_IP_ACCOUNT_CHECK=YES", "ACK_IP_ACCOUNT_CHECK=NO"),
         lambda phrase: f"{phrase} EXTRA=YES",
         lambda phrase: phrase.replace(" SIZE=100 ", "  SIZE=100 "),
         lambda phrase: phrase.replace(" ACK_RISK=YES ", "\nACK_RISK=YES "),
@@ -348,6 +362,26 @@ def test_approval_command_rejects_missing_ack_token(token: str) -> None:
     assert decision.side == "unknown"
 
 
+def test_legacy_compact_approval_command_without_step4f_ack_tokens_fails() -> None:
+    decision = evaluate_step4_approval(
+        gate=_gate(),
+        approval_phrase=LEGACY_COMPACT_BUY_APPROVAL_COMMAND,
+        now_jst=FIXED_NOW + timedelta(seconds=30),
+    )
+
+    assert decision.approval_passed is False
+    assert "approval_phrase_mismatch" in decision.fail_reasons
+    assert decision.side == "unknown"
+
+
+def test_step4_approval_id_prefix_fails_for_step4f_gate() -> None:
+    with pytest.raises(LiveVerificationLiveOrderOnceError):
+        build_step4_approval_gate(
+            issued_at_jst=FIXED_NOW,
+            approval_id=LEGACY_STEP4_APPROVAL_ID,
+        )
+
+
 def test_old_japanese_approval_phrase_fails() -> None:
     decision = evaluate_step4_approval(
         gate=_gate(),
@@ -377,7 +411,7 @@ def test_approval_expiry_after_300_seconds_fails() -> None:
 @pytest.mark.parametrize(
     "phrase",
     [
-        "STEP4_APPROVE STEP4-1234ABCD",
+        "STEP4_APPROVE STEP4F-1234ABCD",
         "OK",
         "続行",
         "任せる",
@@ -449,7 +483,7 @@ def test_expired_ledger_allows_new_prepare(tmp_path: Path) -> None:
     )
     new_gate = build_step4_approval_gate(
         issued_at_jst=FIXED_NOW + timedelta(seconds=360),
-        approval_id="STEP4-ABCDEF12",
+        approval_id="STEP4F-ABCDEF12",
     )
 
     ledger = prepare_live_order_attempt(
