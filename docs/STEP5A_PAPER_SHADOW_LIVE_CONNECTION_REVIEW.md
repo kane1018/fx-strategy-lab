@@ -320,6 +320,8 @@ Recommended sequence:
    No POST. Completed in
    [STEP5B_LIVE_ORDER_CANDIDATE_DRY_RUN.md](STEP5B_LIVE_ORDER_CANDIDATE_DRY_RUN.md).
 2. Step 5C: implement candidate risk gate and fail-closed tests. No POST.
+   Completed in
+   [STEP5C_LIVE_ORDER_CANDIDATE_RISK_GATE.md](STEP5C_LIVE_ORDER_CANDIDATE_RISK_GATE.md).
 3. Step 5D: link paper/shadow decision records to candidate records. No POST.
 4. Step 5E: render or report candidate review before any approval gate. No POST.
 5. Step 5F or later: consider a separate one-shot live task only after fresh
@@ -331,9 +333,11 @@ Do not proceed directly to another live POST from Step 5A.
 ## Handoff Summary
 
 Step 5A completed a docs-only design review. Step 5B then added the first
-dry-run-only live-order candidate model. Paper trading remains simulation,
-shadow remains local risk/audit recording, and live order execution remains a
-separate human-approved one-shot path. The safe bridge is candidate-based:
-strategy and shadow may produce non-executable evidence, Step 5C may add a risk
-gate, and only a future separately approved task may perform final dynamic
-preflight and at most one live POST.
+dry-run-only live-order candidate model, and Step 5C added a fail-closed risk
+gate for sanitized candidate review eligibility. Paper trading remains
+simulation, shadow remains local risk/audit recording, and live order execution
+remains a separate human-approved one-shot path. The safe bridge is
+candidate-based: strategy and shadow may produce non-executable evidence,
+Step 5C may mark a candidate eligible for human review only, and only a future
+separately approved task may perform final dynamic preflight and at most one
+live POST.

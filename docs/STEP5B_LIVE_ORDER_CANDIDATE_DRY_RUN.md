@@ -199,6 +199,12 @@ human approval review.
 
 Step 5C must still remain no POST unless a later task explicitly changes scope.
 
+Step 5C was later implemented in
+[STEP5C_LIVE_ORDER_CANDIDATE_RISK_GATE.md](STEP5C_LIVE_ORDER_CANDIDATE_RISK_GATE.md).
+The risk gate evaluates a candidate plus sanitized risk snapshot, fails closed
+on unsafe or unknown input, and keeps `allowed_for_live=false` even when
+`eligible_for_human_review=true`.
+
 ## Tests
 
 Added tests cover:
@@ -221,3 +227,6 @@ non-executable live-order candidate. Valid BUY and SELL signals become
 NO_TRADE and unsafe inputs become blocked results. Every result keeps
 `allowed_for_live=false`, requires a later risk gate, and requires a later human
 approval gate.
+
+Step 5C now provides that risk gate, but still does not issue approval gates or
+permit live POST.

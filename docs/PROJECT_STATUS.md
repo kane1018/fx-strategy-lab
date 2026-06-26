@@ -82,6 +82,17 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5C Live order candidate risk gate完了 / no order / no POST** —
+  `backend/app/live_verification/live_order_candidate_risk_gate.py` を追加し、Step 5Bの
+  `LiveOrderCandidate` とsanitizedな `LiveOrderCandidateRiskSnapshot` からfail-closedな
+  `LiveOrderCandidateRiskDecision` を作るrisk gateを実装した。safe snapshotでは
+  `risk_gate_passed=true`、`eligible_for_human_review=true` になるが、`allowed_for_live=false`、
+  `requires_human_approval=true`、`approval_gate_required=true`、`dry_run_only=true` を維持する。
+  unsafe / unknown / missing inputは `BLOCKED` となり、複数の `blocked_reasons` を返す。Step 5Cは
+  risk gate passをlive POST許可とは扱わず、candidate review候補へ進めるだけで停止する。
+  `live_order_once`、Private API、broker、HTTP client、ledger、approval gateには接続していない。
+  詳細は [STEP5C_LIVE_ORDER_CANDIDATE_RISK_GATE.md](STEP5C_LIVE_ORDER_CANDIDATE_RISK_GATE.md)。
+  推奨次フェーズはStep 5D/5E candidate review/reportingであり、引き続きno POSTとする。
 - **Step 5B Live order candidate dry-run model完了 / no order / no POST** —
   `backend/app/live_verification/live_order_candidate.py` を追加し、sanitizedな `StrategySignalInput` から
   非実行の `LiveOrderCandidate` またはblocked resultを作るdry-runモデルを実装した。BUY / SELL signalは
