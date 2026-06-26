@@ -210,6 +210,13 @@ order execution by itself. Any later approval gate must be a separate task with
 fresh preflight, one-shot ledger protection, exact approval text, final dynamic
 preflight, and explicit user risk acknowledgement.
 
+Step 5G was later implemented in
+[STEP5G_REVIEW_GATED_SESSION_BUNDLE.md](STEP5G_REVIEW_GATED_SESSION_BUNDLE.md).
+It combines a Step 5E review report and Step 5F session policy decision into a
+sanitized dry-run operation bundle. A ready bundle still keeps
+`allowed_for_live=false`, does not issue approval gates, and does not permit
+live POST.
+
 ## Tests
 
 Added tests cover:
@@ -235,3 +242,6 @@ Step 5F is complete as a dry-run policy layer. The next step may design how to
 display or operate a review-gated session, but it must remain no POST unless a
 separate future task explicitly introduces fresh preflight, approval gate, and
 one-shot execution controls.
+
+Step 5G now provides that display/operation bundle layer as a sanitized dry-run
+report only. It preserves the no POST and no approval gate boundary.

@@ -256,3 +256,7 @@ Step 5F now evaluates that report against review-gated session policy constraint
 such as max two sessions per day, at least two hours between sessions, 100-unit
 session size, and 200-unit daily cap. It remains no POST and keeps
 `allowed_for_live=false`.
+
+Step 5G now turns the Step 5E review report plus Step 5F policy decision into a
+sanitized operation bundle with remaining session and daily-size capacity. It
+remains no POST, no approval gate, and `allowed_for_live=false`.

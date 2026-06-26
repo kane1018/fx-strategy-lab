@@ -244,3 +244,7 @@ Step 5C now provides that risk gate, Step 5D now provides the sanitized trace
 record, Step 5E now provides the sanitized review report, and Step 5F now
 provides the dry-run review-gated session policy. None of these steps issues
 approval gates or permits live POST.
+
+Step 5G now provides a sanitized operation bundle that combines the review
+report and session policy decision for operator inspection only. It still keeps
+`allowed_for_live=false`, issues no approval gate, and permits no live POST.

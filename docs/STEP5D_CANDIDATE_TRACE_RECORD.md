@@ -260,3 +260,8 @@ and no approval gate boundary.
 Step 5F now evaluates a sanitized review report plus sanitized session snapshot
 against review-gated session policy rules. A Step 5F pass still keeps
 `allowed_for_live=false` and does not issue approval gates or permit live POST.
+
+Step 5G now combines the Step 5E review report and Step 5F session policy
+decision into a sanitized operation bundle. A ready bundle is operator review
+material only; it still keeps `allowed_for_live=false` and does not issue
+approval gates or permit live POST.

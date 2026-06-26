@@ -213,6 +213,12 @@ Step 5F adds a review-gated session policy layer after this review report. Step
 5F policy pass still keeps `allowed_for_live=false`; it only means a future
 review-gated session design may be considered without POST.
 
+Step 5G was later implemented in
+[STEP5G_REVIEW_GATED_SESSION_BUNDLE.md](STEP5G_REVIEW_GATED_SESSION_BUNDLE.md).
+It combines this review report with the Step 5F session policy decision into a
+sanitized operation bundle for human inspection only. It still keeps
+`allowed_for_live=false` and does not issue approval gates or permit live POST.
+
 ## Tests
 
 Added tests cover:
@@ -242,3 +248,7 @@ API access, ledger access, and live POST.
 
 Step 5F follows this layer with dry-run session constraints. It does not connect
 the review report directly to approval gate issuance or live POST.
+
+Step 5G follows with a dry-run operation bundle that summarizes review status,
+policy status, blocked reasons, and remaining capacity without creating an
+approval gate or live POST path.

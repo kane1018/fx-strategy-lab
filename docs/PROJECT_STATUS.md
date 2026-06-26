@@ -82,6 +82,22 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5G Review-gated session bundle完了 / no order / no POST** —
+  `backend/app/live_verification/live_order_review_session_bundle.py` を追加し、Step 5Eの
+  `LiveOrderCandidateReviewReport` とStep 5Fの `ReviewGatedSessionPolicyDecision` から
+  sanitizedな `ReviewGatedSessionBundle` を作るoperation bundle modelを実装した。
+  ready review + passed session policyでは `READY_FOR_OPERATOR_REVIEW` になるが、
+  これは人間が読むdry-run運用判断レポート候補という意味だけで、`allowed_for_live=false`、
+  `requires_human_approval=true`、`approval_gate_required=true`、`dry_run_only=true` を維持する。
+  review / policy / bundle-levelの `blocked_reasons` を統合し、`remaining_sessions_today` と
+  `remaining_daily_size` をsanitizedに計算する。capacityがmissing/unknown/negativeの場合はfail closedで
+  `BLOCKED_BUNDLE` になる。Markdown renderingには `This operation bundle is dry-run only.`、
+  `This bundle is not an approval gate.`、`This bundle does not authorize live POST.`、
+  `allowed_for_live=false.` の警告を含める。Step 5Gは `live_order_once`、Private API、broker、
+  HTTP client、read-only API、ledger、approval gateには接続していない。詳細は
+  [STEP5G_REVIEW_GATED_SESSION_BUNDLE.md](STEP5G_REVIEW_GATED_SESSION_BUNDLE.md)。
+  ready bundleはlive POST許可でもapproval gate発行許可でもない。次フェーズを行う場合も
+  別Step・別承認で扱う。
 - **Step 5F Review-gated session policy完了 / no order / no POST** —
   `backend/app/live_verification/live_order_session_policy.py` を追加し、Step 5Eの
   `LiveOrderCandidateReviewReport` とsanitizedな `ReviewGatedSessionPolicySnapshot` から
