@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5E Candidate review report完了 / no order / no POST** —
+  `backend/app/live_verification/live_order_candidate_review.py` を追加し、Step 5Bの
+  `LiveOrderCandidate`、Step 5Cの `LiveOrderCandidateRiskDecision`、Step 5Dの
+  `LiveOrderCandidateTraceRecord` からsanitizedな `LiveOrderCandidateReviewReport` を作る
+  review/reporting modelを実装した。`READY_FOR_HUMAN_REVIEW` は人間が読むdry-run report候補という
+  意味だけで、`allowed_for_live=false`、`requires_human_approval=true`、`approval_gate_required=true`、
+  `dry_run_only=true` を維持する。risk decisionやtraceがblockedの場合は `BLOCKED_REVIEW` として
+  blocked reasonsを統合し、`fix_blocked_reasons_no_post` を返す。Markdown renderingには
+  `This review report is dry-run only.`、`This report is not an approval gate.`、
+  `This report does not authorize live POST.`、`allowed_for_live=false.` の警告を含める。
+  Step 5Eは `live_order_once`、Private API、broker、HTTP client、read-only API、ledger、approval gateには
+  接続していない。詳細は [STEP5E_CANDIDATE_REVIEW_REPORT.md](STEP5E_CANDIDATE_REVIEW_REPORT.md)。
+  次フェーズを行う場合も、approval gateやlive POSTへ直接進まず、別Step・別承認で扱う。
 - **Step 5D Candidate trace record完了 / no order / no POST** —
   `backend/app/live_verification/live_order_candidate_trace.py` を追加し、Step 5Bの
   `LiveOrderCandidate` とStep 5Cの `LiveOrderCandidateRiskDecision` を、sanitizedな

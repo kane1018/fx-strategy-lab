@@ -211,6 +211,12 @@ record links the candidate and risk decision back to sanitized Paper / Shadow /
 Strategy source references for review/reporting only. It keeps
 `allowed_for_live=false` and does not issue approval gates or permit live POST.
 
+Step 5E was later implemented in
+[STEP5E_CANDIDATE_REVIEW_REPORT.md](STEP5E_CANDIDATE_REVIEW_REPORT.md). The
+review report renders candidate / risk decision / trace data for human
+inspection only, keeps `allowed_for_live=false`, and still does not issue
+approval gates or permit live POST.
+
 ## Tests
 
 Added tests cover:
@@ -234,6 +240,6 @@ NO_TRADE and unsafe inputs become blocked results. Every result keeps
 `allowed_for_live=false`, requires a later risk gate, and requires a later human
 approval gate.
 
-Step 5C now provides that risk gate, and Step 5D now provides the sanitized
-trace record for candidate / risk decision review. Neither step issues approval
-gates or permits live POST.
+Step 5C now provides that risk gate, Step 5D now provides the sanitized trace
+record, and Step 5E now provides the sanitized review report. None of these
+steps issues approval gates or permits live POST.

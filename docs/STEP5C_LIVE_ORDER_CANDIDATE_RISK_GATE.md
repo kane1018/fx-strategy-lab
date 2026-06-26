@@ -210,8 +210,11 @@ risk decision to sanitized Paper / Shadow / Strategy source references for
 review and audit only. A Step 5D `READY_FOR_REVIEW` trace still keeps
 `allowed_for_live=false` and does not issue an approval gate.
 
-Step 5E can later render or report those trace records. Step 5E should still
-remain no POST unless a separate future task explicitly changes scope.
+Step 5E was later implemented in
+[STEP5E_CANDIDATE_REVIEW_REPORT.md](STEP5E_CANDIDATE_REVIEW_REPORT.md). It
+renders candidate / risk decision / trace data as a sanitized dry-run review
+report only. It keeps `allowed_for_live=false` and does not issue approval
+gates or permit live POST.
 
 Any future live POST path must still require a separate approval gate, final
 dynamic preflight, one-shot ledger protection, and explicit user authorization.
@@ -245,3 +248,6 @@ permission, not approval gate issuance, and not final preflight.
 Step 5D now records the candidate / risk decision / Paper / Shadow / Strategy
 trace relationship for later review/reporting, while preserving the same no
 POST and `allowed_for_live=false` boundary.
+
+Step 5E now renders that relationship into a sanitized human-readable report,
+again without approval gate issuance or live POST permission.

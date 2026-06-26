@@ -221,6 +221,12 @@ should remain no POST and should show sanitized candidate, risk, and trace
 relationships without exposing credentials, raw responses, or execution
 identifiers.
 
+Step 5E was later implemented in
+[STEP5E_CANDIDATE_REVIEW_REPORT.md](STEP5E_CANDIDATE_REVIEW_REPORT.md). It
+renders candidate / risk decision / trace data as a sanitized dry-run review
+report only, keeps `allowed_for_live=false`, and does not issue approval gates
+or permit live POST.
+
 ## Tests
 
 Added tests cover:
@@ -247,3 +253,6 @@ Step 5D adds the dry-run trace layer between Step 5C risk decisions and a future
 Step 5E review/reporting surface. It records how a Paper / Shadow / Strategy
 source led to a candidate and risk decision, but it keeps `allowed_for_live=false`
 and never issues an approval gate or live POST.
+
+Step 5E now provides that sanitized review report surface, with the same no POST
+and no approval gate boundary.
