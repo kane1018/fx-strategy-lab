@@ -65,6 +65,27 @@ values, order id, execution id, position id, open price, execution price,
 timestamp, detailed P/L, account details, and position details were not
 displayed or saved.
 
+## 0C. Step 4H Micro-Live Completion Review
+
+Step 4H records the completed micro-live verification in
+[STEP4_MICRO_LIVE_COMPLETION_REVIEW.md](STEP4_MICRO_LIVE_COMPLETION_REVIEW.md).
+
+The USD_JPY 100-unit rule was sufficient for the bounded one-shot new order API
+connectivity verification. The final verified state after user manual
+settlement was:
+
+```text
+open_positions_count: 0
+active_orders_count: 0
+```
+
+This does not authorize another live POST, larger lot size, API close
+verification, cancellation, order change, continuous operation, or automated
+BUY/SELL decisions. Any future live POST requires a separate task, fresh
+preflight, clean Git state, passing tests and ruff, no secret or raw artifact
+contamination, an approval gate, one-shot execution design, stop-on-unknown
+design, retry/loop prohibition, and explicit user risk approval.
+
 ## 1. Purpose
 
 This review resolves the Step 4 quantity mismatch before any live order retry.
