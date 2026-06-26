@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4G-A 建玉read-only確認完了 / POSITION_CONFIRMED / no close / no order** —
+  Step 4F-B後のOPEN建玉確認として、2026-06-26にread-only確認のみを実施した。
+  `GMO_FX_API_KEY: set` / `GMO_FX_API_SECRET: set` を値非表示で確認し、ledgerは
+  `POST_COMPLETED`、`attempt_count=1`、`result_category=success` のままsanitized確認した。
+  既存read-only runnerで `account/assets=success`、`open_positions_count=1`、
+  `active_orders_count=0`、raw response保存なし、headers保存なし、credential表示なしを確認した。
+  openPositionsのsanitized summaryは `position_count=1`、`symbol=USD_JPY`、`side=BUY`、
+  `size_total=100`。建玉ID、注文ID、約定ID、position ID、open price、execution price、
+  timestamp、詳細損益、残高詳細、建玉詳細、raw responseは表示・保存していない。public tickerは
+  `bid=161.804`、`ask=161.809`、`spread_jpy=0.005`、`ticker_age_seconds=0.236`。
+  判定は **POSITION_CONFIRMED**。USD/JPY 100通貨では、1円変動で概算約100円、0.1円変動で
+  概算約10円の損益変動があり得る。Step 4G-AではHTTP POST、新規注文、追加注文、決済、
+  取消、注文変更、approval id発行、approval gate、ledger resetは未実行。決済する場合は
+  Step 4G-Bとして別タスク・別承認で扱う。
 - **Step 4F-B one-shot retry with approval gate 完了 / live order success、OPEN建玉あり** —
   `dd705dd` 対応後、2026-06-26 11:09 JSTに `STEP4F-` approval gateを発行し、
   ユーザーが同じCodexセッションで短い1行approval commandを完全一致入力した。承認後再preflightでは

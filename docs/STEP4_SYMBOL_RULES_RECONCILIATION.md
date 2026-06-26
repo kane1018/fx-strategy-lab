@@ -21,6 +21,28 @@ credential values, order id, execution id, or request id. No retry, loop,
 additional order, order change, cancellation, close order, or auto-close was
 performed.
 
+## 0A. Step 4G-A Read-Only Position Check
+
+Step 4G-A confirmed the remaining position state with read-only checks only:
+
+```text
+open_positions_count: 1
+active_orders_count: 0
+position_count: 1
+symbol: USD_JPY
+side: BUY
+size_total: 100
+public_bid: 161.804
+public_ask: 161.809
+spread_jpy: 0.005
+```
+
+No HTTP POST, new order, additional order, close order, cancellation, order
+change, approval id, approval gate, or ledger reset was performed. Raw response,
+headers, signatures, credential values, order id, execution id, position id,
+open price, execution price, detailed P/L, account details, and position details
+were not displayed or saved.
+
 ## 1. Purpose
 
 This review resolves the Step 4 quantity mismatch before any live order retry.

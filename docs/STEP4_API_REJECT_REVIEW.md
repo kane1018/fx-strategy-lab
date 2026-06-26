@@ -56,6 +56,53 @@ loop, order change, cancellation, close order, or auto-close was performed.
 Because `open_positions_count_after=1`, an OPEN position may remain. Any further
 action must be handled as a separate task with separate explicit approval.
 
+## 1B. Step 4G-A Read-Only Position Check
+
+Step 4G-A was performed as a read-only position check after Step 4F-B.
+
+Sanitized result:
+
+```text
+GMO_FX_API_KEY: set
+GMO_FX_API_SECRET: set
+ledger_state: POST_COMPLETED
+attempt_count: 1
+result_category: success
+account_assets: success
+open_positions_count: 1
+active_orders_count: 0
+position_count: 1
+position_symbol: USD_JPY
+position_side: BUY
+position_size_total: 100
+public_bid: 161.804
+public_ask: 161.809
+spread_jpy: 0.005
+ticker_age_seconds: 0.236
+raw_response_saved: false
+raw_response_displayed: false
+ids_displayed: false
+price_detail_displayed: false
+```
+
+Classification:
+
+```text
+POSITION_CONFIRMED
+```
+
+Step 4G-A did not execute HTTP POST, place a new order, add to the position,
+close the position, cancel orders, change orders, issue an approval id, issue an
+approval gate, or reset the ledger. Position identifiers, order identifiers,
+execution identifiers, open price, execution price, detailed P/L, account
+details, position details, raw request, raw response, headers, signatures, and
+credential values were not displayed or saved.
+
+For a 100-unit USD/JPY position, a 1 JPY move corresponds to an approximate
+100 JPY P/L change, and a 0.1 JPY move corresponds to an approximate 10 JPY
+P/L change. Any close action must be handled as a separate Step 4G-B task with
+separate explicit approval.
+
 ## 2. Previous Sanitized State
 
 The previous Step 4B-B outcome was handled only as sanitized facts:
