@@ -209,6 +209,10 @@ execution by itself. Any later approval gate must be a separate task with fresh
 preflight, one-shot ledger protection, exact approval text, and explicit user
 risk acknowledgement.
 
+Step 5F adds a review-gated session policy layer after this review report. Step
+5F policy pass still keeps `allowed_for_live=false`; it only means a future
+review-gated session design may be considered without POST.
+
 ## Tests
 
 Added tests cover:
@@ -235,3 +239,6 @@ Step 5E adds the sanitized report layer for candidate review. It turns
 candidate / risk decision / trace data into a human-readable dry-run report,
 while preserving `allowed_for_live=false` and avoiding approval gate issuance,
 API access, ledger access, and live POST.
+
+Step 5F follows this layer with dry-run session constraints. It does not connect
+the review report directly to approval gate issuance or live POST.

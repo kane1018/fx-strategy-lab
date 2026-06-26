@@ -251,3 +251,8 @@ POST and `allowed_for_live=false` boundary.
 
 Step 5E now renders that relationship into a sanitized human-readable report,
 again without approval gate issuance or live POST permission.
+
+Step 5F now evaluates that report against review-gated session policy constraints
+such as max two sessions per day, at least two hours between sessions, 100-unit
+session size, and 200-unit daily cap. It remains no POST and keeps
+`allowed_for_live=false`.

@@ -241,5 +241,6 @@ NO_TRADE and unsafe inputs become blocked results. Every result keeps
 approval gate.
 
 Step 5C now provides that risk gate, Step 5D now provides the sanitized trace
-record, and Step 5E now provides the sanitized review report. None of these
-steps issues approval gates or permits live POST.
+record, Step 5E now provides the sanitized review report, and Step 5F now
+provides the dry-run review-gated session policy. None of these steps issues
+approval gates or permits live POST.

@@ -82,6 +82,22 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5F Review-gated session policy完了 / no order / no POST** —
+  `backend/app/live_verification/live_order_session_policy.py` を追加し、Step 5Eの
+  `LiveOrderCandidateReviewReport` とsanitizedな `ReviewGatedSessionPolicySnapshot` から
+  fail-closedな `ReviewGatedSessionPolicyDecision` を作るsession policy modelを実装した。
+  初回micro-live完了、前回結果確定、結果不明なし、`open_positions_count=0`、
+  `active_orders_count=0`、1日最大2セッション、セッション間120分以上、1セッション100通貨、
+  1日合計200通貨以下、Git/tests/ruff/secret scan正常、raw response未保存・未表示、
+  market window allowed、maintenance false、important event window confirmedを評価する。
+  safe snapshotでは `policy_passed=true`、`eligible_for_review_session=true` になるが、
+  `allowed_for_live=false`、`requires_human_approval=true`、`approval_gate_required=true`、
+  `dry_run_only=true` を維持する。unknown / missing / unsafe inputは `BLOCKED` となり、
+  複数の `blocked_reasons` を返す。Step 5Fは `live_order_once`、Private API、broker、
+  HTTP client、read-only API、ledger、approval gateには接続していない。詳細は
+  [STEP5F_REVIEW_GATED_SESSION_POLICY.md](STEP5F_REVIEW_GATED_SESSION_POLICY.md)。
+  policy passはlive POST許可でもapproval gate発行許可でもない。次フェーズを行う場合も
+  別Step・別承認で扱う。
 - **Step 5E Candidate review report完了 / no order / no POST** —
   `backend/app/live_verification/live_order_candidate_review.py` を追加し、Step 5Bの
   `LiveOrderCandidate`、Step 5Cの `LiveOrderCandidateRiskDecision`、Step 5Dの

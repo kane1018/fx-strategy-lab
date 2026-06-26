@@ -326,7 +326,9 @@ Recommended sequence:
    Completed in [STEP5D_CANDIDATE_TRACE_RECORD.md](STEP5D_CANDIDATE_TRACE_RECORD.md).
 4. Step 5E: render or report candidate review before any approval gate. No POST.
    Completed in [STEP5E_CANDIDATE_REVIEW_REPORT.md](STEP5E_CANDIDATE_REVIEW_REPORT.md).
-5. Step 5F or later: consider a separate one-shot live task only after fresh
+5. Step 5F: evaluate review-gated session policy. No POST. Completed in
+   [STEP5F_REVIEW_GATED_SESSION_POLICY.md](STEP5F_REVIEW_GATED_SESSION_POLICY.md).
+6. Step 5G or later: consider a separate one-shot live task only after fresh
    preflight, exact approval gate, final dynamic preflight, and explicit user
    risk approval.
 
@@ -338,11 +340,12 @@ Step 5A completed a docs-only design review. Step 5B then added the first
 dry-run-only live-order candidate model, Step 5C added a fail-closed risk gate
 for sanitized candidate review eligibility, Step 5D added the sanitized
 candidate / risk decision trace record, and Step 5E added the sanitized review
-report. Paper trading remains
+report. Step 5F added the review-gated session policy for evaluating post-
+micro-live session constraints without POST. Paper trading remains
 simulation, shadow remains local risk/audit recording, and live order execution
 remains a separate human-approved one-shot path. The safe bridge is
 candidate-based: strategy and shadow may produce non-executable evidence,
 Step 5C may mark a candidate eligible for human review only, Step 5D may record
-the review trace only, Step 5E may render a dry-run report only, and only a
-future separately approved task may perform final dynamic preflight and at most
-one live POST.
+the review trace only, Step 5E may render a dry-run report only, Step 5F may
+evaluate session policy only, and only a future separately approved task may
+perform final dynamic preflight and at most one live POST.

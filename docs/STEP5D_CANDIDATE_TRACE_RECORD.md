@@ -256,3 +256,7 @@ and never issues an approval gate or live POST.
 
 Step 5E now provides that sanitized review report surface, with the same no POST
 and no approval gate boundary.
+
+Step 5F now evaluates a sanitized review report plus sanitized session snapshot
+against review-gated session policy rules. A Step 5F pass still keeps
+`allowed_for_live=false` and does not issue approval gates or permit live POST.
