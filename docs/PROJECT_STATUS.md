@@ -82,6 +82,17 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5A Paper / Shadow / Live接続設計レビュー完了 / no order / no POST** —
+  Step 4 micro-live完了後の次フェーズとして、paper trading、shadow run、live verificationの役割分担と
+  安全な接続設計を [STEP5A_PAPER_SHADOW_LIVE_CONNECTION_REVIEW.md](STEP5A_PAPER_SHADOW_LIVE_CONNECTION_REVIEW.md)
+  にdocs-onlyで整理した。提案フローは `Market data -> Strategy signal -> Paper / Shadow decision record ->
+  Live order candidate -> Risk gate -> Human approval gate -> Final dynamic preflight -> One-shot live POST ->
+  Read-only reconciliation -> Stop`。Paperは仮想取引・仮想P/L・研究用、Shadowはpublic market data由来の
+  candidate/risk/audit記録、Liveは人間承認・final preflight・one-shot ledger後にのみ扱う分離を明文化した。
+  Live order candidate schema draftとrisk gate必須項目を定義したが、実装、HTTP POST、実注文、決済、取消、
+  注文変更、approval id発行、approval gate、BUY/SELL live判断、Private API接続、API key / secret確認、
+  ledger変更は行っていない。推奨次フェーズはStep 5B strategy signal -> live order candidate dry-run model
+  であり、Step 5Bもno POSTとする。
 - **Step 4H micro-live検証完了レビュー完了 / no order / no close / no POST** —
   Step 4B〜Step 4G-Cのmicro-live検証を
   [STEP4_MICRO_LIVE_COMPLETION_REVIEW.md](STEP4_MICRO_LIVE_COMPLETION_REVIEW.md)

@@ -17,6 +17,21 @@ requests or raw responses, or display order, execution, or position identifiers.
 The successful live order was a user-specified BUY premise. It was not a
 strategy-generated BUY/SELL decision.
 
+## Step 5A Follow-Up
+
+Step 5A completed a docs-only Paper / Shadow / Live connection design review in
+[STEP5A_PAPER_SHADOW_LIVE_CONNECTION_REVIEW.md](STEP5A_PAPER_SHADOW_LIVE_CONNECTION_REVIEW.md).
+
+Step 5A did not execute HTTP POST, place or close an order, cancel or change an
+order, issue an approval id, issue an approval gate, display an approval
+command, choose BUY or SELL for live trading, call Private API endpoints, check
+API key or secret presence, reset or edit a ledger, or display raw requests,
+raw responses, credentials, headers, signatures, order identifiers, execution
+identifiers, or position identifiers.
+
+The recommended next step is Step 5B: strategy signal to live-order candidate
+dry-run model. Step 5B should remain no POST.
+
 ## Confirmed outcomes
 
 - GMO FX Private API read-only checks can be performed with sanitized output.
