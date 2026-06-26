@@ -82,6 +82,24 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5H Operator review procedure完了 / no order / no POST** —
+  `backend/app/live_verification/live_order_operator_review.py` を追加し、Step 5Gの
+  `ReviewGatedSessionBundle` からsanitizedな `LiveOrderOperatorReviewProcedure` と
+  checklist itemsを作るoperator review procedure modelを実装した。
+  ready bundleでは `READY_FOR_OPERATOR_CHECKLIST` になるが、これは人間が読むdry-run確認手順という
+  意味だけで、`allowed_for_live=false`、`requires_human_approval=true`、
+  `approval_gate_required=true`、`dry_run_only=true` を維持する。READY checklistにはdry-run確認、
+  approval gateではないこと、live POSTを許可しないこと、candidate条件、risk gate、session policy、
+  残りセッション枠、残り通貨枠、future approval gate / final dynamic preflightが別Stepであることを含める。
+  blocked bundleやunsafe inputでは `BLOCKED_OPERATOR_REVIEW` となり、blocked reasonsを保持し、
+  `Do not proceed to approval gate` / `Do not proceed to live POST` のchecklistを出す。
+  Markdown renderingには `This operator review is dry-run only.`、
+  `This review is not an approval gate.`、`This review does not authorize live POST.`、
+  `allowed_for_live=false.` の警告を含める。Step 5Hは `live_order_once`、Private API、broker、
+  HTTP client、read-only API、ledger、approval gateには接続していない。詳細は
+  [STEP5H_OPERATOR_REVIEW_PROCEDURE.md](STEP5H_OPERATOR_REVIEW_PROCEDURE.md)。
+  ready operator reviewはlive POST許可でもapproval gate発行許可でもない。次フェーズを行う場合も
+  別Step・別承認で扱う。
 - **Step 5G Review-gated session bundle完了 / no order / no POST** —
   `backend/app/live_verification/live_order_review_session_bundle.py` を追加し、Step 5Eの
   `LiveOrderCandidateReviewReport` とStep 5Fの `ReviewGatedSessionPolicyDecision` から

@@ -245,3 +245,7 @@ one-shot execution controls.
 
 Step 5G now provides that display/operation bundle layer as a sanitized dry-run
 report only. It preserves the no POST and no approval gate boundary.
+
+Step 5H now converts the Step 5G operation bundle into a sanitized operator
+review checklist. The checklist is still dry-run only, keeps
+`allowed_for_live=false`, and does not issue approval gates or permit live POST.

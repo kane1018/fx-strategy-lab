@@ -265,3 +265,7 @@ Step 5G now combines the Step 5E review report and Step 5F session policy
 decision into a sanitized operation bundle. A ready bundle is operator review
 material only; it still keeps `allowed_for_live=false` and does not issue
 approval gates or permit live POST.
+
+Step 5H now turns that bundle into a sanitized operator checklist. The checklist
+is still review material only, keeps `allowed_for_live=false`, and does not
+issue approval gates or permit live POST.

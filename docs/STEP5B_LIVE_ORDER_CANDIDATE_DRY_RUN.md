@@ -248,3 +248,7 @@ approval gates or permits live POST.
 Step 5G now provides a sanitized operation bundle that combines the review
 report and session policy decision for operator inspection only. It still keeps
 `allowed_for_live=false`, issues no approval gate, and permits no live POST.
+
+Step 5H now provides a sanitized operator review checklist derived from that
+bundle. It remains dry-run only, keeps `allowed_for_live=false`, issues no
+approval gate, and permits no live POST.

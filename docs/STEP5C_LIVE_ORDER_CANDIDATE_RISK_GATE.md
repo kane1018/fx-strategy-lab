@@ -216,6 +216,10 @@ renders candidate / risk decision / trace data as a sanitized dry-run review
 report only. It keeps `allowed_for_live=false` and does not issue approval
 gates or permit live POST.
 
+Step 5G and Step 5H now extend this no-POST review path with a sanitized
+operation bundle and operator checklist. They keep `allowed_for_live=false`,
+do not issue approval gates, and do not permit live POST.
+
 Any future live POST path must still require a separate approval gate, final
 dynamic preflight, one-shot ledger protection, and explicit user authorization.
 

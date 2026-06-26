@@ -252,3 +252,7 @@ the review report directly to approval gate issuance or live POST.
 Step 5G follows with a dry-run operation bundle that summarizes review status,
 policy status, blocked reasons, and remaining capacity without creating an
 approval gate or live POST path.
+
+Step 5H follows with a sanitized operator review checklist derived from the
+Step 5G bundle. It is a review procedure only, keeps `allowed_for_live=false`,
+and does not issue approval gates or permit live POST.

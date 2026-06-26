@@ -206,6 +206,12 @@ authorize live order execution by itself. Any later approval gate must be a
 separate task with fresh preflight, one-shot ledger protection, exact approval
 text, final dynamic preflight, and explicit user risk acknowledgement.
 
+Step 5H was later implemented in
+[STEP5H_OPERATOR_REVIEW_PROCEDURE.md](STEP5H_OPERATOR_REVIEW_PROCEDURE.md). It
+converts a Step 5G bundle into a sanitized operator checklist for review only.
+The checklist keeps `allowed_for_live=false`, does not issue approval gates, and
+does not permit live POST.
+
 ## Tests
 
 Added tests cover:
@@ -239,7 +245,7 @@ dry-run operation report only. It preserves `allowed_for_live=false`, avoids
 approval gate issuance, avoids API and ledger access, and never permits live
 POST.
 
-The next step may design how a human operator reviews this bundle, but it must
-remain no POST unless a separate future task explicitly introduces fresh
+Step 5H now provides the human operator checklist layer for this bundle. It
+remains no POST and no approval gate. Any future live task still requires fresh
 preflight, approval gate, final dynamic preflight, and one-shot execution
-controls.
+controls as a separate explicit step.
