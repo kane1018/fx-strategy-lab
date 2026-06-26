@@ -82,6 +82,17 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5B Live order candidate dry-run model完了 / no order / no POST** —
+  `backend/app/live_verification/live_order_candidate.py` を追加し、sanitizedな `StrategySignalInput` から
+  非実行の `LiveOrderCandidate` またはblocked resultを作るdry-runモデルを実装した。BUY / SELL signalは
+  `USD_JPY`、`size=100`、`execution_type=MARKET`、`status=REVIEW_REQUIRED` のcandidateになるが、
+  `allowed_for_live=false`、`requires_human_approval=true`、`risk_gate_required=true`、
+  `approval_gate_required=true`、`dry_run_only=true` を固定する。`NO_TRADE` / `hold`、unsupported symbol、
+  invalid confidence、missing rationaleはcandidateなしの `BLOCKED` resultへfail closedする。
+  candidate idは `LOCAND-` prefixのdeterministic dry-run IDで、order id、execution id、position id、
+  client order idではない。`live_order_once`、Private API、broker、HTTP client、ledger、approval gateには
+  接続していない。詳細は [STEP5B_LIVE_ORDER_CANDIDATE_DRY_RUN.md](STEP5B_LIVE_ORDER_CANDIDATE_DRY_RUN.md)。
+  推奨次フェーズはStep 5C candidate risk gate implementationであり、Step 5Cもno POSTとする。
 - **Step 5A Paper / Shadow / Live接続設計レビュー完了 / no order / no POST** —
   Step 4 micro-live完了後の次フェーズとして、paper trading、shadow run、live verificationの役割分担と
   安全な接続設計を [STEP5A_PAPER_SHADOW_LIVE_CONNECTION_REVIEW.md](STEP5A_PAPER_SHADOW_LIVE_CONNECTION_REVIEW.md)

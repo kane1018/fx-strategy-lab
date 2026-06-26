@@ -32,6 +32,13 @@ identifiers, or position identifiers.
 The recommended next step is Step 5B: strategy signal to live-order candidate
 dry-run model. Step 5B should remain no POST.
 
+Step 5B later added that dry-run model in
+[STEP5B_LIVE_ORDER_CANDIDATE_DRY_RUN.md](STEP5B_LIVE_ORDER_CANDIDATE_DRY_RUN.md).
+The model creates only non-executable review candidates or blocked results.
+It keeps `allowed_for_live=false`, requires later risk and approval gates, and
+does not call the live runner, Private API, broker code, HTTP clients, or
+ledger operations.
+
 ## Confirmed outcomes
 
 - GMO FX Private API read-only checks can be performed with sanitized output.

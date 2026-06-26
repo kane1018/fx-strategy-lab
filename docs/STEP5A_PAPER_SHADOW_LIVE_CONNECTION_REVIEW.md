@@ -317,7 +317,8 @@ unsafe. A passed risk gate should mean only "ready for human review", not
 Recommended sequence:
 
 1. Step 5B: implement strategy signal -> live order candidate dry-run model.
-   No POST.
+   No POST. Completed in
+   [STEP5B_LIVE_ORDER_CANDIDATE_DRY_RUN.md](STEP5B_LIVE_ORDER_CANDIDATE_DRY_RUN.md).
 2. Step 5C: implement candidate risk gate and fail-closed tests. No POST.
 3. Step 5D: link paper/shadow decision records to candidate records. No POST.
 4. Step 5E: render or report candidate review before any approval gate. No POST.
@@ -329,9 +330,10 @@ Do not proceed directly to another live POST from Step 5A.
 
 ## Handoff Summary
 
-Step 5A completed a docs-only design review. Paper trading remains simulation,
+Step 5A completed a docs-only design review. Step 5B then added the first
+dry-run-only live-order candidate model. Paper trading remains simulation,
 shadow remains local risk/audit recording, and live order execution remains a
 separate human-approved one-shot path. The safe bridge is candidate-based:
-strategy and shadow may produce non-executable evidence, a risk gate may mark a
-candidate ready for human review, and only a future separately approved task may
-perform final dynamic preflight and at most one live POST.
+strategy and shadow may produce non-executable evidence, Step 5C may add a risk
+gate, and only a future separately approved task may perform final dynamic
+preflight and at most one live POST.

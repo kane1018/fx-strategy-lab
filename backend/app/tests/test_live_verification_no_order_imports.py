@@ -997,6 +997,100 @@ def test_live_order_reject_classification_exposes_only_sanitized_fields() -> Non
     assert allowed_classification_fields.issubset(field_names)
 
 
+def test_live_order_candidate_has_no_http_secret_private_api_or_broker_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    path = PACKAGE_ROOT / "live_order_candidate.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+
+
+def test_live_order_candidate_exposes_only_dry_run_review_fields() -> None:
+    allowed_fields = {
+        "candidate",
+        "candidate_id",
+        "source_signal_id",
+        "source_type",
+        "strategy_name",
+        "symbol",
+        "side",
+        "confidence",
+        "rationale",
+        "created_at",
+        "expires_at",
+        "market_snapshot_ref",
+        "paper_trade_ref",
+        "shadow_run_ref",
+        "status",
+        "blocked_reason",
+        "size",
+        "execution_type",
+        "requires_human_approval",
+        "allowed_for_live",
+        "dry_run_only",
+        "risk_gate_required",
+        "approval_gate_required",
+    }
+    blocked_fields = {
+        "request_headers",
+        "headers",
+        "signature",
+        "api_key",
+        "api_secret",
+        "raw_request",
+        "raw_response",
+        "order_id",
+        "execution_id",
+        "position_id",
+        "clientOrderId",
+        "request_url",
+        "url",
+        "endpoint",
+        "method",
+        "http_client",
+        "ledger",
+    }
+    path = PACKAGE_ROOT / "live_order_candidate.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_fields.issubset(field_names)
+
+
 def test_live_order_once_allows_only_explicit_one_shot_http_boundary() -> None:
     path = PACKAGE_ROOT / "live_order_once.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
