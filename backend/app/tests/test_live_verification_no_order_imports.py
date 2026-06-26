@@ -1202,6 +1202,112 @@ def test_live_order_candidate_risk_gate_exposes_only_sanitized_review_fields() -
     assert allowed_fields.issubset(field_names)
 
 
+def test_live_order_candidate_trace_has_no_ordering_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+        "app.live_verification.live_order_once",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+        "post_live_order_with_httpx",
+        "execute_one_shot_live_order",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    path = PACKAGE_ROOT / "live_order_candidate_trace.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+
+
+def test_live_order_candidate_trace_exposes_only_sanitized_review_fields() -> None:
+    allowed_fields = {
+        "trace_record",
+        "trace_id",
+        "created_at",
+        "source_signal_id",
+        "source_type",
+        "strategy_name",
+        "paper_trade_ref",
+        "shadow_run_ref",
+        "paper_decision_ref",
+        "shadow_decision_ref",
+        "review_batch_id",
+        "candidate_id",
+        "risk_decision_id",
+        "risk_status",
+        "risk_gate_passed",
+        "eligible_for_human_review",
+        "symbol",
+        "side",
+        "size",
+        "execution_type",
+        "candidate_status",
+        "trace_status",
+        "blocked_reasons",
+        "allowed_for_live",
+        "requires_human_approval",
+        "approval_gate_required",
+        "dry_run_only",
+        "recommended_next_step",
+    }
+    blocked_fields = {
+        "request_headers",
+        "headers",
+        "signature",
+        "api_key",
+        "api_secret",
+        "raw_request",
+        "raw_response",
+        "order_id",
+        "execution_id",
+        "position_id",
+        "clientOrderId",
+        "request_url",
+        "url",
+        "endpoint",
+        "method",
+        "http_client",
+        "open_price",
+        "detailed_pl",
+        "ledger",
+    }
+    path = PACKAGE_ROOT / "live_order_candidate_trace.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_fields.issubset(field_names)
+
+
 def test_live_order_once_allows_only_explicit_one_shot_http_boundary() -> None:
     path = PACKAGE_ROOT / "live_order_once.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))

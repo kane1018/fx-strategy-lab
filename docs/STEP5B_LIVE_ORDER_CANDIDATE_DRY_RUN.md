@@ -205,6 +205,12 @@ The risk gate evaluates a candidate plus sanitized risk snapshot, fails closed
 on unsafe or unknown input, and keeps `allowed_for_live=false` even when
 `eligible_for_human_review=true`.
 
+Step 5D was later implemented in
+[STEP5D_CANDIDATE_TRACE_RECORD.md](STEP5D_CANDIDATE_TRACE_RECORD.md). The trace
+record links the candidate and risk decision back to sanitized Paper / Shadow /
+Strategy source references for review/reporting only. It keeps
+`allowed_for_live=false` and does not issue approval gates or permit live POST.
+
 ## Tests
 
 Added tests cover:
@@ -228,5 +234,6 @@ NO_TRADE and unsafe inputs become blocked results. Every result keeps
 `allowed_for_live=false`, requires a later risk gate, and requires a later human
 approval gate.
 
-Step 5C now provides that risk gate, but still does not issue approval gates or
-permit live POST.
+Step 5C now provides that risk gate, and Step 5D now provides the sanitized
+trace record for candidate / risk decision review. Neither step issues approval
+gates or permits live POST.

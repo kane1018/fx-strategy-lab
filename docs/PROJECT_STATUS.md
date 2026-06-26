@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5D Candidate trace record完了 / no order / no POST** —
+  `backend/app/live_verification/live_order_candidate_trace.py` を追加し、Step 5Bの
+  `LiveOrderCandidate` とStep 5Cの `LiveOrderCandidateRiskDecision` を、sanitizedな
+  `source_signal_id` / `paper_trade_ref` / `shadow_run_ref` / optional decision refsへ紐付ける
+  `LiveOrderCandidateTraceRecord` を実装した。`candidate_id` と `risk_decision.candidate_id` の不一致、
+  `allowed_for_live=true`、dry-run / human approval / approval gate条件の欠落、source signal欠落、
+  paper/shadow参照欠落、unsupported symbol/side/size/execution_typeはfail closedで `BLOCKED` になる。
+  risk decisionがblockedの場合も監査用に `BLOCKED_TRACE_RECORDED` を作れるが、
+  `eligible_for_human_review=false`、`allowed_for_live=false` を維持する。`READY_FOR_REVIEW` は
+  review/reporting候補という意味だけで、approval gateやlive POST許可ではない。Step 5Dは
+  `live_order_once`、Private API、broker、HTTP client、ledger、approval gateには接続していない。
+  詳細は [STEP5D_CANDIDATE_TRACE_RECORD.md](STEP5D_CANDIDATE_TRACE_RECORD.md)。
+  推奨次フェーズはStep 5E candidate review/reportingであり、引き続きno POSTとする。
 - **Step 5C Live order candidate risk gate完了 / no order / no POST** —
   `backend/app/live_verification/live_order_candidate_risk_gate.py` を追加し、Step 5Bの
   `LiveOrderCandidate` とsanitizedな `LiveOrderCandidateRiskSnapshot` からfail-closedな

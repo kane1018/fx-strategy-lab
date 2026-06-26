@@ -205,9 +205,13 @@ recommended_next_step: fix_inputs_or_wait_no_post
 
 ## Relationship to Step 5D/5E
 
-Step 5C can feed a later review/reporting step such as Step 5D or Step 5E.
-Those steps should still remain no POST unless a separate future task explicitly
-changes scope.
+Step 5C feeds Step 5D candidate trace records. Step 5D links the candidate and
+risk decision to sanitized Paper / Shadow / Strategy source references for
+review and audit only. A Step 5D `READY_FOR_REVIEW` trace still keeps
+`allowed_for_live=false` and does not issue an approval gate.
+
+Step 5E can later render or report those trace records. Step 5E should still
+remain no POST unless a separate future task explicitly changes scope.
 
 Any future live POST path must still require a separate approval gate, final
 dynamic preflight, one-shot ledger protection, and explicit user authorization.
@@ -237,3 +241,7 @@ Step 5C creates a fail-closed risk decision layer between a Step 5B
 `LiveOrderCandidate` and any future human review surface. A passed risk decision
 means the candidate may move to human review only. It is not live POST
 permission, not approval gate issuance, and not final preflight.
+
+Step 5D now records the candidate / risk decision / Paper / Shadow / Strategy
+trace relationship for later review/reporting, while preserving the same no
+POST and `allowed_for_live=false` boundary.
