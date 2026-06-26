@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 4G-C 手動決済後read-only確認完了 / MANUAL_SETTLEMENT_CONFIRMED / no order / no close** —
+  ユーザー報告として、GMO Web画面から前回の `USD_JPY BUY 100通貨` 建玉を手動決済済みで、
+  建玉サマリー・建玉一覧に対象取引なしと表示されていることを確認した。Codex側では2026-06-26に
+  read-only確認のみを実施し、`GMO_FX_API_KEY: set` / `GMO_FX_API_SECRET: set` を値非表示で確認した。
+  ledgerは `POST_COMPLETED`、`attempt_count=1`、`result_category=success` のままsanitized確認し、
+  ledger reset / delete / edit / overwriteは行っていない。既存read-only runnerで
+  `account/assets=success`、`open_positions_count=0`、`active_orders_count=0`、raw response保存なし、
+  headers保存なし、credential表示なしを確認した。manual settlement API confirmationは `true`、
+  position statusは `closed`、active order statusは `none`。Step 4G-CではHTTP POST、新規注文、
+  追加注文、決済注文、取消、注文変更、approval id発行、approval gate、approval command表示は未実行。
+  raw request / raw response、order id、execution id、position id、open price、execution price、
+  timestamp、詳細損益、残高詳細、建玉詳細は表示・保存していない。今回のmicro-live検証は
+  「新規注文API成功 -> ユーザー手動決済 -> read-onlyで建玉0・有効注文0確認」まで到達した。
 - **Step 4G-A 建玉read-only確認完了 / POSITION_CONFIRMED / no close / no order** —
   Step 4F-B後のOPEN建玉確認として、2026-06-26にread-only確認のみを実施した。
   `GMO_FX_API_KEY: set` / `GMO_FX_API_SECRET: set` を値非表示で確認し、ledgerは

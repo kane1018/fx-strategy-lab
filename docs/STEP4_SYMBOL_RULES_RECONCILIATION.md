@@ -43,6 +43,28 @@ headers, signatures, credential values, order id, execution id, position id,
 open price, execution price, detailed P/L, account details, and position details
 were not displayed or saved.
 
+## 0B. Step 4G-C Manual Settlement Read-Only Confirmation
+
+After the user reported manually closing the previous `USD_JPY BUY 100`
+position in the GMO Web UI, Step 4G-C confirmed the post-settlement state with
+read-only checks only:
+
+```text
+account_assets: success
+open_positions_count: 0
+active_orders_count: 0
+manual_settlement_confirmed_by_api: true
+position_status: closed
+active_order_status: none
+```
+
+No HTTP POST, new order, additional order, API close order, cancellation, order
+change, approval id, approval gate, approval command display, or ledger reset
+was performed. Raw request, raw response, headers, signatures, credential
+values, order id, execution id, position id, open price, execution price,
+timestamp, detailed P/L, account details, and position details were not
+displayed or saved.
+
 ## 1. Purpose
 
 This review resolves the Step 4 quantity mismatch before any live order retry.

@@ -103,6 +103,49 @@ For a 100-unit USD/JPY position, a 1 JPY move corresponds to an approximate
 P/L change. Any close action must be handled as a separate Step 4G-B task with
 separate explicit approval.
 
+## 1C. Step 4G-C Manual Settlement Read-Only Confirmation
+
+Step 4G-C was performed after the user reported manually closing the previous
+`USD_JPY BUY 100` position in the GMO Web UI. The user-reported UI state was
+that the position summary and position list showed no target transaction.
+
+Codex performed only read-only confirmation:
+
+```text
+GMO_FX_API_KEY: set
+GMO_FX_API_SECRET: set
+ledger_state: POST_COMPLETED
+attempt_count: 1
+result_category: success
+account_assets: success
+open_positions_count: 0
+active_orders_count: 0
+manual_settlement_confirmed_by_api: true
+position_status: closed
+active_order_status: none
+raw_response_saved: false
+raw_response_displayed: false
+```
+
+Classification:
+
+```text
+MANUAL_SETTLEMENT_CONFIRMED
+```
+
+Step 4G-C did not execute HTTP POST, place a new order, add to the position,
+close the position via API, cancel orders, change orders, issue an approval id,
+issue an approval gate, display an approval command, or reset the ledger. Raw
+request, raw response, headers, signatures, credential values, order id,
+execution id, position id, open price, execution price, timestamp, detailed P/L,
+account details, and position details were not displayed or saved.
+
+The micro-live verification has reached:
+
+```text
+live order API success -> user manual settlement -> read-only open positions 0 and active orders 0 confirmed
+```
+
 ## 2. Previous Sanitized State
 
 The previous Step 4B-B outcome was handled only as sanitized facts:
