@@ -280,3 +280,7 @@ Step 5N now adds the one-shot live boundary dry-run model. Session policy pass
 and final dynamic preflight pass can feed the boundary as sanitized references
 only; Step 5N still performs no API call, no approval issuance, no POST, and no
 live permission.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Session policy
+decisions can feed the runbook as sanitized references only; Step 5O still
+performs no API call, no approval issuance, no POST, and no live permission.

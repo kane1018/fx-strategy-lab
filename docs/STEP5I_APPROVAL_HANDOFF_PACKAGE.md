@@ -342,3 +342,7 @@ Step 5N now adds the one-shot live boundary dry-run model. Approval handoff
 packages remain non-executable review material; Step 5N keeps real approval
 issuance, one-shot runner calls, Private API, broker calls, and live POST outside
 this phase.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Approval handoff
+references remain non-executable; real approval gate issuance is still a future
+separate step and the runbook does not generate real approval text.

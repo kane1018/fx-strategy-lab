@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5O One-shot execution runbook完了 / dry-run only / no API / no POST** —
+  `backend/app/live_verification/live_order_execution_runbook.py` を追加し、Step 5Nの
+  `LiveOrderOneShotBoundaryDecision` から、将来のreal approval gate、fresh final dynamic preflight、
+  one-shot HTTP POST、post reconciliation、final report and stopを分離したdry-run execution runbookを作る
+  modelを実装した。safe boundary + safe runbook constraintsでは
+  `READY_FOR_ONE_SHOT_EXECUTION_RUNBOOK_REVIEW`、`runbook_ready=true`、
+  `eligible_for_future_execution_planning=true` になるが、これは将来の別Stepで実承認・実preflight・
+  one-shot executionを設計する候補という意味だけで、`allowed_for_live=false`、
+  `approval_gate_issued=false`、`approval_id_generated=false`、`approval_command_generated=false`、
+  `approval_command_template_only=true`、`approval_command_copyable=false`、`post_attempt_limit=1`、
+  `post_executed=false`、`live_order_once_called=false`、`private_api_called=false`、
+  `broker_called=false`、`read_only_api_called=false`、retry/loop/追加/変更/取消/決済禁止を維持する。
+  required phases、go/no-go/stop conditions、post reconciliation planをsanitizedに整理する。
+  Step 5OはHTTP POST、実注文、approval gate発行、approval id生成、approval command生成、final dynamic
+  preflight実行、post reconciliation実行、read-only API、Private API、public API、broker、ledgerには接続していない。
+  詳細は [STEP5O_ONE_SHOT_EXECUTION_RUNBOOK.md](STEP5O_ONE_SHOT_EXECUTION_RUNBOOK.md)。
+  ready runbookはlive POST許可でもapproval gate発行許可でもない。次フェーズを行う場合も別Step・別承認で扱う。
 - **Step 5N One-shot live boundary完了 / dry-run only / no API / no POST** —
   `backend/app/live_verification/live_order_one_shot_boundary.py` を追加し、Step 5Mの
   `LiveOrderFinalDynamicPreflightDecision` から、将来のone-shot live orderに必要な境界条件を

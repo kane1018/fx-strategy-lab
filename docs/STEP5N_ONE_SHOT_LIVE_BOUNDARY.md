@@ -312,3 +312,9 @@ Step 5N is complete as a dry-run boundary model. Next work, if requested, should
 be a separate design or execution-preparation step. It must not reuse Step 5N as
 live POST permission, and it must keep approval gate issuance and real execution
 behind explicit future user authorization.
+
+Step 5O now adds that execution-preparation layer as a dry-run runbook package.
+It defines future real approval gate, fresh final dynamic preflight, one-shot
+HTTP POST, post reconciliation, and final report phases, but it does not execute
+those phases. A ready Step 5O runbook is not approval gate permission and not
+live POST permission; it keeps `allowed_for_live=false`.

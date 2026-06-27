@@ -280,3 +280,7 @@ pass.
 Step 5N now adds the one-shot live boundary dry-run model. Operation bundles
 remain dry-run operator reports only; Step 5N checks sanitized one-shot
 constraints and keeps `allowed_for_live=false` even when the boundary passes.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Operation bundle
+references remain dry-run only; the runbook defines future phases and
+go/no-go/stop conditions while keeping `allowed_for_live=false`.

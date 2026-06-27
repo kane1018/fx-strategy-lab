@@ -401,3 +401,7 @@ and does not execute final dynamic preflight.
 Step 5N now adds the one-shot live boundary dry-run model. Approval gate design
 remains fake/template-only; Step 5N does not turn it into a real approval gate,
 does not call the live runner, and does not execute HTTP POST.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Approval gate
+design remains fake/template-only; the runbook only describes a future real
+approval phase and does not issue approval or execute HTTP POST.

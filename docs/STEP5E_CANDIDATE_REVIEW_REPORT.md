@@ -284,3 +284,8 @@ one-shot boundary review eligibility, not approval or live POST permission.
 Step 5N now adds the one-shot live boundary dry-run model. Review reports remain
 human-readable dry-run artifacts only; Step 5N pass means future boundary review
 eligibility, not approval gate issuance or live POST permission.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Review reports
+remain human-readable dry-run artifacts only; a ready runbook means future
+execution planning review, not approval gate issuance, API connection, or live
+POST permission.

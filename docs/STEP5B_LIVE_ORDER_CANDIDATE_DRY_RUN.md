@@ -284,3 +284,8 @@ Step 5N now adds the one-shot live boundary dry-run model. Candidate output is
 still non-executable: a passed boundary means only that sanitized one-shot
 constraints are review-ready, with `allowed_for_live=false` and no approval
 gate or live POST.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Candidate ids can
+flow into the runbook as sanitized references only; the runbook is not an
+approval gate, does not call APIs or `live_order_once`, and does not permit live
+POST.

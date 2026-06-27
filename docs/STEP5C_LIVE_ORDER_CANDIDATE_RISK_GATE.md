@@ -292,3 +292,8 @@ Step 5N now adds the one-shot live boundary dry-run model. Risk decisions still
 do not directly POST; Step 5N only verifies sanitized one-shot constraints such
 as attempt limit, no retry/loop/order mutation flags, body/signing equality,
 and reconciliation requirement while preserving `allowed_for_live=false`.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Risk decisions
+remain non-executable references in the runbook; Step 5O defines future phases
+and stop conditions but does not issue approval, call APIs, call
+`live_order_once`, or authorize live POST.

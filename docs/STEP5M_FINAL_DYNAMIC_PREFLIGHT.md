@@ -348,3 +348,8 @@ no retry/loop/order mutation flags, body allowlist matched, request body equals
 signing body, and post reconciliation is required. It still keeps
 `allowed_for_live=false`, does not issue approval, and does not authorize live
 POST.
+
+Step 5O now adds the one-shot execution runbook dry-run model. It packages the
+future real approval gate, fresh final dynamic preflight, one-shot POST, post
+reconciliation, and final report as separate phases, but it does not execute any
+phase and does not authorize live POST.

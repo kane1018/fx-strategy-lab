@@ -326,3 +326,8 @@ Step 5N now adds that future one-shot boundary as a dry-run model only. A passed
 Step 5N decision means sanitized one-shot constraints are ready for review; it
 does not issue approval, does not call `live_order_once`, does not call APIs, and
 does not authorize live POST.
+
+Step 5O now adds the one-shot execution runbook dry-run model. A ready runbook
+means only that the future execution procedure is review-ready; it does not
+validate real approval, run final dynamic preflight, call APIs, or execute live
+POST.

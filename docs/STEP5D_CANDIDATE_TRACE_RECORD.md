@@ -299,3 +299,7 @@ ids, but it does not authorize final dynamic preflight execution or live POST.
 Step 5N now adds the one-shot live boundary dry-run model. Trace-linked ids can
 flow into the boundary decision as sanitized references only; the boundary does
 not call APIs, issue approval, execute POST, or permit live execution.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Trace-linked ids
+can flow into the runbook as sanitized references only; the runbook does not
+execute future phases, does not issue approval, and keeps `allowed_for_live=false`.

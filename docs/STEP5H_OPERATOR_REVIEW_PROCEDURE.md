@@ -266,3 +266,7 @@ Step 5N now adds the one-shot live boundary dry-run model. Operator procedures
 remain review-only; Step 5N checks one-shot constraints and post-reconciliation
 requirements without issuing approval, calling APIs, executing POST, or
 permitting live execution.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Operator review
+output remains review-only; the runbook packages future approval, preflight,
+single-attempt, reconciliation, and final-stop phases without executing them.

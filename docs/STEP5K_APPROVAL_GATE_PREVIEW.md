@@ -393,3 +393,7 @@ non-executable; Step 5M only evaluates sanitized final preflight snapshot inputs
 Step 5N now adds the one-shot live boundary dry-run model. Approval gate preview
 remains non-copyable and non-executable; Step 5N only evaluates sanitized
 one-shot constraints and does not issue approval or execute POST.
+
+Step 5O now adds the one-shot execution runbook dry-run model. Approval gate
+preview remains non-copyable and non-executable; the runbook does not create a
+real approval command and does not authorize live POST.

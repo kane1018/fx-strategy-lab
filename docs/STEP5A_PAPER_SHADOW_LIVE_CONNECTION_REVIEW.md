@@ -382,3 +382,9 @@ Step 5N now adds the one-shot live boundary dry-run model. It keeps
 `allowed_for_live=false`, `post_attempt_limit=1`, `post_executed=false`, no
 runner/API/broker/read-only calls, no retry/loop/order mutation flags, no
 approval issuance, and no live POST permission.
+
+Step 5O now adds the one-shot execution runbook dry-run model. It packages the
+future real approval gate, fresh final dynamic preflight, one-shot HTTP POST,
+post reconciliation, and final report sequence as review-only phases. It still
+keeps `allowed_for_live=false`, does not issue approval, does not call APIs or
+`live_order_once`, and does not execute live POST.
