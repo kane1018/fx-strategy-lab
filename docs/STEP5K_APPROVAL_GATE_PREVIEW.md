@@ -385,3 +385,7 @@ It validates fake/template-only input against this preview's rules only. A
 passed simulation is not a real approval gate, does not generate a real approval
 id or command, does not authorize final dynamic preflight, and does not
 authorize live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model after the fake
+approval validation simulator. Approval gate preview remains non-copyable and
+non-executable; Step 5M only evaluates sanitized final preflight snapshot inputs.

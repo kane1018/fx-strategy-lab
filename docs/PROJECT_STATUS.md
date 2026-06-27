@@ -82,6 +82,29 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5M Final dynamic preflight完了 / dry-run only / no API / no POST** —
+  `backend/app/live_verification/live_order_final_dynamic_preflight.py` を追加し、Step 5Lの
+  `LiveOrderApprovalValidationSimulation` とsanitizedな `LiveOrderFinalDynamicPreflightSnapshot` から
+  fail-closedな `LiveOrderFinalDynamicPreflightDecision` を作るfinal dynamic preflight dry-run modelを実装した。
+  account/assets status、open positions / active orders count、USD_JPY min order size / size step、ticker availability、
+  spread、ticker age、market window、maintenance、important event、ledger unused、session attempt、daily size、
+  previous result、result unknown、Git/tests/ruff/secret scan、raw response saved/displayed、outbound body allowlist、
+  request body/signing body一致、final preflight ageをsanitized inputとして評価する。safe snapshotでは
+  `READY_FOR_FINAL_DYNAMIC_PREFLIGHT_REVIEW`、`preflight_passed=true`、
+  `eligible_for_future_one_shot_review=true` になるが、これは将来のone-shot boundary review候補という意味だけで、
+  `allowed_for_live=false`、`requires_human_approval=true`、`approval_gate_required=true`、
+  `approval_gate_issued=false`、`approval_id_generated=false`、`approval_command_generated=false`、
+  `approval_command_template_only=true`、`approval_command_copyable=false`、
+  `final_dynamic_preflight_required=true`、`dry_run_only=true` を維持する。blocked simulation、unsafe flags、
+  unsupported order shape、API/preflight入力のmissing/unsafe/staleは `BLOCKED_FINAL_DYNAMIC_PREFLIGHT` として
+  blocked reasonsを保持する。Markdown renderingには `This final dynamic preflight model is dry-run only.`、
+  `This model does not call read-only API.`、`This model does not call Private API.`、
+  `This model does not execute final dynamic preflight.`、`This model does not authorize live POST.`、
+  `allowed_for_live=false.` の警告を含める。Step 5MはHTTP POST、実注文、approval gate発行、approval id生成、
+  approval command生成、final dynamic preflight実行、read-only API、Private API、public API、broker、ledgerには
+  接続していない。詳細は [STEP5M_FINAL_DYNAMIC_PREFLIGHT.md](STEP5M_FINAL_DYNAMIC_PREFLIGHT.md)。
+  passed decisionはlive POST許可でもapproval gate発行許可でもfinal dynamic preflight実行許可でもない。
+  次フェーズを行う場合も別Step・別承認で扱う。
 - **Step 5L Approval validation simulator完了 / fake validation only / no order / no POST** —
   `backend/app/live_verification/live_order_approval_validation_simulator.py` を追加し、Step 5Kの
   `LiveOrderApprovalGatePreview` とfake/template-only command入力からsanitizedな

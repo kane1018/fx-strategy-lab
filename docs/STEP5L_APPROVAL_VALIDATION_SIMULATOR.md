@@ -316,3 +316,8 @@ API and ledger access, and never permits final dynamic preflight or live POST.
 The next step may design final dynamic preflight handling, but it must remain a
 separate task with no live execution unless explicitly authorized in a later
 real approval flow.
+
+Step 5M now adds that final dynamic preflight handling as a dry-run model only.
+A passed Step 5M decision means sanitized final preflight inputs are ready for
+future one-shot boundary review. It does not execute final dynamic preflight,
+does not call APIs, does not issue approval, and does not authorize live POST.

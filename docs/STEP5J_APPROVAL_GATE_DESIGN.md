@@ -393,3 +393,7 @@ It validates fake/template-only input against the preview rules only. It keeps
 `allowed_for_live=false`, avoids real approval id and command generation, avoids
 clipboard and file output, does not authorize final dynamic preflight, and does
 not authorize live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model. Approval gate design
+remains fake/template-only; Step 5M does not turn it into a real approval gate
+and does not execute final dynamic preflight.

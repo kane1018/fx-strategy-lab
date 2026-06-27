@@ -271,3 +271,8 @@ It validates fake/template-only input against the preview rules while keeping
 `approval_gate_issued=false`, `approval_id_generated=false`, and
 `approval_command_generated=false`, authorizing no final dynamic preflight, and
 permitting no live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model. Operation bundles
+remain dry-run operator reports only; Step 5M evaluates sanitized final
+preflight snapshot inputs and keeps `allowed_for_live=false` even when they
+pass.

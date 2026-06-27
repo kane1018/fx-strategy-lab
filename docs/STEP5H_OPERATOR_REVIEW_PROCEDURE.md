@@ -257,3 +257,7 @@ Step 5L now provides the fake approval validation simulation layer for that
 preview. It remains no POST, no real approval gate, no real approval id, no
 real approval command, no final dynamic preflight authorization, no clipboard
 output, and no file output.
+
+Step 5M now adds the final dynamic preflight dry-run model. Operator review
+procedures remain dry-run checklists only; Step 5M does not issue approval or
+execute preflight, and it does not permit live POST.

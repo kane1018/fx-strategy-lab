@@ -283,3 +283,7 @@ Step 5L now extends that path with a fake approval validation simulator. It
 checks fake/template-only input and validation-rule outcomes only. It keeps
 `allowed_for_live=false`, generates no real approval id or command, issues no
 approval gate, runs no final dynamic preflight, and does not permit live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model. Risk decisions still
+do not directly POST; Step 5M only evaluates sanitized downstream state and
+preflight snapshot values while preserving `allowed_for_live=false`.

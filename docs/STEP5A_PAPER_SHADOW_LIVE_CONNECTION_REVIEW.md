@@ -372,3 +372,8 @@ Step 5K may render a non-copyable approval gate preview and validation dry-run
 only, Step 5L may simulate fake/template-only approval validation only, and
 only a future separately approved task may perform final dynamic preflight and
 at most one live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model. It evaluates only
+sanitized snapshot inputs, keeps `allowed_for_live=false`, does not call any
+API, does not read or write ledger state, does not issue approval, and does not
+permit live POST.

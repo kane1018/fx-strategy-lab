@@ -291,3 +291,7 @@ Step 5L now turns that preview into a fake approval validation simulation. The
 simulation remains review material only, validates fake/template-only input,
 keeps `approval_id_generated=false`, keeps `approval_command_generated=false`,
 does not authorize final dynamic preflight, and does not permit live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model. Trace records remain
+sanitized audit/review records only; Step 5M can consume trace-linked dry-run
+ids, but it does not authorize final dynamic preflight execution or live POST.

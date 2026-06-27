@@ -274,3 +274,8 @@ preview. It validates fake/template-only input against exact-match, TTL,
 same-session, ACK-token, spacing, and placeholder rules while keeping
 `allowed_for_live=false`, issuing no approval gate, generating no approval id or
 command, running no final dynamic preflight, and permitting no live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model after that simulated
+approval validation. The candidate remains non-executable evidence only; a
+passed Step 5M decision is future one-shot review eligibility, not live POST
+permission.

@@ -270,3 +270,8 @@ The simulation is still dry-run only, validates fake/template-only input,
 keeps `approval_gate_issued=false`, `approval_id_generated=false`,
 `approval_command_generated=false`, does not authorize final dynamic preflight,
 and does not permit live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model. Session policy pass
+remains review-session eligibility only; Step 5M adds another fail-closed
+sanitized boundary and still does not execute preflight, issue approval, or
+permit live POST.

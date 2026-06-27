@@ -276,3 +276,7 @@ Step 5L follows with a fake approval validation simulator derived from that
 preview. It validates fake/template-only simulated input only, preserves
 `allowed_for_live=false`, generates no real approval id or command, authorizes
 no final dynamic preflight, and does not permit live POST.
+
+Step 5M now adds the final dynamic preflight dry-run model. Review reports
+remain human-readable dry-run artifacts only; Step 5M pass means future
+one-shot boundary review eligibility, not approval or live POST permission.

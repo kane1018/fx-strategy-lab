@@ -2313,6 +2313,130 @@ def test_live_order_approval_validation_simulator_exposes_only_sanitized_fields(
     assert allowed_fields.issubset(field_names)
 
 
+def test_live_order_final_dynamic_preflight_has_no_ordering_or_api_imports() -> None:
+    blocked_modules = {
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+    }
+    path = PACKAGE_ROOT / "live_order_final_dynamic_preflight.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+
+
+def test_live_order_final_dynamic_preflight_exposes_only_sanitized_fields() -> None:
+    required_safe_fields = {
+        "snapshot_id",
+        "created_at",
+        "simulation_id",
+        "preview_id",
+        "design_id",
+        "handoff_id",
+        "operator_review_id",
+        "bundle_id",
+        "review_id",
+        "candidate_id",
+        "risk_decision_id",
+        "trace_id",
+        "session_policy_decision_id",
+        "source_signal_id",
+        "source_type",
+        "strategy_name",
+        "symbol",
+        "side",
+        "size",
+        "execution_type",
+        "account_assets_status",
+        "open_positions_count",
+        "active_orders_count",
+        "min_open_order_size",
+        "size_step",
+        "ticker_available",
+        "spread_jpy",
+        "ticker_age_seconds",
+        "market_window_allowed",
+        "maintenance_active",
+        "important_event_window_ok",
+        "ledger_unused",
+        "session_attempt_count_today",
+        "daily_live_size_total",
+        "previous_result_confirmed",
+        "result_unknown",
+        "git_clean",
+        "tests_passed",
+        "ruff_passed",
+        "secret_scan_passed",
+        "raw_response_saved",
+        "raw_response_displayed",
+        "outbound_body_allowlist_matched",
+        "request_body_equals_signing_body",
+        "final_preflight_age_seconds",
+        "allowed_for_live",
+        "requires_human_approval",
+        "approval_gate_required",
+        "approval_gate_issued",
+        "approval_id_generated",
+        "approval_command_generated",
+        "approval_command_template_only",
+        "approval_command_copyable",
+        "final_dynamic_preflight_required",
+        "dry_run_only",
+        "check_results",
+        "blocked_reasons",
+        "summary",
+        "recommended_next_step",
+        "sections",
+    }
+    blocked_fields = {
+        "request_headers",
+        "headers",
+        "signature",
+        "api_key",
+        "api_secret",
+        "raw_request",
+        "raw_response",
+        "order_id",
+        "execution_id",
+        "position_id",
+        "clientOrderId",
+        "request_url",
+        "url",
+        "endpoint",
+        "method",
+        "http_client",
+        "open_price",
+        "detailed_pl",
+        "ledger_path",
+        "approval_id",
+        "approval_command",
+        "copyable_command",
+        "pbcopy",
+    }
+    path = PACKAGE_ROOT / "live_order_final_dynamic_preflight.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert required_safe_fields.issubset(field_names)
+
+
 def test_live_order_once_allows_only_explicit_one_shot_http_boundary() -> None:
     path = PACKAGE_ROOT / "live_order_once.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
