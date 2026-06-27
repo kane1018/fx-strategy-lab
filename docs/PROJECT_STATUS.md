@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6E Real API preflight execution model完了 / read-only-preflight result model / no POST** —
+  `backend/app/live_verification/live_order_real_api_preflight_execution.py` を追加し、Step 6Dの
+  `LiveOrderRealApiPreflightPlan`、明示的なStep 6E request acknowledgement snapshot、
+  environment/safe-route check、sanitized preflight resultを入力に、real API preflight結果を
+  fail-closedで評価できるようにした。ready resultでは
+  `REAL_API_PREFLIGHT_PASSED_NO_POST`、`execution_ready=true`、
+  `api_preflight_executed=true`、`api_preflight_passed=true`、
+  `eligible_for_step6f_post_readiness_planning=true` になるが、これはsanitized read-only/preflight evidenceを
+  Step 6Fの別タスクへ渡せるという意味だけで、Step 6Eでも `allowed_for_live=false`、
+  `post_allowed_this_step=false`、`post_executed=false`、`order_endpoint_called=false`、
+  `order_payload_generated=false`、`order_payload_sent=false`、`live_order_once_called=false`、
+  retry/loop/追加/変更/取消/決済禁止、raw request/response/headers/signature表示・保存禁止を維持する。
+  2026-06-28 JSTは日曜のため、今回の作業では実API preflightは実行せず、model/tests/docsのみ完了した。
+  詳細は [STEP6E_REAL_API_PREFLIGHT_EXECUTION.md](STEP6E_REAL_API_PREFLIGHT_EXECUTION.md)。
+  次は別StepのStep 6F post-readiness planning request。明示依頼なしに進まない。
 - **Step 6D Real API preflight plan完了 / planning-only / no real API / no POST** —
   `backend/app/live_verification/live_order_real_api_preflight_plan.py` を追加し、Step 6Cの
   `LiveOrderRealApprovalArtifactValidation`、明示的なStep 6D request acknowledgement snapshot、

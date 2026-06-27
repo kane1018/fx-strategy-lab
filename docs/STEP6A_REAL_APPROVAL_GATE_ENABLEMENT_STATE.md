@@ -296,3 +296,14 @@ policy only. It does not call read-only/public/Private API, broker code,
 `live_order_once`, ledgers, or HTTP POST, and it does not display/copy/save
 approval commands. Details:
 [STEP6D_REAL_API_PREFLIGHT_PLAN.md](STEP6D_REAL_API_PREFLIGHT_PLAN.md).
+
+## Step 6E Follow-up
+
+Step 6E adds read-only/preflight-only sanitized result evaluation after Step 6D.
+Ready Step 6E output may mark `api_preflight_executed=true` and
+`api_preflight_passed=true` only for sanitized preflight evidence, while keeping
+`allowed_for_live=false`, no order endpoint, no order payload, no
+`live_order_once`, no raw request/response display or save, and no HTTP POST.
+The implementation pass did not run real API preflight because it was Sunday
+JST. Details:
+[STEP6E_REAL_API_PREFLIGHT_EXECUTION.md](STEP6E_REAL_API_PREFLIGHT_EXECUTION.md).

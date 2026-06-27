@@ -246,3 +246,19 @@ Step 6D is complete when the plan can be built from a ready Step 6C validation,
 explicit Step 6D request, and safe sanitized snapshot, while all real API,
 broker, `live_order_once`, approval command, ledger, and POST paths remain off.
 Next work is a separate Step 6E real API preflight execution request.
+
+## Step 6E Follow-up
+
+Step 6E adds `LiveOrderRealApiPreflightExecution` as a read-only/preflight-only
+sanitized result model. It can represent a passed real API preflight result as
+`REAL_API_PREFLIGHT_PASSED_NO_POST`, but it still keeps
+`allowed_for_live=false`, `post_allowed_this_step=false`,
+`post_executed=false`, `order_endpoint_called=false`,
+`order_payload_generated=false`, `order_payload_sent=false`, and
+`live_order_once_called=false`.
+
+Step 6E requires a safe read-only/preflight route, no raw request/response or
+headers/signature exposure, and fail-closed market/weekend checks. In the
+implementation pass, real API preflight was not executed because the work date
+was Sunday JST. Details:
+[STEP6E_REAL_API_PREFLIGHT_EXECUTION.md](STEP6E_REAL_API_PREFLIGHT_EXECUTION.md).
