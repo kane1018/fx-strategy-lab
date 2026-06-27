@@ -337,7 +337,10 @@ Recommended sequence:
 8. Step 5I: convert the operator checklist into a sanitized approval handoff
    package. No POST. Completed in
    [STEP5I_APPROVAL_HANDOFF_PACKAGE.md](STEP5I_APPROVAL_HANDOFF_PACKAGE.md).
-9. Step 5J or later: consider a separate approval gate or one-shot live task only after fresh
+9. Step 5J: convert the approval handoff package into a fake approval gate
+   design. No POST and no real approval gate. Completed in
+   [STEP5J_APPROVAL_GATE_DESIGN.md](STEP5J_APPROVAL_GATE_DESIGN.md).
+10. Step 5K or later: consider a separate real approval gate or one-shot live task only after fresh
    preflight, exact approval gate, final dynamic preflight, and explicit user
    risk approval.
 
@@ -361,5 +364,6 @@ Step 5C may mark a candidate eligible for human review only, Step 5D may record
 the review trace only, Step 5E may render a dry-run report only, Step 5F may
 evaluate session policy only, Step 5G may render an operation bundle only,
 Step 5H may render an operator checklist only, Step 5I may render approval
-handoff material only, and only a future separately approved task may perform
-final dynamic preflight and at most one live POST.
+handoff material only, Step 5J may render a fake approval gate design only, and
+only a future separately approved task may perform final dynamic preflight and
+at most one live POST.

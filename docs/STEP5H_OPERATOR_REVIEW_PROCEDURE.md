@@ -200,6 +200,13 @@ package for future approval gate design only. It keeps `allowed_for_live=false`,
 keeps `approval_gate_issued=false`, keeps `approval_command_generated=false`,
 does not issue approval gates, and does not permit live POST.
 
+Step 5J was later implemented in
+[STEP5J_APPROVAL_GATE_DESIGN.md](STEP5J_APPROVAL_GATE_DESIGN.md). It converts
+that handoff into a fake approval gate design only. It uses placeholder approval
+id and side values, keeps the fake approval command template non-copyable,
+keeps `approval_gate_issued=false`, keeps `approval_id_generated=false`, keeps
+`approval_command_generated=false`, and does not permit live POST.
+
 ## Tests
 
 Added tests cover:
@@ -236,3 +243,7 @@ Step 5I now provides the approval handoff package layer for this checklist. It
 remains no POST and no approval gate. Any future approval gate remains a
 separate explicit task with fresh preflight before approval id or approval
 command generation.
+
+Step 5J now provides the fake approval gate design layer for that handoff. It
+remains no POST, no real approval gate, no real approval id, and no real
+approval command.

@@ -82,6 +82,29 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5J Approval gate design完了 / fake approval only / no order / no POST** —
+  `backend/app/live_verification/live_order_approval_gate_design.py` を追加し、Step 5Iの
+  `LiveOrderApprovalHandoffPackage` からsanitizedな `LiveOrderApprovalGateDesign` と
+  `LiveOrderApprovalCommandTemplate` を作るfake approval gate design modelを実装した。
+  ready handoffでは `READY_FOR_APPROVAL_GATE_DESIGN_REVIEW` になるが、これは将来のreal approval gate前に読む
+  dry-run設計資料という意味だけで、`allowed_for_live=false`、`requires_human_approval=true`、
+  `approval_gate_required=true`、`approval_gate_issued=false`、`approval_id_generated=false`、
+  `approval_command_generated=false`、`approval_command_template_only=true`、
+  `approval_command_copyable=false`、`ttl_seconds=300`、`exact_match_required=true`、
+  `same_session_required=true`、`final_dynamic_preflight_required=true`、`dry_run_only=true` を維持する。
+  approval idは `<APPROVAL_ID_FROM_FUTURE_STEP>` placeholderのみ、approval commandは
+  `STEP_APPROVAL_TEMPLATE ...` のfake templateのみで、実approval id、実approval command、
+  copyable command、approval gate発行、pbcopy、ファイル保存は行わない。blocked handoffやunsafe inputでは
+  `BLOCKED_APPROVAL_GATE_DESIGN` となり、blocked reasonsを保持する。Markdown renderingには
+  `This approval gate design is dry-run only.`、`This design is not an approval gate.`、
+  `This design does not generate a real approval_id.`、
+  `This design does not generate a real approval command.`、
+  `This design does not authorize live POST.`、`allowed_for_live=false.` の警告を含める。
+  Step 5Jは `approval_id` / real approval command生成、approval gate発行、`live_order_once`、
+  Private API、broker、HTTP client、read-only API、ledgerには接続していない。詳細は
+  [STEP5J_APPROVAL_GATE_DESIGN.md](STEP5J_APPROVAL_GATE_DESIGN.md)。
+  ready designはlive POST許可でもapproval gate発行許可でもない。次フェーズを行う場合も
+  別Step・別承認で扱う。
 - **Step 5I Approval handoff package完了 / no order / no POST** —
   `backend/app/live_verification/live_order_approval_handoff.py` を追加し、Step 5Hの
   `LiveOrderOperatorReviewProcedure` からsanitizedな `LiveOrderApprovalHandoffPackage` を作る

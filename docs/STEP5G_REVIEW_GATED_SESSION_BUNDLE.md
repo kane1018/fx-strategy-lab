@@ -254,3 +254,8 @@ Step 5I now converts that operator checklist into a sanitized approval handoff
 package. It records display-allowed fields, display-forbidden labels, and future
 final dynamic preflight items while keeping `allowed_for_live=false`,
 `approval_gate_issued=false`, and `approval_command_generated=false`.
+
+Step 5J now converts that handoff package into a fake approval gate design. It
+records a placeholder-only approval id and non-copyable fake command template
+while keeping `allowed_for_live=false`, `approval_gate_issued=false`,
+`approval_id_generated=false`, and `approval_command_generated=false`.

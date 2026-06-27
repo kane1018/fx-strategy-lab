@@ -257,3 +257,8 @@ Step 5I now provides a sanitized approval handoff package derived from the
 operator checklist. It records future display and final preflight requirements,
 but still issues no approval gate, generates no approval command, and permits no
 live POST.
+
+Step 5J now provides a fake approval gate design derived from that handoff. It
+uses placeholder approval id and side values, keeps the fake approval command
+template non-copyable, keeps `allowed_for_live=false`, issues no real approval
+gate, generates no real approval command, and permits no live POST.

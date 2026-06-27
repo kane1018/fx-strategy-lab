@@ -253,3 +253,8 @@ review checklist. The checklist is still dry-run only, keeps
 Step 5I now converts the operator checklist into a sanitized approval handoff
 package. The package is still dry-run only, keeps `approval_gate_issued=false`
 and `approval_command_generated=false`, and does not permit live POST.
+
+Step 5J now converts that handoff into a fake approval gate design. The design
+is still dry-run only, keeps `approval_gate_issued=false`,
+`approval_id_generated=false`, `approval_command_generated=false`, and
+`approval_command_copyable=false`, and does not permit live POST.

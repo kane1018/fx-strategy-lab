@@ -274,3 +274,9 @@ Step 5I now turns the operator checklist into a sanitized approval handoff
 package. The package is still review material only, keeps
 `approval_gate_issued=false` and `approval_command_generated=false`, and does
 not permit live POST.
+
+Step 5J now turns that handoff into a fake approval gate design. The design is
+still review material only, uses placeholder approval id and side values, keeps
+the fake command template non-copyable, keeps `approval_gate_issued=false`,
+keeps `approval_id_generated=false`, keeps `approval_command_generated=false`,
+and does not permit live POST.

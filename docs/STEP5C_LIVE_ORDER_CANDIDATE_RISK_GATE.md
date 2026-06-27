@@ -268,3 +268,8 @@ session size, and 200-unit daily cap. It remains no POST and keeps
 Step 5G now turns the Step 5E review report plus Step 5F policy decision into a
 sanitized operation bundle with remaining session and daily-size capacity. It
 remains no POST, no approval gate, and `allowed_for_live=false`.
+
+Step 5H, Step 5I, and Step 5J now extend the same no-POST path with a sanitized
+operator checklist, an approval handoff package, and a fake approval gate design.
+Step 5J still uses placeholders only, keeps the fake command template
+non-copyable, and does not issue a real approval gate or permit live POST.

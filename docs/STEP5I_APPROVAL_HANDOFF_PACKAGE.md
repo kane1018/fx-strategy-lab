@@ -277,6 +277,12 @@ execution by itself. Any later approval gate must be a separate task with fresh
 preflight, one-shot ledger protection, exact approval text, final dynamic
 preflight, and explicit user risk acknowledgement.
 
+Step 5J was later implemented in [STEP5J_APPROVAL_GATE_DESIGN.md](STEP5J_APPROVAL_GATE_DESIGN.md).
+It converts this handoff package into a fake approval gate design only. Step 5J
+uses a placeholder approval id, a non-copyable template, TTL/exact-match design
+flags, and final dynamic preflight boundaries, while still preserving
+`allowed_for_live=false` and avoiding any real approval gate or live POST.
+
 ## Tests
 
 Added tests cover:
@@ -312,3 +318,7 @@ and ledger access, and never permits live POST.
 The next step may design an approval gate, but it must remain a separate task
 with fresh preflight. Step 5I itself does not generate approval ids or approval
 commands.
+
+Step 5J now provides that fake approval gate design layer. It still does not
+issue real approval ids, does not generate a real approval command, does not
+copy approval text, and does not authorize live POST.
