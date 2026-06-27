@@ -82,6 +82,26 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6D Real API preflight plan完了 / planning-only / no real API / no POST** —
+  `backend/app/live_verification/live_order_real_api_preflight_plan.py` を追加し、Step 6Cの
+  `LiveOrderRealApprovalArtifactValidation`、明示的なStep 6D request acknowledgement snapshot、
+  sanitized safety snapshotを入力に、将来のStep 6E real API preflight executionで確認する予定項目、
+  data handling policy、go/no-go/stop条件、future Step 6E handoff/blockersをfail-closedで整理した。
+  ready planでは `API_PREFLIGHT_PLAN_READY_NO_REAL_API_NO_POST`、`plan_ready=true`、
+  `eligible_for_step6e_real_api_preflight_execution=true`、`approval_gate_enabled=true`、
+  `approval_artifact_validated=true`、`api_preflight_planned=true` になるが、これはStep 6E以降の
+  real API preflight executionを別タスクとして計画できるという意味だけで、Step 6Dでは
+  `allowed_for_live=false`、`api_preflight_executed=false`、`real_api_execution_deferred_to_step6e=true`、
+  `read_only_api_called=false`、`public_api_called=false`、`private_api_called=false`、
+  `broker_called=false`、`live_order_once_called=false`、`post_allowed_this_step=false`、
+  `post_attempt_limit=1`、`post_executed=false`、retry/loop/追加/変更/取消/決済禁止を維持する。
+  Planned checksはmarket-hours/session、account/assets、open positions、active orders、instrument rules、
+  ticker spread/age、permission scope、IP/account binding、previous result unknown、raw response handlingを
+  **将来Step 6E or later** の確認予定として定義するだけで、Step 6Dではread-only API、public API、
+  Private API、broker、`live_order_once`、ledger、HTTP POST、実注文、approval gate発行、approval command生成・
+  表示・copyable化・pbcopy・保存、raw request/response/headers/signature表示・保存には接続していない。
+  詳細は [STEP6D_REAL_API_PREFLIGHT_PLAN.md](STEP6D_REAL_API_PREFLIGHT_PLAN.md)。
+  次は別StepのStep 6E real API preflight execution request。
 - **Step 6C Real approval artifact validation完了 / validation-only / no API / no POST / no copyable command** —
   `backend/app/live_verification/live_order_real_approval_artifact_validation.py` を追加し、Step 6Bの
   `LiveOrderRealApprovalArtifact`、明示的なStep 6C request acknowledgement snapshot、provided command

@@ -235,3 +235,17 @@ inputs, and Markdown sanitization.
 Step 6C is complete when approval artifact validation can pass internally while
 full commands remain unrendered and non-copyable, all live/API surfaces remain
 off, and future Step 6D handoff conditions are documented.
+
+## Step 6D Follow-up
+
+Step 6D adds API preflight planning after this validation step. A ready Step 6D
+plan may set `api_preflight_planned=true` and
+`eligible_for_step6e_real_api_preflight_execution=true`, but it keeps
+`allowed_for_live=false`, `api_preflight_executed=false`, all API/broker/
+`live_order_once` flags false, and `post_executed=false`.
+
+Step 6D defines future Step 6E planned checks and raw request/response handling
+policy only. It does not call read-only/public/Private API, broker code,
+`live_order_once`, ledgers, or HTTP POST, and it does not display/copy/save
+approval commands. Details:
+[STEP6D_REAL_API_PREFLIGHT_PLAN.md](STEP6D_REAL_API_PREFLIGHT_PLAN.md).

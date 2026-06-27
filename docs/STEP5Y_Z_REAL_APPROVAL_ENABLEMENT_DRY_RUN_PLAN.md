@@ -260,3 +260,17 @@ real approval gate, does not render or copy the full generated/provided approval
 command, does not use `pbcopy`, does not save approval text, does not call any
 API or ledger, and does not execute POST. Details:
 [STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md](STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md).
+
+## Step 6D Follow-up
+
+Step 6D adds API preflight planning after Step 6C validation. A ready plan may
+set `api_preflight_planned=true` and
+`eligible_for_step6e_real_api_preflight_execution=true`, but it keeps
+`allowed_for_live=false`, `api_preflight_executed=false`, all API/broker/
+`live_order_once` flags false, and `post_executed=false`.
+
+Step 6D defines future Step 6E planned checks and raw request/response handling
+policy only. It does not call read-only/public/Private API, broker code,
+`live_order_once`, ledgers, or HTTP POST, and it does not display/copy/save
+approval commands. Details:
+[STEP6D_REAL_API_PREFLIGHT_PLAN.md](STEP6D_REAL_API_PREFLIGHT_PLAN.md).
