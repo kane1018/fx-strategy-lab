@@ -354,3 +354,17 @@ API/broker calls, no POST, and one-shot constraints. It does not call read-only
 API, public API, Private API, broker, `live_order_once`, ledgers, clipboard, or
 POST, and it does not generate usable approval artifacts. Details:
 [STEP5W_REAL_APPROVAL_DISABLED_SCAFFOLD.md](STEP5W_REAL_APPROVAL_DISABLED_SCAFFOLD.md).
+
+## Step 5X Handoff Update
+
+Step 5X adds `LiveOrderRealApprovalEnablementCriteria`, consuming the Step 5W
+`LiveOrderRealApprovalDisabledScaffold` to define sanitized future enablement
+requirements, go/no-go conditions, kill switch conditions, and approval artifact
+generation preconditions. It keeps `approval_gate_enabled=false`,
+`allowed_for_live=false`, `approval_gate_issued=false`,
+`approval_id_generated=false`, `approval_command_generated=false`,
+`approval_command_copyable=false`, `approval_command_executable=false`,
+`post_attempt_limit=1`, `post_executed=false`, and no API/broker/live_order_once
+calls. Step 5X is no API / no POST and does not enable a real approval gate or
+generate real approval artifacts. Details:
+[STEP5X_REAL_APPROVAL_ENABLEMENT_CRITERIA.md](STEP5X_REAL_APPROVAL_ENABLEMENT_CRITERIA.md).
