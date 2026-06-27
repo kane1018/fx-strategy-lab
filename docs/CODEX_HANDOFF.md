@@ -841,3 +841,27 @@ a real approval command, copy approval text, run final dynamic preflight, call
 `ttl_seconds=300`, `exact_match_required=true`, and
 `same_session_required=true`. See
 [STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
+## Step 5U Follow-up
+
+Step 5U is complete as a dry-run-only real approval pre-implementation safety
+audit. `backend/app/live_verification/live_order_real_approval_pre_implementation_audit.py`
+adds `LiveOrderRealApprovalPreImplementationAudit` and builder/renderer
+helpers. It consumes the Step 5T generation package, preserves blocked reasons
+when Step 5T is blocked, and otherwise produces
+`READY_FOR_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT_REVIEW`.
+
+Important boundary: a ready Step 5U audit is review evidence only. It is not
+permission to issue a real approval gate, generate a real approval id, generate
+a real approval command, copy approval text, run final dynamic preflight, call
+`live_order_once`, or execute POST. It keeps `allowed_for_live=false`,
+`approval_gate_issued=false`, `approval_id_generated=false`,
+`approval_command_generated=false`, `approval_command_copyable=false`,
+`post_attempt_limit=1`, `post_executed=false`, `live_order_once_called=false`,
+and `retry_allowed=false` / `loop_allowed=false`.
+
+Step 5U records residual risks, manual confirmation items, implementation
+blockers, and required safety checks for TTL 300, exact match, same session,
+ACK tokens, display forbidden fields, no API/broker calls, no POST, and
+one-shot constraints. See
+[STEP5U_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT.md](STEP5U_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT.md).

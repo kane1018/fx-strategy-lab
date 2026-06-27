@@ -1,5 +1,17 @@
 # Step 5T Real Approval Gate Generation Package
 
+## Step 5U Update
+
+Step 5U adds a dry-run real approval pre-implementation safety audit on top of
+this generation package. The audit independently checks that approval artifact
+generation remains deferred, no API/broker/`live_order_once`/POST path has been
+used, `allowed_for_live=false` is preserved, TTL/exact match/same session/ACK
+requirements are intact, and residual risks/manual confirmations/implementation
+blockers are visible.
+
+See
+[STEP5U_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT.md](STEP5U_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT.md).
+
 ## Summary
 
 Step 5T adds a dry-run `LiveOrderRealApprovalGateGenerationPackage`.

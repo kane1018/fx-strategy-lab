@@ -1041,3 +1041,26 @@ confirmation through final report. It does not call read-only API, public API,
 Private API, broker, `live_order_once`, ledgers, or POST, and it does not issue
 approval gate artifacts. Details:
 [STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
+## Step 5U Follow-up
+
+Step 5U adds a real approval pre-implementation safety audit dry-run model. It
+consumes the Step 5T `LiveOrderRealApprovalGateGenerationPackage` and creates
+`LiveOrderRealApprovalPreImplementationAudit` as sanitized review evidence
+before any future real approval gate implementation.
+
+Ready audits use
+`READY_FOR_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT_REVIEW`,
+`audit_ready=true`, and
+`eligible_for_future_real_approval_gate_implementation_review=true`, but this
+is not live execution permission. Step 5U keeps `allowed_for_live=false`,
+`approval_gate_issued=false`, `approval_id_generated=false`,
+`approval_command_generated=false`, `approval_command_copyable=false`,
+`post_attempt_limit=1`, and `live_order_once_called=false`.
+
+Step 5U records residual risks, manual confirmation items, implementation
+blockers, and check results for TTL/exact match/same session/ACK/display and
+no API/no POST/no retry/no loop boundaries. It does not call read-only API,
+public API, Private API, broker, `live_order_once`, ledgers, or POST, and it
+does not issue approval gate artifacts. Details:
+[STEP5U_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT.md](STEP5U_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT.md).
