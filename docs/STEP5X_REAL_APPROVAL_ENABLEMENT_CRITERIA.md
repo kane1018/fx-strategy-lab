@@ -229,3 +229,14 @@ Step 5X is complete when the criteria model, tests, no-order guard, and docs
 pass. The next step, if explicitly requested, must still treat real approval
 gate enablement as separate future work. No approval gate, approval_id, approval
 command, API call, ledger access, or live POST is authorized by this step.
+
+## Step 6A Follow-up
+
+Step 6A adds a real approval gate enablement state model after the Step 5Y-Z
+pre-enable plan. Safe output may set `approval_gate_enabled=true` only as a
+sanitized model state for future Step 6B artifact-generation review. Step 6A
+keeps `allowed_for_live=false`, does not issue a real approval gate, does not
+generate approval_id or approval command artifacts, does not create copyable
+approval text, does not call any API or ledger, and does not execute POST.
+Details:
+[STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md](STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md).

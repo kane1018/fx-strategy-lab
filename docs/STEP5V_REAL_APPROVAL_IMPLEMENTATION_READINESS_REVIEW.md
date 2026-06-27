@@ -308,3 +308,14 @@ evidence for a future explicit Step 6A request and keeps `approval_gate_enabled=
 `allowed_for_live=false`, no real approval artifacts, no API calls, no ledger access,
 no clipboard use, and no POST. Details:
 [STEP5Y_Z_REAL_APPROVAL_ENABLEMENT_DRY_RUN_PLAN.md](STEP5Y_Z_REAL_APPROVAL_ENABLEMENT_DRY_RUN_PLAN.md).
+
+## Step 6A Follow-up
+
+Step 6A adds a real approval gate enablement state model after the Step 5Y-Z
+pre-enable plan. Safe output may set `approval_gate_enabled=true` only as a
+sanitized model state for future Step 6B artifact-generation review. Step 6A
+keeps `allowed_for_live=false`, does not issue a real approval gate, does not
+generate approval_id or approval command artifacts, does not create copyable
+approval text, does not call any API or ledger, and does not execute POST.
+Details:
+[STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md](STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md).

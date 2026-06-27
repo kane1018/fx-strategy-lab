@@ -223,3 +223,15 @@ Step 5Y-Z is complete when the dry-run plan model, tests, no-order guard, and
 docs pass. The next step, if explicitly requested, is future Step 6A planning.
 No approval gate, approval_id, approval command, copyable command, API call,
 ledger access, clipboard operation, or live POST is authorized by this step.
+
+## Step 6A Follow-up
+
+Step 6A adds a real approval gate enablement state model that consumes this
+Step 5Y-Z dry-run plan, an explicit Step 6A request snapshot, and sanitized
+safety snapshot inputs. Safe output may set `approval_gate_enabled=true` only as
+a sanitized model state for future Step 6B artifact-generation review. Step 6A
+keeps `allowed_for_live=false`, does not issue a real approval gate, does not
+generate approval_id or approval command artifacts, does not create copyable
+approval text, does not call any API or ledger, and does not execute POST.
+Details:
+[STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md](STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md).

@@ -82,6 +82,25 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6A Real approval gate enablement state完了 / state-only / no approval artifacts / no API / no POST** —
+  `backend/app/live_verification/live_order_real_approval_gate_enablement_state.py` を追加し、Step 5Y-Zの
+  `LiveOrderRealApprovalEnablementDryRunPlan`、明示的なStep 6A request acknowledgement snapshot、
+  sanitized safety snapshotを入力に、将来のStep 6B approval artifact generation reviewへ進める状態かを
+  fail-closedで整理した。safe plan + explicit request + safe snapshotでは
+  `REAL_APPROVAL_GATE_ENABLED_NO_ARTIFACTS`、`enablement_state_ready=true`、
+  `eligible_for_future_step6b_approval_artifact_generation=true`、`approval_gate_enabled=true` になるが、
+  これはsanitized model outputだけで、`approval_gate_enablement_scope=future_approval_artifact_generation_review_only`、
+  `allowed_for_live=false`、`approval_gate_issued=false`、`approval_id_generated=false`、
+  `approval_command_generated=false`、`approval_command_copyable=false`、
+  `approval_command_executable=false`、`usable_approval_artifacts_generated=false`、
+  `real_approval_artifacts_available=false`、`post_allowed_this_step=false`、`post_attempt_limit=1`、
+  `post_executed=false`、`live_order_once_called=false`、`private_api_called=false`、`broker_called=false`、
+  `read_only_api_called=false`、`public_api_called=false`、retry/loop/追加/変更/取消/決済禁止を維持する。
+  Step 6AはHTTP POST、実注文、read-only API、public API、Private API、broker、live_order_once、ledger、
+  real approval gate発行、real approval id生成、real approval command生成、copyable approval text生成、
+  pbcopy、approval text保存には接続していない。詳細は
+  [STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md](STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md)。
+  ready stateはlive POST許可でもapproval gate発行許可でもapproval command生成許可でもない。
 - **Step 5Y-Z Real approval enablement dry-run plan完了 / dry-run only / market-hours snapshot blocker / no API / no POST / no real approval artifacts** —
   `backend/app/live_verification/live_order_real_approval_enablement_dry_run_plan.py` を追加し、Step 5Xの
   `LiveOrderRealApprovalEnablementCriteria` と sanitized market-hours snapshot を入力に、将来のStep 6A
