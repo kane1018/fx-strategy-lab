@@ -317,3 +317,8 @@ acknowledgements and future-step separation, records go/no-go/stop conditions,
 keeps `allowed_for_live=false`, and does not call APIs, issue approval,
 generate real approval ids or commands, call `live_order_once`, read/write
 ledgers, or execute POST.
+
+Step 5R now adds the real approval gate plan dry-run model. Trace-linked ids can
+flow into the plan as sanitized references only; real approval gate issuance,
+approval id generation, approval command generation, final dynamic preflight,
+one-shot POST, and post reconciliation remain future separate steps.

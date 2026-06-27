@@ -213,3 +213,15 @@ Step 5Q is complete when the checkpoint model, tests, docs, and no-order guard
 pass. A ready checkpoint is still dry-run readiness evidence only. It is not
 approval gate permission, approval command permission, final preflight
 permission, live POST permission, or post reconciliation permission.
+
+## Step 5R Follow-up
+
+Step 5R now adds the real approval gate plan dry-run model. It consumes the
+Step 5Q readiness checkpoint as sanitized evidence, separates future fresh
+preflight, real approval gate generation, approval command exact-match
+validation, post-approval final dynamic preflight, one-shot boundary, post
+reconciliation, and final report phases, keeps `allowed_for_live=false`, and
+does not call APIs, issue approval, generate real approval ids or commands,
+call `live_order_once`, read/write ledgers, or execute POST. A ready Step 5R
+plan is planning evidence only and does not authorize real approval gate
+issuance, approval command generation, final dynamic preflight, or live POST.

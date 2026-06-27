@@ -344,3 +344,8 @@ acknowledgements and future-step separation, records go/no-go/stop conditions,
 keeps `allowed_for_live=false`, and does not call APIs, issue approval,
 generate real approval ids or commands, call `live_order_once`, read/write
 ledgers, or execute POST.
+
+Step 5R now adds the real approval gate plan dry-run model. Approval validation
+simulation results remain fake evidence only; Step 5R does not validate a real
+approval command, run final dynamic preflight, call APIs, call `live_order_once`,
+or execute POST.

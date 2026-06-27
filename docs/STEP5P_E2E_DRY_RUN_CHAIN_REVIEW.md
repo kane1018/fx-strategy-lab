@@ -301,3 +301,12 @@ keeps `allowed_for_live=false`, and does not call APIs, issue approval,
 generate real approval ids or commands, call `live_order_once`, read/write
 ledgers, or execute POST. A ready Step 5Q checkpoint is still review evidence
 only and does not authorize real approval gate issuance or live POST.
+
+## Step 5R Follow-up
+
+Step 5R now adds the real approval gate plan dry-run model. It consumes the Step
+5Q readiness checkpoint as sanitized evidence, records the future approval gate
+sequence, preserves `allowed_for_live=false`, and does not call APIs, issue
+approval, generate real approval ids or commands, call `live_order_once`,
+read/write ledgers, or execute POST. A ready Step 5R plan is still planning
+evidence only and does not authorize real approval gate issuance or live POST.

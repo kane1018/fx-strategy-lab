@@ -410,3 +410,8 @@ acknowledgements and future-step separation, records go/no-go/stop conditions,
 keeps `allowed_for_live=false`, and does not call APIs, issue approval,
 generate real approval ids or commands, call `live_order_once`, read/write
 ledgers, or execute POST.
+
+Step 5R now adds the real approval gate plan dry-run model. Fake approval
+previews remain non-copyable evidence; Step 5R keeps real approval artifacts
+ungenerated and only records the future sequence that would be needed in a
+separate explicit task.
