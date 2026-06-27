@@ -82,6 +82,22 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5V Real approval implementation readiness review完了 / dry-run only / no API / no POST** —
+  `backend/app/live_verification/live_order_real_approval_implementation_readiness.py` を追加し、Step 5Uの
+  `LiveOrderRealApprovalPreImplementationAudit` をsanitized evidenceとして、将来のreal approval gate
+  implementation stepへ進む前のreadiness reviewをfail-closedで作るmodelを実装した。safe auditでは
+  `READY_FOR_REAL_APPROVAL_IMPLEMENTATION_READINESS_REVIEW`、`readiness_ready=true`、
+  `eligible_for_future_real_approval_gate_implementation_step=true` になるが、これは将来の別Stepで
+  実承認ゲート実装を検討するためのreview evidenceという意味だけで、`allowed_for_live=false`、
+  `approval_gate_issued=false`、`approval_id_generated=false`、`approval_command_generated=false`、
+  `approval_command_copyable=false`、`post_attempt_limit=1`、`post_executed=false`、
+  `live_order_once_called=false`、`private_api_called=false`、`broker_called=false`、
+  `read_only_api_called=false`、`public_api_called=false`、retry/loop/追加/変更/取消/決済禁止を維持する。
+  Step 5VはHTTP POST、実注文、real approval gate実装/発行、real approval id生成、
+  real approval command生成、final dynamic preflight実行、post reconciliation実行、read-only API、
+  public API、Private API、broker、ledgerには接続していない。詳細は
+  [STEP5V_REAL_APPROVAL_IMPLEMENTATION_READINESS_REVIEW.md](STEP5V_REAL_APPROVAL_IMPLEMENTATION_READINESS_REVIEW.md)。
+  ready reviewはlive POST許可でもapproval gate実装/発行許可でもapproval command生成許可でもない。
 - **Step 5R Real approval gate plan完了 / dry-run only / no API / no POST** —
   `backend/app/live_verification/live_order_real_approval_gate_plan.py` を追加し、Step 5Qの
   `LiveOrderRealApprovalReadinessCheckpoint` をsanitized evidenceとして、将来のreal approval gate stepに
@@ -1064,3 +1080,29 @@ no API/no POST/no retry/no loop boundaries. It does not call read-only API,
 public API, Private API, broker, `live_order_once`, ledgers, or POST, and it
 does not issue approval gate artifacts. Details:
 [STEP5U_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT.md](STEP5U_REAL_APPROVAL_PRE_IMPLEMENTATION_AUDIT.md).
+
+## Step 5V Follow-up
+
+Step 5V adds a real approval implementation readiness review dry-run model. It
+consumes the Step 5U `LiveOrderRealApprovalPreImplementationAudit` and creates
+`LiveOrderRealApprovalImplementationReadinessReview` as sanitized review
+evidence before any future real approval gate implementation step.
+
+Ready reviews use
+`READY_FOR_REAL_APPROVAL_IMPLEMENTATION_READINESS_REVIEW`,
+`readiness_ready=true`, and
+`eligible_for_future_real_approval_gate_implementation_step=true`, but this is
+not live execution permission. Step 5V keeps `allowed_for_live=false`,
+`approval_gate_issued=false`, `approval_id_generated=false`,
+`approval_command_generated=false`, `approval_command_copyable=false`,
+`post_attempt_limit=1`, `post_executed=false`, and
+`live_order_once_called=false`.
+
+Step 5V records residual risks, manual confirmation items, Step 5U
+implementation blockers, future implementation readiness blockers, and check
+results for prompt truncation review, Step 5U test/docs review, TTL/exact
+match/same session/ACK/display, no API/no POST/no retry/no loop boundaries, and
+future explicit user instruction. It does not call read-only API, public API,
+Private API, broker, `live_order_once`, ledgers, or POST, and it does not
+implement or issue approval gate artifacts. Details:
+[STEP5V_REAL_APPROVAL_IMPLEMENTATION_READINESS_REVIEW.md](STEP5V_REAL_APPROVAL_IMPLEMENTATION_READINESS_REVIEW.md).

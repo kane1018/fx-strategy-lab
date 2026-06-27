@@ -241,3 +241,18 @@ Step 5U completes the dry-run real approval pre-implementation safety audit.
 The audit is review evidence only. Next work, if explicitly requested, must be
 a separate future real approval gate implementation step; Step 5U does not
 generate approval artifacts and does not permit live POST.
+
+## Step 5V Follow-up
+
+Step 5V now consumes this audit as sanitized evidence and creates
+`LiveOrderRealApprovalImplementationReadinessReview`. That review checks the
+future implementation boundary again, records prompt truncation/test/docs review
+facts, and keeps `allowed_for_live=false`, `approval_gate_issued=false`,
+`approval_id_generated=false`, `approval_command_generated=false`,
+`approval_command_copyable=false`, `post_executed=false`, and
+`live_order_once_called=false`.
+
+Step 5V is still dry-run only. A ready Step 5V review is not permission to
+implement or issue a real approval gate, generate a real approval id, generate a
+real approval command, run final dynamic preflight, call APIs, or execute live
+POST.

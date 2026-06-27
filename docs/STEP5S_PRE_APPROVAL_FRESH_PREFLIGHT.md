@@ -290,3 +290,20 @@ ready decision is still dry-run pre-approval evidence only. It is not approval
 gate permission, approval command permission, final dynamic preflight
 permission, live POST permission, `live_order_once` permission, or post
 reconciliation permission.
+
+## Step 5V Follow-up
+
+Step 5V adds `LiveOrderRealApprovalImplementationReadinessReview` as a
+sanitized, dry-run-only readiness review for a future real approval gate
+implementation step. It consumes the Step 5U pre-implementation audit and keeps
+`allowed_for_live=false`, `approval_gate_issued=false`,
+`approval_id_generated=false`, `approval_command_generated=false`,
+`approval_command_copyable=false`, `post_executed=false`, and
+`live_order_once_called=false`.
+
+A ready Step 5V review is review evidence only. It is not permission to
+implement or issue a real approval gate, generate a real approval id, generate a
+real approval command, call APIs, run final dynamic preflight, or execute live
+POST. Future execution work still requires a separate explicit user request and
+a separate safety-gated step. See
+[STEP5V_REAL_APPROVAL_IMPLEMENTATION_READINESS_REVIEW.md](STEP5V_REAL_APPROVAL_IMPLEMENTATION_READINESS_REVIEW.md).
