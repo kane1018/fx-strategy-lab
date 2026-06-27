@@ -259,3 +259,9 @@ Step 5J now converts that handoff package into a fake approval gate design. It
 records a placeholder-only approval id and non-copyable fake command template
 while keeping `allowed_for_live=false`, `approval_gate_issued=false`,
 `approval_id_generated=false`, and `approval_command_generated=false`.
+
+Step 5K now converts that design into a fake approval gate preview and
+validation dry-run. It keeps the preview non-copyable, keeps
+`approval_gate_issued=false`, `approval_id_generated=false`, and
+`approval_command_generated=false`, avoids clipboard and file output, and does
+not permit live POST.

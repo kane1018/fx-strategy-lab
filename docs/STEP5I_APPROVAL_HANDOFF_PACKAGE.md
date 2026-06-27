@@ -322,3 +322,8 @@ commands.
 Step 5J now provides that fake approval gate design layer. It still does not
 issue real approval ids, does not generate a real approval command, does not
 copy approval text, and does not authorize live POST.
+
+Step 5K now provides the fake approval gate preview layer for that design. It
+still does not issue real approval ids, does not generate a real approval
+command, does not copy approval text, does not write approval text to a file,
+and does not authorize live POST.

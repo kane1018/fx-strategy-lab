@@ -266,3 +266,8 @@ Step 5J follows with a fake approval gate design derived from that handoff. It
 records placeholder-only approval id and command template structure, keeps the
 template non-copyable, and still does not issue a real approval gate, generate a
 real approval command, or permit live POST.
+
+Step 5K follows with a fake approval gate preview derived from that design. It
+renders non-copyable preview material and validation rules only, keeps
+`allowed_for_live=false`, does not generate real approval ids or commands, does
+not use clipboard or file output, and does not permit live POST.

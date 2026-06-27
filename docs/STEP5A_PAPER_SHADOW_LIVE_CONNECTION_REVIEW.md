@@ -340,7 +340,10 @@ Recommended sequence:
 9. Step 5J: convert the approval handoff package into a fake approval gate
    design. No POST and no real approval gate. Completed in
    [STEP5J_APPROVAL_GATE_DESIGN.md](STEP5J_APPROVAL_GATE_DESIGN.md).
-10. Step 5K or later: consider a separate real approval gate or one-shot live task only after fresh
+10. Step 5K: convert the fake approval gate design into a non-copyable preview
+   and validation dry-run. No POST, no real approval gate, and no real approval
+   command. Completed in [STEP5K_APPROVAL_GATE_PREVIEW.md](STEP5K_APPROVAL_GATE_PREVIEW.md).
+11. Step 5L or later: consider a separate real approval gate or one-shot live task only after fresh
    preflight, exact approval gate, final dynamic preflight, and explicit user
    risk approval.
 
@@ -364,6 +367,7 @@ Step 5C may mark a candidate eligible for human review only, Step 5D may record
 the review trace only, Step 5E may render a dry-run report only, Step 5F may
 evaluate session policy only, Step 5G may render an operation bundle only,
 Step 5H may render an operator checklist only, Step 5I may render approval
-handoff material only, Step 5J may render a fake approval gate design only, and
+handoff material only, Step 5J may render a fake approval gate design only,
+Step 5K may render a non-copyable approval gate preview and validation dry-run only, and
 only a future separately approved task may perform final dynamic preflight and
 at most one live POST.

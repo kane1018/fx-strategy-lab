@@ -82,6 +82,30 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5K Approval gate preview完了 / validation dry-run / no order / no POST** —
+  `backend/app/live_verification/live_order_approval_gate_preview.py` を追加し、Step 5Jの
+  `LiveOrderApprovalGateDesign` からsanitizedな `LiveOrderApprovalGatePreview` と
+  `LiveOrderApprovalGatePreviewValidationRule` を作るapproval gate preview modelを実装した。
+  ready designでは `READY_FOR_APPROVAL_GATE_PREVIEW_REVIEW` になるが、これは将来のreal approval gate前に読む
+  dry-run previewという意味だけで、`allowed_for_live=false`、`requires_human_approval=true`、
+  `approval_gate_required=true`、`approval_gate_issued=false`、`approval_id_generated=false`、
+  `approval_command_generated=false`、`approval_command_template_only=true`、
+  `approval_command_copyable=false`、`ttl_seconds=300`、`exact_match_required=true`、
+  `same_session_required=true`、`final_dynamic_preflight_required=true`、`dry_run_only=true` を維持する。
+  approval idは `<APPROVAL_ID_FROM_FUTURE_STEP>` placeholderのみ、approval commandは
+  `STEP_APPROVAL_TEMPLATE ...` のfake template previewのみで、実approval id、実approval command、
+  copyable command、approval gate発行、pbcopy、ファイル保存は行わない。blocked designやunsafe inputでは
+  `BLOCKED_APPROVAL_GATE_PREVIEW` となり、blocked reasonsを保持する。Markdown renderingには
+  `This approval gate preview is dry-run only.`、`This preview is not a real approval gate.`、
+  `This preview does not generate a real approval_id.`、
+  `This preview does not generate a real approval command.`、
+  `This preview is not copyable approval text.`、
+  `This preview does not authorize live POST.`、`allowed_for_live=false.` の警告を含める。
+  Step 5Kは `approval_id` / real approval command生成、approval gate発行、clipboard/file出力、
+  `live_order_once`、Private API、broker、HTTP client、read-only API、ledgerには接続していない。
+  詳細は [STEP5K_APPROVAL_GATE_PREVIEW.md](STEP5K_APPROVAL_GATE_PREVIEW.md)。
+  ready previewはlive POST許可でもapproval gate発行許可でもない。次フェーズを行う場合も
+  別Step・別承認で扱う。
 - **Step 5J Approval gate design完了 / fake approval only / no order / no POST** —
   `backend/app/live_verification/live_order_approval_gate_design.py` を追加し、Step 5Iの
   `LiveOrderApprovalHandoffPackage` からsanitizedな `LiveOrderApprovalGateDesign` と

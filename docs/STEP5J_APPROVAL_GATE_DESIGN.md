@@ -379,3 +379,10 @@ permits live POST.
 The next step may review how a real approval gate would be implemented, but it
 must remain a separate task with fresh preflight. Step 5J itself does not
 generate approval ids or approval commands.
+
+Step 5K now provides that review layer in
+[STEP5K_APPROVAL_GATE_PREVIEW.md](STEP5K_APPROVAL_GATE_PREVIEW.md). It converts
+this design into a fake approval gate preview and validation-rule dry-run only.
+It keeps `allowed_for_live=false`, keeps the fake command template
+non-copyable, avoids real approval id and command generation, avoids clipboard
+and file output, and does not authorize live POST.

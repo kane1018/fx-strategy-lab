@@ -262,3 +262,9 @@ Step 5J now provides a fake approval gate design derived from that handoff. It
 uses placeholder approval id and side values, keeps the fake approval command
 template non-copyable, keeps `allowed_for_live=false`, issues no real approval
 gate, generates no real approval command, and permits no live POST.
+
+Step 5K now provides a fake approval gate preview and validation-rule dry-run
+derived from that design. It keeps `allowed_for_live=false`, uses placeholder
+approval id values only, keeps the fake command template non-copyable, does not
+generate a real approval command, does not use clipboard or file output, and
+permits no live POST.
