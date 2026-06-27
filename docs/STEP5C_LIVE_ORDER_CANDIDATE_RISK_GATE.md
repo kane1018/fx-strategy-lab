@@ -220,6 +220,10 @@ Step 5G and Step 5H now extend this no-POST review path with a sanitized
 operation bundle and operator checklist. They keep `allowed_for_live=false`,
 do not issue approval gates, and do not permit live POST.
 
+Step 5I now extends the same no-POST path with a sanitized approval handoff
+package. It does not issue approval gates, does not generate approval commands,
+and does not permit live POST.
+
 Any future live POST path must still require a separate approval gate, final
 dynamic preflight, one-shot ledger protection, and explicit user authorization.
 

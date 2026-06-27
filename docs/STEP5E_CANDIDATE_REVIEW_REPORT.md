@@ -256,3 +256,8 @@ approval gate or live POST path.
 Step 5H follows with a sanitized operator review checklist derived from the
 Step 5G bundle. It is a review procedure only, keeps `allowed_for_live=false`,
 and does not issue approval gates or permit live POST.
+
+Step 5I follows with a sanitized approval handoff package derived from the
+operator checklist. It records what may be shown before a future approval gate
+and what must remain hidden, but it does not issue approval gates, generate
+approval commands, or permit live POST.

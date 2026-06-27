@@ -193,6 +193,13 @@ live order execution by itself. Any later approval gate must be a separate task
 with fresh preflight, one-shot ledger protection, exact approval text, final
 dynamic preflight, and explicit user risk acknowledgement.
 
+Step 5I was later implemented in
+[STEP5I_APPROVAL_HANDOFF_PACKAGE.md](STEP5I_APPROVAL_HANDOFF_PACKAGE.md). It
+converts a Step 5H operator review procedure into a sanitized approval handoff
+package for future approval gate design only. It keeps `allowed_for_live=false`,
+keeps `approval_gate_issued=false`, keeps `approval_command_generated=false`,
+does not issue approval gates, and does not permit live POST.
+
 ## Tests
 
 Added tests cover:
@@ -225,7 +232,7 @@ operation bundles. A ready operator review is a human-readable dry-run
 procedure only. It preserves `allowed_for_live=false`, avoids approval gate
 issuance, avoids API and ledger access, and never permits live POST.
 
-The next step may design what happens after a human finishes this checklist,
-but it must remain no POST unless a separate future task explicitly introduces
-fresh preflight, approval gate, final dynamic preflight, and one-shot execution
-controls.
+Step 5I now provides the approval handoff package layer for this checklist. It
+remains no POST and no approval gate. Any future approval gate remains a
+separate explicit task with fresh preflight before approval id or approval
+command generation.

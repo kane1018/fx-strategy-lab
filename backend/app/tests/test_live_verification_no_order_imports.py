@@ -1768,6 +1768,125 @@ def test_live_order_operator_review_exposes_only_sanitized_procedure_fields() ->
     assert allowed_fields.issubset(field_names)
 
 
+def test_live_order_approval_handoff_has_no_ordering_imports() -> None:
+    blocked_modules = {
+        "hmac",
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+        "app.live_verification.live_order_once",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+        "post_live_order_with_httpx",
+        "execute_one_shot_live_order",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    path = PACKAGE_ROOT / "live_order_approval_handoff.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+
+
+def test_live_order_approval_handoff_exposes_only_sanitized_package_fields() -> None:
+    allowed_fields = {
+        "package",
+        "handoff_id",
+        "created_at",
+        "operator_review_id",
+        "bundle_id",
+        "review_id",
+        "candidate_id",
+        "risk_decision_id",
+        "trace_id",
+        "session_policy_decision_id",
+        "source_signal_id",
+        "source_type",
+        "strategy_name",
+        "symbol",
+        "side",
+        "size",
+        "execution_type",
+        "operator_review_status",
+        "handoff_status",
+        "eligible_for_operator_review",
+        "allowed_for_live",
+        "requires_human_approval",
+        "approval_gate_required",
+        "approval_gate_issued",
+        "approval_command_generated",
+        "final_dynamic_preflight_required",
+        "dry_run_only",
+        "display_allowed_fields",
+        "display_forbidden_fields",
+        "final_dynamic_preflight_items",
+        "blocked_reasons",
+        "summary",
+        "recommended_next_step",
+        "sections",
+        "section_id",
+        "title",
+        "lines",
+    }
+    blocked_fields = {
+        "request_headers",
+        "headers",
+        "signature",
+        "api_key",
+        "api_secret",
+        "raw_request",
+        "raw_response",
+        "order_id",
+        "execution_id",
+        "position_id",
+        "clientOrderId",
+        "request_url",
+        "url",
+        "endpoint",
+        "method",
+        "http_client",
+        "open_price",
+        "detailed_pl",
+        "ledger",
+        "approval_id",
+        "approval_command",
+    }
+    path = PACKAGE_ROOT / "live_order_approval_handoff.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    field_names = _field_names(tree)
+
+    assert field_names.isdisjoint(blocked_fields)
+    assert allowed_fields.issubset(field_names)
+
+
 def test_live_order_once_allows_only_explicit_one_shot_http_boundary() -> None:
     path = PACKAGE_ROOT / "live_order_once.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))

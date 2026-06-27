@@ -82,6 +82,25 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5I Approval handoff package完了 / no order / no POST** —
+  `backend/app/live_verification/live_order_approval_handoff.py` を追加し、Step 5Hの
+  `LiveOrderOperatorReviewProcedure` からsanitizedな `LiveOrderApprovalHandoffPackage` を作る
+  approval handoff modelを実装した。ready operator reviewでは
+  `READY_FOR_APPROVAL_HANDOFF_REVIEW` になるが、これは将来のapproval gate前に読むdry-run handoff資料という
+  意味だけで、`allowed_for_live=false`、`requires_human_approval=true`、
+  `approval_gate_required=true`、`approval_gate_issued=false`、`approval_command_generated=false`、
+  `final_dynamic_preflight_required=true`、`dry_run_only=true` を維持する。
+  display allowed fields、display forbidden fields、future final dynamic preflight itemsを固定した。
+  blocked operator reviewやunsafe inputでは `BLOCKED_HANDOFF` となり、blocked reasonsを保持する。
+  Markdown renderingには `This approval handoff is dry-run only.`、
+  `This handoff is not an approval gate.`、
+  `This handoff does not generate approval_id or approval command.`、
+  `This handoff does not authorize live POST.`、`allowed_for_live=false.` の警告を含める。
+  Step 5Iは `approval_id` / approval command生成、approval gate発行、`live_order_once`、Private API、
+  broker、HTTP client、read-only API、ledgerには接続していない。詳細は
+  [STEP5I_APPROVAL_HANDOFF_PACKAGE.md](STEP5I_APPROVAL_HANDOFF_PACKAGE.md)。
+  ready handoffはlive POST許可でもapproval gate発行許可でもない。次フェーズを行う場合も
+  別Step・別承認で扱う。
 - **Step 5H Operator review procedure完了 / no order / no POST** —
   `backend/app/live_verification/live_order_operator_review.py` を追加し、Step 5Gの
   `ReviewGatedSessionBundle` からsanitizedな `LiveOrderOperatorReviewProcedure` と

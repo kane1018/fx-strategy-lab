@@ -334,7 +334,10 @@ Recommended sequence:
 7. Step 5H: convert the operation bundle into a sanitized operator checklist.
    No POST. Completed in
    [STEP5H_OPERATOR_REVIEW_PROCEDURE.md](STEP5H_OPERATOR_REVIEW_PROCEDURE.md).
-8. Step 5I or later: consider a separate one-shot live task only after fresh
+8. Step 5I: convert the operator checklist into a sanitized approval handoff
+   package. No POST. Completed in
+   [STEP5I_APPROVAL_HANDOFF_PACKAGE.md](STEP5I_APPROVAL_HANDOFF_PACKAGE.md).
+9. Step 5J or later: consider a separate approval gate or one-shot live task only after fresh
    preflight, exact approval gate, final dynamic preflight, and explicit user
    risk approval.
 
@@ -349,12 +352,14 @@ candidate / risk decision trace record, and Step 5E added the sanitized review
 report. Step 5F added the review-gated session policy for evaluating post-
 micro-live session constraints without POST. Step 5G added the sanitized
 review-gated session operation bundle without POST. Step 5H added the sanitized
-operator review checklist without POST. Paper trading remains simulation,
-shadow remains local risk/audit recording, and live order execution remains a
-separate human-approved one-shot path. The safe bridge is candidate-based:
-strategy and shadow may produce non-executable evidence, Step 5C may mark a
-candidate eligible for human review only, Step 5D may record the review trace
-only, Step 5E may render a dry-run report only, Step 5F may evaluate session
-policy only, Step 5G may render an operation bundle only, Step 5H may render an
-operator checklist only, and only a future separately approved task may perform
+operator review checklist without POST. Step 5I added the sanitized approval
+handoff package without POST or approval command generation. Paper trading
+remains simulation, shadow remains local risk/audit recording, and live order
+execution remains a separate human-approved one-shot path. The safe bridge is
+candidate-based: strategy and shadow may produce non-executable evidence,
+Step 5C may mark a candidate eligible for human review only, Step 5D may record
+the review trace only, Step 5E may render a dry-run report only, Step 5F may
+evaluate session policy only, Step 5G may render an operation bundle only,
+Step 5H may render an operator checklist only, Step 5I may render approval
+handoff material only, and only a future separately approved task may perform
 final dynamic preflight and at most one live POST.

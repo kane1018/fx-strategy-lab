@@ -252,3 +252,8 @@ report and session policy decision for operator inspection only. It still keeps
 Step 5H now provides a sanitized operator review checklist derived from that
 bundle. It remains dry-run only, keeps `allowed_for_live=false`, issues no
 approval gate, and permits no live POST.
+
+Step 5I now provides a sanitized approval handoff package derived from the
+operator checklist. It records future display and final preflight requirements,
+but still issues no approval gate, generates no approval command, and permits no
+live POST.

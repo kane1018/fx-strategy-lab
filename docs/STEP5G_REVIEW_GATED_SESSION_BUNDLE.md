@@ -249,3 +249,8 @@ Step 5H now provides the human operator checklist layer for this bundle. It
 remains no POST and no approval gate. Any future live task still requires fresh
 preflight, approval gate, final dynamic preflight, and one-shot execution
 controls as a separate explicit step.
+
+Step 5I now converts that operator checklist into a sanitized approval handoff
+package. It records display-allowed fields, display-forbidden labels, and future
+final dynamic preflight items while keeping `allowed_for_live=false`,
+`approval_gate_issued=false`, and `approval_command_generated=false`.

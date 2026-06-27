@@ -249,3 +249,7 @@ report only. It preserves the no POST and no approval gate boundary.
 Step 5H now converts the Step 5G operation bundle into a sanitized operator
 review checklist. The checklist is still dry-run only, keeps
 `allowed_for_live=false`, and does not issue approval gates or permit live POST.
+
+Step 5I now converts the operator checklist into a sanitized approval handoff
+package. The package is still dry-run only, keeps `approval_gate_issued=false`
+and `approval_command_generated=false`, and does not permit live POST.

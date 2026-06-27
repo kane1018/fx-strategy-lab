@@ -269,3 +269,8 @@ approval gates or permit live POST.
 Step 5H now turns that bundle into a sanitized operator checklist. The checklist
 is still review material only, keeps `allowed_for_live=false`, and does not
 issue approval gates or permit live POST.
+
+Step 5I now turns the operator checklist into a sanitized approval handoff
+package. The package is still review material only, keeps
+`approval_gate_issued=false` and `approval_command_generated=false`, and does
+not permit live POST.
