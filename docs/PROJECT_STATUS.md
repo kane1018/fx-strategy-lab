@@ -82,6 +82,27 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6B Real approval artifact generation完了 / artifact-only / no API / no POST / no copyable command** —
+  `backend/app/live_verification/live_order_real_approval_artifact_generation.py` を追加し、Step 6Aの
+  `LiveOrderRealApprovalGateEnablementState`、明示的なStep 6B request acknowledgement snapshot、
+  sanitized artifact-generation safety snapshotを入力に、将来のStep 6C approval artifact validationへ渡す
+  内部artifactをfail-closedで生成できるようにした。safe source + explicit request + safe snapshotでは
+  `APPROVAL_ARTIFACT_GENERATED_NO_API_NO_POST`、`artifact_ready=true`、
+  `eligible_for_step6c_validation=true`、`approval_id_generated=true`、
+  `approval_command_generated=true`、`approval_artifact_generated=true` になるが、これはmodel内部artifactだけで、
+  `allowed_for_live=false`、`approval_gate_issued=false`、`approval_command_copyable=false`、
+  `approval_command_displayed=false`、`approval_command_display_mode=redacted_only_in_step6b`、
+  `approval_command_persisted=false`、`approval_command_copied_to_clipboard=false`、
+  `approval_command_executable=false`、`real_approval_artifacts_available=false`、
+  `post_allowed_this_step=false`、`post_attempt_limit=1`、`post_executed=false`、
+  `live_order_once_called=false`、`private_api_called=false`、`broker_called=false`、
+  `read_only_api_called=false`、`public_api_called=false`、retry/loop/追加/変更/取消/決済禁止を維持する。
+  Step 6Bはapproval command全文をMarkdown表示せず、copyableにせず、pbcopyせず、ファイル保存せず、
+  HTTP POST、実注文、read-only API、public API、Private API、broker、live_order_once、ledgerには接続していない。
+  rendererは `approval_command_sha256`、fingerprint、redacted representationのみを出す。詳細は
+  [STEP6B_REAL_APPROVAL_ARTIFACT_GENERATION.md](STEP6B_REAL_APPROVAL_ARTIFACT_GENERATION.md)。
+  ready artifactはlive POST許可でも実approval gate発行でもcopyable承認文でもない。次は別Stepの
+  Step 6C approval artifact validation。
 - **Step 6A Real approval gate enablement state完了 / state-only / no approval artifacts / no API / no POST** —
   `backend/app/live_verification/live_order_real_approval_gate_enablement_state.py` を追加し、Step 5Y-Zの
   `LiveOrderRealApprovalEnablementDryRunPlan`、明示的なStep 6A request acknowledgement snapshot、

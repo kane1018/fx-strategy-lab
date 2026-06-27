@@ -180,6 +180,26 @@ market/preflight state, any unexpected API/broker/live runner call, any
 secret/raw/real-ID exposure risk, and any need for retry, loop, add, change,
 cancel, or close.
 
+## Step 6B Follow-up Status
+
+Step 6B has now been implemented as
+`LiveOrderRealApprovalArtifact` in
+`backend/app/live_verification/live_order_real_approval_artifact_generation.py`.
+It may generate internal model artifacts for future Step 6C validation:
+
+- `approval_id_generated=true`
+- `approval_command_generated=true`
+- `approval_artifact_generated=true`
+
+Those values remain internal Step 6B artifacts only. Step 6B keeps
+`allowed_for_live=false`, does not issue a real approval gate, does not render
+the full approval command, does not make approval text copyable, does not use
+`pbcopy`, does not save approval text, does not call APIs or `live_order_once`,
+and does not execute HTTP POST.
+
+Details are in
+[STEP6B_REAL_APPROVAL_ARTIFACT_GENERATION.md](STEP6B_REAL_APPROVAL_ARTIFACT_GENERATION.md).
+
 ## Markdown Rendering
 
 The renderer includes these required warnings:

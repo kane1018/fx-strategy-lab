@@ -317,3 +317,14 @@ generate approval_id or approval command artifacts, does not create copyable
 approval text, does not call any API or ledger, and does not execute POST.
 Details:
 [STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md](STEP6A_REAL_APPROVAL_GATE_ENABLEMENT_STATE.md).
+
+## Step 6B Follow-up
+
+Step 6B adds an approval artifact generation model after the Step 6A enablement
+state. Ready output may set `approval_id_generated=true`,
+`approval_command_generated=true`, and `approval_artifact_generated=true` only
+as internal model artifacts for future Step 6C validation. Step 6B keeps
+`allowed_for_live=false`, does not issue a real approval gate, does not render
+or copy the full approval command, does not use `pbcopy`, does not save approval
+text, does not call any API or ledger, and does not execute POST. Details:
+[STEP6B_REAL_APPROVAL_ARTIFACT_GENERATION.md](STEP6B_REAL_APPROVAL_ARTIFACT_GENERATION.md).
