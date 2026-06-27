@@ -1,5 +1,12 @@
 # Step 5J Approval Gate Design
 
+## Step 5T Update
+
+Step 5T moves from fake design lineage to a dry-run real approval gate
+generation package. It still does not issue the gate, generate the id, generate
+the command, copy command text, or authorize POST. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5J adds a fake approval gate design model for a Step 5I

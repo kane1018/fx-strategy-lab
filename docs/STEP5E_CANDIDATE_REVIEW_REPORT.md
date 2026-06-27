@@ -1,5 +1,12 @@
 # Step 5E Candidate Review Report
 
+## Step 5T Update
+
+Step 5T packages future real approval gate generation requirements after the
+review/reporting chain. The package is not a review approval, not a real
+approval gate, and not live POST authorization. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5E adds a sanitized review/reporting model for Step 5B

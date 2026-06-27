@@ -1,5 +1,13 @@
 # Step 5N One-shot Live Boundary
 
+## Step 5T Update
+
+Step 5T does not cross the one-shot live boundary. It only creates a dry-run
+real approval gate generation package and continues to require future separate
+approval, final dynamic preflight, one-shot POST, reconciliation, and final
+report steps. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5N adds a dry-run one-shot live boundary model after the Step 5M final

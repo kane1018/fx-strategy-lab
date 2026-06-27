@@ -1,5 +1,12 @@
 # Step 5G Review-gated Session Bundle
 
+## Step 5T Update
+
+Step 5T consumes the later readiness/preflight chain and produces only a dry-run
+real approval gate generation package. Session bundle readiness still does not
+authorize an approval gate or live POST. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5G adds a sanitized operation bundle model for combining a Step 5E

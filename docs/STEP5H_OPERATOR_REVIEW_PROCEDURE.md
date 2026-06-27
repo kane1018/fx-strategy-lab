@@ -1,5 +1,12 @@
 # Step 5H Operator Review Procedure
 
+## Step 5T Update
+
+Step 5T depends on the operator-review chain only as sanitized upstream
+evidence. The package is not an operator approval, not an approval gate, and not
+live POST authorization. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5H adds a sanitized operator review procedure for a Step 5G

@@ -1,5 +1,13 @@
 # Step 5O One-shot Execution Runbook
 
+## Step 5T Update
+
+Step 5T keeps one-shot execution as a future separate step. Its generation
+package only records approval gate generation prerequisites and stop
+conditions, while `allowed_for_live=false`, `approval_gate_issued=false`, and
+POST execution remain fixed to safe values. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5O adds a dry-run one-shot execution runbook model after the Step 5N

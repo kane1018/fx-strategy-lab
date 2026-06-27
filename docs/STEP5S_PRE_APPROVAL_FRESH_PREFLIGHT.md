@@ -1,5 +1,14 @@
 # Step 5S Pre-approval Fresh Preflight
 
+## Step 5T Update
+
+Step 5T adds a dry-run real approval gate generation package on top of this
+decision. It keeps `allowed_for_live=false`, defers real approval id and real
+approval command generation to a future separate step, does not issue an
+approval gate, does not create copyable approval text, and does not call APIs,
+`live_order_once`, ledgers, or POST. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5S adds a dry-run pre-approval fresh preflight model. It consumes the Step

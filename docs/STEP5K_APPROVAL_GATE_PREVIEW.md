@@ -1,5 +1,12 @@
 # Step 5K Approval Gate Preview
 
+## Step 5T Update
+
+Step 5T does not preview or display a real approval command. It records only
+placeholder labels and future sequence requirements, keeps approval command
+copyable=false, and preserves `allowed_for_live=false`. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5K adds a dry-run approval gate preview model for a Step 5J

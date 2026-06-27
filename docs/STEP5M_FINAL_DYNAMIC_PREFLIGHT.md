@@ -1,5 +1,12 @@
 # Step 5M Final Dynamic Preflight
 
+## Step 5T Update
+
+Step 5T preserves final dynamic preflight as a future separate step after a
+future exact-match approval. The Step 5T package does not perform final
+preflight, does not issue approval artifacts, and does not authorize live POST.
+See [STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5M adds a dry-run final dynamic preflight model after the Step 5L approval

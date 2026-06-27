@@ -1,5 +1,12 @@
 # Step 5F Review-gated Session Policy
 
+## Step 5T Update
+
+Step 5T preserves the session policy boundary. Even with ready upstream
+evidence, the generation package keeps `allowed_for_live=false` and requires a
+future explicit real approval gate generation step. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5F adds a fail-closed policy model for deciding whether a sanitized Step 5E

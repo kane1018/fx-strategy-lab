@@ -1,5 +1,12 @@
 # Step 5C Live Order Candidate Risk Gate
 
+## Step 5T Update
+
+Step 5T does not weaken the fail-closed risk chain. A ready generation package
+still has `allowed_for_live=false` and only records future approval generation
+requirements. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5C adds a fail-closed risk gate for Step 5B `LiveOrderCandidate`

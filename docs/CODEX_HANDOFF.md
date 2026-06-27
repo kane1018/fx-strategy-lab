@@ -822,3 +822,22 @@ A ready Step 5S decision keeps `allowed_for_live=false` and is only evidence for
 a future separate real approval gate generation step. Step 5S does not call APIs,
 issue approval, generate real approval ids or commands, make approval text
 copyable, call `live_order_once`, read/write ledgers, or execute POST.
+
+## Step 5T Follow-up
+
+Step 5T is complete as a dry-run-only real approval gate generation package.
+`backend/app/live_verification/live_order_real_approval_gate_generation_package.py`
+adds `LiveOrderRealApprovalGateGenerationPackage` and builder/renderer helpers.
+It consumes the Step 5S pre-approval fresh preflight decision, preserves blocked
+reasons when Step 5S is blocked, and otherwise produces
+`READY_FOR_REAL_APPROVAL_GATE_GENERATION_PACKAGE_REVIEW`.
+
+Important boundary: a ready Step 5T package is review evidence only. It is not
+permission to issue a real approval gate, generate a real approval id, generate
+a real approval command, copy approval text, run final dynamic preflight, call
+`live_order_once`, or execute POST. It keeps `allowed_for_live=false`,
+`approval_gate_issued=false`, `approval_id_generated=false`,
+`approval_command_generated=false`, `approval_command_copyable=false`,
+`ttl_seconds=300`, `exact_match_required=true`, and
+`same_session_required=true`. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).

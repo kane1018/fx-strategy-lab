@@ -1,5 +1,12 @@
 # Step 5P E2E Dry-run Chain Review
 
+## Step 5T Update
+
+Step 5T extends the dry-run chain with a real approval gate generation package.
+The package does not issue a gate, approval id, approval command, or copyable
+approval text, and it does not call APIs, ledgers, `live_order_once`, or POST.
+See [STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5P adds an end-to-end dry-run chain review model for the Step 5B through

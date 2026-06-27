@@ -1,5 +1,12 @@
 # Step 5D Candidate Trace Record
 
+## Step 5T Update
+
+Step 5T continues the traceable dry-run chain by preserving upstream sanitized
+references in a real approval gate generation package. The package contains no
+credentials, raw responses, real IDs, or approval command text. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5D adds a dry-run trace record that links sanitized Paper / Shadow /

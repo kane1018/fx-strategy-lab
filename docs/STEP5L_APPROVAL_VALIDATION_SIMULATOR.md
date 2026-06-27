@@ -1,5 +1,13 @@
 # Step 5L Approval Validation Simulator
 
+## Step 5T Update
+
+Step 5T is still dry-run and does not perform real approval validation. It
+packages future real approval gate generation requirements, while actual
+approval id and approval command generation remain deferred to a later explicit
+step. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5L adds a dry-run approval validation simulator for a Step 5K

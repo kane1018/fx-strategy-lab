@@ -1,5 +1,12 @@
 # Step 5I Approval Handoff Package
 
+## Step 5T Update
+
+Step 5T keeps approval handoff evidence sanitized and adds a package for future
+real approval gate generation review. It remains no API, no approval gate, no
+approval id, no approval command, no clipboard/file output, and no POST. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5I adds a sanitized approval handoff package for a Step 5H

@@ -1,5 +1,13 @@
 # Step 5R Real Approval Gate Plan
 
+## Step 5T Update
+
+Step 5T adds a dry-run real approval gate generation package after Step 5S. The
+package is review evidence only: real approval id generation, real approval
+command generation, approval gate issuance, final preflight, and one-shot POST
+remain future separate steps. `allowed_for_live=false` is preserved. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5R adds a dry-run real approval gate planning package. It consumes the

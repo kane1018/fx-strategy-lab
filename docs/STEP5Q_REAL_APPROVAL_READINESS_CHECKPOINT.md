@@ -1,5 +1,13 @@
 # Step 5Q Real Approval Readiness Checkpoint
 
+## Step 5T Update
+
+Step 5T records the next dry-run package layer after Step 5S. It does not
+generate approval artifacts and does not authorize live POST; it only packages
+future real approval gate generation rules for review with
+`allowed_for_live=false`. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5Q adds a dry-run checkpoint for deciding whether the Step 5P end-to-end

@@ -1,5 +1,13 @@
 # Step 5B Live Order Candidate Dry-run Model
 
+## Step 5T Update
+
+Step 5T is still downstream dry-run packaging. Strategy signal, candidate, risk
+decision, trace, review, session policy, bundle, operator review, handoff,
+design, preview, validation, preflight, boundary, runbook, chain, readiness,
+plan, pre-approval preflight, and generation package never directly POST. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5B adds a dry-run-only model that converts a sanitized strategy signal into

@@ -1,5 +1,12 @@
 # Step 5A Paper / Shadow / Live Connection Review
 
+## Step 5T Update
+
+Step 5T stays within the reviewed Paper / Shadow / Live separation. It adds a
+dry-run real approval gate generation package only, with no live runner
+connection, no API connection, no approval gate issuance, and no live POST. See
+[STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md](STEP5T_REAL_APPROVAL_GATE_GENERATION_PACKAGE.md).
+
 ## Summary
 
 Step 5A is a design review for connecting existing paper trading, shadow runs,
