@@ -82,6 +82,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6E-S Sunday offline preparation完了 / no API / no POST** —
+  2026-06-28 JSTが日曜で市場外停止条件に該当するため、Step 6E real API preflightは引き続き未実行。
+  代わりに、明日以降の市場時間内に別タスクとして1回だけread-only/preflight確認を再試行するための
+  Step 6E-R runbookを追加した。Step 6E-Sは実API、read-only API、public API、Private API、broker、
+  order endpoint、`live_order_once`、HTTP POST、実注文、raw request/response表示・保存、
+  headers/signature/credentials表示・保存、ledger操作を行わない。
+  詳細は [STEP6E_R_MARKET_OPEN_RETRY_RUNBOOK.md](STEP6E_R_MARKET_OPEN_RETRY_RUNBOOK.md)。
+  次は市場時間内の別タスクとしてStep 6E-R real API preflight retry request。明示依頼なしに進まない。
 - **Step 6E Real API preflight execution model完了 / read-only-preflight result model / no POST** —
   `backend/app/live_verification/live_order_real_api_preflight_execution.py` を追加し、Step 6Dの
   `LiveOrderRealApiPreflightPlan`、明示的なStep 6E request acknowledgement snapshot、
@@ -96,7 +104,8 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   retry/loop/追加/変更/取消/決済禁止、raw request/response/headers/signature表示・保存禁止を維持する。
   2026-06-28 JSTは日曜のため、今回の作業では実API preflightは実行せず、model/tests/docsのみ完了した。
   詳細は [STEP6E_REAL_API_PREFLIGHT_EXECUTION.md](STEP6E_REAL_API_PREFLIGHT_EXECUTION.md)。
-  次は別StepのStep 6F post-readiness planning request。明示依頼なしに進まない。
+  実API preflightは未実行のため、次はStep 6E-R market-open retry。Step 6Fへ進むには
+  freshなStep 6E-R sanitized resultと別の明示依頼が必要。
 - **Step 6D Real API preflight plan完了 / planning-only / no real API / no POST** —
   `backend/app/live_verification/live_order_real_api_preflight_plan.py` を追加し、Step 6Cの
   `LiveOrderRealApprovalArtifactValidation`、明示的なStep 6D request acknowledgement snapshot、

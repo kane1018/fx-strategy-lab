@@ -262,3 +262,17 @@ headers/signature exposure, and fail-closed market/weekend checks. In the
 implementation pass, real API preflight was not executed because the work date
 was Sunday JST. Details:
 [STEP6E_REAL_API_PREFLIGHT_EXECUTION.md](STEP6E_REAL_API_PREFLIGHT_EXECUTION.md).
+
+## Step 6E-S / Step 6E-R follow-up
+
+Step 6E-S added an offline market-open retry runbook because the Step 6E
+implementation pass occurred on Sunday JST and did not execute real API
+preflight. Details:
+[STEP6E_R_MARKET_OPEN_RETRY_RUNBOOK.md](STEP6E_R_MARKET_OPEN_RETRY_RUNBOOK.md).
+
+The next executable preflight work is a separate Step 6E-R market-open retry.
+It remains read-only/preflight only, no POST, no order endpoint, no
+`live_order_once`, no raw request/response display or save, no
+headers/signatures/credentials/real IDs display, and `allowed_for_live=false`.
+Step 6F remains blocked until Step 6E-R produces fresh sanitized evidence and
+the user explicitly requests Step 6F.

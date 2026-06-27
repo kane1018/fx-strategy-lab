@@ -142,6 +142,21 @@ For this implementation pass, the real API preflight was not executed because
 the work date was Sunday JST. The model, tests, and docs were completed with
 fake/sanitized inputs only.
 
+## Step 6E-S Sunday offline preparation
+
+Step 6E-S confirmed the Sunday blocker and added a market-open retry runbook
+without calling any API. The retry is documented in
+[STEP6E_R_MARKET_OPEN_RETRY_RUNBOOK.md](STEP6E_R_MARKET_OPEN_RETRY_RUNBOOK.md).
+
+The next executable preflight attempt is Step 6E-R, and it must be requested as
+a separate market-hours task. Step 6E-R is still read-only/preflight only,
+no POST, no order endpoint, no `live_order_once`, no raw request/response
+display or save, no headers/signatures/credentials/real IDs display, and
+`allowed_for_live=false`.
+
+Step 6F must not start until a fresh Step 6E-R sanitized result exists and the
+user explicitly requests Step 6F.
+
 ## Safe read-only route requirements
 
 A route must be verified before use:
@@ -256,5 +271,7 @@ no-order/no-API import boundaries.
 
 Step 6E is implemented as a read-only/preflight-only sanitized result model.
 Actual real API preflight was not executed in this pass because Sunday JST is a
-market blocker. Next work is an explicit Step 6F post-readiness planning request
-after a fresh safe Step 6E preflight exists.
+market blocker. Step 6E-S added the Step 6E-R market-open retry runbook without
+API execution. Next work is an explicit Step 6E-R market-open retry request;
+Step 6F remains blocked until a fresh safe Step 6E-R preflight exists and a
+separate Step 6F request is made.
