@@ -278,3 +278,8 @@ Step 5K now extends that path with a fake approval gate preview and validation
 dry-run. It keeps `allowed_for_live=false`, keeps the template non-copyable,
 does not generate a real approval id or command, does not use clipboard or file
 output, and does not permit live POST.
+
+Step 5L now extends that path with a fake approval validation simulator. It
+checks fake/template-only input and validation-rule outcomes only. It keeps
+`allowed_for_live=false`, generates no real approval id or command, issues no
+approval gate, runs no final dynamic preflight, and does not permit live POST.

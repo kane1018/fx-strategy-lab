@@ -268,3 +268,9 @@ derived from that design. It keeps `allowed_for_live=false`, uses placeholder
 approval id values only, keeps the fake command template non-copyable, does not
 generate a real approval command, does not use clipboard or file output, and
 permits no live POST.
+
+Step 5L now provides a fake approval validation simulator derived from that
+preview. It validates fake/template-only input against exact-match, TTL,
+same-session, ACK-token, spacing, and placeholder rules while keeping
+`allowed_for_live=false`, issuing no approval gate, generating no approval id or
+command, running no final dynamic preflight, and permitting no live POST.

@@ -327,3 +327,8 @@ Step 5K now provides the fake approval gate preview layer for that design. It
 still does not issue real approval ids, does not generate a real approval
 command, does not copy approval text, does not write approval text to a file,
 and does not authorize live POST.
+
+Step 5L now provides the fake approval validation simulator layer for that
+preview. It still does not issue real approval ids, does not generate a real
+approval command, does not copy or write approval text, does not authorize final
+dynamic preflight, and does not authorize live POST.

@@ -271,3 +271,8 @@ Step 5K follows with a fake approval gate preview derived from that design. It
 renders non-copyable preview material and validation rules only, keeps
 `allowed_for_live=false`, does not generate real approval ids or commands, does
 not use clipboard or file output, and does not permit live POST.
+
+Step 5L follows with a fake approval validation simulator derived from that
+preview. It validates fake/template-only simulated input only, preserves
+`allowed_for_live=false`, generates no real approval id or command, authorizes
+no final dynamic preflight, and does not permit live POST.

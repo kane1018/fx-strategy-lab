@@ -286,3 +286,8 @@ dry-run. The preview remains review material only, keeps the template
 non-copyable, keeps `approval_id_generated=false`, keeps
 `approval_command_generated=false`, avoids clipboard and file output, and does
 not permit live POST.
+
+Step 5L now turns that preview into a fake approval validation simulation. The
+simulation remains review material only, validates fake/template-only input,
+keeps `approval_id_generated=false`, keeps `approval_command_generated=false`,
+does not authorize final dynamic preflight, and does not permit live POST.

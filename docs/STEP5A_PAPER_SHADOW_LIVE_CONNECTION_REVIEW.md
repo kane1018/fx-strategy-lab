@@ -368,6 +368,7 @@ the review trace only, Step 5E may render a dry-run report only, Step 5F may
 evaluate session policy only, Step 5G may render an operation bundle only,
 Step 5H may render an operator checklist only, Step 5I may render approval
 handoff material only, Step 5J may render a fake approval gate design only,
-Step 5K may render a non-copyable approval gate preview and validation dry-run only, and
+Step 5K may render a non-copyable approval gate preview and validation dry-run
+only, Step 5L may simulate fake/template-only approval validation only, and
 only a future separately approved task may perform final dynamic preflight and
 at most one live POST.

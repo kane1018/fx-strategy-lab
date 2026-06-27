@@ -386,3 +386,10 @@ this design into a fake approval gate preview and validation-rule dry-run only.
 It keeps `allowed_for_live=false`, keeps the fake command template
 non-copyable, avoids real approval id and command generation, avoids clipboard
 and file output, and does not authorize live POST.
+
+Step 5L now provides the validation simulation layer in
+[STEP5L_APPROVAL_VALIDATION_SIMULATOR.md](STEP5L_APPROVAL_VALIDATION_SIMULATOR.md).
+It validates fake/template-only input against the preview rules only. It keeps
+`allowed_for_live=false`, avoids real approval id and command generation, avoids
+clipboard and file output, does not authorize final dynamic preflight, and does
+not authorize live POST.

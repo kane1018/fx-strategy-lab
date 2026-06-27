@@ -82,6 +82,29 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5L Approval validation simulator完了 / fake validation only / no order / no POST** —
+  `backend/app/live_verification/live_order_approval_validation_simulator.py` を追加し、Step 5Kの
+  `LiveOrderApprovalGatePreview` とfake/template-only command入力からsanitizedな
+  `LiveOrderApprovalValidationSimulation` と `LiveOrderApprovalValidationRuleResult` を作る
+  approval validation simulator modelを実装した。fake templateの完全一致、TTL 300秒、同一セッション、
+  未使用、ACK token、余分なtoken/改行/空白なし、placeholder-only、fake prefixをfail-closedで評価する。
+  pass時は `SIMULATED_APPROVAL_VALIDATION_PASSED` になるが、これはfake validation simulationが通った
+  という意味だけで、`allowed_for_live=false`、`requires_human_approval=true`、
+  `approval_gate_required=true`、`approval_gate_issued=false`、`approval_id_generated=false`、
+  `approval_command_generated=false`、`approval_command_template_only=true`、
+  `approval_command_copyable=false`、`final_dynamic_preflight_required=true`、`dry_run_only=true` を維持する。
+  blocked preview、mismatch、TTL超過、別セッション、使用済み、ACK不足/重複、extra token、改行/余分な空白、
+  real approval shape、placeholder欠落では `BLOCKED_APPROVAL_VALIDATION_SIMULATION` となり、blocked reasonsを
+  保持する。Markdown renderingには `This approval validation simulation is dry-run only.`、
+  `This simulation is not a real approval gate.`、`This simulation does not generate a real approval_id.`、
+  `This simulation does not generate a real approval command.`、
+  `This simulation does not authorize final dynamic preflight.`、
+  `This simulation does not authorize live POST.`、`allowed_for_live=false.` の警告を含める。
+  Step 5Lは real approval id / real approval command生成、approval gate発行、clipboard/file出力、
+  final dynamic preflight、`live_order_once`、Private API、broker、HTTP client、read-only API、ledgerには
+  接続していない。詳細は [STEP5L_APPROVAL_VALIDATION_SIMULATOR.md](STEP5L_APPROVAL_VALIDATION_SIMULATOR.md)。
+  passed simulationはlive POST許可でもapproval gate発行許可でもfinal dynamic preflight許可でもない。
+  次フェーズを行う場合も別Step・別承認で扱う。
 - **Step 5K Approval gate preview完了 / validation dry-run / no order / no POST** —
   `backend/app/live_verification/live_order_approval_gate_preview.py` を追加し、Step 5Jの
   `LiveOrderApprovalGateDesign` からsanitizedな `LiveOrderApprovalGatePreview` と

@@ -378,3 +378,10 @@ API and ledger access, and never permits live POST.
 The next step may review how a real approval gate would be implemented, but it
 must remain a separate task with fresh preflight. Step 5K itself does not
 generate approval ids or approval commands.
+
+Step 5L now provides the fake approval validation simulator layer in
+[STEP5L_APPROVAL_VALIDATION_SIMULATOR.md](STEP5L_APPROVAL_VALIDATION_SIMULATOR.md).
+It validates fake/template-only input against this preview's rules only. A
+passed simulation is not a real approval gate, does not generate a real approval
+id or command, does not authorize final dynamic preflight, and does not
+authorize live POST.
