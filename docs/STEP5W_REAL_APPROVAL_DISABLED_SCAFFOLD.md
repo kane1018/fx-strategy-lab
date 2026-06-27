@@ -1,0 +1,194 @@
+# Step 5W Real Approval Disabled Scaffold
+
+## Summary
+
+Step 5W adds `LiveOrderRealApprovalDisabledScaffold`, a dry-run-only disabled
+scaffold for future real approval gate implementation work.
+
+The scaffold consumes the Step 5V
+`LiveOrderRealApprovalImplementationReadinessReview` and converts it into
+sanitized review evidence about what a future real approval gate implementation
+would need, while keeping all usable approval artifacts disabled.
+
+## Scope
+
+This step defines:
+
+- a disabled scaffold data model
+- disabled scaffold status and block reasons
+- future enablement requirements
+- disabled reasons
+- sanitized check results
+- sanitized markdown rendering
+- no-order/no-API guard coverage
+
+## What this step does not do
+
+Step 5W does not:
+
+- call read-only API, public API, Private API, broker, or `live_order_once`
+- execute HTTP POST
+- issue a real approval gate
+- generate a real approval_id
+- generate a real approval command
+- create copyable approval text
+- copy approval text to the clipboard
+- save approval text to a file
+- read or write ledgers
+- authorize live execution
+
+## Input: LiveOrderRealApprovalImplementationReadinessReview
+
+The input is the Step 5V readiness review. The scaffold requires the review to
+be ready, dry-run-only, not live-enabled, and still free of real approval
+artifacts.
+
+Blocked Step 5V reviews can still produce a blocked Step 5W scaffold for
+auditability, but cannot become eligible for future enablement planning.
+
+## Output: LiveOrderRealApprovalDisabledScaffold
+
+The scaffold records sanitized IDs, candidate shape, readiness status, future
+enablement requirements, disabled reasons, and check results.
+
+The output always keeps:
+
+- `allowed_for_live=false`
+- `approval_gate_enabled=false`
+- `approval_gate_issued=false`
+- `approval_id_generated=false`
+- `approval_command_generated=false`
+- `approval_command_copyable=false`
+- `approval_command_executable=false`
+- `usable_approval_artifacts_generated=false`
+- `real_approval_artifacts_available=false`
+- `post_executed=false`
+- `live_order_once_called=false`
+
+## Disabled Scaffold Meaning
+
+`READY_FOR_DISABLED_REAL_APPROVAL_GATE_SCAFFOLD_REVIEW` means the disabled
+scaffold is internally consistent and can be reviewed as evidence for a future
+separate enablement planning step.
+
+It does not mean:
+
+- real approval gate issuance is allowed
+- a real approval_id can be generated
+- a real approval command can be generated
+- approval text can be copied or pasted
+- live POST is authorized
+
+## Blocked Scaffold Meaning
+
+`BLOCKED_DISABLED_REAL_APPROVAL_GATE_SCAFFOLD` means one or more prerequisites
+or disabled-state guarantees failed. The result remains sanitized and
+fail-closed, and `allowed_for_live=false` is preserved.
+
+Blocked reasons can include:
+
+- readiness review not ready or not eligible
+- review already allows live execution
+- real approval artifact already generated
+- approval generation not deferred
+- unsupported symbol, side, size, or execution type
+- missing ACK token or display forbidden field coverage
+- API/live runner/post flag already called
+- scaffold enablement flag set true
+- missing future enablement requirements
+- missing disabled reasons
+
+## Future Enablement Requirements
+
+Step 5W records the minimum future conditions for any separate enablement step:
+
+- explicit future user instruction required
+- fresh pre-approval preflight must be re-run in a future separate step
+- implementation readiness review must be rechecked
+- real approval gate enablement must be a separate step
+- real approval_id generation must be a separate step
+- real approval command generation must be a separate step
+- real approval command exact match validation required
+- TTL must remain 300 seconds
+- same Codex session required
+- post-approval final dynamic preflight required
+- one-shot POST remains a separate step
+- post reconciliation remains a separate step
+
+## Check Results
+
+The scaffold records sanitized check results for:
+
+- Step 5V implementation readiness review ready
+- approval gate enabled false
+- allowed_for_live false
+- approval gate not issued
+- approval_id not generated
+- approval command not generated, copyable, or executable
+- no usable approval artifacts generated
+- approval id and command generation deferred
+- TTL 300, exact match, same session, and ACK token requirements
+- display forbidden fields include secrets, raw data, IDs, and real commands
+- no API, broker, or `live_order_once` calls
+- post not executed
+- one-shot constraints preserved
+- future enablement requirements present
+- disabled reasons present
+
+## Markdown Rendering
+
+The markdown renderer is sanitized and includes these warnings:
+
+```text
+This real approval gate scaffold is disabled and dry-run only.
+This scaffold does not call read-only API.
+This scaffold does not call Private API.
+This scaffold does not call live_order_once.
+This scaffold does not execute HTTP POST.
+This scaffold does not issue a real approval gate.
+This scaffold does not generate a real approval_id.
+This scaffold does not generate a real approval command.
+This scaffold does not provide copyable approval text.
+This scaffold does not authorize live POST.
+approval_gate_enabled=false.
+allowed_for_live=false.
+```
+
+## Do-not-cross Boundaries
+
+Strategy signal, candidate, risk decision, trace, review report, session policy,
+bundle, operator review, handoff, fake approval artifacts, preflight dry-runs,
+one-shot boundary, execution runbook, E2E chain, real approval readiness,
+planning package, pre-approval fresh preflight, real approval generation
+package, pre-implementation audit, readiness review, and disabled scaffold must
+not directly connect to live POST.
+
+## Relationship to Future Enablement
+
+Step 5W is a disabled scaffold only. Future enablement, if ever requested, must
+be a separate explicit task with a fresh safety review and without assuming
+Step 5W is permission to issue approval artifacts.
+
+## Tests
+
+Tests cover:
+
+- ready Step 5V review to ready disabled scaffold
+- safety defaults fixed false/true as required
+- blocked Step 5V review preservation
+- real artifact and enablement flag blockers
+- unsupported order shape blockers
+- TTL, ACK, exact match, and display forbidden field blockers
+- no API, no POST, and one-shot constraint blockers
+- markdown warnings
+- serialization safety
+- forbidden builder kwargs
+- no-order/no-API/no-clipboard guard coverage
+
+## Handoff Summary
+
+Step 5W is complete when the disabled scaffold model, tests, no-order guard, and
+docs pass. The next step, if explicitly requested, must still treat real
+approval gate enablement as separate future work. No approval gate, approval_id,
+approval command, API call, ledger access, or live POST is authorized by this
+step.

@@ -258,3 +258,29 @@ The review is evidence only. Next work, if explicitly requested, must be a
 separate future real approval gate implementation step; Step 5V does not
 implement or issue the gate, does not generate approval artifacts, and does not
 permit live POST.
+
+## Step 5W Follow-up
+
+Step 5W adds a disabled real approval gate scaffold dry-run model. It consumes
+the Step 5V `LiveOrderRealApprovalImplementationReadinessReview` and creates
+`LiveOrderRealApprovalDisabledScaffold` as sanitized review evidence for a
+future separate enablement planning step.
+
+Ready scaffolds use
+`READY_FOR_DISABLED_REAL_APPROVAL_GATE_SCAFFOLD_REVIEW`,
+`scaffold_ready=true`, and `eligible_for_future_enablement_planning=true`, but
+this is not live execution permission and not approval gate enablement. Step 5W
+keeps `allowed_for_live=false`, `approval_gate_enabled=false`,
+`approval_gate_issued=false`, `approval_id_generated=false`,
+`approval_command_generated=false`, `approval_command_copyable=false`,
+`approval_command_executable=false`, `usable_approval_artifacts_generated=false`,
+`real_approval_artifacts_available=false`, `post_attempt_limit=1`,
+`post_executed=false`, and `live_order_once_called=false`.
+
+Step 5W records future enablement requirements, disabled reasons, and check
+results for disabled gate state, deferred approval id/command generation, TTL
+300, exact match, same session, ACK tokens, display forbidden fields, no
+API/broker calls, no POST, and one-shot constraints. It does not call read-only
+API, public API, Private API, broker, `live_order_once`, ledgers, clipboard, or
+POST, and it does not generate usable approval artifacts. Details:
+[STEP5W_REAL_APPROVAL_DISABLED_SCAFFOLD.md](STEP5W_REAL_APPROVAL_DISABLED_SCAFFOLD.md).
