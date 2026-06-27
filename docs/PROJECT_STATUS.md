@@ -1002,3 +1002,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 公開可否・認証要否・公開禁止情報の方針は [PUBLICATION_POLICY.md](PUBLICATION_POLICY.md) を単一参照点とする
 （現状の read-only サンプル公開は暫定可。§2 の条件に触れる前＝実データ/実取引/Private API/設定画面の公開前に
 認証/アクセス制御の必須化を再判断）。
+
+## Step 5S Follow-up
+
+Step 5S adds a pre-approval fresh preflight dry-run model. It consumes the Step
+5R real approval gate plan plus sanitized snapshot fields for account/assets,
+open positions, active orders, instrument rules, ticker/spread/age,
+market/maintenance/event, API scope/order permission/IP account, previous
+result, session/daily limits, Git/tests/ruff/secret scan, raw response flags,
+outbound body allowlist, request/signing body equality, and pre-approval
+freshness.
+
+A ready Step 5S decision keeps `allowed_for_live=false` and is only evidence for
+a future separate real approval gate generation step. Step 5S does not call APIs,
+issue approval, generate real approval ids or commands, make approval text
+copyable, call `live_order_once`, read/write ledgers, or execute POST.

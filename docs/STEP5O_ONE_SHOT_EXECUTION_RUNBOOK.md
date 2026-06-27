@@ -375,3 +375,18 @@ Step 5R now adds the real approval gate plan dry-run model. Execution runbooks
 remain review-only; Step 5R translates readiness evidence into a future approval
 gate plan without executing any runbook phase, calling APIs, calling
 `live_order_once`, or issuing approval artifacts.
+
+## Step 5S Follow-up
+
+Step 5S adds a pre-approval fresh preflight dry-run model. It consumes the Step
+5R real approval gate plan plus sanitized snapshot fields for account/assets,
+open positions, active orders, instrument rules, ticker/spread/age,
+market/maintenance/event, API scope/order permission/IP account, previous
+result, session/daily limits, Git/tests/ruff/secret scan, raw response flags,
+outbound body allowlist, request/signing body equality, and pre-approval
+freshness.
+
+A ready Step 5S decision keeps `allowed_for_live=false` and is only evidence for
+a future separate real approval gate generation step. Step 5S does not call APIs,
+issue approval, generate real approval ids or commands, make approval text
+copyable, call `live_order_once`, read/write ledgers, or execute POST.
