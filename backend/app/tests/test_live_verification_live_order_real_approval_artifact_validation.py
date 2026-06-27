@@ -173,6 +173,7 @@ def _assert_blocked(
     assert result.validation_ready is False
     assert result.approval_artifact_validated is False
     assert result.eligible_for_step6d_api_preflight_planning is False
+    assert result.validation.approval_gate_enabled is False
     assert result.allowed_for_live is False
     assert result.approval_gate_issued is False
     assert result.approval_command_copyable is False
@@ -212,6 +213,7 @@ def test_ready_artifact_request_command_and_safety_validate_without_post() -> No
     assert validation.approval_command_one_line_validated is True
     assert validation.approval_command_ack_tokens_validated is True
     assert validation.eligible_for_step6d_api_preflight_planning is True
+    assert validation.approval_gate_enabled is True
     assert validation.allowed_for_live is False
     assert validation.approval_gate_issued is False
     assert validation.approval_command_copyable is False

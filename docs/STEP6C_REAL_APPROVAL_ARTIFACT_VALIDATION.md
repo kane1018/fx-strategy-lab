@@ -15,9 +15,13 @@ to true:
 - `approval_command_ttl_validated`
 - `approval_command_same_session_validated`
 - `eligible_for_step6d_api_preflight_planning`
+- `approval_gate_enabled`
 
 These fields are validation evidence only. They do not authorize live POST,
 API access, `live_order_once`, or a real approval gate.
+`approval_gate_enabled=true` means the Step 6A state-only enablement carried
+through Step 6B into Step 6C validation. It is not live permission, not approval
+gate issuance, not copyable approval text, and not POST authorization.
 
 ## Scope
 
@@ -63,6 +67,7 @@ The source artifact must be a ready Step 6B artifact:
 - `artifact_ready=true`
 - `eligible_for_step6c_validation=true`
 - `allowed_for_live=false`
+- `approval_gate_enabled=true`
 - internal `approval_id` and `approval_command` generated
 - full command not displayed, not copyable, not persisted, not executable
 
@@ -104,6 +109,7 @@ It does not call APIs or read ledgers.
 
 Ready output keeps:
 
+- `approval_gate_enabled=true` as Step 6A state-only enablement evidence
 - `allowed_for_live=false`
 - `approval_gate_issued=false`
 - `approval_command_copyable=false`
@@ -173,6 +179,9 @@ data and is not Markdown-rendered, copied, persisted, or made executable.
 `APPROVAL_ARTIFACT_VALIDATED_NO_API_NO_POST` means the artifact passed dry-run
 validation and can be handed to a future explicit Step 6D API preflight planning
 task. It does not authorize live POST.
+In ready state, `approval_gate_enabled=true` is preserved from the Step 6A
+state-only model through the Step 6B artifact. This does not issue a real
+approval gate and does not permit API access or POST.
 
 ## Blocked Meanings
 
@@ -199,6 +208,8 @@ Step 6E or later remains the earliest place to consider a one-shot POST.
 Step 6C keeps no API, no POST, no copyable approval text, no `pbcopy`, no
 approval text file save, no `live_order_once`, no ledgers, no retry, no loop, no
 add/change/cancel/close, and `allowed_for_live=false`.
+Ready validation preserves `approval_gate_enabled=true` only as state-only
+enablement evidence from Step 6A. Blocked validation remains fail-closed.
 
 ## Markdown Rendering
 

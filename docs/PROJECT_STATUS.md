@@ -91,7 +91,10 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   `APPROVAL_ARTIFACT_VALIDATED_NO_API_NO_POST`、`validation_ready=true`、
   `approval_artifact_validated=true`、`approval_command_exact_match_validated=true`、
   `approval_command_ttl_validated=true`、`approval_command_same_session_validated=true`、
-  `eligible_for_step6d_api_preflight_planning=true` になるが、これはmodel内部validationだけで、
+  `eligible_for_step6d_api_preflight_planning=true`、`approval_gate_enabled=true` になるが、
+  `approval_gate_enabled=true` はStep 6A由来のstate-only enablementがStep 6B artifact経由で
+  Step 6C validationまで維持されたという意味だけで、live POST許可、実approval gate発行、
+  実注文許可、copyable承認文ではない。Step 6Cはmodel内部validationだけで、
   `allowed_for_live=false`、`approval_gate_issued=false`、`approval_command_copyable=false`、
   `approval_command_displayed=false`、`approval_command_display_mode=redacted_only_in_step6c`、
   `approval_command_persisted=false`、`approval_command_copied_to_clipboard=false`、

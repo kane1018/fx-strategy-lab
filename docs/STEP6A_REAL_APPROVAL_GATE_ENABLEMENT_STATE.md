@@ -273,8 +273,9 @@ completeness, and sanitized safety snapshot. Ready validation may set
 `approval_command_exact_match_validated=true`,
 `approval_command_ttl_validated=true`,
 `approval_command_same_session_validated=true`, and
-`eligible_for_step6d_api_preflight_planning=true`, but still keeps
-`allowed_for_live=false`.
+`eligible_for_step6d_api_preflight_planning=true`, and preserves
+`approval_gate_enabled=true` only as Step 6A state-only enablement evidence, but
+still keeps `allowed_for_live=false`.
 
 Step 6C does not issue a real approval gate, does not render/copy/persist the
 full generated or provided approval command, does not use `pbcopy`, does not

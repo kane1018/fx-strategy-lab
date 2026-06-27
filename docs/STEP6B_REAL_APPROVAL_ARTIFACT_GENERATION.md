@@ -340,12 +340,15 @@ Ready validation may set these model-only fields to true:
 - `approval_command_ttl_validated`
 - `approval_command_same_session_validated`
 - `eligible_for_step6d_api_preflight_planning`
+- `approval_gate_enabled`
 
 Those values remain internal Step 6C validation evidence only. Step 6C keeps
-`allowed_for_live=false`, does not issue a real approval gate, does not render
-the full generated or provided approval command, does not make approval text
-copyable, does not use `pbcopy`, does not save approval text, does not call APIs
-or `live_order_once`, and does not execute HTTP POST.
+`approval_gate_enabled=true` only as Step 6A state-only enablement carried
+through the Step 6B artifact. It also keeps `allowed_for_live=false`, does not
+issue a real approval gate, does not render the full generated or provided
+approval command, does not make approval text copyable, does not use `pbcopy`,
+does not save approval text, does not call APIs or `live_order_once`, and does
+not execute HTTP POST.
 
 Details are in
 [STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md](STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md).
