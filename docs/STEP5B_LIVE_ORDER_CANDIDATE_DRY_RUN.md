@@ -289,3 +289,10 @@ Step 5O now adds the one-shot execution runbook dry-run model. Candidate ids can
 flow into the runbook as sanitized references only; the runbook is not an
 approval gate, does not call APIs or `live_order_once`, and does not permit live
 POST.
+
+Step 5P now adds the E2E dry-run chain review model. Candidate ids can flow
+through Step 5B to Step 5O as sanitized references only; Step 5P verifies the
+chain's stage/status, ID, order-shape, source signal, safety flag, and one-shot
+constraint consistency while keeping `allowed_for_live=false`. It does not call
+APIs, issue approval, generate approval commands, call `live_order_once`, or
+execute POST.

@@ -346,3 +346,9 @@ this phase.
 Step 5O now adds the one-shot execution runbook dry-run model. Approval handoff
 references remain non-executable; real approval gate issuance is still a future
 separate step and the runbook does not generate real approval text.
+
+Step 5P now adds the E2E dry-run chain review model. Approval handoff references
+remain non-executable sanitized evidence only; Step 5P checks chain consistency
+across Step 5B through Step 5O, keeps `allowed_for_live=false`, and does not
+call APIs, issue approval, generate approval commands, call `live_order_once`,
+or execute POST.

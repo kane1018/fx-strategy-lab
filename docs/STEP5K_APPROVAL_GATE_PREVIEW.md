@@ -397,3 +397,9 @@ one-shot constraints and does not issue approval or execute POST.
 Step 5O now adds the one-shot execution runbook dry-run model. Approval gate
 preview remains non-copyable and non-executable; the runbook does not create a
 real approval command and does not authorize live POST.
+
+Step 5P now adds the E2E dry-run chain review model. Fake approval preview
+artifacts remain non-copyable sanitized evidence only; Step 5P checks them in
+the Step 5B through Step 5O chain, keeps `allowed_for_live=false`, and does not
+call APIs, issue approval, generate approval commands, call `live_order_once`,
+or execute POST.

@@ -289,3 +289,9 @@ Step 5O now adds the one-shot execution runbook dry-run model. Review reports
 remain human-readable dry-run artifacts only; a ready runbook means future
 execution planning review, not approval gate issuance, API connection, or live
 POST permission.
+
+Step 5P now adds the E2E dry-run chain review model. Review reports remain
+human-readable dry-run artifacts only; Step 5P checks that Step 5B through Step
+5O artifacts are internally consistent as sanitized evidence, keeps
+`allowed_for_live=false`, and does not call APIs, issue approval, generate
+approval commands, call `live_order_once`, or execute POST.

@@ -331,3 +331,9 @@ Step 5O now adds the one-shot execution runbook dry-run model. A ready runbook
 means only that the future execution procedure is review-ready; it does not
 validate real approval, run final dynamic preflight, call APIs, or execute live
 POST.
+
+Step 5P now adds the E2E dry-run chain review model. Fake validation simulation
+results remain dry-run evidence only; Step 5P checks them with the other Step
+5B through Step 5O artifacts as sanitized references, keeps
+`allowed_for_live=false`, and does not call APIs, issue approval, generate
+approval commands, call `live_order_once`, or execute POST.

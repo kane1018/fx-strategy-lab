@@ -284,3 +284,10 @@ constraints and keeps `allowed_for_live=false` even when the boundary passes.
 Step 5O now adds the one-shot execution runbook dry-run model. Operation bundle
 references remain dry-run only; the runbook defines future phases and
 go/no-go/stop conditions while keeping `allowed_for_live=false`.
+
+Step 5P now adds the E2E dry-run chain review model. Operation bundle
+references are checked as sanitized links in the Step 5B through Step 5O chain.
+The review keeps `allowed_for_live=false`, verifies stage/status, ID,
+order-shape, source signal, safety flag, and one-shot constraint consistency,
+and does not call APIs, issue approval, generate approval commands, call
+`live_order_once`, or execute POST.

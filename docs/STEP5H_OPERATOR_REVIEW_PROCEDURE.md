@@ -270,3 +270,10 @@ permitting live execution.
 Step 5O now adds the one-shot execution runbook dry-run model. Operator review
 output remains review-only; the runbook packages future approval, preflight,
 single-attempt, reconciliation, and final-stop phases without executing them.
+
+Step 5P now adds the E2E dry-run chain review model. Operator review output is
+checked only as sanitized evidence in the Step 5B through Step 5O chain. Step
+5P keeps `allowed_for_live=false`, verifies stage/status, ID, order-shape,
+source signal, safety flag, and one-shot constraint consistency, and does not
+call APIs, issue approval, generate approval commands, call `live_order_once`,
+or execute POST.

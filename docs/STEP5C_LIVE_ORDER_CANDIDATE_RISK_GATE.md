@@ -297,3 +297,10 @@ Step 5O now adds the one-shot execution runbook dry-run model. Risk decisions
 remain non-executable references in the runbook; Step 5O defines future phases
 and stop conditions but does not issue approval, call APIs, call
 `live_order_once`, or authorize live POST.
+
+Step 5P now adds the E2E dry-run chain review model. Risk decisions are checked
+only as sanitized references in the Step 5B through Step 5O chain; Step 5P
+verifies stage/status, ID, order-shape, source signal, safety flag, and
+one-shot constraint consistency while preserving `allowed_for_live=false`. It
+does not call APIs, issue approval, generate approval commands, call
+`live_order_once`, or execute POST.

@@ -388,3 +388,10 @@ future real approval gate, fresh final dynamic preflight, one-shot HTTP POST,
 post reconciliation, and final report sequence as review-only phases. It still
 keeps `allowed_for_live=false`, does not issue approval, does not call APIs or
 `live_order_once`, and does not execute live POST.
+
+Step 5P now adds the E2E dry-run chain review model. It connects Step 5B
+through Step 5O artifacts as sanitized references only, checks stage/status,
+ID, symbol, side, size, execution type, source signal, safety flag, and
+one-shot constraint consistency, keeps `allowed_for_live=false`, and does not
+call APIs, issue approval, generate approval commands, call `live_order_once`,
+or execute POST.

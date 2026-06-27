@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5P E2E dry-run chain review完了 / no API / no POST** —
+  `backend/app/live_verification/live_order_e2e_dry_run_chain.py` を追加し、Step 5B〜5Oの
+  `LiveOrderCandidate`、`RiskDecision`、`TraceRecord`、review report、session policy、bundle、
+  operator review、approval handoff、fake approval design/preview/validation、final dynamic preflight、
+  one-shot boundary、execution runbookを、1本のfake/sanitized chainとして整合確認できるmodelを実装した。
+  safe chainでは `READY_FOR_E2E_DRY_RUN_CHAIN_REVIEW`、`chain_ready=true`、
+  `eligible_for_future_real_approval_planning=true` になるが、これは将来の別Stepでreal approval planningを
+  検討するためのreview evidenceという意味だけで、`allowed_for_live=false` を維持する。stage/status/ID、
+  symbol/side/size/executionType、source signal、安全flag、one-shot constraints、post reconciliation requirementを
+  fail-closedで確認する。Step 5PはHTTP POST、実注文、approval gate発行、approval id生成、approval command生成、
+  final dynamic preflight実行、post reconciliation実行、read-only API、public API、Private API、broker、ledgerには
+  接続していない。詳細は [STEP5P_E2E_DRY_RUN_CHAIN_REVIEW.md](STEP5P_E2E_DRY_RUN_CHAIN_REVIEW.md)。
+  ready chainはlive POST許可でもapproval gate発行許可でもapproval command生成許可でもない。
 - **Step 5O One-shot execution runbook完了 / dry-run only / no API / no POST** —
   `backend/app/live_verification/live_order_execution_runbook.py` を追加し、Step 5Nの
   `LiveOrderOneShotBoundaryDecision` から、将来のreal approval gate、fresh final dynamic preflight、

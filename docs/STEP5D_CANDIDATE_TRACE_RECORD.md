@@ -303,3 +303,10 @@ not call APIs, issue approval, execute POST, or permit live execution.
 Step 5O now adds the one-shot execution runbook dry-run model. Trace-linked ids
 can flow into the runbook as sanitized references only; the runbook does not
 execute future phases, does not issue approval, and keeps `allowed_for_live=false`.
+
+Step 5P now adds the E2E dry-run chain review model. Trace-linked ids are
+validated across Step 5B through Step 5O as sanitized references only. The chain
+review checks stage/status, ID, order-shape, source signal, safety flag, and
+one-shot constraint consistency, keeps `allowed_for_live=false`, and does not
+call APIs, issue approval, generate approval commands, call `live_order_once`,
+or execute POST.

@@ -405,3 +405,9 @@ does not call the live runner, and does not execute HTTP POST.
 Step 5O now adds the one-shot execution runbook dry-run model. Approval gate
 design remains fake/template-only; the runbook only describes a future real
 approval phase and does not issue approval or execute HTTP POST.
+
+Step 5P now adds the E2E dry-run chain review model. Fake approval gate design
+artifacts remain template-only sanitized evidence; Step 5P checks them in the
+Step 5B through Step 5O chain, keeps `allowed_for_live=false`, and does not call
+APIs, issue real approval, generate approval commands, call `live_order_once`,
+or execute POST.

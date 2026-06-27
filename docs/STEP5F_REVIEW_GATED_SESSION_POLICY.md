@@ -284,3 +284,10 @@ live permission.
 Step 5O now adds the one-shot execution runbook dry-run model. Session policy
 decisions can feed the runbook as sanitized references only; Step 5O still
 performs no API call, no approval issuance, no POST, and no live permission.
+
+Step 5P now adds the E2E dry-run chain review model. Session policy decisions
+are checked as one stage in the Step 5B through Step 5O sanitized chain. The
+review verifies stage/status, ID, order-shape, source signal, safety flag, and
+one-shot constraint consistency, keeps `allowed_for_live=false`, and does not
+call APIs, issue approval, generate approval commands, call `live_order_once`,
+or execute POST.

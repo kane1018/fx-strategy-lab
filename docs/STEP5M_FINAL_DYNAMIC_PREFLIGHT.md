@@ -353,3 +353,9 @@ Step 5O now adds the one-shot execution runbook dry-run model. It packages the
 future real approval gate, fresh final dynamic preflight, one-shot POST, post
 reconciliation, and final report as separate phases, but it does not execute any
 phase and does not authorize live POST.
+
+Step 5P now adds the E2E dry-run chain review model. Final dynamic preflight
+decisions remain sanitized dry-run evidence only; Step 5P checks them in the
+Step 5B through Step 5O chain, keeps `allowed_for_live=false`, and does not call
+APIs, execute final dynamic preflight, issue approval, generate approval
+commands, call `live_order_once`, or execute POST.

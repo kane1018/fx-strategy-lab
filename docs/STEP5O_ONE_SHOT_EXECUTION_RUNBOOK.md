@@ -356,3 +356,10 @@ requested, should remain a separate task. A ready runbook is not live POST
 permission and not approval gate permission. Any future execution must still
 perform a real approval gate, fresh final dynamic preflight, one-shot execution,
 post reconciliation, and final report as explicit separate steps.
+
+Step 5P now adds the E2E dry-run chain review model. Execution runbooks remain
+sanitized dry-run evidence only; Step 5P checks the Step 5B through Step 5O
+chain for stage/status, ID, order-shape, source signal, safety flag, and
+one-shot constraint consistency. It keeps `allowed_for_live=false`, does not
+issue approval, does not generate approval commands, does not call APIs or
+`live_order_once`, and does not execute POST.
