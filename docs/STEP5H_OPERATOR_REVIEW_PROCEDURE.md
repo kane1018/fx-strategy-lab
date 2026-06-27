@@ -261,3 +261,8 @@ output, and no file output.
 Step 5M now adds the final dynamic preflight dry-run model. Operator review
 procedures remain dry-run checklists only; Step 5M does not issue approval or
 execute preflight, and it does not permit live POST.
+
+Step 5N now adds the one-shot live boundary dry-run model. Operator procedures
+remain review-only; Step 5N checks one-shot constraints and post-reconciliation
+requirements without issuing approval, calling APIs, executing POST, or
+permitting live execution.

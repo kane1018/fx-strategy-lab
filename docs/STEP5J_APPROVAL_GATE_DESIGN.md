@@ -397,3 +397,7 @@ not authorize live POST.
 Step 5M now adds the final dynamic preflight dry-run model. Approval gate design
 remains fake/template-only; Step 5M does not turn it into a real approval gate
 and does not execute final dynamic preflight.
+
+Step 5N now adds the one-shot live boundary dry-run model. Approval gate design
+remains fake/template-only; Step 5N does not turn it into a real approval gate,
+does not call the live runner, and does not execute HTTP POST.

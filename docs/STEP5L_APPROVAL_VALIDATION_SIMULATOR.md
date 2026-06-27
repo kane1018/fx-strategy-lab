@@ -321,3 +321,8 @@ Step 5M now adds that final dynamic preflight handling as a dry-run model only.
 A passed Step 5M decision means sanitized final preflight inputs are ready for
 future one-shot boundary review. It does not execute final dynamic preflight,
 does not call APIs, does not issue approval, and does not authorize live POST.
+
+Step 5N now adds that future one-shot boundary as a dry-run model only. A passed
+Step 5N decision means sanitized one-shot constraints are ready for review; it
+does not issue approval, does not call `live_order_once`, does not call APIs, and
+does not authorize live POST.

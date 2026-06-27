@@ -340,3 +340,11 @@ state, and does not authorize live POST.
 The next step may design the future one-shot boundary, but it must remain a
 separate task with no live execution unless explicitly authorized in a later
 real approval flow.
+
+Step 5N now adds that one-shot boundary as a dry-run model only. A passed Step
+5N boundary means the sanitized one-shot constraints are internally consistent:
+`post_attempt_limit=1`, POST not executed, no runner/API/broker/read-only calls,
+no retry/loop/order mutation flags, body allowlist matched, request body equals
+signing body, and post reconciliation is required. It still keeps
+`allowed_for_live=false`, does not issue approval, and does not authorize live
+POST.

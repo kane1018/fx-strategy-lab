@@ -377,3 +377,8 @@ Step 5M now adds the final dynamic preflight dry-run model. It evaluates only
 sanitized snapshot inputs, keeps `allowed_for_live=false`, does not call any
 API, does not read or write ledger state, does not issue approval, and does not
 permit live POST.
+
+Step 5N now adds the one-shot live boundary dry-run model. It keeps
+`allowed_for_live=false`, `post_attempt_limit=1`, `post_executed=false`, no
+runner/API/broker/read-only calls, no retry/loop/order mutation flags, no
+approval issuance, and no live POST permission.

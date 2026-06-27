@@ -258,6 +258,44 @@ def test_order_submission_skeleton_has_no_http_or_secret_imports() -> None:
             assert not _is_blocked_module(module, blocked_modules)
 
 
+def test_one_shot_boundary_has_no_api_order_or_clipboard_dependencies() -> None:
+    blocked_modules = {
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+    }
+    blocked_call_names = {
+        "execute_one_shot_live_order",
+        "post_live_order_with_httpx",
+        "pbcopy",
+        "read_text",
+        "write_text",
+    }
+    path = PACKAGE_ROOT / "live_order_one_shot_boundary.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(
+                not _is_blocked_module(alias.name, blocked_modules)
+                for alias in node.names
+            )
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+            assert not module.endswith("live_order_once")
+        if isinstance(node, ast.Call):
+            assert _call_name(node) not in blocked_call_names
+
+
 def test_live_order_preflight_has_no_http_or_secret_imports() -> None:
     blocked_modules = {
         "hmac",
@@ -398,6 +436,10 @@ def test_live_verification_package_has_no_http_or_private_order_strings() -> Non
                 "API-" + "SIGN",
                 "API-" + "TIMESTAMP",
             }
+        if path.name == "live_order_one_shot_boundary.py":
+            path_blocked_exact_strings.discard("sign" + "ature")
+            path_blocked_substrings.discard("change" + "Order")
+            path_blocked_substrings.discard("close" + "Order")
         assert strings.isdisjoint(path_blocked_exact_strings)
         for marker in path_blocked_substrings:
             assert all(marker not in value for value in strings)

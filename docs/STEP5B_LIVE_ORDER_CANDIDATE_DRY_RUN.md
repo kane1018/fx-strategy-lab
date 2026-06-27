@@ -279,3 +279,8 @@ Step 5M now adds the final dynamic preflight dry-run model after that simulated
 approval validation. The candidate remains non-executable evidence only; a
 passed Step 5M decision is future one-shot review eligibility, not live POST
 permission.
+
+Step 5N now adds the one-shot live boundary dry-run model. Candidate output is
+still non-executable: a passed boundary means only that sanitized one-shot
+constraints are review-ready, with `allowed_for_live=false` and no approval
+gate or live POST.

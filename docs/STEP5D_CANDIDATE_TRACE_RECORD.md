@@ -295,3 +295,7 @@ does not authorize final dynamic preflight, and does not permit live POST.
 Step 5M now adds the final dynamic preflight dry-run model. Trace records remain
 sanitized audit/review records only; Step 5M can consume trace-linked dry-run
 ids, but it does not authorize final dynamic preflight execution or live POST.
+
+Step 5N now adds the one-shot live boundary dry-run model. Trace-linked ids can
+flow into the boundary decision as sanitized references only; the boundary does
+not call APIs, issue approval, execute POST, or permit live execution.

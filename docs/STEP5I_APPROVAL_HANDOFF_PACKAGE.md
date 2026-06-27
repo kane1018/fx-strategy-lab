@@ -337,3 +337,8 @@ Step 5M now adds the final dynamic preflight dry-run model. Approval handoff
 packages remain non-executable review material; Step 5M keeps approval gate
 issuance, approval id generation, approval command generation, and live POST
 outside this phase.
+
+Step 5N now adds the one-shot live boundary dry-run model. Approval handoff
+packages remain non-executable review material; Step 5N keeps real approval
+issuance, one-shot runner calls, Private API, broker calls, and live POST outside
+this phase.

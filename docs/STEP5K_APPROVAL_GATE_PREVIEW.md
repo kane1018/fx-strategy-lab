@@ -389,3 +389,7 @@ authorize live POST.
 Step 5M now adds the final dynamic preflight dry-run model after the fake
 approval validation simulator. Approval gate preview remains non-copyable and
 non-executable; Step 5M only evaluates sanitized final preflight snapshot inputs.
+
+Step 5N now adds the one-shot live boundary dry-run model. Approval gate preview
+remains non-copyable and non-executable; Step 5N only evaluates sanitized
+one-shot constraints and does not issue approval or execute POST.

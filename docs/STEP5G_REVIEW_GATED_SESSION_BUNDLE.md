@@ -276,3 +276,7 @@ Step 5M now adds the final dynamic preflight dry-run model. Operation bundles
 remain dry-run operator reports only; Step 5M evaluates sanitized final
 preflight snapshot inputs and keeps `allowed_for_live=false` even when they
 pass.
+
+Step 5N now adds the one-shot live boundary dry-run model. Operation bundles
+remain dry-run operator reports only; Step 5N checks sanitized one-shot
+constraints and keeps `allowed_for_live=false` even when the boundary passes.

@@ -275,3 +275,8 @@ Step 5M now adds the final dynamic preflight dry-run model. Session policy pass
 remains review-session eligibility only; Step 5M adds another fail-closed
 sanitized boundary and still does not execute preflight, issue approval, or
 permit live POST.
+
+Step 5N now adds the one-shot live boundary dry-run model. Session policy pass
+and final dynamic preflight pass can feed the boundary as sanitized references
+only; Step 5N still performs no API call, no approval issuance, no POST, and no
+live permission.

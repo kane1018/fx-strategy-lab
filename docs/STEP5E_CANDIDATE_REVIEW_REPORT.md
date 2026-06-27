@@ -280,3 +280,7 @@ no final dynamic preflight, and does not permit live POST.
 Step 5M now adds the final dynamic preflight dry-run model. Review reports
 remain human-readable dry-run artifacts only; Step 5M pass means future
 one-shot boundary review eligibility, not approval or live POST permission.
+
+Step 5N now adds the one-shot live boundary dry-run model. Review reports remain
+human-readable dry-run artifacts only; Step 5N pass means future boundary review
+eligibility, not approval gate issuance or live POST permission.

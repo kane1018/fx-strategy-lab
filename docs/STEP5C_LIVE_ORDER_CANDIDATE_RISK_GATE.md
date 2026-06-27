@@ -287,3 +287,8 @@ approval gate, runs no final dynamic preflight, and does not permit live POST.
 Step 5M now adds the final dynamic preflight dry-run model. Risk decisions still
 do not directly POST; Step 5M only evaluates sanitized downstream state and
 preflight snapshot values while preserving `allowed_for_live=false`.
+
+Step 5N now adds the one-shot live boundary dry-run model. Risk decisions still
+do not directly POST; Step 5N only verifies sanitized one-shot constraints such
+as attempt limit, no retry/loop/order mutation flags, body/signing equality,
+and reconciliation requirement while preserving `allowed_for_live=false`.
