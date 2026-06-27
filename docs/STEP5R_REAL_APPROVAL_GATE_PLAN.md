@@ -316,3 +316,17 @@ as internal model artifacts for future Step 6C validation. Step 6B keeps
 or copy the full approval command, does not use `pbcopy`, does not save approval
 text, does not call any API or ledger, and does not execute POST. Details:
 [STEP6B_REAL_APPROVAL_ARTIFACT_GENERATION.md](STEP6B_REAL_APPROVAL_ARTIFACT_GENERATION.md).
+
+## Step 6C Follow-up
+
+Step 6C adds approval artifact validation after Step 6B. Ready validation may
+set `approval_artifact_validated=true`,
+`approval_command_exact_match_validated=true`,
+`approval_command_ttl_validated=true`,
+`approval_command_same_session_validated=true`, and
+`eligible_for_step6d_api_preflight_planning=true` only as internal dry-run
+validation evidence. Step 6C keeps `allowed_for_live=false`, does not issue a
+real approval gate, does not render or copy the full generated/provided approval
+command, does not use `pbcopy`, does not save approval text, does not call any
+API or ledger, and does not execute POST. Details:
+[STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md](STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md).

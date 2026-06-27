@@ -263,3 +263,21 @@ Step 6A is complete when the enablement state model, tests, no-order guard, and
 docs pass. The next step, if explicitly requested, is Step 6B approval artifact
 generation review. Step 6A does not generate approval artifacts, call any API,
 read or write ledger files, use clipboard, or execute live POST.
+
+## Step 6C Follow-up Status
+
+Step 6C has now been implemented after Step 6B. It validates the internal
+approval artifact exact match, TTL 300, same session, one-line shape, ACK token
+completeness, and sanitized safety snapshot. Ready validation may set
+`approval_artifact_validated=true`,
+`approval_command_exact_match_validated=true`,
+`approval_command_ttl_validated=true`,
+`approval_command_same_session_validated=true`, and
+`eligible_for_step6d_api_preflight_planning=true`, but still keeps
+`allowed_for_live=false`.
+
+Step 6C does not issue a real approval gate, does not render/copy/persist the
+full generated or provided approval command, does not use `pbcopy`, does not
+call read-only/public/Private API, broker, `live_order_once`, or ledgers, and
+does not execute HTTP POST. Details:
+[STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md](STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md).

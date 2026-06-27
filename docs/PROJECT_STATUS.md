@@ -82,6 +82,28 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6C Real approval artifact validation完了 / validation-only / no API / no POST / no copyable command** —
+  `backend/app/live_verification/live_order_real_approval_artifact_validation.py` を追加し、Step 6Bの
+  `LiveOrderRealApprovalArtifact`、明示的なStep 6C request acknowledgement snapshot、provided command
+  snapshot、sanitized validation safety snapshotを入力に、approval artifactの整合性・TTL・same session・
+  exact match・one-line・ACK tokensをfail-closedで検証できるようにした。safe artifact + explicit request +
+  exact provided command + safe snapshotでは
+  `APPROVAL_ARTIFACT_VALIDATED_NO_API_NO_POST`、`validation_ready=true`、
+  `approval_artifact_validated=true`、`approval_command_exact_match_validated=true`、
+  `approval_command_ttl_validated=true`、`approval_command_same_session_validated=true`、
+  `eligible_for_step6d_api_preflight_planning=true` になるが、これはmodel内部validationだけで、
+  `allowed_for_live=false`、`approval_gate_issued=false`、`approval_command_copyable=false`、
+  `approval_command_displayed=false`、`approval_command_display_mode=redacted_only_in_step6c`、
+  `approval_command_persisted=false`、`approval_command_copied_to_clipboard=false`、
+  `approval_command_executable=false`、`post_allowed_this_step=false`、`post_attempt_limit=1`、
+  `post_executed=false`、`live_order_once_called=false`、`private_api_called=false`、`broker_called=false`、
+  `read_only_api_called=false`、`public_api_called=false`、retry/loop/追加/変更/取消/決済禁止を維持する。
+  Step 6Cはgenerated/provided approval command全文をMarkdown表示せず、copyableにせず、pbcopyせず、
+  ファイル保存せず、HTTP POST、実注文、read-only API、public API、Private API、broker、live_order_once、
+  ledgerには接続していない。rendererはredacted/fingerprint/sha256のみを出す。詳細は
+  [STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md](STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md)。
+  ready validationはlive POST許可でも実approval gate発行でもcopyable承認文でもない。次は別Stepの
+  Step 6D API preflight planning。
 - **Step 6B Real approval artifact generation完了 / artifact-only / no API / no POST / no copyable command** —
   `backend/app/live_verification/live_order_real_approval_artifact_generation.py` を追加し、Step 6Aの
   `LiveOrderRealApprovalGateEnablementState`、明示的なStep 6B request acknowledgement snapshot、

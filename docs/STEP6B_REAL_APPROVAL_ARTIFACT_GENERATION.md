@@ -324,3 +324,28 @@ input rejection.
 Step 6B is complete when the model can generate an internal approval artifact
 for future Step 6C validation while still keeping no API, no POST, no real
 approval gate issuance, no copyable command display, and `allowed_for_live=false`.
+
+## Step 6C Follow-up Status
+
+Step 6C has now been implemented as
+`LiveOrderRealApprovalArtifactValidation` in
+`backend/app/live_verification/live_order_real_approval_artifact_validation.py`.
+It validates the Step 6B artifact, explicit Step 6C request snapshot, provided
+command snapshot, and sanitized validation safety snapshot.
+
+Ready validation may set these model-only fields to true:
+
+- `approval_artifact_validated`
+- `approval_command_exact_match_validated`
+- `approval_command_ttl_validated`
+- `approval_command_same_session_validated`
+- `eligible_for_step6d_api_preflight_planning`
+
+Those values remain internal Step 6C validation evidence only. Step 6C keeps
+`allowed_for_live=false`, does not issue a real approval gate, does not render
+the full generated or provided approval command, does not make approval text
+copyable, does not use `pbcopy`, does not save approval text, does not call APIs
+or `live_order_once`, and does not execute HTTP POST.
+
+Details are in
+[STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md](STEP6C_REAL_APPROVAL_ARTIFACT_VALIDATION.md).
