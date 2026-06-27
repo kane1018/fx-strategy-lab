@@ -200,6 +200,12 @@ requested, must be a separate explicit task with a fresh preflight, a fresh
 safety review, and a new implementation decision. Step 5X is not permission to
 enable a gate or issue approval artifacts.
 
+Step 5Y-Z follows Step 5X by adding a sanitized market-hours/weekend blocker
+and final pre-enable go/no-go dry-run plan. Step 5Y-Z still keeps
+`approval_gate_enabled=false`, `allowed_for_live=false`, and does not issue a
+real approval gate, generate approval ids or commands, call APIs, read ledgers,
+use clipboard, or execute POST.
+
 ## Tests
 
 Tests cover:

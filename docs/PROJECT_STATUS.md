@@ -82,6 +82,25 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5Y-Z Real approval enablement dry-run plan完了 / dry-run only / market-hours snapshot blocker / no API / no POST / no real approval artifacts** —
+  `backend/app/live_verification/live_order_real_approval_enablement_dry_run_plan.py` を追加し、Step 5Xの
+  `LiveOrderRealApprovalEnablementCriteria` と sanitized market-hours snapshot を入力に、将来のStep 6A
+  planningへ進めるかどうかをpre-enable go/no-goとしてfail-closedで整理した。safe criteria + safe snapshotでは
+  `READY_FOR_PRE_ENABLE_GO_NO_GO_REVIEW`、`GO_FOR_FUTURE_STEP6A_PLANNING_ONLY`、
+  `plan_ready=true`、`eligible_for_future_step6a_enablement_planning=true` になるが、これは将来の別Stepで
+  Step 6A planningを検討するためのevidenceという意味だけで、`approval_gate_enabled=false`、
+  `allowed_for_live=false`、`approval_gate_issued=false`、`approval_id_generated=false`、
+  `approval_command_generated=false`、`approval_command_copyable=false`、
+  `approval_command_executable=false`、`usable_approval_artifacts_generated=false`、
+  `real_approval_artifacts_available=false`、`post_attempt_limit=1`、`post_executed=false`、
+  `live_order_once_called=false`、`private_api_called=false`、`broker_called=false`、
+  `read_only_api_called=false`、`public_api_called=false`、retry/loop/追加/変更/取消/決済禁止を維持する。
+  Step 5Y-Zはsanitized snapshotのみでweekend/market-hours/maintenance/holiday/stale/unknownをblockし、
+  HTTP POST、実注文、read-only API、public API、Private API、broker、live_order_once、ledger、
+  real approval gate有効化/発行、real approval id生成、real approval command生成、copyable approval text生成、
+  pbcopy、approval text保存には接続していない。詳細は
+  [STEP5Y_Z_REAL_APPROVAL_ENABLEMENT_DRY_RUN_PLAN.md](STEP5Y_Z_REAL_APPROVAL_ENABLEMENT_DRY_RUN_PLAN.md)。
+  ready planはlive POST許可でもapproval gate enablement/発行許可でもapproval command生成許可でもない。
 - **Step 5X Real approval enablement criteria完了 / dry-run only / no API / no POST / no real enablement** —
   `backend/app/live_verification/live_order_real_approval_enablement_criteria.py` を追加し、Step 5Wの
   `LiveOrderRealApprovalDisabledScaffold` を入力に、将来どの条件を満たせばreal approval gateの

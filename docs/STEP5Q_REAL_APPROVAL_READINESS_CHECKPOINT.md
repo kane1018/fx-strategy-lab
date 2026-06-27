@@ -305,3 +305,13 @@ generation preconditions. It keeps `approval_gate_enabled=false`,
 calls. Step 5X is no API / no POST and does not enable a real approval gate or
 generate real approval artifacts. Details:
 [STEP5X_REAL_APPROVAL_ENABLEMENT_CRITERIA.md](STEP5X_REAL_APPROVAL_ENABLEMENT_CRITERIA.md).
+
+## Step 5Y-Z Follow-up
+
+Step 5Y-Z adds a real approval enablement dry-run plan with a sanitized
+market-hours/weekend blocker and final pre-enable go/no-go report. It consumes
+Step 5X criteria plus a sanitized snapshot only. Ready output remains planning
+evidence for a future explicit Step 6A request and keeps `approval_gate_enabled=false`,
+`allowed_for_live=false`, no real approval artifacts, no API calls, no ledger access,
+no clipboard use, and no POST. Details:
+[STEP5Y_Z_REAL_APPROVAL_ENABLEMENT_DRY_RUN_PLAN.md](STEP5Y_Z_REAL_APPROVAL_ENABLEMENT_DRY_RUN_PLAN.md).
