@@ -363,3 +363,10 @@ chain for stage/status, ID, order-shape, source signal, safety flag, and
 one-shot constraint consistency. It keeps `allowed_for_live=false`, does not
 issue approval, does not generate approval commands, does not call APIs or
 `live_order_once`, and does not execute POST.
+
+Step 5Q now adds the real approval readiness checkpoint model. It consumes the
+Step 5P E2E dry-run chain review as sanitized evidence, requires operator
+acknowledgements and future-step separation, records go/no-go/stop conditions,
+keeps `allowed_for_live=false`, and does not call APIs, issue approval,
+generate real approval ids or commands, call `live_order_once`, read/write
+ledgers, or execute POST.

@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 5Q Real approval readiness checkpoint完了 / dry-run only / no API / no POST** —
+  `backend/app/live_verification/live_order_real_approval_readiness.py` を追加し、Step 5Pの
+  `LiveOrderE2EDryRunChainReview` をsanitized evidenceとして、将来のreal approval gate planningへ進む前の
+  readiness checkpointをfail-closedで作るmodelを実装した。ready chainに加えて、operator reviewed full chain、
+  real-money risk理解、no auto-post理解、future steps separation理解、unknown means stop理解を必須にする。
+  safe checkpointでは `READY_FOR_REAL_APPROVAL_READINESS_REVIEW`、`readiness_ready=true`、
+  `eligible_for_future_real_approval_gate_planning=true` になるが、これは将来の別Stepで実承認設計を
+  検討するためのreadiness evidenceという意味だけで、`allowed_for_live=false`、
+  `approval_gate_issued=false`、`approval_id_generated=false`、`approval_command_generated=false`、
+  `approval_command_copyable=false`、`post_attempt_limit=1`、`post_executed=false`、
+  `live_order_once_called=false`、`private_api_called=false`、`broker_called=false`、
+  `read_only_api_called=false`、retry/loop/追加/変更/取消/決済禁止を維持する。go/no-go/stop conditionsと
+  readiness check resultsをsanitizedに整理する。Step 5QはHTTP POST、実注文、real approval gate発行、
+  real approval id生成、real approval command生成、final dynamic preflight実行、post reconciliation実行、
+  read-only API、public API、Private API、broker、ledgerには接続していない。詳細は
+  [STEP5Q_REAL_APPROVAL_READINESS_CHECKPOINT.md](STEP5Q_REAL_APPROVAL_READINESS_CHECKPOINT.md)。
+  ready checkpointはlive POST許可でもapproval gate発行許可でもapproval command生成許可でもない。
 - **Step 5P E2E dry-run chain review完了 / no API / no POST** —
   `backend/app/live_verification/live_order_e2e_dry_run_chain.py` を追加し、Step 5B〜5Oの
   `LiveOrderCandidate`、`RiskDecision`、`TraceRecord`、review report、session policy、bundle、

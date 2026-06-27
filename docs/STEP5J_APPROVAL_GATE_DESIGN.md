@@ -411,3 +411,10 @@ artifacts remain template-only sanitized evidence; Step 5P checks them in the
 Step 5B through Step 5O chain, keeps `allowed_for_live=false`, and does not call
 APIs, issue real approval, generate approval commands, call `live_order_once`,
 or execute POST.
+
+Step 5Q now adds the real approval readiness checkpoint model. It consumes the
+Step 5P E2E dry-run chain review as sanitized evidence, requires operator
+acknowledgements and future-step separation, records go/no-go/stop conditions,
+keeps `allowed_for_live=false`, and does not call APIs, issue approval,
+generate real approval ids or commands, call `live_order_once`, read/write
+ledgers, or execute POST.

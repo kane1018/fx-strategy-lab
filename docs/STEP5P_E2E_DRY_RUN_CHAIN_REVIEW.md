@@ -291,3 +291,13 @@ Step 5P is complete as an end-to-end dry-run chain review model. A ready chain i
 review evidence only. It is not live POST permission, approval gate permission,
 approval command generation permission, final dynamic preflight permission, or
 post reconciliation permission.
+
+## Step 5Q Follow-up
+
+Step 5Q now adds the real approval readiness checkpoint model. It consumes this
+Step 5P E2E dry-run chain review as sanitized evidence, requires operator
+acknowledgements and future-step separation, records go/no-go/stop conditions,
+keeps `allowed_for_live=false`, and does not call APIs, issue approval,
+generate real approval ids or commands, call `live_order_once`, read/write
+ledgers, or execute POST. A ready Step 5Q checkpoint is still review evidence
+only and does not authorize real approval gate issuance or live POST.
