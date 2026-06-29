@@ -188,6 +188,15 @@ market-hours, zero open positions, zero active orders, spread, ticker age,
 permissions, IP/account binding, and raw-output safety. Step 6F remains no
 POST unless separately scoped. One-shot POST remains Step 6G or later.
 
+## Step 6E-RR route review result
+
+Step 6E-RR reviewed the current route candidates offline and did not execute
+API calls. It found that the existing private readonly script and public
+market-data adapter are not enough as one complete Step 6E-R route. Before
+Step 6E-R2, add a safe consolidated route or wrapper that covers the missing
+sanitized fields without raw output, POST, order endpoints, or
+`live_order_once`.
+
 ## Final report format
 
 The Step 6E-R final report should include:

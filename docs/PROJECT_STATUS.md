@@ -1296,3 +1296,23 @@ API/broker calls, no POST, and one-shot constraints. It does not call read-only
 API, public API, Private API, broker, `live_order_once`, ledgers, clipboard, or
 POST, and it does not generate usable approval artifacts. Details:
 [STEP5W_REAL_APPROVAL_DISABLED_SCAFFOLD.md](STEP5W_REAL_APPROVAL_DISABLED_SCAFFOLD.md).
+
+## Step 6E-RR Follow-up
+
+Step 6E-RR adds an offline/static safe read-only preflight route review after
+Step 6E-R stopped without real API execution. The review records the current
+route candidates and required Step 6E-R coverage matrix.
+
+Current conclusion: `backend/scripts/check_private_readonly_connection.py`
+covers private GET account/assets, open positions, and active orders, and
+`backend/app/shadow/gmo_public.py` covers public market-data source paths, but
+no single verified route currently covers all Step 6E-R sanitized fields. The
+review status is
+`READY_FOR_STEP6E_SAFE_ROUTE_CONSOLIDATION_IMPLEMENTATION`.
+
+Step 6E-RR did not call real API, read-only API, public API, Private API,
+broker code, order endpoints, or `live_order_once`; it did not execute POST and
+keeps `allowed_for_live=false`. Step 6F remains blocked until a future safe
+route consolidation and fresh Step 6E-R2 preflight produce sanitized evidence.
+Details:
+[STEP6E_RR_SAFE_READONLY_PREFLIGHT_ROUTE_REVIEW.md](STEP6E_RR_SAFE_READONLY_PREFLIGHT_ROUTE_REVIEW.md).

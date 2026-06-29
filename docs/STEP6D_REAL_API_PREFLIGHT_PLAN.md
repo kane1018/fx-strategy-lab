@@ -276,3 +276,16 @@ It remains read-only/preflight only, no POST, no order endpoint, no
 headers/signatures/credentials/real IDs display, and `allowed_for_live=false`.
 Step 6F remains blocked until Step 6E-R produces fresh sanitized evidence and
 the user explicitly requests Step 6F.
+
+## Step 6E-RR Follow-up
+
+After Step 6E-R stopped on safe-route verification, Step 6E-RR added a static
+safe route review. The review confirmed that existing candidates are partial:
+private account/assets/open positions/active orders and public status/ticker
+source data are available as candidates, but a complete Step 6E-R sanitized
+route still needs consolidation.
+
+The next route work remains separate from Step 6D planning and must preserve
+the Step 6D boundaries: no API execution in planning/review steps, no POST, no
+order endpoint, no `live_order_once`, no raw request/response display or save,
+and `allowed_for_live=false`.

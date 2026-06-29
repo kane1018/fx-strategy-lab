@@ -275,3 +275,12 @@ market blocker. Step 6E-S added the Step 6E-R market-open retry runbook without
 API execution. Next work is an explicit Step 6E-R market-open retry request;
 Step 6F remains blocked until a fresh safe Step 6E-R preflight exists and a
 separate Step 6F request is made.
+
+## Step 6E-RR route review result
+
+Step 6E-R later stopped before API execution because no single verified safe
+read-only/preflight route covered every required sanitized field. Step 6E-RR
+reviewed route candidates offline and concluded that safe route consolidation
+is needed before Step 6E-R2. Step 6E-RR did not call real API, read-only API,
+public API, Private API, broker code, order endpoints, or `live_order_once`;
+it did not execute POST and keeps `allowed_for_live=false`.
