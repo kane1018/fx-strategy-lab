@@ -296,3 +296,14 @@ Step 6E-SC implements the no-API/no-POST sanitized consolidation model needed
 after Step 6E-RR. It remains downstream of Step 6D planning and upstream of a
 future Step 6E-R2 retry. Step 6D's no API/no POST planning boundary remains
 unchanged.
+
+## Step 6F Follow-up
+
+Step 6F adds post-readiness planning after a separate Step 6E-R2 sanitized pass.
+It consumes sanitized preflight evidence only and keeps `allowed_for_live=false`,
+`post_allowed_this_step=false`, `post_executed=false`, no order endpoint, no
+order payload generation or send, no `live_order_once`, and no HTTP POST.
+
+Ready Step 6F output is only a handoff to stop and wait for an explicit Step 6G
+request. Step 6G must refresh real API preflight immediately before any one-shot
+POST decision.

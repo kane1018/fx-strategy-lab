@@ -260,3 +260,12 @@ Ready Step 6E output may mark `api_preflight_executed=true` and
 The implementation pass did not run real API preflight because it was Sunday
 JST. Details:
 [STEP6E_REAL_API_PREFLIGHT_EXECUTION.md](STEP6E_REAL_API_PREFLIGHT_EXECUTION.md).
+
+## Step 6F Follow-up
+
+Step 6F adds post-readiness planning after a separate Step 6E-R2 sanitized pass.
+It is planning-only and does not authorize live POST. It keeps
+`allowed_for_live=false`, `post_allowed_this_step=false`, `post_executed=false`,
+no order endpoint, no order payload generation or send, no `live_order_once`,
+and no HTTP POST. Step 6G still requires a separate explicit request and fresh
+real API preflight immediately before any one-shot POST decision.

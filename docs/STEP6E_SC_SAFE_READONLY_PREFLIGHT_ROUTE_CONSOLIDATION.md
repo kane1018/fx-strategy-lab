@@ -168,3 +168,14 @@ Step 6E-SC is complete when the wrapper/model can produce a single sanitized
 result from sanitized inputs only. It enables a future Step 6E-R2 retry request,
 but Step 6F remains blocked until fresh Step 6E-R2 evidence exists and a
 separate Step 6F request is made.
+
+## Step 6F post-readiness handoff
+
+After a separate Step 6E-R2 runtime pass, Step 6F may consume the sanitized
+preflight evidence as `LiveOrderRealPostReadinessPreflightSnapshot`. Step 6F is
+still planning-only: no POST, no order endpoint, no order payload generation or
+send, no `live_order_once`, and `allowed_for_live=false`.
+
+Ready Step 6F output only means the project can stop and wait for an explicit
+Step 6G one-shot POST request. Step 6G must refresh real API preflight
+immediately before any POST decision.

@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6F Real post-readiness planning完了 / planning-only / no POST / no order endpoint / no live_order_once** —
+  Step 6E-R2のsanitized runtime result
+  `REAL_API_PREFLIGHT_PASSED_NO_POST` をGitに保存せずsnapshot入力として受け取り、
+  `backend/app/live_verification/live_order_real_post_readiness_plan.py` を追加した。
+  `LiveOrderRealPostReadinessPreflightSnapshot`、`LiveOrderRealPostReadinessRequestSnapshot`、
+  `LiveOrderRealPostReadinessPlan`、`LiveOrderRealPostReadinessGoNoGoReport` で、
+  post-readiness planning、preflight freshness、Step 6G go/no-go/stop/handoff/blockersをfail-closedで整理する。
+  ready planでは `POST_READINESS_PLANNED_NO_POST`、`plan_ready=true`、
+  `eligible_for_step6g_one_shot_post_request=true` になるが、これは将来のStep 6G明示依頼を待てるという意味だけで、
+  `allowed_for_live=false`、`post_authorized_this_step=false`、`post_allowed_this_step=false`、
+  `post_attempt_limit=1`、`post_executed=false`、`order_endpoint_called=false`,
+  `order_payload_generated=false`, `order_payload_sent=false`, `live_order_once_called=false`,
+  broker order path false、retry/loop/追加/変更/取消/決済禁止を維持する。
+  Step 6Fは実API、read-only API、public API、Private API、broker、order endpoint、`live_order_once`、
+  HTTP POST、実注文、raw request/response表示・保存、headers/signature/credentials/real ID表示・保存、
+  ledger操作を行わない。Step 6Gへ進むには別の明示依頼と直前fresh real API preflight再確認が必要。
+  詳細は [STEP6F_REAL_POST_READINESS_PLAN.md](STEP6F_REAL_POST_READINESS_PLAN.md)。
 - **Step 6E-CP Credential presence readiness完了 / no API / no POST** —
   Step 6E-R2はprivate read-only routeのcredential presence不足でAPI接続前にfail-closed停止した。
   Step 6E-CPでは `backend/scripts/check_private_readonly_connection.py` から期待credential名を

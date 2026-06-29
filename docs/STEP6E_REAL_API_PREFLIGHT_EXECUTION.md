@@ -203,6 +203,19 @@ Ready means the sanitized preflight evidence passed Step 6E checks and can be
 handed to a separate Step 6F post-readiness planning request. It is not live
 POST permission and not approval to place an order.
 
+## Step 6F post-readiness planning
+
+Step 6F consumes the Step 6E-R2 sanitized result as a snapshot and produces
+`POST_READINESS_PLANNED_NO_POST` only when the source result is passing, fresh,
+and still safe. Step 6F remains planning-only. It keeps
+`allowed_for_live=false`, `post_allowed_this_step=false`, and
+`post_executed=false`, and it does not call order endpoints, generate or send
+order payloads, call `live_order_once`, or execute HTTP POST.
+
+Step 6F ready is not Step 6G authorization. A future Step 6G request must be
+explicit and must refresh real API preflight immediately before any one-shot
+POST decision.
+
 ## Blocked request meaning
 
 `BLOCKED_STEP6E_PREFLIGHT_REQUEST` means the explicit Step 6E request or one or
