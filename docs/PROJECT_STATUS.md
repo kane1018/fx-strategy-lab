@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-AD controlled adapter fake transport完了 / no API / no POST** —
+  Step 6G-PBのpure route bridgeとStep 6G-EBのfake runtime bridgeを入力に、将来の実POST実行器へ渡す
+  controlled adapter skeletonとして `backend/app/live_verification/live_order_real_step6g_controlled_adapter.py`
+  を追加した。このStepでは `FAKE_ONLY` transport contractのみを許可し、real transport、HTTP POST可能transport、
+  order endpoint / `live_order_once` / broker / Private API / HTTP client importをfail-closedでblockする。
+  fake accepted / rejected / unknown / timeoutを区別するが、実POST結果としては扱わない。ready / fake completedでも
+  `allowed_for_live=false`、`post_allowed_this_step=false`、`post_executed=false`、
+  `real_http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false` を維持する。
+  fakeでもattemptは最大1回で、retry/loop/追加/変更/取消/決済、raw/secret/ID露出、Step 4 approval phrase偽装、
+  ledger state強制変更をfail-closedでblockする。Step 6G-ADは実API、read-only API、public API、
+  Private API、broker、fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、ledger操作、
+  final confirmation再利用を行わない。将来の実行には別Stepで新しいfinal confirmation、fresh preflight、
+  reviewed real adapter contractが必要。詳細は [STEP6G_CONTROLLED_ADAPTER_PLAN.md](STEP6G_CONTROLLED_ADAPTER_PLAN.md)。
 - **Step 6G-EB runtime bridge fake executor完了 / no API / no POST** —
   Step 6G-PBのPOST route bridge pure model ready resultを受け取り、将来の実POST実行器へ渡す前段として
   `backend/app/live_verification/live_order_real_step6g_runtime_bridge.py` を追加した。これはfake-only runtime
