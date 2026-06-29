@@ -15,6 +15,7 @@ from app.live_verification.live_order_real_api_preflight_execution import (
     PREFLIGHT_PASSED_SANITIZED_STATUS,
     STEP6E_MAX_SPREAD_JPY,
     STEP6E_MAX_TICKER_AGE_SECONDS,
+    STEP6E_MIN_TICKER_AGE_SECONDS,
     STEP6E_REQUEST_SCOPE_LABEL,
     STEP6E_ROUTE_TYPE,
     LiveOrderRealApiPreflightExecutionBlockReason,
@@ -389,6 +390,10 @@ def test_source_plan_blocked_blocks_step6e() -> None:
             BlockReason.TICKER_AGE_STALE,
         ),
         (
+            {"ticker_age_seconds": STEP6E_MIN_TICKER_AGE_SECONDS - 1},
+            BlockReason.TICKER_AGE_STALE,
+        ),
+        (
             {"permission_scope_check_passed": False},
             BlockReason.PERMISSION_SCOPE_CHECK_FAILED,
         ),
@@ -465,6 +470,18 @@ def test_ready_execution_keeps_supported_order_shape_only() -> None:
     }
     assert execution.size == LIVE_ORDER_CANDIDATE_SIZE
     assert execution.execution_type == LIVE_ORDER_CANDIDATE_EXECUTION_TYPE
+
+
+def test_ticker_age_future_skew_within_limit_can_pass_step6e_execution() -> None:
+    result = _execution(
+        sanitized_result=_sanitized_result(
+            ticker_age_seconds=STEP6E_MIN_TICKER_AGE_SECONDS,
+        ),
+    )
+
+    assert result.execution_status is ExecutionStatus.REAL_API_PREFLIGHT_PASSED_NO_POST
+    assert result.execution_ready is True
+    assert result.blocked_reasons == ()
 
 
 def test_future_step6f_handoff_conditions_and_blockers_are_present() -> None:

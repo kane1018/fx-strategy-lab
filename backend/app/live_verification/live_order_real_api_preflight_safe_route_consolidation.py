@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import Enum
@@ -18,6 +19,7 @@ from app.live_verification.live_order_candidate import LIVE_ORDER_CANDIDATE_SIZE
 from app.live_verification.live_order_real_api_preflight_execution import (
     STEP6E_MAX_SPREAD_JPY,
     STEP6E_MAX_TICKER_AGE_SECONDS,
+    STEP6E_MIN_TICKER_AGE_SECONDS,
 )
 from app.live_verification.live_order_real_approval_enablement_dry_run_plan import (
     MARKET_HOURS_OPEN_STATE,
@@ -25,6 +27,7 @@ from app.live_verification.live_order_real_approval_enablement_dry_run_plan impo
 from app.live_verification.precheck import SUPPORTED_SYMBOL
 
 LIVE_ORDER_REAL_API_PREFLIGHT_SAFE_ROUTE_CONSOLIDATION_ID_PREFIX = "LORAPSC6ESC-"
+TICKER_TIME_FIELD_CANDIDATES = ("time", "timestamp")
 
 
 class LiveOrderRealApiPreflightSafeRouteConsolidationStatus(str, Enum):
@@ -228,6 +231,49 @@ class LiveOrderRealApiPreflightConsolidationCheckResult:
         _require_non_empty("reason", self.reason)
         _require_non_empty("sanitized_value", self.sanitized_value)
         _require_non_empty("expected", self.expected)
+
+
+@dataclass(frozen=True)
+class LiveOrderRealApiPreflightTickerSanitizerResult:
+    ticker_symbol: str | None
+    ticker_bid: float | None
+    ticker_ask: float | None
+    ticker_spread_jpy: float | None
+    ticker_age_seconds: float | None
+    ticker_check_passed: bool
+    ticker_time_field: str | None
+    blocked_reasons: tuple[str, ...]
+    raw_response_saved: bool = False
+    raw_response_displayed: bool = False
+    headers_displayed: bool = False
+    signature_displayed: bool = False
+    credentials_displayed: bool = False
+    order_ids_displayed: bool = False
+    execution_ids_displayed: bool = False
+    position_ids_displayed: bool = False
+    client_order_ids_displayed: bool = False
+
+    def __post_init__(self) -> None:
+        _validate_optional_number("ticker_bid", self.ticker_bid)
+        _validate_optional_number("ticker_ask", self.ticker_ask)
+        _validate_optional_number("ticker_spread_jpy", self.ticker_spread_jpy)
+        _validate_optional_number("ticker_age_seconds", self.ticker_age_seconds)
+        _validate_bool_fields(
+            self,
+            (
+                "ticker_check_passed",
+                "raw_response_saved",
+                "raw_response_displayed",
+                "headers_displayed",
+                "signature_displayed",
+                "credentials_displayed",
+                "order_ids_displayed",
+                "execution_ids_displayed",
+                "position_ids_displayed",
+                "client_order_ids_displayed",
+            ),
+        )
+        _require_string_tuple("blocked_reasons", self.blocked_reasons or ("none",))
 
 
 @dataclass(frozen=True)
@@ -664,6 +710,54 @@ def render_live_order_real_api_preflight_safe_route_consolidation_markdown(
     )
 
 
+def sanitize_live_order_real_api_preflight_ticker(
+    ticker: object,
+    *,
+    observed_at: datetime,
+    expected_symbol: str = SUPPORTED_SYMBOL,
+) -> LiveOrderRealApiPreflightTickerSanitizerResult:
+    """Convert a public ticker object to sanitized fields without exposing raw data."""
+    observed = _ensure_aware(observed_at)
+    reasons: list[str] = []
+    symbol = _optional_text(_ticker_field(ticker, "symbol"))
+    bid = _optional_float(_ticker_field(ticker, "bid"))
+    ask = _optional_float(_ticker_field(ticker, "ask"))
+    ticker_time_field, ticker_time_value = _first_ticker_time_field(ticker)
+    parsed_time = _parse_ticker_time(ticker_time_value)
+
+    if symbol != expected_symbol:
+        _add_reason(reasons, "ticker_symbol_unsupported")
+    if bid is None or ask is None:
+        _add_reason(reasons, "ticker_bid_ask_invalid")
+
+    spread = ask - bid if bid is not None and ask is not None else None
+    if spread is not None and spread > STEP6E_MAX_SPREAD_JPY:
+        _add_reason(reasons, "ticker_spread_too_wide")
+
+    age_seconds = None
+    if ticker_time_field is None:
+        _add_reason(reasons, "ticker_time_missing")
+    elif parsed_time is None:
+        _add_reason(reasons, "ticker_time_unsupported")
+    else:
+        age_seconds = (observed - parsed_time).total_seconds()
+        if age_seconds > STEP6E_MAX_TICKER_AGE_SECONDS:
+            _add_reason(reasons, "ticker_age_stale")
+        if age_seconds < STEP6E_MIN_TICKER_AGE_SECONDS:
+            _add_reason(reasons, "ticker_age_future_skew")
+
+    return LiveOrderRealApiPreflightTickerSanitizerResult(
+        ticker_symbol=symbol,
+        ticker_bid=bid,
+        ticker_ask=ask,
+        ticker_spread_jpy=spread,
+        ticker_age_seconds=age_seconds,
+        ticker_check_passed=not reasons,
+        ticker_time_field=ticker_time_field,
+        blocked_reasons=tuple(reasons),
+    )
+
+
 def make_live_order_real_api_preflight_safe_route_consolidation_id(
     *,
     created_at: datetime,
@@ -836,7 +930,10 @@ def _preflight_not_passing_reasons(
             _add_reason(reasons, "ticker_spread_too_wide")
         if (
             public_input.ticker_age_seconds is not None
-            and public_input.ticker_age_seconds > STEP6E_MAX_TICKER_AGE_SECONDS
+            and (
+                public_input.ticker_age_seconds > STEP6E_MAX_TICKER_AGE_SECONDS
+                or public_input.ticker_age_seconds < STEP6E_MIN_TICKER_AGE_SECONDS
+            )
         ):
             _add_reason(reasons, "ticker_age_stale")
         if public_input.ticker_check_passed is not True:
@@ -1019,10 +1116,12 @@ def _build_check_results(
             "ticker_age_passed",
             public_market_input is not None
             and public_market_input.ticker_age_seconds is not None
-            and public_market_input.ticker_age_seconds <= STEP6E_MAX_TICKER_AGE_SECONDS,
+            and STEP6E_MIN_TICKER_AGE_SECONDS
+            <= public_market_input.ticker_age_seconds
+            <= STEP6E_MAX_TICKER_AGE_SECONDS,
             "ticker age is within limit",
             _safe_text(_value(public_market_input, "ticker_age_seconds")),
-            f"<= {STEP6E_MAX_TICKER_AGE_SECONDS}",
+            f"{STEP6E_MIN_TICKER_AGE_SECONDS}..{STEP6E_MAX_TICKER_AGE_SECONDS}",
         ),
         _check(
             "permission_scope_passed",
@@ -1257,6 +1356,53 @@ def _source_name(source: object | None) -> str:
 
 def _value(source: object | None, field_name: str) -> Any:
     return getattr(source, field_name, None) if source is not None else None
+
+
+def _ticker_field(ticker: object, field_name: str) -> object | None:
+    if isinstance(ticker, Mapping):
+        return ticker.get(field_name)
+    return getattr(ticker, field_name, None)
+
+
+def _first_ticker_time_field(ticker: object) -> tuple[str | None, object | None]:
+    for field_name in TICKER_TIME_FIELD_CANDIDATES:
+        value = _ticker_field(ticker, field_name)
+        if value is not None and value != "":
+            return field_name, value
+    return None, None
+
+
+def _parse_ticker_time(value: object | None) -> datetime | None:
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return None
+        return value.astimezone(UTC)
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(UTC)
+
+
+def _optional_text(value: object | None) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _optional_float(value: object | None) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return None
 
 
 def _is_missing(value: object | None) -> bool:

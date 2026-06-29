@@ -82,6 +82,17 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-TF Ticker age sanitizer fix完了予定 / no API / no POST** —
+  Step 6G-Fはfinal confirmation phraseを完全一致で受領し、approval artifact再生成・fingerprint一致までは
+  成功したが、POST直前fresh preflightのsanitized処理で `Ticker object has no attribute timestamp` が発生し、
+  fail-closedで停止した。HTTP POST、order endpoint、`live_order_once`、実注文は未実行で、
+  `post_attempt_count=0`、raw/secret/ID露出なし。原因はGMO Public normalized `Ticker` の時刻fieldが
+  `time` である一方、Step 6G-Fのticker age算出が `.timestamp` 固定参照だったこと。Step 6G-TFでは
+  実API、read-only API、public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、
+  `live_order_once`、実注文、final confirmation再利用を行わず、`time` primaryのfail-closed ticker age
+  sanitizerとfake/sanitized testsを追加する。修正後も過去final confirmation phraseは失効扱いで、
+  次のStep 6Gは別タスクとして最初から再実行し、新しいfinal confirmation gateを通す必要がある。
+  詳細は [STEP6G_TICKER_AGE_SANITIZER_FIX.md](STEP6G_TICKER_AGE_SANITIZER_FIX.md)。
 - **Step 6F Real post-readiness planning完了 / planning-only / no POST / no order endpoint / no live_order_once** —
   Step 6E-R2のsanitized runtime result
   `REAL_API_PREFLIGHT_PASSED_NO_POST` をGitに保存せずsnapshot入力として受け取り、

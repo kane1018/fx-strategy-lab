@@ -38,6 +38,7 @@ STEP6E_REQUEST_SCOPE_LABEL = (
 PREFLIGHT_PASSED_SANITIZED_STATUS = "PREFLIGHT_PASSED_SANITIZED"
 STEP6E_MAX_SPREAD_JPY = 0.01
 STEP6E_MAX_TICKER_AGE_SECONDS = 30
+STEP6E_MIN_TICKER_AGE_SECONDS = -5
 STEP6E_ROUTE_TYPE = "read_only_or_preflight_sanitized"
 
 DEFAULT_FUTURE_STEP6F_HANDOFF_CONDITIONS = (
@@ -1122,7 +1123,10 @@ def _sanitized_result_blocked_reasons(
         _add_reason(reasons, BlockReason.TICKER_SYMBOL_UNSUPPORTED)
     if result.ticker_spread_jpy > STEP6E_MAX_SPREAD_JPY:
         _add_reason(reasons, BlockReason.TICKER_SPREAD_TOO_WIDE)
-    if result.ticker_age_seconds > STEP6E_MAX_TICKER_AGE_SECONDS:
+    if (
+        result.ticker_age_seconds > STEP6E_MAX_TICKER_AGE_SECONDS
+        or result.ticker_age_seconds < STEP6E_MIN_TICKER_AGE_SECONDS
+    ):
         _add_reason(reasons, BlockReason.TICKER_AGE_STALE)
     if result.ticker_check_passed is not True:
         _add_reason(reasons, BlockReason.TICKER_CHECK_FAILED)
@@ -1316,7 +1320,8 @@ def _build_check_results(
         ),
         check_bool(
             "ticker_age_passed",
-            _result_number(sanitized_result, "ticker_age_seconds")
+            STEP6E_MIN_TICKER_AGE_SECONDS
+            <= _result_number(sanitized_result, "ticker_age_seconds")
             <= STEP6E_MAX_TICKER_AGE_SECONDS,
             "ticker age passed",
         ),

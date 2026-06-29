@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import ast
 from dataclasses import asdict
+from datetime import timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 from app.live_verification.live_order_candidate import LIVE_ORDER_CANDIDATE_SIZE
 from app.live_verification.live_order_real_api_preflight_execution import (
     STEP6E_MAX_SPREAD_JPY,
     STEP6E_MAX_TICKER_AGE_SECONDS,
+    STEP6E_MIN_TICKER_AGE_SECONDS,
 )
 from app.live_verification.live_order_real_api_preflight_safe_route_consolidation import (
     LiveOrderRealApiPreflightConsolidationDataPolicy,
@@ -17,6 +20,7 @@ from app.live_verification.live_order_real_api_preflight_safe_route_consolidatio
     LiveOrderRealApiPreflightSafeRouteConsolidationStatus,
     build_live_order_real_api_preflight_safe_route_consolidation,
     render_live_order_real_api_preflight_safe_route_consolidation_markdown,
+    sanitize_live_order_real_api_preflight_ticker,
 )
 from app.live_verification.live_order_real_approval_enablement_dry_run_plan import (
     MARKET_HOURS_OPEN_STATE,
@@ -299,6 +303,185 @@ def test_ticker_age_too_old_blocks_preflight_not_passing() -> None:
         is Status.BLOCKED_SAFE_ROUTE_CONSOLIDATION_PREFLIGHT_NOT_PASSING
     )
     assert "ticker_age_stale" in result.blocked_reasons
+
+
+def test_ticker_age_future_skew_beyond_limit_blocks_preflight_not_passing() -> None:
+    result = _consolidation(
+        public_input=_public(ticker_age_seconds=STEP6E_MIN_TICKER_AGE_SECONDS - 1),
+    )
+
+    assert (
+        result.consolidation_status
+        is Status.BLOCKED_SAFE_ROUTE_CONSOLIDATION_PREFLIGHT_NOT_PASSING
+    )
+    assert "ticker_age_stale" in result.blocked_reasons
+
+
+def test_ticker_age_future_skew_within_limit_can_consolidate() -> None:
+    result = _consolidation(
+        public_input=_public(ticker_age_seconds=STEP6E_MIN_TICKER_AGE_SECONDS),
+    )
+
+    assert (
+        result.consolidation_status
+        is Status.SAFE_READONLY_PREFLIGHT_ROUTE_CONSOLIDATED_NO_API_NO_POST
+    )
+    assert result.consolidation_ready is True
+
+
+def test_ticker_sanitizer_uses_actual_gmo_public_time_field_without_timestamp() -> None:
+    ticker = SimpleNamespace(
+        symbol=SUPPORTED_SYMBOL,
+        bid=150.001,
+        ask=150.006,
+        time=CREATED_AT.isoformat(),
+    )
+
+    sanitized = sanitize_live_order_real_api_preflight_ticker(
+        ticker,
+        observed_at=CREATED_AT + timedelta(seconds=1),
+    )
+
+    assert not hasattr(ticker, "timestamp")
+    assert sanitized.ticker_time_field == "time"
+    assert sanitized.ticker_age_seconds == 1.0
+    assert sanitized.ticker_spread_jpy is not None
+    assert round(sanitized.ticker_spread_jpy, 3) == 0.005
+    assert sanitized.ticker_check_passed is True
+    assert sanitized.blocked_reasons == ()
+
+
+def test_ticker_sanitizer_supports_timestamp_field_when_present() -> None:
+    ticker = {
+        "symbol": SUPPORTED_SYMBOL,
+        "bid": 150.001,
+        "ask": 150.006,
+        "timestamp": CREATED_AT.isoformat(),
+    }
+
+    sanitized = sanitize_live_order_real_api_preflight_ticker(
+        ticker,
+        observed_at=CREATED_AT + timedelta(seconds=1),
+    )
+
+    assert sanitized.ticker_time_field == "timestamp"
+    assert sanitized.ticker_age_seconds == 1.0
+    assert sanitized.ticker_check_passed is True
+
+
+def test_ticker_sanitizer_missing_time_fails_closed_without_exception() -> None:
+    ticker = SimpleNamespace(symbol=SUPPORTED_SYMBOL, bid=150.001, ask=150.006)
+
+    sanitized = sanitize_live_order_real_api_preflight_ticker(
+        ticker,
+        observed_at=CREATED_AT,
+    )
+
+    assert sanitized.ticker_age_seconds is None
+    assert sanitized.ticker_check_passed is False
+    assert sanitized.blocked_reasons == ("ticker_time_missing",)
+
+
+def test_ticker_sanitizer_future_timestamp_within_clock_skew_passes() -> None:
+    ticker = SimpleNamespace(
+        symbol=SUPPORTED_SYMBOL,
+        bid=150.001,
+        ask=150.006,
+        time=(CREATED_AT + timedelta(seconds=5)).isoformat(),
+    )
+
+    sanitized = sanitize_live_order_real_api_preflight_ticker(
+        ticker,
+        observed_at=CREATED_AT,
+    )
+
+    assert sanitized.ticker_age_seconds == STEP6E_MIN_TICKER_AGE_SECONDS
+    assert sanitized.ticker_check_passed is True
+
+
+def test_ticker_sanitizer_future_timestamp_beyond_clock_skew_fails_closed() -> None:
+    ticker = SimpleNamespace(
+        symbol=SUPPORTED_SYMBOL,
+        bid=150.001,
+        ask=150.006,
+        time=(CREATED_AT + timedelta(seconds=6)).isoformat(),
+    )
+
+    sanitized = sanitize_live_order_real_api_preflight_ticker(
+        ticker,
+        observed_at=CREATED_AT,
+    )
+
+    assert sanitized.ticker_age_seconds == STEP6E_MIN_TICKER_AGE_SECONDS - 1
+    assert sanitized.ticker_check_passed is False
+    assert "ticker_age_future_skew" in sanitized.blocked_reasons
+
+
+def test_ticker_sanitizer_stale_timestamp_fails_closed() -> None:
+    ticker = SimpleNamespace(
+        symbol=SUPPORTED_SYMBOL,
+        bid=150.001,
+        ask=150.006,
+        time=(
+            CREATED_AT - timedelta(seconds=STEP6E_MAX_TICKER_AGE_SECONDS + 1)
+        ).isoformat(),
+    )
+
+    sanitized = sanitize_live_order_real_api_preflight_ticker(
+        ticker,
+        observed_at=CREATED_AT,
+    )
+
+    assert sanitized.ticker_age_seconds == STEP6E_MAX_TICKER_AGE_SECONDS + 1
+    assert sanitized.ticker_check_passed is False
+    assert "ticker_age_stale" in sanitized.blocked_reasons
+
+
+def test_ticker_sanitizer_spread_too_wide_fails_closed() -> None:
+    ticker = SimpleNamespace(
+        symbol=SUPPORTED_SYMBOL,
+        bid=150.001,
+        ask=150.012,
+        time=CREATED_AT.isoformat(),
+    )
+
+    sanitized = sanitize_live_order_real_api_preflight_ticker(
+        ticker,
+        observed_at=CREATED_AT,
+    )
+
+    assert sanitized.ticker_spread_jpy > STEP6E_MAX_SPREAD_JPY
+    assert sanitized.ticker_check_passed is False
+    assert "ticker_spread_too_wide" in sanitized.blocked_reasons
+
+
+def test_ticker_sanitizer_serialization_does_not_hold_raw_secret_or_real_id_values() -> None:
+    sanitized = sanitize_live_order_real_api_preflight_ticker(
+        SimpleNamespace(
+            symbol=SUPPORTED_SYMBOL,
+            bid=150.001,
+            ask=150.006,
+            time=CREATED_AT.isoformat(),
+        ),
+        observed_at=CREATED_AT,
+    )
+    serialized = str(asdict(sanitized))
+    represented = repr(sanitized)
+
+    assert sanitized.raw_response_saved is False
+    assert sanitized.raw_response_displayed is False
+    assert sanitized.headers_displayed is False
+    assert sanitized.signature_displayed is False
+    assert sanitized.credentials_displayed is False
+    for forbidden_value in (
+        "raw-response-value",
+        "header-value",
+        "signature-value",
+        "credential-value",
+        "real-order-id-value",
+    ):
+        assert forbidden_value not in serialized
+        assert forbidden_value not in represented
 
 
 def test_permission_scope_failed_blocks_preflight_not_passing() -> None:
