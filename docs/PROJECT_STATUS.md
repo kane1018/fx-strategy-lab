@@ -82,6 +82,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-EB runtime bridge fake executor完了 / no API / no POST** —
+  Step 6G-PBのPOST route bridge pure model ready resultを受け取り、将来の実POST実行器へ渡す前段として
+  `backend/app/live_verification/live_order_real_step6g_runtime_bridge.py` を追加した。これはfake-only runtime
+  bridgeであり、fake accepted / rejected / unknown / timeoutを区別しつつ、実POST結果としては扱わない。
+  ready / fake completedでも `allowed_for_live=false`、`post_allowed_this_step=false`、`post_executed=false`、
+  `real_http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false`、
+  `broker_order_path_called=false` を維持する。fakeでもattemptは最大1回で、retry/loop/追加/変更/取消/決済、
+  raw/secret/ID露出、Step 4 approval phrase偽装、ledger state強制変更をfail-closedでblockする。
+  Step 6G-EBは実API、read-only API、public API、Private API、broker、fresh preflight、HTTP POST、
+  order endpoint、`live_order_once`、実注文、ledger操作、final confirmation再利用を行わない。将来の実行には
+  別Stepで新しいfinal confirmationとfresh preflight、実adapter reviewが必要。詳細は
+  [STEP6G_RUNTIME_BRIDGE_PLAN.md](STEP6G_RUNTIME_BRIDGE_PLAN.md)。
 - **Step 6G-PB POST route bridge pure model完了 / no API / no POST** —
   Step 6G-F2はfinal confirmation、approval artifact再生成、fingerprint/sha256 prefix一致、
   POST直前fresh preflight、order intent exact matchまでは通過したが、既存POST経路との接続仕様が
