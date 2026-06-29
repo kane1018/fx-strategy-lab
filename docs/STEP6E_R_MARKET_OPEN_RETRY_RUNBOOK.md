@@ -204,6 +204,20 @@ calls. Step 6E-R2 may use the consolidated sanitized result only after a
 separate explicit retry request and fresh market-open checks. Step 6E-SC ready
 is not Step 6F readiness and does not authorize POST.
 
+## Step 6E-CP credential presence gate
+
+Step 6E-R2 must verify credential presence before the private read-only route
+can run. The expected names are `GMO_FX_API_KEY` and `GMO_FX_API_SECRET`, as
+read by `backend/scripts/check_private_readonly_connection.py`.
+
+The check is presence-only. It may output only `PRESENT` or `MISSING` for those
+two names. It must not display values, lengths, prefixes, suffixes, hashes,
+fingerprints, `.env` contents, or an environment listing.
+
+If either name is missing, Step 6E-R2 must stop before API execution. The user
+must set the missing variables manually in the execution environment, then
+request a separate Step 6E-R2 retry.
+
 ## Final report format
 
 The Step 6E-R final report should include:

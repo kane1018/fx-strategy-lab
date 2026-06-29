@@ -82,6 +82,16 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6E-CP Credential presence readiness完了 / no API / no POST** —
+  Step 6E-R2はprivate read-only routeのcredential presence不足でAPI接続前にfail-closed停止した。
+  Step 6E-CPでは `backend/scripts/check_private_readonly_connection.py` から期待credential名を
+  `GMO_FX_API_KEY` / `GMO_FX_API_SECRET` と静的に確認し、値・長さ・hash・fingerprintを表示せず、
+  `.env`表示/grep/cat/変更やenv一覧表示なしで、presence-only確認方針をdocs化した。
+  Step 6E-CPは実API、read-only API、public API、Private API、broker、order endpoint、
+  `live_order_once`、HTTP POST、実注文、raw request/response表示・保存、headers/signature/credentials値表示、
+  ledger操作を行わない。runtimeのPRESENT/MISSING結果はGitに保存しない。詳細は
+  [STEP6E_CP_CREDENTIAL_PRESENCE_READINESS.md](STEP6E_CP_CREDENTIAL_PRESENCE_READINESS.md)。
+  次は不足credentialをユーザーが実行環境へ手動設定したうえで、別タスクとしてStep 6E-R2を再実行する。
 - **Step 6E-S Sunday offline preparation完了 / no API / no POST** —
   2026-06-28 JSTが日曜で市場外停止条件に該当するため、Step 6E real API preflightは引き続き未実行。
   代わりに、明日以降の市場時間内に別タスクとして1回だけread-only/preflight確認を再試行するための

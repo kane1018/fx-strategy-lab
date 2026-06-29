@@ -292,3 +292,14 @@ private read-only, public market, and local/static inputs into one sanitized
 Step 6E result. A ready consolidation is eligible only for Step 6E-R2 retry. It
 does not execute API calls, does not call order endpoints or `live_order_once`,
 does not execute POST, and does not make Step 6F eligible by itself.
+
+## Step 6E-CP credential presence readiness
+
+Step 6E-R2 also requires credential presence for the private read-only route.
+The route expects `GMO_FX_API_KEY` and `GMO_FX_API_SECRET`. Step 6E-CP records
+that these names may be checked only for boolean presence, never for value,
+length, hash, fingerprint, prefix, or suffix.
+
+If either expected name is missing, Step 6E-R2 blocks before any API call. The
+presence check must not display `.env`, list the environment, display
+credentials, display headers/signatures, or save raw request/response data.

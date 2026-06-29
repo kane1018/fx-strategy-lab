@@ -150,6 +150,12 @@ Step 6E-R2 needs a separate explicit request. It remains read-only/preflight
 only, no POST, no order endpoint, no `live_order_once`, no raw output, no
 headers/signatures/credentials/real IDs, and `allowed_for_live=false`.
 
+Step 6E-R2 also requires private read-only route credential presence before any
+API attempt. The expected names are `GMO_FX_API_KEY` and `GMO_FX_API_SECRET`.
+Step 6E-CP defines that presence check as values-hidden, `.env`-hidden, and
+environment-list-hidden. Missing credential presence blocks Step 6E-R2 before
+API execution.
+
 ## Tests
 
 Tests cover ready consolidation, missing inputs, unsafe route verification,
