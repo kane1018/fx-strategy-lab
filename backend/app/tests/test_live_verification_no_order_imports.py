@@ -91,8 +91,7 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 assert all(
-                    not _is_blocked_module(alias.name, path_blocked_modules)
-                    for alias in node.names
+                    not _is_blocked_module(alias.name, path_blocked_modules) for alias in node.names
                 )
             if isinstance(node, ast.ImportFrom):
                 module = node.module or ""
@@ -118,10 +117,7 @@ def test_signature_request_design_has_no_crypto_or_http_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -144,10 +140,7 @@ def test_signature_headers_body_plan_has_no_crypto_http_or_secret_imports() -> N
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -170,10 +163,7 @@ def test_actual_order_body_has_no_crypto_http_or_secret_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -221,10 +211,7 @@ def test_mock_signed_transport_has_no_http_or_secret_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -249,10 +236,7 @@ def test_order_submission_skeleton_has_no_http_or_secret_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -284,10 +268,7 @@ def test_one_shot_boundary_has_no_api_order_or_clipboard_dependencies() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -342,10 +323,7 @@ def test_one_shot_execution_runbook_has_no_api_order_or_clipboard_dependencies()
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -403,10 +381,7 @@ def test_e2e_dry_run_chain_has_no_api_order_or_clipboard_dependencies() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -464,10 +439,7 @@ def test_real_approval_readiness_has_no_api_order_or_clipboard_dependencies() ->
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -525,10 +497,7 @@ def test_real_approval_gate_plan_has_no_api_order_or_clipboard_dependencies() ->
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -586,10 +555,7 @@ def test_pre_approval_fresh_preflight_has_no_api_order_or_clipboard_dependencies
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -647,10 +613,7 @@ def test_real_approval_gate_generation_package_has_no_api_order_or_clipboard_dep
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -662,8 +625,9 @@ def test_real_approval_gate_generation_package_has_no_api_order_or_clipboard_dep
             assert _call_name(node) not in blocked_call_names
 
 
-def test_real_approval_pre_implementation_audit_has_no_api_order_or_clipboard_dependencies(
-) -> None:
+def test_real_approval_pre_implementation_audit_has_no_api_order_or_clipboard_dependencies() -> (
+    None
+):
     blocked_modules = {
         "requests",
         "httpx",
@@ -709,10 +673,7 @@ def test_real_approval_pre_implementation_audit_has_no_api_order_or_clipboard_de
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -724,8 +685,9 @@ def test_real_approval_pre_implementation_audit_has_no_api_order_or_clipboard_de
             assert _call_name(node) not in blocked_call_names
 
 
-def test_real_approval_implementation_readiness_has_no_api_order_or_clipboard_dependencies(
-) -> None:
+def test_real_approval_implementation_readiness_has_no_api_order_or_clipboard_dependencies() -> (
+    None
+):
     blocked_modules = {
         "requests",
         "httpx",
@@ -771,10 +733,7 @@ def test_real_approval_implementation_readiness_has_no_api_order_or_clipboard_de
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -786,8 +745,7 @@ def test_real_approval_implementation_readiness_has_no_api_order_or_clipboard_de
             assert _call_name(node) not in blocked_call_names
 
 
-def test_real_approval_disabled_scaffold_has_no_api_order_or_clipboard_dependencies(
-) -> None:
+def test_real_approval_disabled_scaffold_has_no_api_order_or_clipboard_dependencies() -> None:
     blocked_modules = {
         "requests",
         "httpx",
@@ -833,10 +791,7 @@ def test_real_approval_disabled_scaffold_has_no_api_order_or_clipboard_dependenc
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -848,8 +803,7 @@ def test_real_approval_disabled_scaffold_has_no_api_order_or_clipboard_dependenc
             assert _call_name(node) not in blocked_call_names
 
 
-def test_real_approval_enablement_criteria_has_no_api_order_or_clipboard_dependencies(
-) -> None:
+def test_real_approval_enablement_criteria_has_no_api_order_or_clipboard_dependencies() -> None:
     blocked_modules = {
         "requests",
         "httpx",
@@ -895,10 +849,7 @@ def test_real_approval_enablement_criteria_has_no_api_order_or_clipboard_depende
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -910,8 +861,7 @@ def test_real_approval_enablement_criteria_has_no_api_order_or_clipboard_depende
             assert _call_name(node) not in blocked_call_names
 
 
-def test_real_approval_enablement_dry_run_plan_has_no_api_order_or_clipboard_dependencies(
-) -> None:
+def test_real_approval_enablement_dry_run_plan_has_no_api_order_or_clipboard_dependencies() -> None:
     blocked_modules = {
         "requests",
         "httpx",
@@ -957,10 +907,7 @@ def test_real_approval_enablement_dry_run_plan_has_no_api_order_or_clipboard_dep
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -972,8 +919,7 @@ def test_real_approval_enablement_dry_run_plan_has_no_api_order_or_clipboard_dep
             assert _call_name(node) not in blocked_call_names
 
 
-def test_real_approval_gate_enablement_state_has_no_api_order_or_clipboard_dependencies(
-) -> None:
+def test_real_approval_gate_enablement_state_has_no_api_order_or_clipboard_dependencies() -> None:
     blocked_modules = {
         "requests",
         "httpx",
@@ -1019,10 +965,7 @@ def test_real_approval_gate_enablement_state_has_no_api_order_or_clipboard_depen
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -1034,8 +977,7 @@ def test_real_approval_gate_enablement_state_has_no_api_order_or_clipboard_depen
             assert _call_name(node) not in blocked_call_names
 
 
-def test_real_approval_artifact_validation_has_no_api_order_or_clipboard_dependencies(
-) -> None:
+def test_real_approval_artifact_validation_has_no_api_order_or_clipboard_dependencies() -> None:
     blocked_modules = {
         "requests",
         "httpx",
@@ -1081,10 +1023,7 @@ def test_real_approval_artifact_validation_has_no_api_order_or_clipboard_depende
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -1142,10 +1081,65 @@ def test_real_post_readiness_plan_has_no_api_order_or_clipboard_dependencies() -
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+        if isinstance(node, ast.Call):
+            assert _call_name(node) not in blocked_call_names
+
+
+def test_step6g_post_route_bridge_has_no_api_order_or_clipboard_dependencies() -> None:
+    blocked_modules = {
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+        "app.live_verification.live_order_once",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+        "post_live_order_with_httpx",
+        "execute_one_shot_live_order",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+    }
+    blocked_call_names = {
+        "execute_one_shot_live_order",
+        "post_live_order_with_httpx",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+        "read_text",
+        "write_text",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    path = PACKAGE_ROOT / "live_order_real_step6g_post_route_bridge.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -1184,10 +1178,7 @@ def test_live_order_preflight_has_no_http_or_secret_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -1372,6 +1363,10 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
                 "body_serialization",
             }
         if path.name == "live_order_real_post_readiness_plan.py":
+            field_names = field_names - {
+                "executionType",
+            }
+        if path.name == "live_order_real_step6g_post_route_bridge.py":
             field_names = field_names - {
                 "executionType",
             }
@@ -1814,10 +1809,7 @@ def test_live_order_reject_classification_has_no_http_secret_or_order_imports() 
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -1932,10 +1924,7 @@ def test_live_order_candidate_has_no_http_secret_private_api_or_broker_imports()
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2031,10 +2020,7 @@ def test_live_order_candidate_risk_gate_has_no_ordering_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2142,10 +2128,7 @@ def test_live_order_candidate_trace_has_no_ordering_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2248,10 +2231,7 @@ def test_live_order_candidate_review_has_no_ordering_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2358,10 +2338,7 @@ def test_live_order_session_policy_has_no_ordering_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2474,10 +2451,7 @@ def test_live_order_review_session_bundle_has_no_ordering_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2595,10 +2569,7 @@ def test_live_order_operator_review_has_no_ordering_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2710,10 +2681,7 @@ def test_live_order_approval_handoff_has_no_ordering_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2829,10 +2797,7 @@ def test_live_order_approval_gate_design_has_no_ordering_imports() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -2963,10 +2928,7 @@ def test_live_order_approval_gate_preview_has_no_ordering_or_real_approval_impor
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -3099,10 +3061,7 @@ def test_live_order_approval_validation_simulator_has_no_ordering_imports() -> N
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -3239,10 +3198,7 @@ def test_live_order_final_dynamic_preflight_has_no_ordering_or_api_imports() -> 
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -3390,10 +3346,7 @@ def test_real_approval_artifact_generation_has_no_api_order_or_clipboard_depende
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -3451,10 +3404,7 @@ def test_real_api_preflight_plan_has_no_api_order_or_clipboard_dependencies() ->
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -3512,10 +3462,7 @@ def test_real_api_preflight_execution_has_no_api_order_or_clipboard_dependencies
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -3573,10 +3520,7 @@ def test_real_api_preflight_safe_route_review_has_no_api_order_or_clipboard_depe
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -3588,8 +3532,7 @@ def test_real_api_preflight_safe_route_review_has_no_api_order_or_clipboard_depe
             assert _call_name(node) not in blocked_call_names
 
 
-def test_real_api_preflight_safe_route_consolidation_has_no_api_order_dependencies(
-) -> None:
+def test_real_api_preflight_safe_route_consolidation_has_no_api_order_dependencies() -> None:
     blocked_modules = {
         "requests",
         "httpx",
@@ -3635,10 +3578,7 @@ def test_real_api_preflight_safe_route_consolidation_has_no_api_order_dependenci
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)
@@ -3683,10 +3623,7 @@ def test_live_order_once_allows_only_explicit_one_shot_http_boundary() -> None:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            assert all(
-                not _is_blocked_module(alias.name, blocked_modules)
-                for alias in node.names
-            )
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             assert not _is_blocked_module(module, blocked_modules)

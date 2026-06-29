@@ -82,7 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Step 6G-TF Ticker age sanitizer fix完了予定 / no API / no POST** —
+- **Step 6G-PB POST route bridge pure model完了 / no API / no POST** —
+  Step 6G-F2はfinal confirmation、approval artifact再生成、fingerprint/sha256 prefix一致、
+  POST直前fresh preflight、order intent exact matchまでは通過したが、既存POST経路との接続仕様が
+  未実装だったため `BLOCKED_STEP6GF2_ROUTE_UNSAFE` で停止した。既存 `live_order_once.py` は
+  Step 4専用 approval phrase と ledger `PREPARED` stateを要求し、Step 6G final confirmation /
+  Step 6B-6C artifactとはそのまま互換ではない。Step 6G-PBでは
+  `backend/app/live_verification/live_order_real_step6g_post_route_bridge.py` を追加し、Step 6G
+  order intent、approval artifact、fresh preflight、attempt state、route safetyを接続するpure modelを
+  実装した。readyでも `allowed_for_live=false`、`post_allowed_this_step=false`、`post_executed=false`、
+  `order_endpoint_called=false`、`live_order_once_called=false` を維持し、Step 4 approval phrase偽装、
+  Step 4 ledger state強制変更、raw/secret/ID露出、retry/loop/追加/変更/取消/決済をfail-closedでblockする。
+  Step 6G-PBは実API、read-only API、public API、Private API、broker、fresh preflight、HTTP POST、
+  order endpoint、`live_order_once`、実注文、ledger操作、final confirmation再利用を行わない。詳細は
+  [STEP6G_POST_ROUTE_BRIDGE_PLAN.md](STEP6G_POST_ROUTE_BRIDGE_PLAN.md)。
+- **Step 6G-TF Ticker age sanitizer fix完了 / no API / no POST** —
   Step 6G-Fはfinal confirmation phraseを完全一致で受領し、approval artifact再生成・fingerprint一致までは
   成功したが、POST直前fresh preflightのsanitized処理で `Ticker object has no attribute timestamp` が発生し、
   fail-closedで停止した。HTTP POST、order endpoint、`live_order_once`、実注文は未実行で、
