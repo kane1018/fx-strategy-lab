@@ -82,6 +82,22 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-RA real adapter contract完了 / stub transport only / no API / no POST** —
+  Step 6G-RTはCASE 2として、既存 `live_order_once.py` のStep 4入口をそのままStep 6Gから使わず、
+  Step 4 approval phrase / ledger `PREPARED` stateを偽装・強制変換しない方針を確認した。
+  Step 6G-RAでは `backend/app/live_verification/live_order_real_step6g_real_adapter.py` を追加し、
+  Step 6G-PBのroute bridge、Step 6G-EBのfake runtime bridge、Step 6G-ADのcontrolled adapterを入力にする
+  real adapter contract / stub transport modelを実装した。このStepでは `STUB_ONLY` transportのみを許可し、
+  real transport、HTTP POST可能transport、order endpoint / `live_order_once` / broker / Private API /
+  HTTP client importをfail-closedでblockする。stub accepted / rejected / unknown / timeoutを区別するが、
+  実POST結果としては扱わない。ready / stub completedでも `allowed_for_live=false`、
+  `post_allowed_this_step=false`、`post_executed=false`、`real_http_post_executed=false`、
+  `order_endpoint_called=false`、`live_order_once_called=false` を維持する。stubでもattemptは最大1回で、
+  retry/loop/追加/変更/取消/決済、raw/secret/ID露出、Step 4 approval phrase偽装、ledger state強制変更を
+  fail-closedでblockする。Step 6G-RAは実API、read-only API、public API、Private API、broker、
+  fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、ledger操作、final confirmation再利用を
+  行わない。将来のreal transport実装は別Stepで、新しいfinal confirmationとfresh preflightが必要。
+  詳細は [STEP6G_REAL_ADAPTER_CONTRACT.md](STEP6G_REAL_ADAPTER_CONTRACT.md)。
 - **Step 6G-AD controlled adapter fake transport完了 / no API / no POST** —
   Step 6G-PBのpure route bridgeとStep 6G-EBのfake runtime bridgeを入力に、将来の実POST実行器へ渡す
   controlled adapter skeletonとして `backend/app/live_verification/live_order_real_step6g_controlled_adapter.py`
