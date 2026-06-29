@@ -1100,3 +1100,19 @@ wrapper without API execution unless separately scoped. Step 6E-RR itself did
 not call API, broker, order endpoints, or `live_order_once`; did not execute
 POST; did not display raw request/response, headers, signatures, credentials,
 or real IDs; and keeps `allowed_for_live=false`.
+
+## Step 6E-SC Follow-up
+
+Step 6E-SC is complete as a no-API/no-POST safe route consolidation model.
+`backend/app/live_verification/live_order_real_api_preflight_safe_route_consolidation.py`
+defines sanitized private read-only input, public market input, local/static
+input, data policy, consolidated sanitized result, and fail-closed status
+handling.
+
+Ready consolidation means only that a future explicit Step 6E-R2 retry can use
+the consolidated safe route surface. It is not Step 6F readiness and not live
+execution permission. The model keeps `allowed_for_live=false`, all API-called
+flags false, `order_endpoint_called_this_step=false`,
+`live_order_once_called_this_step=false`, and `post_executed_this_step=false`.
+It stores no raw request/response, headers, signatures, credentials, or real
+IDs.

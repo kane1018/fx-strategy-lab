@@ -284,3 +284,11 @@ reviewed route candidates offline and concluded that safe route consolidation
 is needed before Step 6E-R2. Step 6E-RR did not call real API, read-only API,
 public API, Private API, broker code, order endpoints, or `live_order_once`;
 it did not execute POST and keeps `allowed_for_live=false`.
+
+## Step 6E-SC consolidation result
+
+Step 6E-SC adds the no-API/no-POST consolidation model that combines sanitized
+private read-only, public market, and local/static inputs into one sanitized
+Step 6E result. A ready consolidation is eligible only for Step 6E-R2 retry. It
+does not execute API calls, does not call order endpoints or `live_order_once`,
+does not execute POST, and does not make Step 6F eligible by itself.

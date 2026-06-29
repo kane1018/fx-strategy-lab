@@ -289,3 +289,10 @@ The next route work remains separate from Step 6D planning and must preserve
 the Step 6D boundaries: no API execution in planning/review steps, no POST, no
 order endpoint, no `live_order_once`, no raw request/response display or save,
 and `allowed_for_live=false`.
+
+## Step 6E-SC Follow-up
+
+Step 6E-SC implements the no-API/no-POST sanitized consolidation model needed
+after Step 6E-RR. It remains downstream of Step 6D planning and upstream of a
+future Step 6E-R2 retry. Step 6D's no API/no POST planning boundary remains
+unchanged.

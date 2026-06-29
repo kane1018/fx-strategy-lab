@@ -197,3 +197,11 @@ Markdown warnings, serialization safety, and no-order import boundaries.
 Step 6E-RR is complete when the route review model, coverage matrix, docs, and
 tests show that existing candidates are not enough for Step 6E-R2 without a
 safe consolidation implementation. Step 6F remains blocked.
+
+## Step 6E-SC follow-up
+
+Step 6E-SC implements the safe consolidation wrapper/model recommended by this
+review. It accepts sanitized private read-only, public market, and local/static
+inputs and produces a single consolidated sanitized result without calling any
+API. A ready Step 6E-SC result is eligible only for a future Step 6E-R2 retry;
+Step 6F remains blocked until fresh Step 6E-R2 evidence exists.

@@ -197,6 +197,13 @@ Step 6E-R2, add a safe consolidated route or wrapper that covers the missing
 sanitized fields without raw output, POST, order endpoints, or
 `live_order_once`.
 
+## Step 6E-SC consolidation result
+
+Step 6E-SC adds that safe consolidated wrapper/model without executing API
+calls. Step 6E-R2 may use the consolidated sanitized result only after a
+separate explicit retry request and fresh market-open checks. Step 6E-SC ready
+is not Step 6F readiness and does not authorize POST.
+
 ## Final report format
 
 The Step 6E-R final report should include:

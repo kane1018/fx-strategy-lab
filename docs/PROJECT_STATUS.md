@@ -1316,3 +1316,20 @@ keeps `allowed_for_live=false`. Step 6F remains blocked until a future safe
 route consolidation and fresh Step 6E-R2 preflight produce sanitized evidence.
 Details:
 [STEP6E_RR_SAFE_READONLY_PREFLIGHT_ROUTE_REVIEW.md](STEP6E_RR_SAFE_READONLY_PREFLIGHT_ROUTE_REVIEW.md).
+
+## Step 6E-SC Follow-up
+
+Step 6E-SC adds a no-API/no-POST safe read-only preflight route consolidation
+model. It accepts sanitized private read-only input, sanitized public market
+input, and sanitized local/static input, then builds one consolidated sanitized
+result for a future Step 6E-R2 retry.
+
+Ready consolidation uses
+`SAFE_READONLY_PREFLIGHT_ROUTE_CONSOLIDATED_NO_API_NO_POST` and
+`eligible_for_step6e_r2_retry=true`, but it still keeps
+`allowed_for_live=false`. Step 6E-SC does not call real API, read-only API,
+public API, Private API, broker code, order endpoints, or `live_order_once`;
+it does not execute POST and does not display or save raw request/response,
+headers, signatures, credentials, or real IDs. Step 6F remains blocked until a
+fresh Step 6E-R2 sanitized preflight exists. Details:
+[STEP6E_SC_SAFE_READONLY_PREFLIGHT_ROUTE_CONSOLIDATION.md](STEP6E_SC_SAFE_READONLY_PREFLIGHT_ROUTE_CONSOLIDATION.md).
