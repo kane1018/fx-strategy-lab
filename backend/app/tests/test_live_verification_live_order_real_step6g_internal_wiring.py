@@ -54,10 +54,16 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.can_execute_http_post is False
     assert result.can_call_order_endpoint is False
     assert result.can_call_live_order_once is False
+    assert result.credential_boundary_ready is True
+    assert result.credential_boundary_mode == "BOUNDARY_ONLY"
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
     assert result.credential_values_provided is False
+    assert result.credential_values_loaded is False
+    assert result.credential_presence_checked_against_environment is False
+    assert result.env_access_requested is False
+    assert result.credential_metadata_exposed is False
     assert result.signature_value_generated is False
     assert result.header_values_present is False
     assert result.post_allowed_this_step is False
@@ -184,6 +190,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "http_transport_interface_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT,
         ),
+        (
+            "credential_boundary_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -204,6 +214,10 @@ def test_component_ready_flag_mismatch_blocks(
         {"dummy_signature_value_present": True},
         {"dummy_signature_value_displayed": True},
         {"dummy_signature_value_saved": True},
+        {"credential_values_loaded": True},
+        {"credential_presence_checked_against_environment": True},
+        {"env_access_requested": True},
+        {"credential_metadata_exposed": True},
         {"raw_request_displayed": True},
         {"raw_request_saved": True},
         {"raw_response_displayed": True},
@@ -278,6 +292,7 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert snapshot.dummy_signing_result.dummy_signing_ready is True
     assert snapshot.dummy_signing_result.dummy_signature_check_passed is True
     assert snapshot.http_transport_interface_result.interface_ready is True
+    assert snapshot.credential_boundary_result.credential_boundary_ready is True
 
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
@@ -294,8 +309,13 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "dummy_signing_ready: true" in rendered
     assert "dummy_signature_check_passed: true" in rendered
     assert "http_transport_interface_ready: true" in rendered
+    assert "credential_boundary_ready: true" in rendered
+    assert "credential_boundary_mode: BOUNDARY_ONLY" in rendered
     assert "http_client_present: false" in rendered
     assert "can_execute_http_post: false" in rendered
+    assert "credential_values_loaded: false" in rendered
+    assert "env_access_requested: false" in rendered
+    assert "credential_metadata_exposed: false" in rendered
     assert "Future real execution requires a new final confirmation" in rendered
     assert "FULL_APPROVAL_COMMAND_SENTINEL" not in rendered
     assert "RAW_REQUEST_SENTINEL" not in rendered

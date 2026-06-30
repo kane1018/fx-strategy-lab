@@ -82,6 +82,24 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-CB credential boundary skeleton完了 / no real credential / no API / no POST** —
+  Step 6G-HT後の次Stepとして、将来のreal signing実装前にcredential境界のcontract-only skeletonを追加した。
+  Step 6G-CBでは `backend/app/live_verification/live_order_real_credential_boundary.py` を追加し、
+  metadataとして `BOUNDARY_ONLY`、credential request/value/load/env/presence/metadata exposure false flags、
+  signing contract / dummy signing / HTTP transport interface readiness、real signature / real headers / POST capability
+  false flagsだけを扱う。readyでは `CREDENTIAL_BOUNDARY_READY_NO_CREDENTIAL_NO_ENV`、
+  `real_credentials_requested=false`、`credential_values_provided=false`、`credential_values_loaded=false`、
+  `credential_presence_checked_against_environment=false`、`env_access_requested=false`、
+  `credential_metadata_exposed=false`、`can_generate_real_signature=false`、`can_generate_real_headers=false`、
+  `can_execute_http_post=false`、`http_post_executed=false`、`order_endpoint_called=false`、
+  `live_order_once_called=false`、`post_allowed_this_step=false`、`post_executed=false` を維持する。
+  Step 6G-IWにも最小連携し、credential boundary readyをready条件に加えた。このStepでは実API、
+  read-only API、public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、
+  `live_order_once`、実注文、ledger操作、実credential値取得、credential presence実環境確認、
+  credential長さ/hash/fingerprint/preview/prefix/suffix取得・表示、実署名値生成、実headers値生成、
+  raw request/response表示・保存、real ID表示を行わない。future real credential injection / real signing /
+  real transportは別Stepで、新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_CREDENTIAL_BOUNDARY_SKELETON.md](STEP6G_CREDENTIAL_BOUNDARY_SKELETON.md)。
 - **Step 6G-HT HTTP transport interface skeleton完了 / no API / no POST** —
   Step 6G-DS後の次Stepとして、将来のreal transport実装前にinterface-onlyのHTTP transport boundaryを追加した。
   Step 6G-HTでは `backend/app/live_verification/live_order_real_http_transport_interface.py` を追加し、
