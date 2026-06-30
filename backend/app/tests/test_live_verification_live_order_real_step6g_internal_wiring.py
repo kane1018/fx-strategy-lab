@@ -100,6 +100,21 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.actual_environment_presence_check_performed is False
     assert result.real_checker_attached is False
     assert result.real_checker_executed is False
+    assert result.credential_presence_checker_contract_ready is True
+    assert result.checker_contract_mode == "CHECKER_CONTRACT_ONLY"
+    assert result.checker_contract_requested is True
+    assert result.checker_contract_ready_requested is True
+    assert result.real_checker_implementation_present is False
+    assert result.env_access_required is True
+    assert result.env_access_allowed is False
+    assert result.credential_values_available is False
+    assert result.credential_values_read is False
+    assert result.credential_metadata_available is False
+    assert result.checker_result_available is False
+    assert result.checker_result_saved is False
+    assert result.checker_result_displayed is False
+    assert result.checker_result_unknown is False
+    assert result.checker_result_failed is False
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
@@ -254,6 +269,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "credential_presence_adapter_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
+        (
+            "credential_presence_checker_contract_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -304,6 +323,21 @@ def test_component_ready_flag_mismatch_blocks(
         {"actual_environment_presence_check_performed": True},
         {"real_checker_attached": True},
         {"real_checker_executed": True},
+        {"real_checker_implementation_present": True},
+        {"env_access_allowed": True},
+        {"credential_values_available": True},
+        {"credential_values_read": True},
+        {"credential_values_displayed": True},
+        {"credential_values_saved": True},
+        {"credential_metadata_available": True},
+        {"credential_metadata_displayed": True},
+        {"credential_metadata_saved": True},
+        {"checker_result_available": True},
+        {"checker_result_saved": True},
+        {"checker_result_displayed": True},
+        {"checker_result_broadly_propagated": True},
+        {"checker_result_unknown": True},
+        {"checker_result_failed": True},
         {"raw_request_displayed": True},
         {"raw_request_saved": True},
         {"raw_response_displayed": True},
@@ -383,6 +417,11 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert snapshot.credential_injection_result.credential_injection_ready is True
     assert snapshot.credential_presence_check_result.credential_presence_check_ready is True
     assert snapshot.credential_presence_adapter_result.credential_presence_adapter_ready is True
+    assert (
+        snapshot.credential_presence_checker_contract_result
+        .credential_presence_checker_contract_ready
+        is True
+    )
 
 
 @pytest.mark.parametrize(
@@ -419,6 +458,24 @@ def test_credential_presence_adapter_not_ready_blocks_internal_wiring(
 
     assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
     assert result.credential_presence_adapter_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"checker_contract_requested": False},
+        {"checker_contract_ready_requested": False},
+        {"checker_result_is_boolean_only": False},
+        {"env_access_required": False},
+    ],
+)
+def test_credential_presence_checker_contract_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.credential_presence_checker_contract_ready is False
 
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
@@ -482,6 +539,16 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "actual_environment_presence_check_performed: false" in rendered
     assert "real_checker_attached: false" in rendered
     assert "real_checker_executed: false" in rendered
+    assert "credential_presence_checker_contract_ready: true" in rendered
+    assert "checker_contract_mode: CHECKER_CONTRACT_ONLY" in rendered
+    assert "real_checker_implementation_present: false" in rendered
+    assert "env_access_allowed: false" in rendered
+    assert "credential_values_read: false" in rendered
+    assert "checker_result_available: false" in rendered
+    assert "checker_result_saved: false" in rendered
+    assert "checker_result_displayed: false" in rendered
+    assert "checker_result_unknown: false" in rendered
+    assert "checker_result_failed: false" in rendered
     assert "Future real execution requires a new final confirmation" in rendered
     assert "FULL_APPROVAL_COMMAND_SENTINEL" not in rendered
     assert "OPERATOR_SENTINEL_TEXT_SHOULD_NOT_APPEAR" not in rendered

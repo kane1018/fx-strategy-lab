@@ -82,6 +82,35 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-C real credential presence checker contract完了 / no env / no actual credential / no API / no POST** —
+  Step 6G-PC-A-V後の次Stepとして、将来のreal credential presence checker implementationへ進む前に、
+  入力・出力・停止条件だけをcontract-onlyで定義した。Step 6G-PC-Cでは
+  `backend/app/live_verification/live_order_real_credential_presence_checker_contract.py` を追加し、metadataとして
+  `CHECKER_CONTRACT_ONLY`、credential presence adapter / presence check / boundary / handle / injection ready、
+  checker contract requested、checker contract ready requested、real checker implementation present=false、
+  real checker attached/executed=false、actual environment presence check performed=false、env access required=true
+  かつ allowed/requested=false、credential values available/read/displayed/saved=false、credential metadata
+  available/displayed/saved=false、checker result available/saved/displayed/broad propagation=false、
+  checker result boolean-only、checker result unknown/failed=false、real signature / real headers / POST capability=false
+  flagsだけを扱う。readyでは
+  `CREDENTIAL_PRESENCE_CHECKER_CONTRACT_READY_NO_ENV_NO_REAL_CHECK`、
+  `credential_presence_checker_contract_ready=true`、`real_checker_implementation_present=false`、
+  `real_checker_attached=false`、`real_checker_executed=false`、
+  `actual_environment_presence_check_performed=false`、`env_access_allowed=false`、
+  `env_access_requested=false`、`credential_values_available=false`、`credential_values_read=false`、
+  `credential_metadata_available=false`、`checker_result_available=false`、`checker_result_saved=false`、
+  `checker_result_displayed=false`、`checker_result_unknown=false`、`checker_result_failed=false`、
+  `can_generate_real_signature=false`、`can_generate_real_headers=false`、`can_execute_http_post=false`、
+  `http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false`、
+  `post_allowed_this_step=false`、`post_executed=false` を維持する。Step 6G-IWにも最小連携し、
+  credential presence checker contract readyをready条件に加えた。このStepでは実API、read-only API、
+  public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、
+  ledger操作、実credential値取得、credential presence実環境確認、env / `.env` access、real checker
+  attachment/execution、checker result detail保存・表示、credential metadata取得・表示、実credential injection、
+  実署名値生成、実headers値生成、raw request/response表示・保存、real ID表示を行わない。future real
+  credential presence check implementation / real credential injection / real signing / real transportは別Stepで、
+  新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_REAL_CREDENTIAL_PRESENCE_CHECKER_CONTRACT.md](STEP6G_REAL_CREDENTIAL_PRESENCE_CHECKER_CONTRACT.md)。
 - **Step 6G-PC-A credential presence adapter skeleton完了 / no env / no actual credential / no API / no POST** —
   Step 6G-PC-V後の次Stepとして、operator-provided presence resultを将来のreal credential presence checkerと
   分離するadapter boundary skeletonを追加した。Step 6G-PC-Aでは

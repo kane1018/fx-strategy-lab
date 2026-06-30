@@ -46,6 +46,12 @@ from app.live_verification.live_order_real_credential_presence_check import (
     LiveOrderRealCredentialPresenceCheckStatus,
     build_live_order_real_credential_presence_check,
 )
+from app.live_verification.live_order_real_credential_presence_checker_contract import (
+    LiveOrderRealCredentialPresenceCheckerContractInput,
+    LiveOrderRealCredentialPresenceCheckerContractResult,
+    LiveOrderRealCredentialPresenceCheckerContractStatus,
+    build_live_order_real_credential_presence_checker_contract,
+)
 from app.live_verification.live_order_real_dummy_signing import (
     LiveOrderRealDummySigningInput,
     LiveOrderRealDummySigningResult,
@@ -271,6 +277,27 @@ class LiveOrderRealStep6GInternalWiringInput:
     actual_environment_presence_check_performed: bool = False
     real_checker_attached: bool = False
     real_checker_executed: bool = False
+    credential_presence_checker_contract_ready: bool = True
+    checker_contract_mode: str = "CHECKER_CONTRACT_ONLY"
+    checker_contract_requested: bool = True
+    checker_contract_ready_requested: bool = True
+    real_checker_implementation_present: bool = False
+    env_access_required: bool = True
+    env_access_allowed: bool = False
+    credential_values_available: bool = False
+    credential_values_read: bool = False
+    credential_values_displayed: bool = False
+    credential_values_saved: bool = False
+    credential_metadata_available: bool = False
+    credential_metadata_displayed: bool = False
+    credential_metadata_saved: bool = False
+    checker_result_available: bool = False
+    checker_result_is_boolean_only: bool = True
+    checker_result_saved: bool = False
+    checker_result_displayed: bool = False
+    checker_result_broadly_propagated: bool = False
+    checker_result_unknown: bool = False
+    checker_result_failed: bool = False
     signature_value_generated: bool = False
     header_values_present: bool = False
     http_post_executed: bool = False
@@ -306,6 +333,7 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty("credential_injection_mode", self.credential_injection_mode)
         _require_non_empty("presence_check_mode", self.presence_check_mode)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
+        _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _validate_non_negative_int("size", self.size)
         _validate_non_negative_int("open_positions_count", self.open_positions_count)
         _validate_non_negative_int("active_orders_count", self.active_orders_count)
@@ -405,6 +433,26 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "actual_environment_presence_check_performed",
                 "real_checker_attached",
                 "real_checker_executed",
+                "credential_presence_checker_contract_ready",
+                "checker_contract_requested",
+                "checker_contract_ready_requested",
+                "real_checker_implementation_present",
+                "env_access_required",
+                "env_access_allowed",
+                "credential_values_available",
+                "credential_values_read",
+                "credential_values_displayed",
+                "credential_values_saved",
+                "credential_metadata_available",
+                "credential_metadata_displayed",
+                "credential_metadata_saved",
+                "checker_result_available",
+                "checker_result_is_boolean_only",
+                "checker_result_saved",
+                "checker_result_displayed",
+                "checker_result_broadly_propagated",
+                "checker_result_unknown",
+                "checker_result_failed",
                 "signature_value_generated",
                 "header_values_present",
                 "http_post_executed",
@@ -463,6 +511,9 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     credential_injection_result: LiveOrderRealCredentialInjectionResult
     credential_presence_check_result: LiveOrderRealCredentialPresenceCheckResult
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
+    credential_presence_checker_contract_result: (
+        LiveOrderRealCredentialPresenceCheckerContractResult
+    )
 
 
 @dataclass(frozen=True)
@@ -541,6 +592,27 @@ class LiveOrderRealStep6GInternalWiringResult:
     actual_environment_presence_check_performed: bool
     real_checker_attached: bool
     real_checker_executed: bool
+    credential_presence_checker_contract_ready: bool
+    checker_contract_mode: str
+    checker_contract_requested: bool
+    checker_contract_ready_requested: bool
+    real_checker_implementation_present: bool
+    env_access_required: bool
+    env_access_allowed: bool
+    credential_values_available: bool
+    credential_values_read: bool
+    credential_values_displayed: bool
+    credential_values_saved: bool
+    credential_metadata_available: bool
+    credential_metadata_displayed: bool
+    credential_metadata_saved: bool
+    checker_result_available: bool
+    checker_result_is_boolean_only: bool
+    checker_result_saved: bool
+    checker_result_displayed: bool
+    checker_result_broadly_propagated: bool
+    checker_result_unknown: bool
+    checker_result_failed: bool
     signature_value_generated: bool
     header_values_present: bool
     allowed_for_live: bool
@@ -632,6 +704,26 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "actual_environment_presence_check_performed",
                 "real_checker_attached",
                 "real_checker_executed",
+                "credential_presence_checker_contract_ready",
+                "checker_contract_requested",
+                "checker_contract_ready_requested",
+                "real_checker_implementation_present",
+                "env_access_required",
+                "env_access_allowed",
+                "credential_values_available",
+                "credential_values_read",
+                "credential_values_displayed",
+                "credential_values_saved",
+                "credential_metadata_available",
+                "credential_metadata_displayed",
+                "credential_metadata_saved",
+                "checker_result_available",
+                "checker_result_is_boolean_only",
+                "checker_result_saved",
+                "checker_result_displayed",
+                "checker_result_broadly_propagated",
+                "checker_result_unknown",
+                "checker_result_failed",
                 "signature_value_generated",
                 "header_values_present",
                 "allowed_for_live",
@@ -717,6 +809,42 @@ class LiveOrderRealStep6GInternalWiringResult:
         if self.real_checker_attached or self.real_checker_executed:
             raise LiveVerificationValidationError(
                 "internal wiring must not attach or execute real checker",
+            )
+        if self.real_checker_implementation_present:
+            raise LiveVerificationValidationError(
+                "internal wiring must not include real checker implementation",
+            )
+        if self.env_access_allowed:
+            raise LiveVerificationValidationError("internal wiring must not allow env")
+        if (
+            self.credential_values_available
+            or self.credential_values_read
+            or self.credential_values_displayed
+            or self.credential_values_saved
+        ):
+            raise LiveVerificationValidationError(
+                "internal wiring must not use checker credentials",
+            )
+        if (
+            self.credential_metadata_available
+            or self.credential_metadata_displayed
+            or self.credential_metadata_saved
+        ):
+            raise LiveVerificationValidationError(
+                "internal wiring must not expose checker credential metadata",
+            )
+        if (
+            self.checker_result_available
+            or self.checker_result_saved
+            or self.checker_result_displayed
+            or self.checker_result_broadly_propagated
+        ):
+            raise LiveVerificationValidationError(
+                "internal wiring must not expose checker results",
+            )
+        if self.checker_result_unknown or self.checker_result_failed:
+            raise LiveVerificationValidationError(
+                "internal wiring must not accept unknown or failed checker result",
             )
         if self.signature_value_generated:
             raise LiveVerificationValidationError("internal wiring must not sign")
@@ -1173,6 +1301,74 @@ def build_valid_step6g_internal_wiring_snapshot(
             loop_allowed=wiring_input.loop_allowed,
         ),
     )
+    credential_presence_checker_contract_result = (
+        build_live_order_real_credential_presence_checker_contract(
+            input_snapshot=LiveOrderRealCredentialPresenceCheckerContractInput(
+                checker_contract_mode=wiring_input.checker_contract_mode,
+                credential_presence_adapter_ready=(
+                    credential_presence_adapter_result.credential_presence_adapter_ready
+                    and wiring_input.credential_presence_checker_contract_ready
+                ),
+                credential_presence_check_ready=(
+                    credential_presence_check_result.credential_presence_check_ready
+                ),
+                credential_boundary_ready=credential_boundary_result.credential_boundary_ready,
+                credential_handle_ready=credential_handle_result.credential_handle_ready,
+                credential_injection_ready=(
+                    credential_injection_result.credential_injection_ready
+                ),
+                checker_contract_requested=wiring_input.checker_contract_requested,
+                checker_contract_ready_requested=(
+                    wiring_input.checker_contract_ready_requested
+                ),
+                real_checker_implementation_present=(
+                    wiring_input.real_checker_implementation_present
+                ),
+                real_checker_attached=wiring_input.real_checker_attached,
+                real_checker_executed=wiring_input.real_checker_executed,
+                actual_environment_presence_check_performed=(
+                    wiring_input.actual_environment_presence_check_performed
+                ),
+                env_access_required=wiring_input.env_access_required,
+                env_access_allowed=wiring_input.env_access_allowed,
+                env_access_requested=wiring_input.env_access_requested,
+                dotenv_access_requested=False,
+                printenv_requested=False,
+                credential_values_available=wiring_input.credential_values_available,
+                credential_values_read=wiring_input.credential_values_read,
+                credential_values_displayed=wiring_input.credential_values_displayed,
+                credential_values_saved=wiring_input.credential_values_saved,
+                credential_metadata_available=(
+                    wiring_input.credential_metadata_available
+                ),
+                credential_metadata_displayed=(
+                    wiring_input.credential_metadata_displayed
+                ),
+                credential_metadata_saved=wiring_input.credential_metadata_saved,
+                checker_result_available=wiring_input.checker_result_available,
+                checker_result_is_boolean_only=(
+                    wiring_input.checker_result_is_boolean_only
+                ),
+                checker_result_saved=wiring_input.checker_result_saved,
+                checker_result_displayed=wiring_input.checker_result_displayed,
+                checker_result_broadly_propagated=(
+                    wiring_input.checker_result_broadly_propagated
+                ),
+                checker_result_unknown=wiring_input.checker_result_unknown,
+                checker_result_failed=wiring_input.checker_result_failed,
+                can_generate_real_signature=False,
+                can_generate_real_headers=False,
+                can_execute_http_post=False,
+                http_post_executed=wiring_input.http_post_executed,
+                order_endpoint_called=wiring_input.order_endpoint_called,
+                live_order_once_called=wiring_input.live_order_once_called,
+                post_allowed_this_step=wiring_input.post_allowed_this_step,
+                post_executed=wiring_input.post_executed,
+                retry_allowed=wiring_input.retry_allowed,
+                loop_allowed=wiring_input.loop_allowed,
+            ),
+        )
+    )
     return LiveOrderRealStep6GInternalWiringSnapshot(
         input_snapshot=wiring_input,
         pb_result=pb_result,
@@ -1189,6 +1385,9 @@ def build_valid_step6g_internal_wiring_snapshot(
         credential_injection_result=credential_injection_result,
         credential_presence_check_result=credential_presence_check_result,
         credential_presence_adapter_result=credential_presence_adapter_result,
+        credential_presence_checker_contract_result=(
+            credential_presence_checker_contract_result
+        ),
     )
 
 
@@ -1225,6 +1424,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
         wiring_snapshot,
+    )
+    credential_presence_checker_contract_reasons = (
+        _credential_presence_checker_contract_reasons(wiring_snapshot)
     )
     raw_reasons = _raw_or_secret_reasons(wiring_input)
     step4_reasons = _step4_reasons(wiring_input)
@@ -1271,6 +1473,7 @@ def build_live_order_real_step6g_internal_wiring(
         or credential_injection_reasons
         or credential_presence_check_reasons
         or credential_presence_adapter_reasons
+        or credential_presence_checker_contract_reasons
     ):
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
         primary_reasons = _merge_reasons(
@@ -1281,6 +1484,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_injection_reasons,
             credential_presence_check_reasons,
             credential_presence_adapter_reasons,
+            credential_presence_checker_contract_reasons,
         )
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
@@ -1312,6 +1516,7 @@ def build_live_order_real_step6g_internal_wiring(
         credential_injection_reasons,
         credential_presence_check_reasons,
         credential_presence_adapter_reasons,
+        credential_presence_checker_contract_reasons,
         private_transport_reasons,
         http_interface_reasons,
         unsupported_reasons,
@@ -1333,6 +1538,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_injection_reasons,
             credential_presence_check_reasons,
             credential_presence_adapter_reasons,
+            credential_presence_checker_contract_reasons,
         ),
         st_private_transport_ready=not _merge_reasons(
             private_transport_reasons,
@@ -1401,6 +1607,31 @@ def build_live_order_real_step6g_internal_wiring(
         actual_environment_presence_check_performed=False,
         real_checker_attached=False,
         real_checker_executed=False,
+        credential_presence_checker_contract_ready=(
+            not credential_presence_checker_contract_reasons
+        ),
+        checker_contract_mode=wiring_input.checker_contract_mode,
+        checker_contract_requested=wiring_input.checker_contract_requested,
+        checker_contract_ready_requested=(
+            wiring_input.checker_contract_ready_requested
+        ),
+        real_checker_implementation_present=False,
+        env_access_required=wiring_input.env_access_required,
+        env_access_allowed=False,
+        credential_values_available=False,
+        credential_values_read=False,
+        credential_values_displayed=False,
+        credential_values_saved=False,
+        credential_metadata_available=False,
+        credential_metadata_displayed=False,
+        credential_metadata_saved=False,
+        checker_result_available=False,
+        checker_result_is_boolean_only=wiring_input.checker_result_is_boolean_only,
+        checker_result_saved=False,
+        checker_result_displayed=False,
+        checker_result_broadly_propagated=False,
+        checker_result_unknown=False,
+        checker_result_failed=False,
         http_post_executed=False,
         order_endpoint_called=False,
         live_order_once_called=False,
@@ -1478,6 +1709,11 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             f"{_bool_text(result.credential_presence_adapter_ready)}"
         ),
         f"- presence_adapter_mode: {result.presence_adapter_mode}",
+        (
+            "- credential_presence_checker_contract_ready: "
+            f"{_bool_text(result.credential_presence_checker_contract_ready)}"
+        ),
+        f"- checker_contract_mode: {result.checker_contract_mode}",
         "",
         "## Order Intent",
         f"- symbol: {input_snapshot.symbol}",
@@ -1596,6 +1832,34 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         ),
         f"- real_checker_attached: {_bool_text(result.real_checker_attached)}",
         f"- real_checker_executed: {_bool_text(result.real_checker_executed)}",
+        (
+            "- real_checker_implementation_present: "
+            f"{_bool_text(result.real_checker_implementation_present)}"
+        ),
+        f"- env_access_required: {_bool_text(result.env_access_required)}",
+        f"- env_access_allowed: {_bool_text(result.env_access_allowed)}",
+        (
+            "- credential_values_available: "
+            f"{_bool_text(result.credential_values_available)}"
+        ),
+        f"- credential_values_read: {_bool_text(result.credential_values_read)}",
+        (
+            "- credential_metadata_available: "
+            f"{_bool_text(result.credential_metadata_available)}"
+        ),
+        f"- checker_result_available: {_bool_text(result.checker_result_available)}",
+        (
+            "- checker_result_is_boolean_only: "
+            f"{_bool_text(result.checker_result_is_boolean_only)}"
+        ),
+        f"- checker_result_saved: {_bool_text(result.checker_result_saved)}",
+        f"- checker_result_displayed: {_bool_text(result.checker_result_displayed)}",
+        (
+            "- checker_result_broadly_propagated: "
+            f"{_bool_text(result.checker_result_broadly_propagated)}"
+        ),
+        f"- checker_result_unknown: {_bool_text(result.checker_result_unknown)}",
+        f"- checker_result_failed: {_bool_text(result.checker_result_failed)}",
         f"- signature_value_generated: {_bool_text(result.signature_value_generated)}",
         f"- header_values_present: {_bool_text(result.header_values_present)}",
         (
@@ -2235,6 +2499,55 @@ def _credential_presence_adapter_reasons(
     return tuple(reasons)
 
 
+def _credential_presence_checker_contract_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealCredentialPresenceCheckerContractStatus
+        .CREDENTIAL_PRESENCE_CHECKER_CONTRACT_READY_NO_ENV_NO_REAL_CHECK
+    )
+    result = snapshot.credential_presence_checker_contract_result
+    if not snapshot.input_snapshot.credential_presence_checker_contract_ready:
+        reasons.append("credential_presence_checker_contract_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(
+            "credential_presence_checker_contract_status_"
+            f"{result.status.value}",
+        )
+    if result.real_checker_implementation_present:
+        reasons.append("credential_presence_checker_contract_real_checker_present")
+    if result.real_checker_attached:
+        reasons.append("credential_presence_checker_contract_real_checker_attached")
+    if result.real_checker_executed:
+        reasons.append("credential_presence_checker_contract_real_checker_executed")
+    if result.actual_environment_presence_check_performed:
+        reasons.append("credential_presence_checker_contract_real_environment_checked")
+    if result.env_access_allowed:
+        reasons.append("credential_presence_checker_contract_env_allowed")
+    if result.env_access_requested:
+        reasons.append("credential_presence_checker_contract_env_requested")
+    if result.credential_values_read:
+        reasons.append("credential_presence_checker_contract_values_read")
+    if result.credential_values_available:
+        reasons.append("credential_presence_checker_contract_values_available")
+    if result.credential_metadata_available:
+        reasons.append("credential_presence_checker_contract_metadata_available")
+    if result.checker_result_available:
+        reasons.append("credential_presence_checker_contract_result_available")
+    if result.checker_result_saved:
+        reasons.append("credential_presence_checker_contract_result_saved")
+    if result.checker_result_displayed:
+        reasons.append("credential_presence_checker_contract_result_displayed")
+    if result.checker_result_broadly_propagated:
+        reasons.append("credential_presence_checker_contract_result_broadly_propagated")
+    if result.checker_result_unknown:
+        reasons.append("credential_presence_checker_contract_result_unknown")
+    if result.checker_result_failed:
+        reasons.append("credential_presence_checker_contract_result_failed")
+    return tuple(reasons)
+
+
 def _raw_or_secret_reasons(
     wiring_input: LiveOrderRealStep6GInternalWiringInput,
 ) -> tuple[str, ...]:
@@ -2291,6 +2604,21 @@ def _raw_or_secret_reasons(
         "actual_environment_presence_check_performed",
         "real_checker_attached",
         "real_checker_executed",
+        "real_checker_implementation_present",
+        "env_access_allowed",
+        "credential_values_available",
+        "credential_values_read",
+        "credential_values_displayed",
+        "credential_values_saved",
+        "credential_metadata_available",
+        "credential_metadata_displayed",
+        "credential_metadata_saved",
+        "checker_result_available",
+        "checker_result_saved",
+        "checker_result_displayed",
+        "checker_result_broadly_propagated",
+        "checker_result_unknown",
+        "checker_result_failed",
     ):
         if getattr(wiring_input, field_name):
             reasons.append(f"{field_name}_unsafe")
@@ -2374,6 +2702,11 @@ def _build_check_results(
             "credential presence adapter",
             not _credential_presence_adapter_reasons(snapshot),
             "presence adapter skeleton ready",
+        ),
+        (
+            "credential presence checker contract",
+            not _credential_presence_checker_contract_reasons(snapshot),
+            "checker contract ready",
         ),
         ("raw secret IDs", not _raw_or_secret_reasons(input_snapshot), "none"),
         ("Step 4 spoofing", not _step4_reasons(input_snapshot), "none"),
