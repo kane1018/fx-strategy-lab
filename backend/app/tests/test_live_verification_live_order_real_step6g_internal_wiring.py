@@ -43,6 +43,11 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.tc_ready is True
     assert result.st_signing_ready is True
     assert result.st_private_transport_ready is True
+    assert result.dummy_signing_ready is True
+    assert result.dummy_signature_check_passed is True
+    assert result.dummy_signature_value_present is False
+    assert result.dummy_signature_value_displayed is False
+    assert result.dummy_signature_value_saved is False
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
@@ -164,6 +169,11 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "st_private_transport_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT,
         ),
+        ("dummy_signing_ready", Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT),
+        (
+            "dummy_signature_check_passed",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -181,6 +191,9 @@ def test_component_ready_flag_mismatch_blocks(
         {"credential_values_provided": True},
         {"signature_value_generated": True},
         {"header_values_present": True},
+        {"dummy_signature_value_present": True},
+        {"dummy_signature_value_displayed": True},
+        {"dummy_signature_value_saved": True},
         {"raw_request_displayed": True},
         {"raw_request_saved": True},
         {"raw_response_displayed": True},
@@ -234,6 +247,8 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert snapshot.tc_result.body_allowlist_passed is True
     assert snapshot.st_signing_result.signing_contract_ready is True
     assert snapshot.st_private_transport_result.transport_contract_ready is True
+    assert snapshot.dummy_signing_result.dummy_signing_ready is True
+    assert snapshot.dummy_signing_result.dummy_signature_check_passed is True
 
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
@@ -247,6 +262,8 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "does not call live_order_once" in rendered
     assert "does not use real credentials" in rendered
     assert "does not generate real signatures" in rendered
+    assert "dummy_signing_ready: true" in rendered
+    assert "dummy_signature_check_passed: true" in rendered
     assert "Future real execution requires a new final confirmation" in rendered
     assert "FULL_APPROVAL_COMMAND_SENTINEL" not in rendered
     assert "RAW_REQUEST_SENTINEL" not in rendered
@@ -265,6 +282,8 @@ def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() 
     assert "REAL_ORDER_ID_SENTINEL" not in payload
     assert "REAL_EXECUTION_ID_SENTINEL" not in payload
     assert "REAL_POSITION_ID_SENTINEL" not in payload
+    assert "DUMMY_SIGNATURE_VALUE_SENTINEL" not in payload
+    assert "DUMMY_SECRET_MATERIAL_VALUE_SENTINEL" not in payload
     assert '{"executionType":"MARKET"' not in payload
 
 

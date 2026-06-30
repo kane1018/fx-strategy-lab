@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-DS dummy signing implementation完了 / no API / no POST / no real credential** —
+  Step 6G-IW後の次Stepとして、実署名・実POSTに進む前にdummy signingの入力形とredaction境界を確認した。
+  Step 6G-DSでは `backend/app/live_verification/live_order_real_dummy_signing.py` を追加し、dummy-only
+  metadataとして method/path、body contract ready、stable serialization ready、dummy timestamp/key/secret
+  material labels、algorithm label、header-name labelsのみを扱う。valid inputでは
+  `DUMMY_SIGNING_CHECK_PASSED_NO_VALUE_EXPOSED` となるが、実credentialを扱わず、実署名値を生成せず、
+  実headers値を生成せず、signature value / header values / credential valuesをresult・renderer・asdictに保持しない。
+  Step 6G-IWにも最小連携し、dummy signing ready / dummy signature check passedをready条件に加えた。readyでも
+  `http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false`、
+  `post_allowed_this_step=false`、`post_executed=false` を維持する。このStepでは実API、read-only API、
+  public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、
+  ledger操作、credential値取得、実署名値生成、実headers値生成、raw request/response表示・保存、real ID表示を
+  行わない。future real signingは別Stepで、新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_DUMMY_SIGNING_PLAN.md](STEP6G_DUMMY_SIGNING_PLAN.md)。
 - **Step 6G-IW internal wiring dry-run完了 / no API / no POST** —
   Step 6G-IRはCASE 2として、PB / EB / AD / RA / TC / STの個別部品は安全境界を維持している一方、
   同一fake/sanitized snapshotで一気通貫させる内部E2E dry-run wiringが未実装であると判定した。

@@ -16,6 +16,12 @@ from app.live_verification.live_order_candidate import (
     LIVE_ORDER_CANDIDATE_EXECUTION_TYPE,
     LIVE_ORDER_CANDIDATE_SIZE,
 )
+from app.live_verification.live_order_real_dummy_signing import (
+    LiveOrderRealDummySigningInput,
+    LiveOrderRealDummySigningResult,
+    LiveOrderRealDummySigningStatus,
+    build_live_order_real_dummy_signing_check,
+)
 from app.live_verification.live_order_real_order_transport_core import (
     LiveOrderRealNoRetryContract,
     LiveOrderRealTransportCoreResult,
@@ -167,6 +173,11 @@ class LiveOrderRealStep6GInternalWiringInput:
     tc_transport_core_ready: bool = True
     st_signing_contract_ready: bool = True
     st_private_transport_ready: bool = True
+    dummy_signing_ready: bool = True
+    dummy_signature_check_passed: bool = True
+    dummy_signature_value_present: bool = False
+    dummy_signature_value_displayed: bool = False
+    dummy_signature_value_saved: bool = False
     credential_values_provided: bool = False
     signature_value_generated: bool = False
     header_values_present: bool = False
@@ -240,6 +251,11 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "tc_transport_core_ready",
                 "st_signing_contract_ready",
                 "st_private_transport_ready",
+                "dummy_signing_ready",
+                "dummy_signature_check_passed",
+                "dummy_signature_value_present",
+                "dummy_signature_value_displayed",
+                "dummy_signature_value_saved",
                 "credential_values_provided",
                 "signature_value_generated",
                 "header_values_present",
@@ -292,6 +308,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     tc_result: LiveOrderRealTransportCoreResult
     st_signing_result: LiveOrderRealSigningContractResult
     st_private_transport_result: LiveOrderRealPrivateOrderTransportResult
+    dummy_signing_result: LiveOrderRealDummySigningResult
 
 
 @dataclass(frozen=True)
@@ -305,6 +322,11 @@ class LiveOrderRealStep6GInternalWiringResult:
     tc_ready: bool
     st_signing_ready: bool
     st_private_transport_ready: bool
+    dummy_signing_ready: bool
+    dummy_signature_check_passed: bool
+    dummy_signature_value_present: bool
+    dummy_signature_value_displayed: bool
+    dummy_signature_value_saved: bool
     http_post_executed: bool
     order_endpoint_called: bool
     live_order_once_called: bool
@@ -335,6 +357,11 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "tc_ready",
                 "st_signing_ready",
                 "st_private_transport_ready",
+                "dummy_signing_ready",
+                "dummy_signature_check_passed",
+                "dummy_signature_value_present",
+                "dummy_signature_value_displayed",
+                "dummy_signature_value_saved",
                 "http_post_executed",
                 "order_endpoint_called",
                 "live_order_once_called",
@@ -360,6 +387,12 @@ class LiveOrderRealStep6GInternalWiringResult:
             raise LiveVerificationValidationError("internal wiring must not sign")
         if self.header_values_present:
             raise LiveVerificationValidationError("internal wiring must not hold header values")
+        if (
+            self.dummy_signature_value_present
+            or self.dummy_signature_value_displayed
+            or self.dummy_signature_value_saved
+        ):
+            raise LiveVerificationValidationError("internal wiring must not expose dummy signature")
         if self.post_allowed_this_step or self.post_executed:
             raise LiveVerificationValidationError("internal wiring must not authorize POST")
         if not isinstance(self.check_results, tuple):
@@ -491,6 +524,36 @@ def build_valid_step6g_internal_wiring_snapshot(
         ),
         signing_contract_result=signing_result,
     )
+    dummy_signing_result = build_live_order_real_dummy_signing_check(
+        input_snapshot=LiveOrderRealDummySigningInput(
+            body_contract_ready=tc_result.body_allowlist_passed,
+            stable_serialization_ready=tc_result.stable_serialization_ready,
+            use_real_credentials=wiring_input.credential_values_provided,
+            use_env_credentials=False,
+            use_dotenv=False,
+            generate_real_signature=wiring_input.signature_value_generated,
+            expose_signature_value=wiring_input.dummy_signature_value_displayed,
+            store_signature_value=wiring_input.dummy_signature_value_saved,
+            expose_header_values=wiring_input.headers_displayed,
+            store_header_values=wiring_input.headers_saved,
+            expose_credentials=wiring_input.credentials_displayed,
+            store_credentials=wiring_input.credentials_saved,
+            signature_value_present=wiring_input.dummy_signature_value_present,
+            credential_value_present=wiring_input.credential_values_provided,
+            header_values_present=wiring_input.header_values_present,
+            raw_request_displayed=wiring_input.raw_request_displayed,
+            raw_request_saved=wiring_input.raw_request_saved,
+            raw_response_displayed=wiring_input.raw_response_displayed,
+            raw_response_saved=wiring_input.raw_response_saved,
+            http_post_executed=wiring_input.http_post_executed,
+            order_endpoint_called=wiring_input.order_endpoint_called,
+            live_order_once_called=wiring_input.live_order_once_called,
+            post_allowed_this_step=wiring_input.post_allowed_this_step,
+            post_executed=wiring_input.post_executed,
+            retry_allowed=wiring_input.retry_allowed,
+            loop_allowed=wiring_input.loop_allowed,
+        ),
+    )
     return LiveOrderRealStep6GInternalWiringSnapshot(
         input_snapshot=wiring_input,
         pb_result=pb_result,
@@ -500,6 +563,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         tc_result=tc_result,
         st_signing_result=signing_result,
         st_private_transport_result=private_transport_result,
+        dummy_signing_result=dummy_signing_result,
     )
 
 
@@ -525,6 +589,7 @@ def build_live_order_real_step6g_internal_wiring(
     real_adapter_reasons = _real_adapter_reasons(wiring_snapshot)
     tc_reasons = _transport_core_reasons(wiring_snapshot)
     signing_reasons = _signing_contract_reasons(wiring_snapshot)
+    dummy_signing_reasons = _dummy_signing_reasons(wiring_snapshot)
     private_transport_reasons = _private_transport_reasons(wiring_snapshot)
     raw_reasons = _raw_or_secret_reasons(wiring_input)
     step4_reasons = _step4_reasons(wiring_input)
@@ -563,9 +628,9 @@ def build_live_order_real_step6g_internal_wiring(
     elif tc_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CORE
         primary_reasons = tc_reasons
-    elif signing_reasons:
+    elif signing_reasons or dummy_signing_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
-        primary_reasons = signing_reasons
+        primary_reasons = _merge_reasons(signing_reasons, dummy_signing_reasons)
     elif private_transport_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
         primary_reasons = private_transport_reasons
@@ -590,6 +655,7 @@ def build_live_order_real_step6g_internal_wiring(
         real_adapter_reasons,
         tc_reasons,
         signing_reasons,
+        dummy_signing_reasons,
         private_transport_reasons,
         unsupported_reasons,
     )
@@ -602,8 +668,15 @@ def build_live_order_real_step6g_internal_wiring(
         ad_ready=not controlled_reasons,
         ra_ready=not real_adapter_reasons,
         tc_ready=not tc_reasons,
-        st_signing_ready=not signing_reasons,
+        st_signing_ready=not _merge_reasons(signing_reasons, dummy_signing_reasons),
         st_private_transport_ready=not private_transport_reasons,
+        dummy_signing_ready=not dummy_signing_reasons,
+        dummy_signature_check_passed=(
+            wiring_snapshot.dummy_signing_result.dummy_signature_check_passed
+        ),
+        dummy_signature_value_present=False,
+        dummy_signature_value_displayed=False,
+        dummy_signature_value_saved=False,
         http_post_executed=False,
         order_endpoint_called=False,
         live_order_once_called=False,
@@ -651,6 +724,11 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         f"- TC_ready: {_bool_text(result.tc_ready)}",
         f"- ST_signing_ready: {_bool_text(result.st_signing_ready)}",
         f"- ST_private_transport_ready: {_bool_text(result.st_private_transport_ready)}",
+        f"- dummy_signing_ready: {_bool_text(result.dummy_signing_ready)}",
+        (
+            "- dummy_signature_check_passed: "
+            f"{_bool_text(result.dummy_signature_check_passed)}"
+        ),
         "",
         "## Order Intent",
         f"- symbol: {input_snapshot.symbol}",
@@ -683,6 +761,10 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         f"- credential_values_provided: {_bool_text(result.credential_values_provided)}",
         f"- signature_value_generated: {_bool_text(result.signature_value_generated)}",
         f"- header_values_present: {_bool_text(result.header_values_present)}",
+        (
+            "- dummy_signature_value_present: "
+            f"{_bool_text(result.dummy_signature_value_present)}"
+        ),
         f"- post_allowed_this_step: {_bool_text(result.post_allowed_this_step)}",
         f"- post_executed: {_bool_text(result.post_executed)}",
         f"- retry_allowed: {_bool_text(result.retry_allowed)}",
@@ -1073,6 +1155,22 @@ def _signing_contract_reasons(
     return tuple(reasons)
 
 
+def _dummy_signing_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    if not snapshot.input_snapshot.dummy_signing_ready:
+        reasons.append("dummy_signing_ready_flag_false")
+    if not snapshot.input_snapshot.dummy_signature_check_passed:
+        reasons.append("dummy_signature_check_passed_flag_false")
+    expected = LiveOrderRealDummySigningStatus.DUMMY_SIGNING_CHECK_PASSED_NO_VALUE_EXPOSED
+    if snapshot.dummy_signing_result.status is not expected:
+        reasons.append(f"dummy_signing_status_{snapshot.dummy_signing_result.status.value}")
+    if not snapshot.dummy_signing_result.dummy_signature_check_passed:
+        reasons.append("dummy_signature_check_not_passed")
+    return tuple(reasons)
+
+
 def _private_transport_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -1119,6 +1217,9 @@ def _raw_or_secret_reasons(
         "credential_values_provided",
         "signature_value_generated",
         "header_values_present",
+        "dummy_signature_value_present",
+        "dummy_signature_value_displayed",
+        "dummy_signature_value_saved",
     ):
         if getattr(wiring_input, field_name):
             reasons.append(f"{field_name}_unsafe")
@@ -1164,6 +1265,7 @@ def _build_check_results(
         ("RA", not _real_adapter_reasons(snapshot), "real adapter stub ready"),
         ("TC", not _transport_core_reasons(snapshot), "transport core ready"),
         ("ST signing", not _signing_contract_reasons(snapshot), "signing contract ready"),
+        ("dummy signing", not _dummy_signing_reasons(snapshot), "dummy signing ready"),
         (
             "ST private transport",
             not _private_transport_reasons(snapshot),
