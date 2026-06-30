@@ -48,6 +48,12 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.dummy_signature_value_present is False
     assert result.dummy_signature_value_displayed is False
     assert result.dummy_signature_value_saved is False
+    assert result.http_transport_interface_ready is True
+    assert result.http_transport_interface_mode == "INTERFACE_ONLY"
+    assert result.http_client_present is False
+    assert result.can_execute_http_post is False
+    assert result.can_call_order_endpoint is False
+    assert result.can_call_live_order_once is False
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
@@ -174,6 +180,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "dummy_signature_check_passed",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
+        (
+            "http_transport_interface_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -227,6 +237,24 @@ def test_execution_boundary_crossing_blocks_route_bridge(overrides: dict[str, ob
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"http_client_present": True},
+        {"can_execute_http_post": True},
+        {"can_call_order_endpoint": True},
+        {"can_call_live_order_once": True},
+    ],
+)
+def test_http_transport_interface_boundary_crossing_blocks(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
+    assert result.http_transport_interface_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
         {"step4_spoofing": True},
         {"ledger_changed": True},
     ],
@@ -249,6 +277,7 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert snapshot.st_private_transport_result.transport_contract_ready is True
     assert snapshot.dummy_signing_result.dummy_signing_ready is True
     assert snapshot.dummy_signing_result.dummy_signature_check_passed is True
+    assert snapshot.http_transport_interface_result.interface_ready is True
 
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
@@ -264,6 +293,9 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "does not generate real signatures" in rendered
     assert "dummy_signing_ready: true" in rendered
     assert "dummy_signature_check_passed: true" in rendered
+    assert "http_transport_interface_ready: true" in rendered
+    assert "http_client_present: false" in rendered
+    assert "can_execute_http_post: false" in rendered
     assert "Future real execution requires a new final confirmation" in rendered
     assert "FULL_APPROVAL_COMMAND_SENTINEL" not in rendered
     assert "RAW_REQUEST_SENTINEL" not in rendered

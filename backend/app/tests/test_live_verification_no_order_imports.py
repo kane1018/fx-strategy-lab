@@ -1499,6 +1499,64 @@ def test_step6g_dummy_signing_has_no_api_order_or_credential_dependencies() -> N
             assert _call_name(node) not in blocked_call_names
 
 
+def test_step6g_http_transport_interface_has_no_api_order_or_credential_dependencies() -> None:
+    blocked_modules = {
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+        "app.live_verification.live_order_once",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+        "post_live_order_with_httpx",
+        "execute_one_shot_live_order",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+    }
+    blocked_call_names = {
+        "execute_one_shot_live_order",
+        "post_live_order_with_httpx",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+        "read_text",
+        "write_text",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    path = PACKAGE_ROOT / "live_order_real_http_transport_interface.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+        if isinstance(node, ast.Call):
+            assert _call_name(node) not in blocked_call_names
+
+
 def test_step6g_private_order_transport_has_no_api_order_or_credential_dependencies() -> None:
     blocked_modules = {
         "requests",
@@ -1755,6 +1813,7 @@ def test_live_verification_package_has_no_http_or_private_order_strings() -> Non
             }
         if path.name in {
             "live_order_real_dummy_signing.py",
+            "live_order_real_http_transport_interface.py",
             "live_order_real_signing_contract.py",
             "live_order_real_private_order_transport.py",
             "live_order_real_step6g_internal_wiring.py",
@@ -1870,6 +1929,11 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
                 "path",
             }
         if path.name == "live_order_real_dummy_signing.py":
+            field_names = field_names - {
+                "method",
+                "path",
+            }
+        if path.name == "live_order_real_http_transport_interface.py":
             field_names = field_names - {
                 "method",
                 "path",

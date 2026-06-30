@@ -22,6 +22,12 @@ from app.live_verification.live_order_real_dummy_signing import (
     LiveOrderRealDummySigningStatus,
     build_live_order_real_dummy_signing_check,
 )
+from app.live_verification.live_order_real_http_transport_interface import (
+    LiveOrderRealHttpTransportInterfaceInput,
+    LiveOrderRealHttpTransportInterfaceResult,
+    LiveOrderRealHttpTransportInterfaceStatus,
+    build_live_order_real_http_transport_interface,
+)
 from app.live_verification.live_order_real_order_transport_core import (
     LiveOrderRealNoRetryContract,
     LiveOrderRealTransportCoreResult,
@@ -178,6 +184,12 @@ class LiveOrderRealStep6GInternalWiringInput:
     dummy_signature_value_present: bool = False
     dummy_signature_value_displayed: bool = False
     dummy_signature_value_saved: bool = False
+    http_transport_interface_ready: bool = True
+    http_transport_interface_mode: str = "INTERFACE_ONLY"
+    http_client_present: bool = False
+    can_execute_http_post: bool = False
+    can_call_order_endpoint: bool = False
+    can_call_live_order_once: bool = False
     credential_values_provided: bool = False
     signature_value_generated: bool = False
     header_values_present: bool = False
@@ -208,6 +220,7 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty("executionType", self.executionType)
         _require_non_empty("market_session_state", self.market_session_state)
         _require_non_empty("ticker_symbol", self.ticker_symbol)
+        _require_non_empty("http_transport_interface_mode", self.http_transport_interface_mode)
         _validate_non_negative_int("size", self.size)
         _validate_non_negative_int("open_positions_count", self.open_positions_count)
         _validate_non_negative_int("active_orders_count", self.active_orders_count)
@@ -256,6 +269,11 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "dummy_signature_value_present",
                 "dummy_signature_value_displayed",
                 "dummy_signature_value_saved",
+                "http_transport_interface_ready",
+                "http_client_present",
+                "can_execute_http_post",
+                "can_call_order_endpoint",
+                "can_call_live_order_once",
                 "credential_values_provided",
                 "signature_value_generated",
                 "header_values_present",
@@ -309,6 +327,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     st_signing_result: LiveOrderRealSigningContractResult
     st_private_transport_result: LiveOrderRealPrivateOrderTransportResult
     dummy_signing_result: LiveOrderRealDummySigningResult
+    http_transport_interface_result: LiveOrderRealHttpTransportInterfaceResult
 
 
 @dataclass(frozen=True)
@@ -327,6 +346,12 @@ class LiveOrderRealStep6GInternalWiringResult:
     dummy_signature_value_present: bool
     dummy_signature_value_displayed: bool
     dummy_signature_value_saved: bool
+    http_transport_interface_ready: bool
+    http_transport_interface_mode: str
+    http_client_present: bool
+    can_execute_http_post: bool
+    can_call_order_endpoint: bool
+    can_call_live_order_once: bool
     http_post_executed: bool
     order_endpoint_called: bool
     live_order_once_called: bool
@@ -346,6 +371,7 @@ class LiveOrderRealStep6GInternalWiringResult:
     def __post_init__(self) -> None:
         if not isinstance(self.status, LiveOrderRealStep6GInternalWiringStatus):
             raise LiveVerificationValidationError("status must be internal wiring status")
+        _require_non_empty("http_transport_interface_mode", self.http_transport_interface_mode)
         _validate_bool_fields(
             self,
             (
@@ -362,6 +388,11 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "dummy_signature_value_present",
                 "dummy_signature_value_displayed",
                 "dummy_signature_value_saved",
+                "http_transport_interface_ready",
+                "http_client_present",
+                "can_execute_http_post",
+                "can_call_order_endpoint",
+                "can_call_live_order_once",
                 "http_post_executed",
                 "order_endpoint_called",
                 "live_order_once_called",
@@ -393,6 +424,14 @@ class LiveOrderRealStep6GInternalWiringResult:
             or self.dummy_signature_value_saved
         ):
             raise LiveVerificationValidationError("internal wiring must not expose dummy signature")
+        if self.http_client_present:
+            raise LiveVerificationValidationError("internal wiring must not include HTTP client")
+        if self.can_execute_http_post:
+            raise LiveVerificationValidationError("internal wiring must not execute POST")
+        if self.can_call_order_endpoint:
+            raise LiveVerificationValidationError("internal wiring must not call endpoint")
+        if self.can_call_live_order_once:
+            raise LiveVerificationValidationError("internal wiring must not call live_order_once")
         if self.post_allowed_this_step or self.post_executed:
             raise LiveVerificationValidationError("internal wiring must not authorize POST")
         if not isinstance(self.check_results, tuple):
@@ -554,6 +593,54 @@ def build_valid_step6g_internal_wiring_snapshot(
             loop_allowed=wiring_input.loop_allowed,
         ),
     )
+    http_transport_interface_result = build_live_order_real_http_transport_interface(
+        input_snapshot=LiveOrderRealHttpTransportInterfaceInput(
+            interface_mode=wiring_input.http_transport_interface_mode,
+            endpoint_contract_ready=not (
+                tc_result.http_post_executed
+                or tc_result.order_endpoint_called
+                or tc_result.live_order_once_called
+            ),
+            order_body_allowlist_passed=tc_result.body_allowlist_passed,
+            stable_serialization_ready=tc_result.stable_serialization_ready,
+            signing_contract_ready=signing_result.signing_contract_ready,
+            dummy_signing_ready=dummy_signing_result.dummy_signing_ready,
+            dummy_signature_check_passed=(
+                dummy_signing_result.dummy_signature_check_passed
+            ),
+            private_order_transport_contract_ready=(
+                private_transport_result.transport_contract_ready
+            ),
+            one_shot_no_retry_ready=not _attempt_reasons(wiring_input),
+            post_attempt_limit=wiring_input.post_attempt_limit,
+            post_attempt_count_before=wiring_input.post_attempt_count_before,
+            retry_allowed=wiring_input.retry_allowed,
+            loop_allowed=wiring_input.loop_allowed,
+            add_order_allowed=wiring_input.add_order_allowed,
+            change_order_allowed=wiring_input.change_order_allowed,
+            cancel_order_allowed=wiring_input.cancel_order_allowed,
+            close_order_allowed=wiring_input.close_order_allowed,
+            real_transport_requested=False,
+            http_client_present=wiring_input.http_client_present,
+            can_execute_http_post=wiring_input.can_execute_http_post,
+            can_call_order_endpoint=wiring_input.can_call_order_endpoint,
+            can_call_live_order_once=wiring_input.can_call_live_order_once,
+            credential_values_provided=wiring_input.credential_values_provided,
+            signature_value_generated=wiring_input.signature_value_generated,
+            header_values_present=wiring_input.header_values_present,
+            raw_request_present=(
+                wiring_input.raw_request_displayed or wiring_input.raw_request_saved
+            ),
+            raw_response_present=(
+                wiring_input.raw_response_displayed or wiring_input.raw_response_saved
+            ),
+            real_ids_present=(
+                wiring_input.real_ids_displayed or wiring_input.real_ids_saved
+            ),
+            post_allowed_this_step=wiring_input.post_allowed_this_step,
+            post_executed=wiring_input.post_executed,
+        ),
+    )
     return LiveOrderRealStep6GInternalWiringSnapshot(
         input_snapshot=wiring_input,
         pb_result=pb_result,
@@ -564,6 +651,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         st_signing_result=signing_result,
         st_private_transport_result=private_transport_result,
         dummy_signing_result=dummy_signing_result,
+        http_transport_interface_result=http_transport_interface_result,
     )
 
 
@@ -591,6 +679,7 @@ def build_live_order_real_step6g_internal_wiring(
     signing_reasons = _signing_contract_reasons(wiring_snapshot)
     dummy_signing_reasons = _dummy_signing_reasons(wiring_snapshot)
     private_transport_reasons = _private_transport_reasons(wiring_snapshot)
+    http_interface_reasons = _http_transport_interface_reasons(wiring_snapshot)
     raw_reasons = _raw_or_secret_reasons(wiring_input)
     step4_reasons = _step4_reasons(wiring_input)
     unsupported_reasons = _unsupported_reasons(wiring_snapshot)
@@ -631,9 +720,9 @@ def build_live_order_real_step6g_internal_wiring(
     elif signing_reasons or dummy_signing_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
         primary_reasons = _merge_reasons(signing_reasons, dummy_signing_reasons)
-    elif private_transport_reasons:
+    elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
-        primary_reasons = private_transport_reasons
+        primary_reasons = _merge_reasons(private_transport_reasons, http_interface_reasons)
     elif unsupported_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_UNSUPPORTED
         primary_reasons = unsupported_reasons
@@ -657,6 +746,7 @@ def build_live_order_real_step6g_internal_wiring(
         signing_reasons,
         dummy_signing_reasons,
         private_transport_reasons,
+        http_interface_reasons,
         unsupported_reasons,
     )
     ready = status is InternalWiringStatus.STEP6G_INTERNAL_WIRING_READY_NO_API_NO_POST
@@ -669,7 +759,10 @@ def build_live_order_real_step6g_internal_wiring(
         ra_ready=not real_adapter_reasons,
         tc_ready=not tc_reasons,
         st_signing_ready=not _merge_reasons(signing_reasons, dummy_signing_reasons),
-        st_private_transport_ready=not private_transport_reasons,
+        st_private_transport_ready=not _merge_reasons(
+            private_transport_reasons,
+            http_interface_reasons,
+        ),
         dummy_signing_ready=not dummy_signing_reasons,
         dummy_signature_check_passed=(
             wiring_snapshot.dummy_signing_result.dummy_signature_check_passed
@@ -677,6 +770,12 @@ def build_live_order_real_step6g_internal_wiring(
         dummy_signature_value_present=False,
         dummy_signature_value_displayed=False,
         dummy_signature_value_saved=False,
+        http_transport_interface_ready=not http_interface_reasons,
+        http_transport_interface_mode=wiring_input.http_transport_interface_mode,
+        http_client_present=False,
+        can_execute_http_post=False,
+        can_call_order_endpoint=False,
+        can_call_live_order_once=False,
         http_post_executed=False,
         order_endpoint_called=False,
         live_order_once_called=False,
@@ -729,6 +828,11 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             "- dummy_signature_check_passed: "
             f"{_bool_text(result.dummy_signature_check_passed)}"
         ),
+        (
+            "- http_transport_interface_ready: "
+            f"{_bool_text(result.http_transport_interface_ready)}"
+        ),
+        f"- http_transport_interface_mode: {result.http_transport_interface_mode}",
         "",
         "## Order Intent",
         f"- symbol: {input_snapshot.symbol}",
@@ -765,6 +869,10 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             "- dummy_signature_value_present: "
             f"{_bool_text(result.dummy_signature_value_present)}"
         ),
+        f"- http_client_present: {_bool_text(result.http_client_present)}",
+        f"- can_execute_http_post: {_bool_text(result.can_execute_http_post)}",
+        f"- can_call_order_endpoint: {_bool_text(result.can_call_order_endpoint)}",
+        f"- can_call_live_order_once: {_bool_text(result.can_call_live_order_once)}",
         f"- post_allowed_this_step: {_bool_text(result.post_allowed_this_step)}",
         f"- post_executed: {_bool_text(result.post_executed)}",
         f"- retry_allowed: {_bool_text(result.retry_allowed)}",
@@ -1194,6 +1302,40 @@ def _private_transport_reasons(
     return tuple(reasons)
 
 
+def _http_transport_interface_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealHttpTransportInterfaceStatus
+        .HTTP_TRANSPORT_INTERFACE_READY_NO_API_NO_POST
+    )
+    if not snapshot.input_snapshot.http_transport_interface_ready:
+        reasons.append("http_transport_interface_ready_flag_false")
+    if snapshot.http_transport_interface_result.status is not expected:
+        reasons.append(
+            "http_transport_interface_status_"
+            f"{snapshot.http_transport_interface_result.status.value}",
+        )
+    if snapshot.http_transport_interface_result.http_client_present:
+        reasons.append("http_transport_interface_http_client_present")
+    if snapshot.http_transport_interface_result.can_execute_http_post:
+        reasons.append("http_transport_interface_can_execute_http_post")
+    if snapshot.http_transport_interface_result.can_call_order_endpoint:
+        reasons.append("http_transport_interface_can_call_order_endpoint")
+    if snapshot.http_transport_interface_result.can_call_live_order_once:
+        reasons.append("http_transport_interface_can_call_live_order_once")
+    if snapshot.input_snapshot.http_client_present:
+        reasons.append("http_client_present")
+    if snapshot.input_snapshot.can_execute_http_post:
+        reasons.append("can_execute_http_post")
+    if snapshot.input_snapshot.can_call_order_endpoint:
+        reasons.append("can_call_order_endpoint")
+    if snapshot.input_snapshot.can_call_live_order_once:
+        reasons.append("can_call_live_order_once")
+    return tuple(reasons)
+
+
 def _raw_or_secret_reasons(
     wiring_input: LiveOrderRealStep6GInternalWiringInput,
 ) -> tuple[str, ...]:
@@ -1268,8 +1410,16 @@ def _build_check_results(
         ("dummy signing", not _dummy_signing_reasons(snapshot), "dummy signing ready"),
         (
             "ST private transport",
-            not _private_transport_reasons(snapshot),
-            "private transport contract ready",
+            not _merge_reasons(
+                _private_transport_reasons(snapshot),
+                _http_transport_interface_reasons(snapshot),
+            ),
+            "private transport and HTTP interface contracts ready",
+        ),
+        (
+            "HTTP transport interface",
+            not _http_transport_interface_reasons(snapshot),
+            "interface-only transport ready",
         ),
         ("raw secret IDs", not _raw_or_secret_reasons(input_snapshot), "none"),
         ("Step 4 spoofing", not _step4_reasons(input_snapshot), "none"),

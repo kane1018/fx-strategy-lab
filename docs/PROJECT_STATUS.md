@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-HT HTTP transport interface skeleton完了 / no API / no POST** —
+  Step 6G-DS後の次Stepとして、将来のreal transport実装前にinterface-onlyのHTTP transport boundaryを追加した。
+  Step 6G-HTでは `backend/app/live_verification/live_order_real_http_transport_interface.py` を追加し、
+  metadataとして `INTERFACE_ONLY`、method/path、endpoint/body/serialization/signing/dummy signing/private
+  transport readiness、one-shot/no-retry attempt state、HTTP client / POST / order endpoint / `live_order_once`
+  capability false flagsだけを扱う。readyでは
+  `HTTP_TRANSPORT_INTERFACE_READY_NO_API_NO_POST`、`http_client_present=false`、
+  `can_execute_http_post=false`、`can_call_order_endpoint=false`、`can_call_live_order_once=false`、
+  `credential_values_provided=false`、`signature_value_generated=false`、`header_values_present=false`、
+  `post_allowed_this_step=false`、`post_executed=false` を維持する。Step 6G-IWにも最小連携し、
+  HTTP transport interface readyをready条件に加えた。このStepでは実API、read-only API、public API、
+  Private API、broker、fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、ledger操作、
+  credential値取得、実署名値生成、実headers値生成、raw request/response表示・保存、real ID表示を行わない。
+  future real transportは別Stepで、新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_HTTP_TRANSPORT_INTERFACE_SKELETON.md](STEP6G_HTTP_TRANSPORT_INTERFACE_SKELETON.md)。
 - **Step 6G-DS dummy signing implementation完了 / no API / no POST / no real credential** —
   Step 6G-IW後の次Stepとして、実署名・実POSTに進む前にdummy signingの入力形とredaction境界を確認した。
   Step 6G-DSでは `backend/app/live_verification/live_order_real_dummy_signing.py` を追加し、dummy-only
