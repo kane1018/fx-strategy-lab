@@ -70,6 +70,23 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.real_credential_values_available is False
     assert result.real_credential_values_injected is False
     assert result.credential_injection_metadata_available is False
+    assert result.credential_presence_check_ready is True
+    assert result.presence_check_mode == "OPERATOR_PROVIDED_SENTINEL_ONLY"
+    assert result.operator_assertion_provided is True
+    assert result.operator_assertion_is_boolean_only is True
+    assert result.operator_sentinel_received is True
+    assert result.operator_sentinel_fresh is True
+    assert result.operator_sentinel_reused is False
+    assert result.operator_sentinel_stale is False
+    assert result.operator_sentinel_previous_turn is False
+    assert result.sentinel_value_present is False
+    assert result.sentinel_value_displayed is False
+    assert result.sentinel_value_saved is False
+    assert result.sentinel_hash_available is False
+    assert result.sentinel_fingerprint_available is False
+    assert result.sentinel_length_available is False
+    assert result.presence_result_broadly_propagated is False
+    assert result.presence_result_saved is False
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
@@ -216,6 +233,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "credential_injection_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
+        (
+            "credential_presence_check_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -248,6 +269,17 @@ def test_component_ready_flag_mismatch_blocks(
         {"real_credential_values_available": True},
         {"real_credential_values_injected": True},
         {"credential_injection_metadata_available": True},
+        {"operator_sentinel_reused": True},
+        {"operator_sentinel_stale": True},
+        {"operator_sentinel_previous_turn": True},
+        {"sentinel_value_present": True},
+        {"sentinel_value_displayed": True},
+        {"sentinel_value_saved": True},
+        {"sentinel_hash_available": True},
+        {"sentinel_fingerprint_available": True},
+        {"sentinel_length_available": True},
+        {"presence_result_broadly_propagated": True},
+        {"presence_result_saved": True},
         {"raw_request_displayed": True},
         {"raw_request_saved": True},
         {"raw_response_displayed": True},
@@ -325,6 +357,25 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert snapshot.credential_boundary_result.credential_boundary_ready is True
     assert snapshot.credential_handle_result.credential_handle_ready is True
     assert snapshot.credential_injection_result.credential_injection_ready is True
+    assert snapshot.credential_presence_check_result.credential_presence_check_ready is True
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_assertion_provided": False},
+        {"operator_assertion_is_boolean_only": False},
+        {"operator_sentinel_received": False},
+        {"operator_sentinel_fresh": False},
+    ],
+)
+def test_credential_presence_check_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.credential_presence_check_ready is False
 
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
@@ -347,6 +398,8 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "credential_handle_mode: HANDLE_CONTRACT_ONLY" in rendered
     assert "credential_injection_ready: true" in rendered
     assert "credential_injection_mode: INJECTION_SKELETON_ONLY" in rendered
+    assert "credential_presence_check_ready: true" in rendered
+    assert "presence_check_mode: OPERATOR_PROVIDED_SENTINEL_ONLY" in rendered
     assert "handle_requested: true" in rendered
     assert "handle_created: false" in rendered
     assert "handle_contains_value: false" in rendered
@@ -362,8 +415,20 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "real_credential_values_available: false" in rendered
     assert "real_credential_values_injected: false" in rendered
     assert "credential_injection_metadata_available: false" in rendered
+    assert "operator_assertion_provided: true" in rendered
+    assert "operator_assertion_is_boolean_only: true" in rendered
+    assert "operator_sentinel_received: true" in rendered
+    assert "operator_sentinel_fresh: true" in rendered
+    assert "operator_sentinel_reused: false" in rendered
+    assert "operator_sentinel_stale: false" in rendered
+    assert "operator_sentinel_previous_turn: false" in rendered
+    assert "sentinel_value_present: false" in rendered
+    assert "sentinel_hash_available: false" in rendered
+    assert "sentinel_fingerprint_available: false" in rendered
+    assert "sentinel_length_available: false" in rendered
     assert "Future real execution requires a new final confirmation" in rendered
     assert "FULL_APPROVAL_COMMAND_SENTINEL" not in rendered
+    assert "OPERATOR_SENTINEL_TEXT_SHOULD_NOT_APPEAR" not in rendered
     assert "RAW_REQUEST_SENTINEL" not in rendered
     assert "RAW_RESPONSE_SENTINEL" not in rendered
     assert "REAL_ORDER_ID_SENTINEL" not in rendered
@@ -389,6 +454,10 @@ def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() 
     assert "KEY_MATERIAL_SENTINEL" not in payload
     assert "CREDENTIAL_METADATA_VALUE_SENTINEL" not in payload
     assert "REAL_CREDENTIAL_VALUE_SENTINEL" not in payload
+    assert "OPERATOR_SENTINEL_TEXT_SHOULD_NOT_APPEAR" not in payload
+    assert "OPERATOR_SENTINEL_HASH_SHOULD_NOT_APPEAR" not in payload
+    assert "OPERATOR_SENTINEL_FINGERPRINT_SHOULD_NOT_APPEAR" not in payload
+    assert "OPERATOR_SENTINEL_LENGTH_SHOULD_NOT_APPEAR" not in payload
     assert '{"executionType":"MARKET"' not in payload
 
 

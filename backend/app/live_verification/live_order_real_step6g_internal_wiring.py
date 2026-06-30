@@ -34,6 +34,12 @@ from app.live_verification.live_order_real_credential_injection import (
     LiveOrderRealCredentialInjectionStatus,
     build_live_order_real_credential_injection,
 )
+from app.live_verification.live_order_real_credential_presence_check import (
+    LiveOrderRealCredentialPresenceCheckInput,
+    LiveOrderRealCredentialPresenceCheckResult,
+    LiveOrderRealCredentialPresenceCheckStatus,
+    build_live_order_real_credential_presence_check,
+)
 from app.live_verification.live_order_real_dummy_signing import (
     LiveOrderRealDummySigningInput,
     LiveOrderRealDummySigningResult,
@@ -229,6 +235,23 @@ class LiveOrderRealStep6GInternalWiringInput:
     real_credential_values_available: bool = False
     real_credential_values_injected: bool = False
     credential_injection_metadata_available: bool = False
+    credential_presence_check_ready: bool = True
+    presence_check_mode: str = "OPERATOR_PROVIDED_SENTINEL_ONLY"
+    operator_assertion_provided: bool = True
+    operator_assertion_is_boolean_only: bool = True
+    operator_sentinel_received: bool = True
+    operator_sentinel_fresh: bool = True
+    operator_sentinel_reused: bool = False
+    operator_sentinel_stale: bool = False
+    operator_sentinel_previous_turn: bool = False
+    sentinel_value_present: bool = False
+    sentinel_value_displayed: bool = False
+    sentinel_value_saved: bool = False
+    sentinel_hash_available: bool = False
+    sentinel_fingerprint_available: bool = False
+    sentinel_length_available: bool = False
+    presence_result_broadly_propagated: bool = False
+    presence_result_saved: bool = False
     signature_value_generated: bool = False
     header_values_present: bool = False
     http_post_executed: bool = False
@@ -262,6 +285,7 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty("credential_boundary_mode", self.credential_boundary_mode)
         _require_non_empty("credential_handle_mode", self.credential_handle_mode)
         _require_non_empty("credential_injection_mode", self.credential_injection_mode)
+        _require_non_empty("presence_check_mode", self.presence_check_mode)
         _validate_non_negative_int("size", self.size)
         _validate_non_negative_int("open_positions_count", self.open_positions_count)
         _validate_non_negative_int("active_orders_count", self.active_orders_count)
@@ -333,6 +357,22 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "real_credential_values_available",
                 "real_credential_values_injected",
                 "credential_injection_metadata_available",
+                "credential_presence_check_ready",
+                "operator_assertion_provided",
+                "operator_assertion_is_boolean_only",
+                "operator_sentinel_received",
+                "operator_sentinel_fresh",
+                "operator_sentinel_reused",
+                "operator_sentinel_stale",
+                "operator_sentinel_previous_turn",
+                "sentinel_value_present",
+                "sentinel_value_displayed",
+                "sentinel_value_saved",
+                "sentinel_hash_available",
+                "sentinel_fingerprint_available",
+                "sentinel_length_available",
+                "presence_result_broadly_propagated",
+                "presence_result_saved",
                 "signature_value_generated",
                 "header_values_present",
                 "http_post_executed",
@@ -389,6 +429,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     credential_boundary_result: LiveOrderRealCredentialBoundaryResult
     credential_handle_result: LiveOrderRealCredentialHandleResult
     credential_injection_result: LiveOrderRealCredentialInjectionResult
+    credential_presence_check_result: LiveOrderRealCredentialPresenceCheckResult
 
 
 @dataclass(frozen=True)
@@ -437,6 +478,23 @@ class LiveOrderRealStep6GInternalWiringResult:
     real_credential_values_available: bool
     real_credential_values_injected: bool
     credential_injection_metadata_available: bool
+    credential_presence_check_ready: bool
+    presence_check_mode: str
+    operator_assertion_provided: bool
+    operator_assertion_is_boolean_only: bool
+    operator_sentinel_received: bool
+    operator_sentinel_fresh: bool
+    operator_sentinel_reused: bool
+    operator_sentinel_stale: bool
+    operator_sentinel_previous_turn: bool
+    sentinel_value_present: bool
+    sentinel_value_displayed: bool
+    sentinel_value_saved: bool
+    sentinel_hash_available: bool
+    sentinel_fingerprint_available: bool
+    sentinel_length_available: bool
+    presence_result_broadly_propagated: bool
+    presence_result_saved: bool
     signature_value_generated: bool
     header_values_present: bool
     allowed_for_live: bool
@@ -456,6 +514,7 @@ class LiveOrderRealStep6GInternalWiringResult:
         _require_non_empty("credential_boundary_mode", self.credential_boundary_mode)
         _require_non_empty("credential_handle_mode", self.credential_handle_mode)
         _require_non_empty("credential_injection_mode", self.credential_injection_mode)
+        _require_non_empty("presence_check_mode", self.presence_check_mode)
         _validate_bool_fields(
             self,
             (
@@ -498,6 +557,22 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "real_credential_values_available",
                 "real_credential_values_injected",
                 "credential_injection_metadata_available",
+                "credential_presence_check_ready",
+                "operator_assertion_provided",
+                "operator_assertion_is_boolean_only",
+                "operator_sentinel_received",
+                "operator_sentinel_fresh",
+                "operator_sentinel_reused",
+                "operator_sentinel_stale",
+                "operator_sentinel_previous_turn",
+                "sentinel_value_present",
+                "sentinel_value_displayed",
+                "sentinel_value_saved",
+                "sentinel_hash_available",
+                "sentinel_fingerprint_available",
+                "sentinel_length_available",
+                "presence_result_broadly_propagated",
+                "presence_result_saved",
                 "signature_value_generated",
                 "header_values_present",
                 "allowed_for_live",
@@ -544,6 +619,25 @@ class LiveOrderRealStep6GInternalWiringResult:
         if self.credential_injection_metadata_available:
             raise LiveVerificationValidationError(
                 "internal wiring must not expose credential injection metadata",
+            )
+        if self.operator_sentinel_reused or self.operator_sentinel_stale:
+            raise LiveVerificationValidationError("internal wiring must not reuse sentinel")
+        if self.operator_sentinel_previous_turn:
+            raise LiveVerificationValidationError(
+                "internal wiring must not use previous turn sentinel",
+            )
+        if (
+            self.sentinel_value_present
+            or self.sentinel_value_displayed
+            or self.sentinel_value_saved
+            or self.sentinel_hash_available
+            or self.sentinel_fingerprint_available
+            or self.sentinel_length_available
+        ):
+            raise LiveVerificationValidationError("internal wiring must not expose sentinel")
+        if self.presence_result_broadly_propagated or self.presence_result_saved:
+            raise LiveVerificationValidationError(
+                "internal wiring must not broadly propagate presence result",
             )
         if self.signature_value_generated:
             raise LiveVerificationValidationError("internal wiring must not sign")
@@ -882,6 +976,60 @@ def build_valid_step6g_internal_wiring_snapshot(
             loop_allowed=wiring_input.loop_allowed,
         ),
     )
+    credential_presence_check_result = build_live_order_real_credential_presence_check(
+        input_snapshot=LiveOrderRealCredentialPresenceCheckInput(
+            presence_check_mode=wiring_input.presence_check_mode,
+            credential_boundary_ready=credential_boundary_result.credential_boundary_ready,
+            credential_handle_ready=credential_handle_result.credential_handle_ready,
+            credential_injection_ready=(
+                credential_injection_result.credential_injection_ready
+                and wiring_input.credential_presence_check_ready
+            ),
+            operator_assertion_provided=wiring_input.operator_assertion_provided,
+            operator_assertion_is_boolean_only=(
+                wiring_input.operator_assertion_is_boolean_only
+            ),
+            operator_sentinel_received=wiring_input.operator_sentinel_received,
+            operator_sentinel_fresh=wiring_input.operator_sentinel_fresh,
+            operator_sentinel_reused=wiring_input.operator_sentinel_reused,
+            operator_sentinel_stale=wiring_input.operator_sentinel_stale,
+            operator_sentinel_previous_turn=wiring_input.operator_sentinel_previous_turn,
+            sentinel_value_present=wiring_input.sentinel_value_present,
+            sentinel_value_displayed=wiring_input.sentinel_value_displayed,
+            sentinel_value_saved=wiring_input.sentinel_value_saved,
+            sentinel_hash_available=wiring_input.sentinel_hash_available,
+            sentinel_fingerprint_available=wiring_input.sentinel_fingerprint_available,
+            sentinel_length_available=wiring_input.sentinel_length_available,
+            credential_values_present=(
+                wiring_input.credential_values_provided
+                or wiring_input.credential_values_loaded
+            ),
+            credential_metadata_present=(
+                wiring_input.credential_metadata_exposed
+                or wiring_input.credential_injection_metadata_available
+            ),
+            credential_presence_checked_against_environment=(
+                wiring_input.credential_presence_checked_against_environment
+            ),
+            env_access_requested=wiring_input.env_access_requested,
+            dotenv_access_requested=False,
+            printenv_requested=False,
+            presence_result_broadly_propagated=(
+                wiring_input.presence_result_broadly_propagated
+            ),
+            presence_result_saved=wiring_input.presence_result_saved,
+            can_generate_real_signature=False,
+            can_generate_real_headers=False,
+            can_execute_http_post=False,
+            http_post_executed=wiring_input.http_post_executed,
+            order_endpoint_called=wiring_input.order_endpoint_called,
+            live_order_once_called=wiring_input.live_order_once_called,
+            post_allowed_this_step=wiring_input.post_allowed_this_step,
+            post_executed=wiring_input.post_executed,
+            retry_allowed=wiring_input.retry_allowed,
+            loop_allowed=wiring_input.loop_allowed,
+        ),
+    )
     return LiveOrderRealStep6GInternalWiringSnapshot(
         input_snapshot=wiring_input,
         pb_result=pb_result,
@@ -896,6 +1044,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         credential_boundary_result=credential_boundary_result,
         credential_handle_result=credential_handle_result,
         credential_injection_result=credential_injection_result,
+        credential_presence_check_result=credential_presence_check_result,
     )
 
 
@@ -927,6 +1076,9 @@ def build_live_order_real_step6g_internal_wiring(
     credential_boundary_reasons = _credential_boundary_reasons(wiring_snapshot)
     credential_handle_reasons = _credential_handle_reasons(wiring_snapshot)
     credential_injection_reasons = _credential_injection_reasons(wiring_snapshot)
+    credential_presence_check_reasons = _credential_presence_check_reasons(
+        wiring_snapshot,
+    )
     raw_reasons = _raw_or_secret_reasons(wiring_input)
     step4_reasons = _step4_reasons(wiring_input)
     unsupported_reasons = _unsupported_reasons(wiring_snapshot)
@@ -970,6 +1122,7 @@ def build_live_order_real_step6g_internal_wiring(
         or credential_boundary_reasons
         or credential_handle_reasons
         or credential_injection_reasons
+        or credential_presence_check_reasons
     ):
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
         primary_reasons = _merge_reasons(
@@ -978,6 +1131,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_boundary_reasons,
             credential_handle_reasons,
             credential_injection_reasons,
+            credential_presence_check_reasons,
         )
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
@@ -1007,6 +1161,7 @@ def build_live_order_real_step6g_internal_wiring(
         credential_boundary_reasons,
         credential_handle_reasons,
         credential_injection_reasons,
+        credential_presence_check_reasons,
         private_transport_reasons,
         http_interface_reasons,
         unsupported_reasons,
@@ -1026,6 +1181,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_boundary_reasons,
             credential_handle_reasons,
             credential_injection_reasons,
+            credential_presence_check_reasons,
         ),
         st_private_transport_ready=not _merge_reasons(
             private_transport_reasons,
@@ -1060,6 +1216,25 @@ def build_live_order_real_step6g_internal_wiring(
         real_credential_values_available=False,
         real_credential_values_injected=False,
         credential_injection_metadata_available=False,
+        credential_presence_check_ready=not credential_presence_check_reasons,
+        presence_check_mode=wiring_input.presence_check_mode,
+        operator_assertion_provided=wiring_input.operator_assertion_provided,
+        operator_assertion_is_boolean_only=(
+            wiring_input.operator_assertion_is_boolean_only
+        ),
+        operator_sentinel_received=wiring_input.operator_sentinel_received,
+        operator_sentinel_fresh=wiring_input.operator_sentinel_fresh,
+        operator_sentinel_reused=False,
+        operator_sentinel_stale=False,
+        operator_sentinel_previous_turn=False,
+        sentinel_value_present=False,
+        sentinel_value_displayed=False,
+        sentinel_value_saved=False,
+        sentinel_hash_available=False,
+        sentinel_fingerprint_available=False,
+        sentinel_length_available=False,
+        presence_result_broadly_propagated=False,
+        presence_result_saved=False,
         http_post_executed=False,
         order_endpoint_called=False,
         live_order_once_called=False,
@@ -1127,6 +1302,11 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         f"- credential_handle_mode: {result.credential_handle_mode}",
         f"- credential_injection_ready: {_bool_text(result.credential_injection_ready)}",
         f"- credential_injection_mode: {result.credential_injection_mode}",
+        (
+            "- credential_presence_check_ready: "
+            f"{_bool_text(result.credential_presence_check_ready)}"
+        ),
+        f"- presence_check_mode: {result.presence_check_mode}",
         "",
         "## Order Intent",
         f"- symbol: {input_snapshot.symbol}",
@@ -1183,6 +1363,36 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             "- credential_injection_metadata_available: "
             f"{_bool_text(result.credential_injection_metadata_available)}"
         ),
+        (
+            "- operator_assertion_provided: "
+            f"{_bool_text(result.operator_assertion_provided)}"
+        ),
+        (
+            "- operator_assertion_is_boolean_only: "
+            f"{_bool_text(result.operator_assertion_is_boolean_only)}"
+        ),
+        f"- operator_sentinel_received: {_bool_text(result.operator_sentinel_received)}",
+        f"- operator_sentinel_fresh: {_bool_text(result.operator_sentinel_fresh)}",
+        f"- operator_sentinel_reused: {_bool_text(result.operator_sentinel_reused)}",
+        f"- operator_sentinel_stale: {_bool_text(result.operator_sentinel_stale)}",
+        (
+            "- operator_sentinel_previous_turn: "
+            f"{_bool_text(result.operator_sentinel_previous_turn)}"
+        ),
+        f"- sentinel_value_present: {_bool_text(result.sentinel_value_present)}",
+        f"- sentinel_value_displayed: {_bool_text(result.sentinel_value_displayed)}",
+        f"- sentinel_value_saved: {_bool_text(result.sentinel_value_saved)}",
+        f"- sentinel_hash_available: {_bool_text(result.sentinel_hash_available)}",
+        (
+            "- sentinel_fingerprint_available: "
+            f"{_bool_text(result.sentinel_fingerprint_available)}"
+        ),
+        f"- sentinel_length_available: {_bool_text(result.sentinel_length_available)}",
+        (
+            "- presence_result_broadly_propagated: "
+            f"{_bool_text(result.presence_result_broadly_propagated)}"
+        ),
+        f"- presence_result_saved: {_bool_text(result.presence_result_saved)}",
         f"- signature_value_generated: {_bool_text(result.signature_value_generated)}",
         f"- header_values_present: {_bool_text(result.header_values_present)}",
         (
@@ -1731,6 +1941,49 @@ def _credential_injection_reasons(
     return tuple(reasons)
 
 
+def _credential_presence_check_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealCredentialPresenceCheckStatus
+        .CREDENTIAL_PRESENCE_CHECK_READY_OPERATOR_PROVIDED_NO_ENV
+    )
+    if not snapshot.input_snapshot.credential_presence_check_ready:
+        reasons.append("credential_presence_check_ready_flag_false")
+    if snapshot.credential_presence_check_result.status is not expected:
+        reasons.append(
+            "credential_presence_check_status_"
+            f"{snapshot.credential_presence_check_result.status.value}",
+        )
+    if not snapshot.credential_presence_check_result.operator_sentinel_fresh:
+        reasons.append("credential_presence_check_sentinel_not_fresh")
+    if snapshot.credential_presence_check_result.operator_sentinel_reused:
+        reasons.append("credential_presence_check_sentinel_reused")
+    if snapshot.credential_presence_check_result.operator_sentinel_stale:
+        reasons.append("credential_presence_check_sentinel_stale")
+    if snapshot.credential_presence_check_result.operator_sentinel_previous_turn:
+        reasons.append("credential_presence_check_previous_turn_sentinel")
+    if snapshot.credential_presence_check_result.sentinel_value_present:
+        reasons.append("credential_presence_check_sentinel_value_present")
+    if snapshot.credential_presence_check_result.credential_values_present:
+        reasons.append("credential_presence_check_values_present")
+    if snapshot.credential_presence_check_result.credential_metadata_present:
+        reasons.append("credential_presence_check_metadata_present")
+    if (
+        snapshot.credential_presence_check_result
+        .credential_presence_checked_against_environment
+    ):
+        reasons.append("credential_presence_check_real_environment_checked")
+    if snapshot.credential_presence_check_result.env_access_requested:
+        reasons.append("credential_presence_check_env_access_requested")
+    if snapshot.credential_presence_check_result.presence_result_broadly_propagated:
+        reasons.append("credential_presence_check_result_broadly_propagated")
+    if snapshot.credential_presence_check_result.presence_result_saved:
+        reasons.append("credential_presence_check_result_saved")
+    return tuple(reasons)
+
+
 def _raw_or_secret_reasons(
     wiring_input: LiveOrderRealStep6GInternalWiringInput,
 ) -> tuple[str, ...]:
@@ -1769,6 +2022,17 @@ def _raw_or_secret_reasons(
         "real_credential_values_available",
         "real_credential_values_injected",
         "credential_injection_metadata_available",
+        "operator_sentinel_reused",
+        "operator_sentinel_stale",
+        "operator_sentinel_previous_turn",
+        "sentinel_value_present",
+        "sentinel_value_displayed",
+        "sentinel_value_saved",
+        "sentinel_hash_available",
+        "sentinel_fingerprint_available",
+        "sentinel_length_available",
+        "presence_result_broadly_propagated",
+        "presence_result_saved",
     ):
         if getattr(wiring_input, field_name):
             reasons.append(f"{field_name}_unsafe")
@@ -1842,6 +2106,11 @@ def _build_check_results(
             "credential injection",
             not _credential_injection_reasons(snapshot),
             "skeleton-only credential injection ready",
+        ),
+        (
+            "credential presence check",
+            not _credential_presence_check_reasons(snapshot),
+            "operator-provided sentinel skeleton ready",
         ),
         ("raw secret IDs", not _raw_or_secret_reasons(input_snapshot), "none"),
         ("Step 4 spoofing", not _step4_reasons(input_snapshot), "none"),

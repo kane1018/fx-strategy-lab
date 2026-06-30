@@ -82,6 +82,30 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC credential presence check skeleton完了 / no env / no actual credential / no API / no POST** —
+  Step 6G-PC-R後の次Stepとして、operator-provided boolean / sentinel方式のcredential presence check skeletonを
+  追加した。Step 6G-PCでは
+  `backend/app/live_verification/live_order_real_credential_presence_check.py` を追加し、metadataとして
+  `OPERATOR_PROVIDED_SENTINEL_ONLY`、credential boundary / handle / injection ready、operator assertion
+  provided、operator assertion boolean-only、operator sentinel received/fresh、stale/reused/previous turn sentinel
+  false、sentinel value/hash/fingerprint/length present/displayed/saved false、credential values/metadata present false、
+  credential presence実環境確認=false、env / `.env` / printenv access=false、presence result broad propagation/save=false、
+  real signature / real headers / POST capability=false flagsだけを扱う。readyでは
+  `CREDENTIAL_PRESENCE_CHECK_READY_OPERATOR_PROVIDED_NO_ENV`、`credential_presence_check_ready=true`、
+  `operator_assertion_provided=true`、`operator_sentinel_fresh=true`、`operator_sentinel_reused=false`、
+  `operator_sentinel_stale=false`、`sentinel_value_present=false`、`credential_values_present=false`、
+  `credential_metadata_present=false`、`credential_presence_checked_against_environment=false`、
+  `env_access_requested=false`、`can_generate_real_signature=false`、`can_generate_real_headers=false`、
+  `can_execute_http_post=false`、`http_post_executed=false`、`order_endpoint_called=false`、
+  `live_order_once_called=false`、`post_allowed_this_step=false`、`post_executed=false` を維持する。
+  Step 6G-IWにも最小連携し、credential presence check readyをready条件に加えた。このStepでは実API、
+  read-only API、public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、
+  `live_order_once`、実注文、ledger操作、実credential値取得、credential presence実環境確認、env / `.env`
+  access、sentinel文字列保存・表示、sentinel hash/fingerprint/length取得・表示、credential metadata取得・表示、
+  実credential injection、実署名値生成、実headers値生成、raw request/response表示・保存、real ID表示を行わない。
+  future real credential presence check / real credential injection / real signing / real transportは別Stepで、
+  新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_CREDENTIAL_PRESENCE_CHECK_PLAN.md](STEP6G_CREDENTIAL_PRESENCE_CHECK_PLAN.md)。
 - **Step 6G-CI credential injection skeleton完了 / no real credential / no env / no API / no POST** —
   Step 6G-CH後の次Stepとして、将来のreal credential injectionへ進む前に、credential値を注入しない
   credential injection skeletonを追加した。Step 6G-CIでは
