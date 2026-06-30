@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from app.live_verification.errors import LiveVerificationValidationError
 from app.live_verification.live_order_real_step6g_internal_wiring import (
     LiveOrderRealStep6GInternalWiringInput,
     LiveOrderRealStep6GInternalWiringStatus,
@@ -145,14 +146,24 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.checker_result_detail_present is False
     assert result.checker_implementation_skeleton_ready is True
     assert result.checker_implementation_mode == "CHECKER_IMPLEMENTATION_SKELETON_ONLY"
+    assert result.checker_execution_contract_ready is True
+    assert result.checker_execution_contract_mode == "CHECKER_EXECUTION_CONTRACT_SKELETON_ONLY"
+    assert result.execution_contract_declared is True
+    assert result.execution_inputs_declared is True
+    assert result.execution_outputs_declared is True
+    assert result.execution_stop_conditions_declared is True
     assert result.implementation_interface_declared is True
     assert result.implementation_lifecycle_declared is True
     assert result.execution_deferred_to_future_step is True
     assert result.execution_performed is False
+    assert result.execution_performed_by_codex is False
+    assert result.execution_performed_by_operator is False
+    assert result.credential_read_performed is False
     assert result.env_access_capability_present is False
     assert result.credential_read_capability_present is False
     assert result.checker_result_unavailable is False
     assert result.checker_result_stale is False
+    assert result.checker_result_timeout is False
     assert result.operator_workflow_supported is True
     assert result.operator_workflow_preserved is True
     assert result.http_post_executed is False
@@ -317,6 +328,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "operator_checker_workflow_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
+        (
+            "checker_execution_contract_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -390,6 +405,9 @@ def test_component_ready_flag_mismatch_blocks(
         {"operator_result_detail_present": True},
         {"env_variable_names_present": True},
         {"checker_result_detail_present": True},
+        {"execution_performed_by_codex": True},
+        {"execution_performed_by_operator": True},
+        {"credential_read_performed": True},
         {"raw_request_displayed": True},
         {"raw_request_saved": True},
         {"raw_response_displayed": True},
@@ -398,6 +416,7 @@ def test_component_ready_flag_mismatch_blocks(
         {"signature_displayed": True},
         {"credentials_displayed": True},
         {"real_ids_displayed": True},
+        {"checker_result_timeout": True},
     ],
 )
 def test_raw_secret_or_real_id_exposure_blocks(overrides: dict[str, object]) -> None:
@@ -478,6 +497,11 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert (
         snapshot.credential_presence_checker_implementation_result
         .checker_implementation_skeleton_ready
+        is True
+    )
+    assert (
+        snapshot.credential_presence_checker_execution_contract_result
+        .checker_execution_contract_ready
         is True
     )
 
@@ -668,6 +692,56 @@ def test_unsupported_checker_implementation_mode_blocks_without_echoing_raw_valu
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"checker_execution_contract_ready": False},
+        {"execution_contract_declared": False},
+        {"execution_inputs_declared": False},
+        {"execution_outputs_declared": False},
+        {"execution_stop_conditions_declared": False},
+        {"execution_deferred_to_future_step": False},
+        {"operator_workflow_preserved": False},
+    ],
+)
+def test_checker_execution_contract_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.checker_execution_contract_ready is False
+
+
+def test_unsupported_checker_execution_contract_mode_blocks_without_echoing_raw_value() -> None:
+    result = _build(checker_execution_contract_mode=UNSUPPORTED_RAW_MODE)
+    rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
+    payload = repr(asdict(result))
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.checker_execution_contract_ready is False
+    assert result.checker_execution_contract_mode == UNSUPPORTED_SAFE_MODE
+    assert (
+        result.snapshot.credential_presence_checker_execution_contract_result
+        .execution_contract_mode
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert (
+        result.snapshot.credential_presence_checker_execution_contract_result
+        .unsupported_execution_contract_mode_present
+        is True
+    )
+    assert (
+        result.snapshot.input_snapshot.checker_execution_contract_mode
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert UNSUPPORTED_RAW_MODE not in repr(result)
+    assert UNSUPPORTED_RAW_MODE not in rendered
+    assert UNSUPPORTED_RAW_MODE not in payload
+    assert UNSUPPORTED_SAFE_MODE in rendered
+    assert UNSUPPORTED_SAFE_MODE in payload
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
         {"codex_env_access_requested": True},
         {"execution_performed": True},
         {"env_access_capability_present": True},
@@ -685,6 +759,39 @@ def test_checker_implementation_raw_or_secret_exposure_blocks_internal_wiring(
 
     assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
     assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"execution_performed": True},
+        {"execution_performed_by_codex": True},
+        {"execution_performed_by_operator": True},
+        {"codex_env_access_requested": True},
+        {"checker_result_available": True},
+        {"checker_result_timeout": True},
+    ],
+)
+def test_checker_execution_contract_raw_or_secret_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+def test_checker_execution_contract_post_allowed_blocks_internal_wiring() -> None:
+    result = _build(post_allowed_this_step=True)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_ROUTE_BRIDGE
+    assert result.internal_wiring_ready is False
+
+
+def test_checker_execution_contract_post_executed_hard_stops_internal_wiring() -> None:
+    with pytest.raises(LiveVerificationValidationError):
+        _build(post_executed=True)
+
 
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
@@ -772,14 +879,27 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "checker_result_detail_present: false" in rendered
     assert "checker_implementation_skeleton_ready: true" in rendered
     assert "checker_implementation_mode: CHECKER_IMPLEMENTATION_SKELETON_ONLY" in rendered
+    assert "checker_execution_contract_ready: true" in rendered
+    assert (
+        "checker_execution_contract_mode: "
+        "CHECKER_EXECUTION_CONTRACT_SKELETON_ONLY"
+    ) in rendered
+    assert "execution_contract_declared: true" in rendered
+    assert "execution_inputs_declared: true" in rendered
+    assert "execution_outputs_declared: true" in rendered
+    assert "execution_stop_conditions_declared: true" in rendered
     assert "implementation_interface_declared: true" in rendered
     assert "implementation_lifecycle_declared: true" in rendered
     assert "execution_deferred_to_future_step: true" in rendered
     assert "execution_performed: false" in rendered
+    assert "execution_performed_by_codex: false" in rendered
+    assert "execution_performed_by_operator: false" in rendered
+    assert "credential_read_performed: false" in rendered
     assert "env_access_capability_present: false" in rendered
     assert "credential_read_capability_present: false" in rendered
     assert "checker_result_unavailable: false" in rendered
     assert "checker_result_stale: false" in rendered
+    assert "checker_result_timeout: false" in rendered
     assert "operator_workflow_supported: true" in rendered
     assert "operator_workflow_preserved: true" in rendered
     assert "real_checker_implementation_present: false" in rendered
