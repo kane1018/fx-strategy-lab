@@ -82,6 +82,29 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-CI credential injection skeleton完了 / no real credential / no env / no API / no POST** —
+  Step 6G-CH後の次Stepとして、将来のreal credential injectionへ進む前に、credential値を注入しない
+  credential injection skeletonを追加した。Step 6G-CIでは
+  `backend/app/live_verification/live_order_real_credential_injection.py` を追加し、metadataとして
+  `INJECTION_SKELETON_ONLY`、credential boundary ready、credential handle ready、injection requested、
+  injection performed=false、real credential values available/injected=false、credential values provided/loaded=false、
+  credential metadata available=false、handle created/value/identifier=false、env / `.env` access=false、
+  credential presence実環境確認=false、real signature / real headers / POST capability=false flagsだけを扱う。
+  readyでは `CREDENTIAL_INJECTION_READY_NO_VALUE_NO_ENV`、`credential_injection_ready=true`、
+  `injection_requested=true`、`injection_performed=false`、`real_credential_values_available=false`、
+  `real_credential_values_injected=false`、`credential_values_provided=false`、`credential_values_loaded=false`、
+  `credential_metadata_available=false`、`handle_created=false`、`handle_contains_value=false`、
+  `handle_contains_identifier=false`、`env_access_requested=false`、`can_generate_real_signature=false`、
+  `can_generate_real_headers=false`、`can_execute_http_post=false`、`http_post_executed=false`、
+  `order_endpoint_called=false`、`live_order_once_called=false`、`post_allowed_this_step=false`、
+  `post_executed=false` を維持する。Step 6G-IWにも最小連携し、credential injection readyをready条件に加えた。
+  このStepでは実API、read-only API、public API、Private API、broker、fresh preflight、HTTP POST、
+  order endpoint、`live_order_once`、実注文、ledger操作、実credential値取得、実credential injection、
+  credential presence実環境確認、実handle作成、handle id/token/secret/key material、credential長さ/hash/
+  fingerprint/preview/prefix/suffix取得・表示、実署名値生成、実headers値生成、raw request/response表示・保存、
+  real ID表示を行わない。future real credential injection / real signing / real transportは別Stepで、
+  新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_CREDENTIAL_INJECTION_SKELETON.md](STEP6G_CREDENTIAL_INJECTION_SKELETON.md)。
 - **Step 6G-CH credential handle contract完了 / no real credential / no env / no API / no POST** —
   Step 6G-CB後の次Stepとして、将来のreal credential injectionに進む前にcredential値を持たない
   credential handle contractを追加した。Step 6G-CHでは

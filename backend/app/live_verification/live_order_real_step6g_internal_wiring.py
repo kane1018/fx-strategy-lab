@@ -28,6 +28,12 @@ from app.live_verification.live_order_real_credential_handle import (
     LiveOrderRealCredentialHandleStatus,
     build_live_order_real_credential_handle,
 )
+from app.live_verification.live_order_real_credential_injection import (
+    LiveOrderRealCredentialInjectionInput,
+    LiveOrderRealCredentialInjectionResult,
+    LiveOrderRealCredentialInjectionStatus,
+    build_live_order_real_credential_injection,
+)
 from app.live_verification.live_order_real_dummy_signing import (
     LiveOrderRealDummySigningInput,
     LiveOrderRealDummySigningResult,
@@ -216,6 +222,13 @@ class LiveOrderRealStep6GInternalWiringInput:
     handle_contains_value: bool = False
     handle_contains_identifier: bool = False
     handle_metadata_exposed: bool = False
+    credential_injection_ready: bool = True
+    credential_injection_mode: str = "INJECTION_SKELETON_ONLY"
+    injection_requested: bool = True
+    injection_performed: bool = False
+    real_credential_values_available: bool = False
+    real_credential_values_injected: bool = False
+    credential_injection_metadata_available: bool = False
     signature_value_generated: bool = False
     header_values_present: bool = False
     http_post_executed: bool = False
@@ -248,6 +261,7 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty("http_transport_interface_mode", self.http_transport_interface_mode)
         _require_non_empty("credential_boundary_mode", self.credential_boundary_mode)
         _require_non_empty("credential_handle_mode", self.credential_handle_mode)
+        _require_non_empty("credential_injection_mode", self.credential_injection_mode)
         _validate_non_negative_int("size", self.size)
         _validate_non_negative_int("open_positions_count", self.open_positions_count)
         _validate_non_negative_int("active_orders_count", self.active_orders_count)
@@ -313,6 +327,12 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "handle_contains_value",
                 "handle_contains_identifier",
                 "handle_metadata_exposed",
+                "credential_injection_ready",
+                "injection_requested",
+                "injection_performed",
+                "real_credential_values_available",
+                "real_credential_values_injected",
+                "credential_injection_metadata_available",
                 "signature_value_generated",
                 "header_values_present",
                 "http_post_executed",
@@ -368,6 +388,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     http_transport_interface_result: LiveOrderRealHttpTransportInterfaceResult
     credential_boundary_result: LiveOrderRealCredentialBoundaryResult
     credential_handle_result: LiveOrderRealCredentialHandleResult
+    credential_injection_result: LiveOrderRealCredentialInjectionResult
 
 
 @dataclass(frozen=True)
@@ -409,6 +430,13 @@ class LiveOrderRealStep6GInternalWiringResult:
     handle_contains_value: bool
     handle_contains_identifier: bool
     handle_metadata_exposed: bool
+    credential_injection_ready: bool
+    credential_injection_mode: str
+    injection_requested: bool
+    injection_performed: bool
+    real_credential_values_available: bool
+    real_credential_values_injected: bool
+    credential_injection_metadata_available: bool
     signature_value_generated: bool
     header_values_present: bool
     allowed_for_live: bool
@@ -427,6 +455,7 @@ class LiveOrderRealStep6GInternalWiringResult:
         _require_non_empty("http_transport_interface_mode", self.http_transport_interface_mode)
         _require_non_empty("credential_boundary_mode", self.credential_boundary_mode)
         _require_non_empty("credential_handle_mode", self.credential_handle_mode)
+        _require_non_empty("credential_injection_mode", self.credential_injection_mode)
         _validate_bool_fields(
             self,
             (
@@ -463,6 +492,12 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "handle_contains_value",
                 "handle_contains_identifier",
                 "handle_metadata_exposed",
+                "credential_injection_ready",
+                "injection_requested",
+                "injection_performed",
+                "real_credential_values_available",
+                "real_credential_values_injected",
+                "credential_injection_metadata_available",
                 "signature_value_generated",
                 "header_values_present",
                 "allowed_for_live",
@@ -496,6 +531,20 @@ class LiveOrderRealStep6GInternalWiringResult:
             raise LiveVerificationValidationError("internal wiring must not hold handle identifier")
         if self.handle_metadata_exposed:
             raise LiveVerificationValidationError("internal wiring must not expose handle metadata")
+        if self.injection_performed:
+            raise LiveVerificationValidationError("internal wiring must not inject credentials")
+        if self.real_credential_values_available:
+            raise LiveVerificationValidationError(
+                "internal wiring must not expose credential values",
+            )
+        if self.real_credential_values_injected:
+            raise LiveVerificationValidationError(
+                "internal wiring must not inject credential values",
+            )
+        if self.credential_injection_metadata_available:
+            raise LiveVerificationValidationError(
+                "internal wiring must not expose credential injection metadata",
+            )
         if self.signature_value_generated:
             raise LiveVerificationValidationError("internal wiring must not sign")
         if self.header_values_present:
@@ -786,6 +835,53 @@ def build_valid_step6g_internal_wiring_snapshot(
             loop_allowed=wiring_input.loop_allowed,
         ),
     )
+    credential_injection_result = build_live_order_real_credential_injection(
+        input_snapshot=LiveOrderRealCredentialInjectionInput(
+            injection_mode=wiring_input.credential_injection_mode,
+            credential_boundary_ready=credential_boundary_result.credential_boundary_ready,
+            credential_handle_ready=(
+                credential_handle_result.credential_handle_ready
+                and wiring_input.credential_injection_ready
+            ),
+            injection_requested=wiring_input.injection_requested,
+            injection_performed=wiring_input.injection_performed,
+            real_credential_values_available=(
+                wiring_input.real_credential_values_available
+            ),
+            real_credential_values_injected=(
+                wiring_input.real_credential_values_injected
+            ),
+            credential_values_provided=wiring_input.credential_values_provided,
+            credential_values_loaded=wiring_input.credential_values_loaded,
+            credential_values_displayed=wiring_input.credentials_displayed,
+            credential_values_saved=wiring_input.credentials_saved,
+            credential_metadata_available=(
+                wiring_input.credential_injection_metadata_available
+            ),
+            credential_metadata_displayed=wiring_input.credential_metadata_exposed,
+            credential_metadata_saved=wiring_input.credential_metadata_exposed,
+            handle_created=wiring_input.handle_created,
+            handle_contains_value=wiring_input.handle_contains_value,
+            handle_contains_identifier=wiring_input.handle_contains_identifier,
+            handle_value_displayed=False,
+            handle_value_saved=False,
+            env_access_requested=wiring_input.env_access_requested,
+            dotenv_access_requested=False,
+            credential_presence_checked_against_environment=(
+                wiring_input.credential_presence_checked_against_environment
+            ),
+            can_generate_real_signature=False,
+            can_generate_real_headers=False,
+            can_execute_http_post=False,
+            http_post_executed=wiring_input.http_post_executed,
+            order_endpoint_called=wiring_input.order_endpoint_called,
+            live_order_once_called=wiring_input.live_order_once_called,
+            post_allowed_this_step=wiring_input.post_allowed_this_step,
+            post_executed=wiring_input.post_executed,
+            retry_allowed=wiring_input.retry_allowed,
+            loop_allowed=wiring_input.loop_allowed,
+        ),
+    )
     return LiveOrderRealStep6GInternalWiringSnapshot(
         input_snapshot=wiring_input,
         pb_result=pb_result,
@@ -799,6 +895,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         http_transport_interface_result=http_transport_interface_result,
         credential_boundary_result=credential_boundary_result,
         credential_handle_result=credential_handle_result,
+        credential_injection_result=credential_injection_result,
     )
 
 
@@ -829,6 +926,7 @@ def build_live_order_real_step6g_internal_wiring(
     http_interface_reasons = _http_transport_interface_reasons(wiring_snapshot)
     credential_boundary_reasons = _credential_boundary_reasons(wiring_snapshot)
     credential_handle_reasons = _credential_handle_reasons(wiring_snapshot)
+    credential_injection_reasons = _credential_injection_reasons(wiring_snapshot)
     raw_reasons = _raw_or_secret_reasons(wiring_input)
     step4_reasons = _step4_reasons(wiring_input)
     unsupported_reasons = _unsupported_reasons(wiring_snapshot)
@@ -871,6 +969,7 @@ def build_live_order_real_step6g_internal_wiring(
         or dummy_signing_reasons
         or credential_boundary_reasons
         or credential_handle_reasons
+        or credential_injection_reasons
     ):
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
         primary_reasons = _merge_reasons(
@@ -878,6 +977,7 @@ def build_live_order_real_step6g_internal_wiring(
             dummy_signing_reasons,
             credential_boundary_reasons,
             credential_handle_reasons,
+            credential_injection_reasons,
         )
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
@@ -906,6 +1006,7 @@ def build_live_order_real_step6g_internal_wiring(
         dummy_signing_reasons,
         credential_boundary_reasons,
         credential_handle_reasons,
+        credential_injection_reasons,
         private_transport_reasons,
         http_interface_reasons,
         unsupported_reasons,
@@ -924,6 +1025,7 @@ def build_live_order_real_step6g_internal_wiring(
             dummy_signing_reasons,
             credential_boundary_reasons,
             credential_handle_reasons,
+            credential_injection_reasons,
         ),
         st_private_transport_ready=not _merge_reasons(
             private_transport_reasons,
@@ -951,6 +1053,13 @@ def build_live_order_real_step6g_internal_wiring(
         handle_contains_value=False,
         handle_contains_identifier=False,
         handle_metadata_exposed=False,
+        credential_injection_ready=not credential_injection_reasons,
+        credential_injection_mode=wiring_input.credential_injection_mode,
+        injection_requested=wiring_input.injection_requested,
+        injection_performed=False,
+        real_credential_values_available=False,
+        real_credential_values_injected=False,
+        credential_injection_metadata_available=False,
         http_post_executed=False,
         order_endpoint_called=False,
         live_order_once_called=False,
@@ -1016,6 +1125,8 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         f"- credential_boundary_mode: {result.credential_boundary_mode}",
         f"- credential_handle_ready: {_bool_text(result.credential_handle_ready)}",
         f"- credential_handle_mode: {result.credential_handle_mode}",
+        f"- credential_injection_ready: {_bool_text(result.credential_injection_ready)}",
+        f"- credential_injection_mode: {result.credential_injection_mode}",
         "",
         "## Order Intent",
         f"- symbol: {input_snapshot.symbol}",
@@ -1058,6 +1169,20 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         f"- handle_contains_value: {_bool_text(result.handle_contains_value)}",
         f"- handle_contains_identifier: {_bool_text(result.handle_contains_identifier)}",
         f"- handle_metadata_exposed: {_bool_text(result.handle_metadata_exposed)}",
+        f"- injection_requested: {_bool_text(result.injection_requested)}",
+        f"- injection_performed: {_bool_text(result.injection_performed)}",
+        (
+            "- real_credential_values_available: "
+            f"{_bool_text(result.real_credential_values_available)}"
+        ),
+        (
+            "- real_credential_values_injected: "
+            f"{_bool_text(result.real_credential_values_injected)}"
+        ),
+        (
+            "- credential_injection_metadata_available: "
+            f"{_bool_text(result.credential_injection_metadata_available)}"
+        ),
         f"- signature_value_generated: {_bool_text(result.signature_value_generated)}",
         f"- header_values_present: {_bool_text(result.header_values_present)}",
         (
@@ -1580,6 +1705,32 @@ def _credential_handle_reasons(
     return tuple(reasons)
 
 
+def _credential_injection_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealCredentialInjectionStatus
+        .CREDENTIAL_INJECTION_READY_NO_VALUE_NO_ENV
+    )
+    if not snapshot.input_snapshot.credential_injection_ready:
+        reasons.append("credential_injection_ready_flag_false")
+    if snapshot.credential_injection_result.status is not expected:
+        reasons.append(
+            "credential_injection_status_"
+            f"{snapshot.credential_injection_result.status.value}",
+        )
+    if snapshot.credential_injection_result.injection_performed:
+        reasons.append("credential_injection_performed")
+    if snapshot.credential_injection_result.real_credential_values_available:
+        reasons.append("credential_injection_real_values_available")
+    if snapshot.credential_injection_result.real_credential_values_injected:
+        reasons.append("credential_injection_real_values_injected")
+    if snapshot.credential_injection_result.credential_metadata_available:
+        reasons.append("credential_injection_metadata_available")
+    return tuple(reasons)
+
+
 def _raw_or_secret_reasons(
     wiring_input: LiveOrderRealStep6GInternalWiringInput,
 ) -> tuple[str, ...]:
@@ -1614,6 +1765,10 @@ def _raw_or_secret_reasons(
         "handle_contains_value",
         "handle_contains_identifier",
         "handle_metadata_exposed",
+        "injection_performed",
+        "real_credential_values_available",
+        "real_credential_values_injected",
+        "credential_injection_metadata_available",
     ):
         if getattr(wiring_input, field_name):
             reasons.append(f"{field_name}_unsafe")
@@ -1682,6 +1837,11 @@ def _build_check_results(
             "credential handle",
             not _credential_handle_reasons(snapshot),
             "contract-only credential handle ready",
+        ),
+        (
+            "credential injection",
+            not _credential_injection_reasons(snapshot),
+            "skeleton-only credential injection ready",
         ),
         ("raw secret IDs", not _raw_or_secret_reasons(input_snapshot), "none"),
         ("Step 4 spoofing", not _step4_reasons(input_snapshot), "none"),

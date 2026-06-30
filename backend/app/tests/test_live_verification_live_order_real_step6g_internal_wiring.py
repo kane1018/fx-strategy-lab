@@ -63,6 +63,13 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.handle_contains_value is False
     assert result.handle_contains_identifier is False
     assert result.handle_metadata_exposed is False
+    assert result.credential_injection_ready is True
+    assert result.credential_injection_mode == "INJECTION_SKELETON_ONLY"
+    assert result.injection_requested is True
+    assert result.injection_performed is False
+    assert result.real_credential_values_available is False
+    assert result.real_credential_values_injected is False
+    assert result.credential_injection_metadata_available is False
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
@@ -205,6 +212,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "credential_handle_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
+        (
+            "credential_injection_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -233,6 +244,10 @@ def test_component_ready_flag_mismatch_blocks(
         {"handle_contains_value": True},
         {"handle_contains_identifier": True},
         {"handle_metadata_exposed": True},
+        {"injection_performed": True},
+        {"real_credential_values_available": True},
+        {"real_credential_values_injected": True},
+        {"credential_injection_metadata_available": True},
         {"raw_request_displayed": True},
         {"raw_request_saved": True},
         {"raw_response_displayed": True},
@@ -309,6 +324,7 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert snapshot.http_transport_interface_result.interface_ready is True
     assert snapshot.credential_boundary_result.credential_boundary_ready is True
     assert snapshot.credential_handle_result.credential_handle_ready is True
+    assert snapshot.credential_injection_result.credential_injection_ready is True
 
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
@@ -329,6 +345,8 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "credential_boundary_mode: BOUNDARY_ONLY" in rendered
     assert "credential_handle_ready: true" in rendered
     assert "credential_handle_mode: HANDLE_CONTRACT_ONLY" in rendered
+    assert "credential_injection_ready: true" in rendered
+    assert "credential_injection_mode: INJECTION_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered
     assert "handle_created: false" in rendered
     assert "handle_contains_value: false" in rendered
@@ -339,6 +357,11 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "credential_values_loaded: false" in rendered
     assert "env_access_requested: false" in rendered
     assert "credential_metadata_exposed: false" in rendered
+    assert "injection_requested: true" in rendered
+    assert "injection_performed: false" in rendered
+    assert "real_credential_values_available: false" in rendered
+    assert "real_credential_values_injected: false" in rendered
+    assert "credential_injection_metadata_available: false" in rendered
     assert "Future real execution requires a new final confirmation" in rendered
     assert "FULL_APPROVAL_COMMAND_SENTINEL" not in rendered
     assert "RAW_REQUEST_SENTINEL" not in rendered
@@ -364,6 +387,8 @@ def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() 
     assert "HANDLE_SECRET_SENTINEL" not in payload
     assert "HANDLE_VALUE_SENTINEL" not in payload
     assert "KEY_MATERIAL_SENTINEL" not in payload
+    assert "CREDENTIAL_METADATA_VALUE_SENTINEL" not in payload
+    assert "REAL_CREDENTIAL_VALUE_SENTINEL" not in payload
     assert '{"executionType":"MARKET"' not in payload
 
 
