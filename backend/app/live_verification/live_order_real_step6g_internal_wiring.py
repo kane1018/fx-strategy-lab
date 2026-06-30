@@ -326,12 +326,19 @@ class LiveOrderRealStep6GInternalWiringInput:
     codex_execution_performed: bool = False
     codex_env_access_requested: bool = False
     actual_environment_presence_check_performed_by_codex: bool = False
+    operator_result_handoff_declared: bool = True
+    operator_result_handoff_safe: bool = True
+    operator_result_category_only: bool = True
     operator_result_provided: bool = True
     operator_result_is_boolean_only: bool = True
+    operator_result_raw_value_present: bool = False
+    operator_result_raw_value_saved: bool = False
+    operator_result_raw_value_displayed: bool = False
     operator_result_fresh: bool = True
     operator_result_stale: bool = False
     operator_result_reused: bool = False
     operator_result_previous_turn: bool = False
+    operator_result_timeout: bool = False
     operator_result_unknown: bool = False
     operator_result_failed: bool = False
     operator_result_unavailable: bool = False
@@ -533,12 +540,19 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "codex_execution_performed",
                 "codex_env_access_requested",
                 "actual_environment_presence_check_performed_by_codex",
+                "operator_result_handoff_declared",
+                "operator_result_handoff_safe",
+                "operator_result_category_only",
                 "operator_result_provided",
                 "operator_result_is_boolean_only",
+                "operator_result_raw_value_present",
+                "operator_result_raw_value_saved",
+                "operator_result_raw_value_displayed",
                 "operator_result_fresh",
                 "operator_result_stale",
                 "operator_result_reused",
                 "operator_result_previous_turn",
+                "operator_result_timeout",
                 "operator_result_unknown",
                 "operator_result_failed",
                 "operator_result_unavailable",
@@ -733,12 +747,19 @@ class LiveOrderRealStep6GInternalWiringResult:
     codex_execution_performed: bool
     codex_env_access_requested: bool
     actual_environment_presence_check_performed_by_codex: bool
+    operator_result_handoff_declared: bool
+    operator_result_handoff_safe: bool
+    operator_result_category_only: bool
     operator_result_provided: bool
     operator_result_is_boolean_only: bool
+    operator_result_raw_value_present: bool
+    operator_result_raw_value_saved: bool
+    operator_result_raw_value_displayed: bool
     operator_result_fresh: bool
     operator_result_stale: bool
     operator_result_reused: bool
     operator_result_previous_turn: bool
+    operator_result_timeout: bool
     operator_result_unknown: bool
     operator_result_failed: bool
     operator_result_unavailable: bool
@@ -898,12 +919,19 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "codex_execution_performed",
                 "codex_env_access_requested",
                 "actual_environment_presence_check_performed_by_codex",
+                "operator_result_handoff_declared",
+                "operator_result_handoff_safe",
+                "operator_result_category_only",
                 "operator_result_provided",
                 "operator_result_is_boolean_only",
+                "operator_result_raw_value_present",
+                "operator_result_raw_value_saved",
+                "operator_result_raw_value_displayed",
                 "operator_result_fresh",
                 "operator_result_stale",
                 "operator_result_reused",
                 "operator_result_previous_turn",
+                "operator_result_timeout",
                 "operator_result_unknown",
                 "operator_result_failed",
                 "operator_result_unavailable",
@@ -1067,6 +1095,14 @@ class LiveOrderRealStep6GInternalWiringResult:
             raise LiveVerificationValidationError(
                 "internal wiring must not perform Codex environment check",
             )
+        if self.operator_result_raw_value_present:
+            raise LiveVerificationValidationError(
+                "internal wiring must not hold raw operator result value",
+            )
+        if self.operator_result_raw_value_saved or self.operator_result_raw_value_displayed:
+            raise LiveVerificationValidationError(
+                "internal wiring must not save or display raw operator result value",
+            )
         if self.operator_result_stale or self.operator_result_reused:
             raise LiveVerificationValidationError(
                 "internal wiring must not accept stale or reused operator result",
@@ -1074,6 +1110,10 @@ class LiveOrderRealStep6GInternalWiringResult:
         if self.operator_result_previous_turn:
             raise LiveVerificationValidationError(
                 "internal wiring must not use previous-turn operator result",
+            )
+        if self.operator_result_timeout:
+            raise LiveVerificationValidationError(
+                "internal wiring must not accept timeout operator result",
             )
         if (
             self.operator_result_unknown
@@ -1676,9 +1716,27 @@ def build_valid_step6g_internal_wiring_snapshot(
                 actual_environment_presence_check_performed_by_codex=(
                     wiring_input.actual_environment_presence_check_performed_by_codex
                 ),
+                operator_result_handoff_declared=(
+                    wiring_input.operator_result_handoff_declared
+                ),
+                operator_result_handoff_safe=(
+                    wiring_input.operator_result_handoff_safe
+                ),
+                operator_result_category_only=(
+                    wiring_input.operator_result_category_only
+                ),
                 operator_result_provided=wiring_input.operator_result_provided,
                 operator_result_is_boolean_only=(
                     wiring_input.operator_result_is_boolean_only
+                ),
+                operator_result_raw_value_present=(
+                    wiring_input.operator_result_raw_value_present
+                ),
+                operator_result_raw_value_saved=(
+                    wiring_input.operator_result_raw_value_saved
+                ),
+                operator_result_raw_value_displayed=(
+                    wiring_input.operator_result_raw_value_displayed
                 ),
                 operator_result_fresh=wiring_input.operator_result_fresh,
                 operator_result_stale=wiring_input.operator_result_stale,
@@ -1686,6 +1744,7 @@ def build_valid_step6g_internal_wiring_snapshot(
                 operator_result_previous_turn=(
                     wiring_input.operator_result_previous_turn
                 ),
+                operator_result_timeout=wiring_input.operator_result_timeout,
                 operator_result_unknown=wiring_input.operator_result_unknown,
                 operator_result_failed=wiring_input.operator_result_failed,
                 operator_result_unavailable=wiring_input.operator_result_unavailable,
@@ -2238,12 +2297,21 @@ def build_live_order_real_step6g_internal_wiring(
         codex_execution_performed=False,
         codex_env_access_requested=False,
         actual_environment_presence_check_performed_by_codex=False,
+        operator_result_handoff_declared=(
+            wiring_input.operator_result_handoff_declared
+        ),
+        operator_result_handoff_safe=wiring_input.operator_result_handoff_safe,
+        operator_result_category_only=wiring_input.operator_result_category_only,
         operator_result_provided=wiring_input.operator_result_provided,
         operator_result_is_boolean_only=wiring_input.operator_result_is_boolean_only,
+        operator_result_raw_value_present=False,
+        operator_result_raw_value_saved=False,
+        operator_result_raw_value_displayed=False,
         operator_result_fresh=wiring_input.operator_result_fresh,
         operator_result_stale=False,
         operator_result_reused=False,
         operator_result_previous_turn=False,
+        operator_result_timeout=False,
         operator_result_unknown=False,
         operator_result_failed=False,
         operator_result_unavailable=False,
@@ -2559,12 +2627,36 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             f"{_bool_text(result.actual_environment_presence_check_performed_by_codex)}"
         ),
         (
+            "- operator_result_handoff_declared: "
+            f"{_bool_text(result.operator_result_handoff_declared)}"
+        ),
+        (
+            "- operator_result_handoff_safe: "
+            f"{_bool_text(result.operator_result_handoff_safe)}"
+        ),
+        (
+            "- operator_result_category_only: "
+            f"{_bool_text(result.operator_result_category_only)}"
+        ),
+        (
             "- operator_result_provided: "
             f"{_bool_text(result.operator_result_provided)}"
         ),
         (
             "- operator_result_is_boolean_only: "
             f"{_bool_text(result.operator_result_is_boolean_only)}"
+        ),
+        (
+            "- operator_result_raw_value_present: "
+            f"{_bool_text(result.operator_result_raw_value_present)}"
+        ),
+        (
+            "- operator_result_raw_value_saved: "
+            f"{_bool_text(result.operator_result_raw_value_saved)}"
+        ),
+        (
+            "- operator_result_raw_value_displayed: "
+            f"{_bool_text(result.operator_result_raw_value_displayed)}"
         ),
         f"- operator_result_fresh: {_bool_text(result.operator_result_fresh)}",
         f"- operator_result_stale: {_bool_text(result.operator_result_stale)}",
@@ -2573,6 +2665,7 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             "- operator_result_previous_turn: "
             f"{_bool_text(result.operator_result_previous_turn)}"
         ),
+        f"- operator_result_timeout: {_bool_text(result.operator_result_timeout)}",
         f"- operator_result_unknown: {_bool_text(result.operator_result_unknown)}",
         f"- operator_result_failed: {_bool_text(result.operator_result_failed)}",
         (
@@ -3368,6 +3461,22 @@ def _operator_checker_workflow_reasons(
         reasons.append("operator_checker_workflow_codex_env_requested")
     if result.actual_environment_presence_check_performed_by_codex:
         reasons.append("operator_checker_workflow_codex_environment_checked")
+    if not result.operator_result_handoff_declared:
+        reasons.append("operator_checker_workflow_handoff_not_declared")
+    if not result.operator_result_handoff_safe:
+        reasons.append("operator_checker_workflow_handoff_not_safe")
+    if not result.operator_result_category_only:
+        reasons.append("operator_checker_workflow_result_not_category_only")
+    if not result.operator_result_provided:
+        reasons.append("operator_checker_workflow_result_not_provided")
+    if not result.operator_result_is_boolean_only:
+        reasons.append("operator_checker_workflow_result_not_boolean_only")
+    if result.operator_result_raw_value_present:
+        reasons.append("operator_checker_workflow_raw_value_present")
+    if result.operator_result_raw_value_saved:
+        reasons.append("operator_checker_workflow_raw_value_saved")
+    if result.operator_result_raw_value_displayed:
+        reasons.append("operator_checker_workflow_raw_value_displayed")
     if not result.operator_result_fresh:
         reasons.append("operator_checker_workflow_result_not_fresh")
     if result.operator_result_stale:
@@ -3376,6 +3485,8 @@ def _operator_checker_workflow_reasons(
         reasons.append("operator_checker_workflow_result_reused")
     if result.operator_result_previous_turn:
         reasons.append("operator_checker_workflow_previous_turn_result")
+    if result.operator_result_timeout:
+        reasons.append("operator_checker_workflow_result_timeout")
     if result.operator_result_unknown:
         reasons.append("operator_checker_workflow_result_unknown")
     if result.operator_result_failed:
@@ -3600,6 +3711,10 @@ def _raw_or_secret_reasons(
         "checker_result_failed",
         "codex_env_access_requested",
         "actual_environment_presence_check_performed_by_codex",
+        "operator_result_raw_value_present",
+        "operator_result_raw_value_saved",
+        "operator_result_raw_value_displayed",
+        "operator_result_timeout",
         "operator_result_saved",
         "operator_result_displayed",
         "operator_result_broadly_propagated",

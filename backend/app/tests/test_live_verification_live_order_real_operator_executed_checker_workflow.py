@@ -49,12 +49,19 @@ def test_valid_operator_workflow_ready_no_codex_env_no_api_no_post() -> None:
     assert result.codex_execution_performed is False
     assert result.codex_env_access_requested is False
     assert result.actual_environment_presence_check_performed_by_codex is False
+    assert result.operator_result_handoff_declared is True
+    assert result.operator_result_handoff_safe is True
+    assert result.operator_result_category_only is True
     assert result.operator_result_provided is True
     assert result.operator_result_is_boolean_only is True
+    assert result.operator_result_raw_value_present is False
+    assert result.operator_result_raw_value_saved is False
+    assert result.operator_result_raw_value_displayed is False
     assert result.operator_result_fresh is True
     assert result.operator_result_stale is False
     assert result.operator_result_reused is False
     assert result.operator_result_previous_turn is False
+    assert result.operator_result_timeout is False
     assert result.operator_result_unknown is False
     assert result.operator_result_failed is False
     assert result.operator_result_unavailable is False
@@ -139,6 +146,9 @@ def test_codex_env_access_blocks() -> None:
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"operator_result_handoff_declared": False},
+        {"operator_result_handoff_safe": False},
+        {"operator_result_category_only": False},
         {"operator_result_provided": False},
         {"operator_result_is_boolean_only": False},
     ],
@@ -146,7 +156,24 @@ def test_codex_env_access_blocks() -> None:
 def test_operator_result_blocks(overrides: dict[str, object]) -> None:
     result = _build(**overrides)
 
-    assert result.status is Status.BLOCKED_OPERATOR_CHECKER_WORKFLOW_OPERATOR_RESULT
+    assert result.status is Status.BLOCKED_OPERATOR_CHECKER_WORKFLOW_HANDOFF
+    assert result.operator_checker_workflow_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_result_raw_value_present": True},
+        {"operator_result_raw_value_saved": True},
+        {"operator_result_raw_value_displayed": True},
+    ],
+)
+def test_raw_operator_result_value_exposure_blocks(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_OPERATOR_CHECKER_WORKFLOW_RAW_VALUE_EXPOSURE
     assert result.operator_checker_workflow_ready is False
 
 
@@ -166,6 +193,13 @@ def test_stale_or_reused_blocks(overrides: dict[str, object]) -> None:
         result.status
         is Status.BLOCKED_OPERATOR_CHECKER_WORKFLOW_STALE_OR_REUSED_RESULT
     )
+    assert result.operator_checker_workflow_ready is False
+
+
+def test_timeout_blocks() -> None:
+    result = _build(operator_result_timeout=True)
+
+    assert result.status is Status.BLOCKED_OPERATOR_CHECKER_WORKFLOW_TIMEOUT
     assert result.operator_checker_workflow_ready is False
 
 
@@ -288,10 +322,14 @@ def test_renderer_includes_safety_warnings_and_no_sensitive_values() -> None:
 
     assert "This operator checker workflow is skeleton-only." in rendered
     assert "operator-side checking outside Codex" in rendered
+    assert "This operator result handoff is safe boolean/category only." in rendered
     assert "does not access env or .env" in rendered
+    assert "does not read credentials" in rendered
     assert "does not check the real environment inside Codex" in rendered
     assert "does not expose operator result detail" in rendered
+    assert "does not expose raw operator result values" in rendered
     assert "does not expose credential metadata" in rendered
+    assert "Previous-turn, reused, stale, unknown, failed, unavailable" in rendered
     assert "does not generate real signatures" in rendered
     assert "does not execute API calls" in rendered
     assert "does not execute HTTP POST" in rendered
@@ -301,13 +339,21 @@ def test_renderer_includes_safety_warnings_and_no_sensitive_values() -> None:
     assert "operator_execution_performed_outside_codex: true" in rendered
     assert "codex_execution_performed: false" in rendered
     assert "codex_env_access_requested: false" in rendered
+    assert "operator_result_handoff_declared: true" in rendered
+    assert "operator_result_handoff_safe: true" in rendered
+    assert "operator_result_category_only: true" in rendered
     assert "operator_result_provided: true" in rendered
     assert "operator_result_is_boolean_only: true" in rendered
+    assert "operator_result_raw_value_present: false" in rendered
+    assert "operator_result_raw_value_saved: false" in rendered
+    assert "operator_result_raw_value_displayed: false" in rendered
     assert "operator_result_fresh: true" in rendered
+    assert "operator_result_timeout: false" in rendered
     assert "operator_result_unknown: false" in rendered
     assert "operator_result_failed: false" in rendered
     assert "operator_result_unavailable: false" in rendered
     assert "OPERATOR_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in rendered
+    assert "RAW_OPERATOR_RESULT_VALUE_SHOULD_NOT_APPEAR" not in rendered
     assert "CREDENTIAL_METADATA_VALUE_SENTINEL" not in rendered
     assert "ENV_NAME_SHOULD_NOT_APPEAR" not in rendered
     assert "OPERATOR_SENTINEL_TEXT_SHOULD_NOT_APPEAR" not in rendered
@@ -320,6 +366,7 @@ def test_asdict_does_not_contain_sensitive_detail_strings() -> None:
     payload = repr(asdict(result))
 
     assert "OPERATOR_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in payload
+    assert "RAW_OPERATOR_RESULT_VALUE_SHOULD_NOT_APPEAR" not in payload
     assert "CHECKER_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in payload
     assert "CREDENTIAL_METADATA_VALUE_SENTINEL" not in payload
     assert "REAL_CREDENTIAL_VALUE_SENTINEL" not in payload

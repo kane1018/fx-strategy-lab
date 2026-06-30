@@ -82,6 +82,30 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-H operator result handoff hardening完了 / no env / no actual credential / no API / no POST** —
+  Step 6G-PC-X-C-VのCASE 2結論後の次Stepとして、operator-executed checker workflowの結果受け渡しを
+  safe boolean/categoryだけに限定するhardeningを追加した。Step 6G-PC-OX-Hでは
+  `backend/app/live_verification/live_order_real_operator_executed_checker_workflow.py` とStep 6G-IWに
+  `operator_result_handoff_declared=true`、`operator_result_handoff_safe=true`、
+  `operator_result_category_only=true`、`operator_result_is_boolean_only=true`、
+  `operator_result_raw_value_present=false`、`operator_result_raw_value_saved=false`、
+  `operator_result_raw_value_displayed=false`、`operator_result_previous_turn=false`、
+  `operator_result_reused=false`、`operator_result_stale=false`、
+  `operator_result_timeout=false`、`operator_result_unknown=false`、
+  `operator_result_failed=false`、`operator_result_unavailable=false`、
+  `operator_result_saved=false`、`operator_result_displayed=false`、
+  `operator_result_broadly_propagated=false` を追加・固定した。raw operator result value、
+  operator result detail、credential metadata、env variable names、sentinel value、previous-turn、
+  reused、stale、unknown、failed、unavailable、timeout はblockする。readyでも
+  `post_allowed_this_step=false`、`post_executed=false`、`http_post_executed=false`、
+  `order_endpoint_called=false`、`live_order_once_called=false` を維持する。このStepでは実API、
+  read-only API、public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、
+  `live_order_once`、実注文、ledger操作、実credential値取得、credential presence実環境確認、
+  env / `.env` access、checker execution、real credential injection、実署名値生成、実headers値生成、
+  raw request/response表示・保存、real ID表示を行わない。future checker execution / env access /
+  real credential injection / real signing / real transportは別Stepで、新しいfinal confirmationと
+  fresh preflightが必要。詳細は
+  [STEP6G_OPERATOR_EXECUTED_CHECKER_WORKFLOW.md](STEP6G_OPERATOR_EXECUTED_CHECKER_WORKFLOW.md)。
 - **Step 6G-PC-X-C checker execution contract skeleton完了 / no env / no actual credential / no actual check / no API / no POST** —
   Step 6G-PC-X-RのCASE 2結論後の次Stepとして、checker executionの入力・出力・停止条件だけを
   pure contract skeletonとして追加した。Step 6G-PC-X-Cでは

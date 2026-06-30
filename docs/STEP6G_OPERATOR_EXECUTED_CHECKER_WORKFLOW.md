@@ -4,6 +4,9 @@
 
 Step 6G-PC-OX follows the Step 6G-PC-I-R planning review. It adds an
 operator-executed checker workflow skeleton for credential presence readiness.
+Step 6G-PC-OX-H hardens that workflow result handoff after the Step
+6G-PC-X-C-V boundary review. The handoff remains skeleton-only and safe
+boolean/category only.
 
 The operator performs any credential presence confirmation outside Codex.
 Codex receives only safe boolean/category metadata. Codex does not read env or
@@ -15,6 +18,13 @@ does not execute a checker. It does not use credential values, credential
 metadata, env variable names, sentinel text, or operator checker result
 details. It does not generate real signatures or real header values. It does
 not execute API calls, HTTP POST, order endpoint calls, or `live_order_once`.
+
+Step 6G-PC-OX-H adds explicit handoff safety gates. Raw operator result values,
+operator result details, credential metadata, env variable names, sentinel
+values, previous-turn results, reused results, stale results, unknown results,
+failed results, unavailable results, and timeout results are all blocked. The
+workflow does not store or render raw operator result values, and it does not
+reuse previous operator results or previous-turn sentinels.
 
 ## Workflow Contract
 
@@ -34,10 +44,14 @@ Ready requires:
 - no Codex checker execution
 - no Codex env access request
 - no actual environment presence check performed by Codex
+- operator result handoff declared
+- operator result handoff safe
+- operator result category-only
 - operator result provided as boolean/category metadata only
+- no raw operator result value present, saved, or displayed
 - operator result fresh
 - operator result not stale, reused, or previous-turn
-- operator result not unknown, failed, or unavailable
+- operator result not unknown, failed, unavailable, or timeout
 - operator result not saved, displayed, or broadly propagated
 - no operator result detail
 - no credential values or credential metadata
@@ -55,8 +69,19 @@ Ready still means:
 - `codex_execution_performed=false`
 - `codex_env_access_requested=false`
 - `actual_environment_presence_check_performed_by_codex=false`
+- `operator_result_handoff_declared=true`
+- `operator_result_handoff_safe=true`
+- `operator_result_category_only=true`
 - `operator_result_provided=true`
+- `operator_result_is_boolean_only=true`
+- `operator_result_raw_value_present=false`
+- `operator_result_raw_value_saved=false`
+- `operator_result_raw_value_displayed=false`
 - `operator_result_fresh=true`
+- `operator_result_stale=false`
+- `operator_result_reused=false`
+- `operator_result_previous_turn=false`
+- `operator_result_timeout=false`
 - `operator_result_unknown=false`
 - `operator_result_failed=false`
 - `operator_result_unavailable=false`
@@ -86,10 +111,13 @@ The workflow blocks:
 - Codex checker execution
 - Codex env access request
 - actual environment presence check performed by Codex
+- operator result handoff not declared
+- unsafe operator result handoff
 - missing operator result
 - non-boolean/category operator result
+- raw operator result value present, saved, or displayed
 - stale, reused, or previous-turn operator result
-- unknown, failed, or unavailable operator result
+- unknown, failed, unavailable, or timeout operator result
 - operator result saved, displayed, broadly propagated, or detailed
 - credential value or credential metadata exposure
 - env variable name exposure
@@ -98,8 +126,8 @@ The workflow blocks:
 - real signing, real headers, HTTP POST, order endpoint, or `live_order_once`
 - unsafe render or serialization settings
 
-Unknown, failed, unavailable, stale, reused, and previous-turn results always
-block. They never permit POST.
+Unknown, failed, unavailable, stale, reused, previous-turn, and timeout results
+always block. They never permit POST.
 
 ## Internal Wiring
 
@@ -110,6 +138,12 @@ The internal wiring keeps only sanitized workflow flags. It does not store or
 render operator result details, credential values, credential metadata, env
 variable names, sentinel text, checker result details, raw request, raw
 response, or real IDs.
+
+Step 6G-PC-OX-H also carries the safe handoff flags into internal wiring:
+`operator_result_handoff_safe=true`, `operator_result_raw_value_present=false`,
+`operator_result_previous_turn=false`, `operator_result_reused=false`, and
+`operator_result_timeout=false`. Unsafe raw value, previous-turn, reused,
+timeout, detail, env-name, credential metadata, or POST flags fail closed.
 
 Ready internal wiring still keeps:
 

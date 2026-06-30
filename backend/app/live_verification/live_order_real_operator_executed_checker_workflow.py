@@ -32,11 +32,20 @@ class LiveOrderRealOperatorExecutedCheckerWorkflowStatus(str, Enum):
     BLOCKED_OPERATOR_CHECKER_WORKFLOW_CODEX_ENV_ACCESS = (
         "BLOCKED_OPERATOR_CHECKER_WORKFLOW_CODEX_ENV_ACCESS"
     )
+    BLOCKED_OPERATOR_CHECKER_WORKFLOW_HANDOFF = (
+        "BLOCKED_OPERATOR_CHECKER_WORKFLOW_HANDOFF"
+    )
     BLOCKED_OPERATOR_CHECKER_WORKFLOW_OPERATOR_RESULT = (
         "BLOCKED_OPERATOR_CHECKER_WORKFLOW_OPERATOR_RESULT"
     )
+    BLOCKED_OPERATOR_CHECKER_WORKFLOW_RAW_VALUE_EXPOSURE = (
+        "BLOCKED_OPERATOR_CHECKER_WORKFLOW_RAW_VALUE_EXPOSURE"
+    )
     BLOCKED_OPERATOR_CHECKER_WORKFLOW_STALE_OR_REUSED_RESULT = (
         "BLOCKED_OPERATOR_CHECKER_WORKFLOW_STALE_OR_REUSED_RESULT"
+    )
+    BLOCKED_OPERATOR_CHECKER_WORKFLOW_TIMEOUT = (
+        "BLOCKED_OPERATOR_CHECKER_WORKFLOW_TIMEOUT"
     )
     BLOCKED_OPERATOR_CHECKER_WORKFLOW_UNKNOWN_FAILED_UNAVAILABLE = (
         "BLOCKED_OPERATOR_CHECKER_WORKFLOW_UNKNOWN_FAILED_UNAVAILABLE"
@@ -89,12 +98,19 @@ class LiveOrderRealOperatorExecutedCheckerWorkflowInput:
     codex_execution_performed: bool = False
     codex_env_access_requested: bool = False
     actual_environment_presence_check_performed_by_codex: bool = False
+    operator_result_handoff_declared: bool = True
+    operator_result_handoff_safe: bool = True
+    operator_result_category_only: bool = True
     operator_result_provided: bool = True
     operator_result_is_boolean_only: bool = True
+    operator_result_raw_value_present: bool = False
+    operator_result_raw_value_saved: bool = False
+    operator_result_raw_value_displayed: bool = False
     operator_result_fresh: bool = True
     operator_result_stale: bool = False
     operator_result_reused: bool = False
     operator_result_previous_turn: bool = False
+    operator_result_timeout: bool = False
     operator_result_unknown: bool = False
     operator_result_failed: bool = False
     operator_result_unavailable: bool = False
@@ -134,12 +150,19 @@ class LiveOrderRealOperatorExecutedCheckerWorkflowInput:
                 "codex_execution_performed",
                 "codex_env_access_requested",
                 "actual_environment_presence_check_performed_by_codex",
+                "operator_result_handoff_declared",
+                "operator_result_handoff_safe",
+                "operator_result_category_only",
                 "operator_result_provided",
                 "operator_result_is_boolean_only",
+                "operator_result_raw_value_present",
+                "operator_result_raw_value_saved",
+                "operator_result_raw_value_displayed",
                 "operator_result_fresh",
                 "operator_result_stale",
                 "operator_result_reused",
                 "operator_result_previous_turn",
+                "operator_result_timeout",
                 "operator_result_unknown",
                 "operator_result_failed",
                 "operator_result_unavailable",
@@ -200,12 +223,19 @@ class LiveOrderRealOperatorExecutedCheckerWorkflowResult:
     codex_execution_performed: bool
     codex_env_access_requested: bool
     actual_environment_presence_check_performed_by_codex: bool
+    operator_result_handoff_declared: bool
+    operator_result_handoff_safe: bool
+    operator_result_category_only: bool
     operator_result_provided: bool
     operator_result_is_boolean_only: bool
+    operator_result_raw_value_present: bool
+    operator_result_raw_value_saved: bool
+    operator_result_raw_value_displayed: bool
     operator_result_fresh: bool
     operator_result_stale: bool
     operator_result_reused: bool
     operator_result_previous_turn: bool
+    operator_result_timeout: bool
     operator_result_unknown: bool
     operator_result_failed: bool
     operator_result_unavailable: bool
@@ -260,12 +290,19 @@ class LiveOrderRealOperatorExecutedCheckerWorkflowResult:
                 "codex_execution_performed",
                 "codex_env_access_requested",
                 "actual_environment_presence_check_performed_by_codex",
+                "operator_result_handoff_declared",
+                "operator_result_handoff_safe",
+                "operator_result_category_only",
                 "operator_result_provided",
                 "operator_result_is_boolean_only",
+                "operator_result_raw_value_present",
+                "operator_result_raw_value_saved",
+                "operator_result_raw_value_displayed",
                 "operator_result_fresh",
                 "operator_result_stale",
                 "operator_result_reused",
                 "operator_result_previous_turn",
+                "operator_result_timeout",
                 "operator_result_unknown",
                 "operator_result_failed",
                 "operator_result_unavailable",
@@ -312,7 +349,9 @@ def build_live_order_real_operator_executed_checker_workflow(
     codex_execution_reasons = _codex_execution_reasons(workflow_input)
     codex_env_reasons = _codex_env_reasons(workflow_input)
     operator_result_reasons = _operator_result_reasons(workflow_input)
+    raw_value_reasons = _raw_value_exposure_reasons(workflow_input)
     stale_reasons = _stale_or_reused_reasons(workflow_input)
+    timeout_reasons = _timeout_reasons(workflow_input)
     unknown_reasons = _unknown_failed_unavailable_reasons(workflow_input)
     result_exposure_reasons = _result_exposure_reasons(workflow_input)
     credential_exposure_reasons = _credential_exposure_reasons(workflow_input)
@@ -342,15 +381,27 @@ def build_live_order_real_operator_executed_checker_workflow(
     elif operator_result_reasons:
         status = (
             OperatorExecutedCheckerWorkflowStatus
-            .BLOCKED_OPERATOR_CHECKER_WORKFLOW_OPERATOR_RESULT
+            .BLOCKED_OPERATOR_CHECKER_WORKFLOW_HANDOFF
         )
         primary_reasons = operator_result_reasons
+    elif raw_value_reasons:
+        status = (
+            OperatorExecutedCheckerWorkflowStatus
+            .BLOCKED_OPERATOR_CHECKER_WORKFLOW_RAW_VALUE_EXPOSURE
+        )
+        primary_reasons = raw_value_reasons
     elif stale_reasons:
         status = (
             OperatorExecutedCheckerWorkflowStatus
             .BLOCKED_OPERATOR_CHECKER_WORKFLOW_STALE_OR_REUSED_RESULT
         )
         primary_reasons = stale_reasons
+    elif timeout_reasons:
+        status = (
+            OperatorExecutedCheckerWorkflowStatus
+            .BLOCKED_OPERATOR_CHECKER_WORKFLOW_TIMEOUT
+        )
+        primary_reasons = timeout_reasons
     elif unknown_reasons:
         status = (
             OperatorExecutedCheckerWorkflowStatus
@@ -406,7 +457,9 @@ def build_live_order_real_operator_executed_checker_workflow(
         codex_execution_reasons,
         codex_env_reasons,
         operator_result_reasons,
+        raw_value_reasons,
         stale_reasons,
+        timeout_reasons,
         unknown_reasons,
         result_exposure_reasons,
         credential_exposure_reasons,
@@ -442,14 +495,23 @@ def build_live_order_real_operator_executed_checker_workflow(
         codex_execution_performed=False,
         codex_env_access_requested=False,
         actual_environment_presence_check_performed_by_codex=False,
+        operator_result_handoff_declared=(
+            workflow_input.operator_result_handoff_declared
+        ),
+        operator_result_handoff_safe=workflow_input.operator_result_handoff_safe,
+        operator_result_category_only=workflow_input.operator_result_category_only,
         operator_result_provided=workflow_input.operator_result_provided,
         operator_result_is_boolean_only=(
             workflow_input.operator_result_is_boolean_only
         ),
+        operator_result_raw_value_present=False,
+        operator_result_raw_value_saved=False,
+        operator_result_raw_value_displayed=False,
         operator_result_fresh=workflow_input.operator_result_fresh,
         operator_result_stale=False,
         operator_result_reused=False,
         operator_result_previous_turn=False,
+        operator_result_timeout=False,
         operator_result_unknown=False,
         operator_result_failed=False,
         operator_result_unavailable=False,
@@ -493,10 +555,17 @@ def render_live_order_real_operator_executed_checker_workflow_markdown(
         "",
         "This operator checker workflow is skeleton-only.",
         "This workflow expects operator-side checking outside Codex.",
+        "This operator result handoff is safe boolean/category only.",
         "This workflow does not access env or .env.",
+        "This workflow does not read credentials.",
         "This workflow does not check the real environment inside Codex.",
         "This workflow does not expose operator result detail.",
+        "This workflow does not expose raw operator result values.",
         "This workflow does not expose credential metadata.",
+        (
+            "Previous-turn, reused, stale, unknown, failed, unavailable, "
+            "and timeout results block POST."
+        ),
         "This workflow does not generate real signatures.",
         "This workflow does not execute API calls.",
         "This workflow does not execute HTTP POST.",
@@ -547,12 +616,37 @@ def render_live_order_real_operator_executed_checker_workflow_markdown(
             "- actual_environment_presence_check_performed_by_codex: "
             f"{_bool_text(result.actual_environment_presence_check_performed_by_codex)}"
         ),
+        (
+            "- operator_result_handoff_declared: "
+            f"{_bool_text(result.operator_result_handoff_declared)}"
+        ),
+        (
+            "- operator_result_handoff_safe: "
+            f"{_bool_text(result.operator_result_handoff_safe)}"
+        ),
+        (
+            "- operator_result_category_only: "
+            f"{_bool_text(result.operator_result_category_only)}"
+        ),
         f"- operator_result_provided: {_bool_text(result.operator_result_provided)}",
         (
             "- operator_result_is_boolean_only: "
             f"{_bool_text(result.operator_result_is_boolean_only)}"
         ),
+        (
+            "- operator_result_raw_value_present: "
+            f"{_bool_text(result.operator_result_raw_value_present)}"
+        ),
+        (
+            "- operator_result_raw_value_saved: "
+            f"{_bool_text(result.operator_result_raw_value_saved)}"
+        ),
+        (
+            "- operator_result_raw_value_displayed: "
+            f"{_bool_text(result.operator_result_raw_value_displayed)}"
+        ),
         f"- operator_result_fresh: {_bool_text(result.operator_result_fresh)}",
+        f"- operator_result_timeout: {_bool_text(result.operator_result_timeout)}",
         f"- operator_result_unknown: {_bool_text(result.operator_result_unknown)}",
         f"- operator_result_failed: {_bool_text(result.operator_result_failed)}",
         (
@@ -619,14 +713,24 @@ def _build_check_results(
             "Codex does not access env or .env",
         ),
         (
-            "operator result contract",
+            "operator result handoff",
             _operator_result_reasons(workflow_input),
-            "operator result is provided as boolean/category only",
+            "operator result handoff is safe boolean/category only",
+        ),
+        (
+            "no raw operator result value exposure",
+            _raw_value_exposure_reasons(workflow_input),
+            "raw operator result values are not stored displayed or propagated",
         ),
         (
             "fresh non-reused operator result",
             _stale_or_reused_reasons(workflow_input),
             "operator result is fresh and not reused",
+        ),
+        (
+            "no timeout operator result",
+            _timeout_reasons(workflow_input),
+            "operator result did not timeout",
         ),
         (
             "known successful operator result",
@@ -707,9 +811,29 @@ def _operator_result_reasons(
     workflow_input: LiveOrderRealOperatorExecutedCheckerWorkflowInput,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
-    for field_name in ("operator_result_provided", "operator_result_is_boolean_only"):
+    for field_name in (
+        "operator_result_handoff_declared",
+        "operator_result_handoff_safe",
+        "operator_result_category_only",
+        "operator_result_provided",
+        "operator_result_is_boolean_only",
+    ):
         if not getattr(workflow_input, field_name):
             reasons.append(f"{field_name}_false")
+    return tuple(reasons)
+
+
+def _raw_value_exposure_reasons(
+    workflow_input: LiveOrderRealOperatorExecutedCheckerWorkflowInput,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    for field_name in (
+        "operator_result_raw_value_present",
+        "operator_result_raw_value_saved",
+        "operator_result_raw_value_displayed",
+    ):
+        if getattr(workflow_input, field_name):
+            reasons.append(f"{field_name}_unsafe")
     return tuple(reasons)
 
 
@@ -727,6 +851,14 @@ def _stale_or_reused_reasons(
         if getattr(workflow_input, field_name):
             reasons.append(f"{field_name}_unsafe")
     return tuple(reasons)
+
+
+def _timeout_reasons(
+    workflow_input: LiveOrderRealOperatorExecutedCheckerWorkflowInput,
+) -> tuple[str, ...]:
+    if workflow_input.operator_result_timeout:
+        return ("operator_result_timeout_unsafe",)
+    return ()
 
 
 def _unknown_failed_unavailable_reasons(
@@ -840,6 +972,10 @@ def _validate_result_safety(
         result.operator_result_stale,
         result.operator_result_reused,
         result.operator_result_previous_turn,
+        result.operator_result_raw_value_present,
+        result.operator_result_raw_value_saved,
+        result.operator_result_raw_value_displayed,
+        result.operator_result_timeout,
         result.operator_result_unknown,
         result.operator_result_failed,
         result.operator_result_unavailable,

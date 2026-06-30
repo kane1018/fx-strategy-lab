@@ -129,12 +129,19 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.codex_execution_performed is False
     assert result.codex_env_access_requested is False
     assert result.actual_environment_presence_check_performed_by_codex is False
+    assert result.operator_result_handoff_declared is True
+    assert result.operator_result_handoff_safe is True
+    assert result.operator_result_category_only is True
     assert result.operator_result_provided is True
     assert result.operator_result_is_boolean_only is True
+    assert result.operator_result_raw_value_present is False
+    assert result.operator_result_raw_value_saved is False
+    assert result.operator_result_raw_value_displayed is False
     assert result.operator_result_fresh is True
     assert result.operator_result_stale is False
     assert result.operator_result_reused is False
     assert result.operator_result_previous_turn is False
+    assert result.operator_result_timeout is False
     assert result.operator_result_unknown is False
     assert result.operator_result_failed is False
     assert result.operator_result_unavailable is False
@@ -399,6 +406,10 @@ def test_component_ready_flag_mismatch_blocks(
         {"checker_result_failed": True},
         {"codex_env_access_requested": True},
         {"actual_environment_presence_check_performed_by_codex": True},
+        {"operator_result_raw_value_present": True},
+        {"operator_result_raw_value_saved": True},
+        {"operator_result_raw_value_displayed": True},
+        {"operator_result_timeout": True},
         {"operator_result_saved": True},
         {"operator_result_displayed": True},
         {"operator_result_broadly_propagated": True},
@@ -591,6 +602,9 @@ def test_unsupported_checker_contract_mode_blocks_without_echoing_raw_value() ->
         {"operator_workflow_declared": False},
         {"operator_execution_required": False},
         {"operator_execution_performed_outside_codex": False},
+        {"operator_result_handoff_declared": False},
+        {"operator_result_handoff_safe": False},
+        {"operator_result_category_only": False},
         {"operator_result_provided": False},
         {"operator_result_is_boolean_only": False},
         {"operator_result_fresh": False},
@@ -868,10 +882,17 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "codex_execution_performed: false" in rendered
     assert "codex_env_access_requested: false" in rendered
     assert "actual_environment_presence_check_performed_by_codex: false" in rendered
+    assert "operator_result_handoff_declared: true" in rendered
+    assert "operator_result_handoff_safe: true" in rendered
+    assert "operator_result_category_only: true" in rendered
     assert "operator_result_provided: true" in rendered
     assert "operator_result_is_boolean_only: true" in rendered
+    assert "operator_result_raw_value_present: false" in rendered
+    assert "operator_result_raw_value_saved: false" in rendered
+    assert "operator_result_raw_value_displayed: false" in rendered
     assert "operator_result_fresh: true" in rendered
     assert "operator_result_unknown: false" in rendered
+    assert "operator_result_timeout: false" in rendered
     assert "operator_result_failed: false" in rendered
     assert "operator_result_unavailable: false" in rendered
     assert "operator_result_detail_present: false" in rendered
@@ -917,6 +938,7 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "RAW_RESPONSE_SENTINEL" not in rendered
     assert "REAL_ORDER_ID_SENTINEL" not in rendered
     assert "OPERATOR_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in rendered
+    assert "RAW_OPERATOR_RESULT_VALUE_SHOULD_NOT_APPEAR" not in rendered
     assert "CHECKER_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in rendered
     assert "ENV_NAME_SHOULD_NOT_APPEAR" not in rendered
     assert '{"executionType":"MARKET"' not in rendered
@@ -949,6 +971,7 @@ def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() 
     assert "OPERATOR_SENTINEL_LENGTH_SHOULD_NOT_APPEAR" not in payload
     assert "REAL_PRESENCE_CHECKER_SENTINEL" not in payload
     assert "OPERATOR_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in payload
+    assert "RAW_OPERATOR_RESULT_VALUE_SHOULD_NOT_APPEAR" not in payload
     assert "CHECKER_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in payload
     assert "ENV_NAME_SHOULD_NOT_APPEAR" not in payload
     assert '{"executionType":"MARKET"' not in payload
