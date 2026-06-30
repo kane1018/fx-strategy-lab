@@ -82,6 +82,31 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-I-S real credential presence checker implementation skeleton完了 / no env / no actual credential / no API / no POST** —
+  Step 6G-PC-OX-V後の次Stepとして、将来のreal credential presence checkerのimplementation
+  interface / lifecycle / stop conditionsだけをskeletonとして追加した。Step 6G-PC-I-Sでは
+  `backend/app/live_verification/live_order_real_credential_presence_checker_implementation.py` を追加し、
+  `CHECKER_IMPLEMENTATION_SKELETON_ONLY`、checker contract ready、operator checker workflow ready、
+  credential presence adapter/check ready、implementation interface/lifecycle declared、
+  execution deferred to future step、execution performed=false、Codex env access requested=false、
+  actual environment presence check performed=false、env access capability=false、credential read capability=false、
+  credential values/metadata=false、checker result available/detail=false、unknown/failed/unavailable/stale=false、
+  operator workflow supported/preserved=true、real signature / real headers / POST capability=false flagsだけを扱う。
+  readyでは `CREDENTIAL_PRESENCE_CHECKER_IMPLEMENTATION_READY_NO_ENV_NO_CHECK`、
+  `checker_implementation_skeleton_ready=true`、`execution_deferred_to_future_step=true`、
+  `execution_performed=false`、`codex_env_access_requested=false`、
+  `actual_environment_presence_check_performed=false`、`checker_result_available=false`、
+  `operator_workflow_preserved=true`、`http_post_executed=false`、`order_endpoint_called=false`、
+  `live_order_once_called=false`、`post_allowed_this_step=false`、`post_executed=false` を維持する。
+  Step 6G-IWにも最小連携し、checker implementation skeleton readyをready条件に加えた。
+  このStepでは実API、read-only API、public API、Private API、broker、fresh preflight、HTTP POST、
+  order endpoint、`live_order_once`、実注文、ledger操作、実credential値取得、credential presence実環境確認、
+  env / `.env` access、checker execution、checker result detail保存・表示、operator result detail保存・表示、
+  env variable names保存・表示、credential metadata取得・表示、実credential injection、実署名値生成、
+  実headers値生成、raw request/response表示・保存、real ID表示を行わない。future checker execution /
+  real credential injection / real signing / real transportは別Stepで、新しいfinal confirmationと
+  fresh preflightが必要。詳細は
+  [STEP6G_CREDENTIAL_PRESENCE_CHECKER_IMPLEMENTATION_SKELETON.md](STEP6G_CREDENTIAL_PRESENCE_CHECKER_IMPLEMENTATION_SKELETON.md)。
 - **Step 6G-PC-OX operator-executed checker workflow skeleton完了 / no env / no actual credential / no API / no POST** —
   Step 6G-PC-I-R後の次Stepとして、operatorが別途credential presenceを確認し、Codexにはsafe
   boolean/categoryだけを渡すworkflow skeletonを追加した。Step 6G-PC-OXでは

@@ -143,6 +143,18 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.operator_result_detail_present is False
     assert result.env_variable_names_present is False
     assert result.checker_result_detail_present is False
+    assert result.checker_implementation_skeleton_ready is True
+    assert result.checker_implementation_mode == "CHECKER_IMPLEMENTATION_SKELETON_ONLY"
+    assert result.implementation_interface_declared is True
+    assert result.implementation_lifecycle_declared is True
+    assert result.execution_deferred_to_future_step is True
+    assert result.execution_performed is False
+    assert result.env_access_capability_present is False
+    assert result.credential_read_capability_present is False
+    assert result.checker_result_unavailable is False
+    assert result.checker_result_stale is False
+    assert result.operator_workflow_supported is True
+    assert result.operator_workflow_preserved is True
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
@@ -463,6 +475,11 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
         is True
     )
     assert snapshot.operator_checker_workflow_result.operator_checker_workflow_ready is True
+    assert (
+        snapshot.credential_presence_checker_implementation_result
+        .checker_implementation_skeleton_ready
+        is True
+    )
 
 
 @pytest.mark.parametrize(
@@ -599,6 +616,77 @@ def test_unsupported_operator_checker_workflow_mode_blocks_without_echoing_raw_v
     assert UNSUPPORTED_SAFE_MODE in payload
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"checker_implementation_skeleton_ready": False},
+        {"implementation_interface_declared": False},
+        {"implementation_lifecycle_declared": False},
+        {"execution_deferred_to_future_step": False},
+        {"operator_workflow_supported": False},
+        {"operator_workflow_preserved": False},
+    ],
+)
+def test_checker_implementation_skeleton_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.checker_implementation_skeleton_ready is False
+
+
+def test_unsupported_checker_implementation_mode_blocks_without_echoing_raw_value() -> None:
+    result = _build(checker_implementation_mode=UNSUPPORTED_RAW_MODE)
+    rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
+    payload = repr(asdict(result))
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.checker_implementation_skeleton_ready is False
+    assert result.checker_implementation_mode == UNSUPPORTED_SAFE_MODE
+    assert (
+        result.snapshot.credential_presence_checker_implementation_result
+        .implementation_mode
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert (
+        result.snapshot.credential_presence_checker_implementation_result
+        .unsupported_implementation_mode_present
+        is True
+    )
+    assert (
+        result.snapshot.input_snapshot.checker_implementation_mode
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert UNSUPPORTED_RAW_MODE not in repr(result)
+    assert UNSUPPORTED_RAW_MODE not in rendered
+    assert UNSUPPORTED_RAW_MODE not in payload
+    assert UNSUPPORTED_SAFE_MODE in rendered
+    assert UNSUPPORTED_SAFE_MODE in payload
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"codex_env_access_requested": True},
+        {"execution_performed": True},
+        {"env_access_capability_present": True},
+        {"credential_read_capability_present": True},
+        {"checker_result_available": True},
+        {"checker_result_detail_present": True},
+        {"checker_result_unavailable": True},
+        {"checker_result_stale": True},
+    ],
+)
+def test_checker_implementation_raw_or_secret_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     result = _build()
     rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
@@ -682,6 +770,18 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "operator_result_detail_present: false" in rendered
     assert "env_variable_names_present: false" in rendered
     assert "checker_result_detail_present: false" in rendered
+    assert "checker_implementation_skeleton_ready: true" in rendered
+    assert "checker_implementation_mode: CHECKER_IMPLEMENTATION_SKELETON_ONLY" in rendered
+    assert "implementation_interface_declared: true" in rendered
+    assert "implementation_lifecycle_declared: true" in rendered
+    assert "execution_deferred_to_future_step: true" in rendered
+    assert "execution_performed: false" in rendered
+    assert "env_access_capability_present: false" in rendered
+    assert "credential_read_capability_present: false" in rendered
+    assert "checker_result_unavailable: false" in rendered
+    assert "checker_result_stale: false" in rendered
+    assert "operator_workflow_supported: true" in rendered
+    assert "operator_workflow_preserved: true" in rendered
     assert "real_checker_implementation_present: false" in rendered
     assert "env_access_allowed: false" in rendered
     assert "credential_values_read: false" in rendered
@@ -697,6 +797,7 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "RAW_RESPONSE_SENTINEL" not in rendered
     assert "REAL_ORDER_ID_SENTINEL" not in rendered
     assert "OPERATOR_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in rendered
+    assert "CHECKER_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in rendered
     assert "ENV_NAME_SHOULD_NOT_APPEAR" not in rendered
     assert '{"executionType":"MARKET"' not in rendered
     assert UNSUPPORTED_RAW_MODE not in rendered
