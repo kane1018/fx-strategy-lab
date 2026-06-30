@@ -17,6 +17,8 @@ from app.live_verification.live_order_real_step6g_internal_wiring import (
 
 CREATED_AT = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
 Status = LiveOrderRealStep6GInternalWiringStatus
+UNSUPPORTED_RAW_MODE = "MODE_RAW_SHOULD_NOT_SURFACE"
+UNSUPPORTED_SAFE_MODE = "UNSUPPORTED_REDACTED"
 
 
 def _input(**overrides: object) -> LiveOrderRealStep6GInternalWiringInput:
@@ -478,6 +480,31 @@ def test_credential_presence_checker_contract_not_ready_blocks_internal_wiring(
     assert result.credential_presence_checker_contract_ready is False
 
 
+def test_unsupported_checker_contract_mode_blocks_without_echoing_raw_value() -> None:
+    result = _build(checker_contract_mode=UNSUPPORTED_RAW_MODE)
+    rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
+    payload = repr(asdict(result))
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.credential_presence_checker_contract_ready is False
+    assert result.checker_contract_mode == UNSUPPORTED_SAFE_MODE
+    assert (
+        result.snapshot.credential_presence_checker_contract_result.checker_contract_mode
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert (
+        result.snapshot.credential_presence_checker_contract_result
+        .unsupported_checker_contract_mode_present
+        is True
+    )
+    assert result.snapshot.input_snapshot.checker_contract_mode == UNSUPPORTED_SAFE_MODE
+    assert UNSUPPORTED_RAW_MODE not in repr(result)
+    assert UNSUPPORTED_RAW_MODE not in rendered
+    assert UNSUPPORTED_RAW_MODE not in payload
+    assert UNSUPPORTED_SAFE_MODE in rendered
+    assert UNSUPPORTED_SAFE_MODE in payload
+
+
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     result = _build()
     rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
@@ -556,6 +583,7 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "RAW_RESPONSE_SENTINEL" not in rendered
     assert "REAL_ORDER_ID_SENTINEL" not in rendered
     assert '{"executionType":"MARKET"' not in rendered
+    assert UNSUPPORTED_RAW_MODE not in rendered
 
 
 def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() -> None:
@@ -568,6 +596,7 @@ def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() 
     assert "REAL_ORDER_ID_SENTINEL" not in payload
     assert "REAL_EXECUTION_ID_SENTINEL" not in payload
     assert "REAL_POSITION_ID_SENTINEL" not in payload
+    assert UNSUPPORTED_RAW_MODE not in payload
     assert "DUMMY_SIGNATURE_VALUE_SENTINEL" not in payload
     assert "DUMMY_SECRET_MATERIAL_VALUE_SENTINEL" not in payload
     assert "HANDLE_ID_SENTINEL" not in payload

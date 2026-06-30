@@ -7,7 +7,7 @@ live_order_once, real signing, or credential access.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import Enum
 
@@ -634,6 +634,7 @@ class LiveOrderRealStep6GInternalWiringResult:
         _require_non_empty("credential_injection_mode", self.credential_injection_mode)
         _require_non_empty("presence_check_mode", self.presence_check_mode)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
+        _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _validate_bool_fields(
             self,
             (
@@ -1403,6 +1404,9 @@ def build_live_order_real_step6g_internal_wiring(
         created_at=created_at,
     )
     wiring_input = wiring_snapshot.input_snapshot
+    credential_presence_checker_contract_result = (
+        wiring_snapshot.credential_presence_checker_contract_result
+    )
     order_reasons = _order_reasons(wiring_input)
     approval_reasons = _approval_reasons(wiring_input)
     preflight_reasons = _preflight_reasons(wiring_input)
@@ -1522,6 +1526,15 @@ def build_live_order_real_step6g_internal_wiring(
         unsupported_reasons,
     )
     ready = status is InternalWiringStatus.STEP6G_INTERNAL_WIRING_READY_NO_API_NO_POST
+    result_snapshot = replace(
+        wiring_snapshot,
+        input_snapshot=replace(
+            wiring_snapshot.input_snapshot,
+            checker_contract_mode=(
+                credential_presence_checker_contract_result.checker_contract_mode
+            ),
+        ),
+    )
     return LiveOrderRealStep6GInternalWiringResult(
         status=status,
         internal_wiring_ready=ready,
@@ -1610,7 +1623,9 @@ def build_live_order_real_step6g_internal_wiring(
         credential_presence_checker_contract_ready=(
             not credential_presence_checker_contract_reasons
         ),
-        checker_contract_mode=wiring_input.checker_contract_mode,
+        checker_contract_mode=(
+            credential_presence_checker_contract_result.checker_contract_mode
+        ),
         checker_contract_requested=wiring_input.checker_contract_requested,
         checker_contract_ready_requested=(
             wiring_input.checker_contract_ready_requested
@@ -1647,9 +1662,9 @@ def build_live_order_real_step6g_internal_wiring(
         post_executed=False,
         retry_allowed=False,
         loop_allowed=False,
-        check_results=_build_check_results(wiring_snapshot),
+        check_results=_build_check_results(result_snapshot),
         blocked_reasons=blocked_reasons,
-        snapshot=wiring_snapshot,
+        snapshot=result_snapshot,
         recommended_next_step=INTERNAL_WIRING_RECOMMENDED_NEXT_STEP
         if ready
         else "fix_step6g_internal_wiring_blockers_no_api_no_post",
@@ -2515,6 +2530,8 @@ def _credential_presence_checker_contract_reasons(
             "credential_presence_checker_contract_status_"
             f"{result.status.value}",
         )
+    if result.unsupported_checker_contract_mode_present:
+        reasons.append("credential_presence_checker_contract_unsupported_mode")
     if result.real_checker_implementation_present:
         reasons.append("credential_presence_checker_contract_real_checker_present")
     if result.real_checker_attached:

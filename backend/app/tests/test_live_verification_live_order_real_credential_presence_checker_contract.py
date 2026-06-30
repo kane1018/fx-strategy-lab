@@ -14,6 +14,8 @@ from app.live_verification.live_order_real_credential_presence_checker_contract 
 )
 
 Status = LiveOrderRealCredentialPresenceCheckerContractStatus
+UNSUPPORTED_RAW_MODE = "MODE_RAW_SHOULD_NOT_SURFACE"
+UNSUPPORTED_SAFE_MODE = "UNSUPPORTED_REDACTED"
 
 
 def _input(
@@ -38,6 +40,9 @@ def test_valid_checker_contract_ready_no_env_no_real_check() -> None:
     )
     assert result.credential_presence_checker_contract_ready is True
     assert result.checker_contract_mode == "CHECKER_CONTRACT_ONLY"
+    assert result.unsupported_checker_contract_mode_present is False
+    assert result.raw_checker_contract_mode_displayed is False
+    assert result.raw_checker_contract_mode_saved is False
     assert result.credential_presence_adapter_ready is True
     assert result.credential_presence_check_ready is True
     assert result.credential_boundary_ready is True
@@ -75,7 +80,6 @@ def test_valid_checker_contract_ready_no_env_no_real_check() -> None:
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"checker_contract_mode": "REAL_CHECKER_CONTRACT"},
         {"credential_presence_adapter_ready": False},
         {"credential_presence_check_ready": False},
         {"credential_boundary_ready": False},
@@ -92,6 +96,29 @@ def test_input_blockers(overrides: dict[str, object]) -> None:
 
     assert result.status is Status.BLOCKED_CREDENTIAL_PRESENCE_CHECKER_CONTRACT_INPUT
     assert result.credential_presence_checker_contract_ready is False
+
+
+def test_unsupported_checker_contract_mode_is_blocked_and_not_echoed() -> None:
+    result = _build(checker_contract_mode=UNSUPPORTED_RAW_MODE)
+    rendered = render_live_order_real_credential_presence_checker_contract_markdown(
+        result,
+    )
+    payload = repr(asdict(result))
+
+    assert (
+        result.status
+        is Status.BLOCKED_CREDENTIAL_PRESENCE_CHECKER_CONTRACT_UNSUPPORTED
+    )
+    assert result.credential_presence_checker_contract_ready is False
+    assert result.checker_contract_mode == UNSUPPORTED_SAFE_MODE
+    assert result.unsupported_checker_contract_mode_present is True
+    assert result.raw_checker_contract_mode_displayed is False
+    assert result.raw_checker_contract_mode_saved is False
+    assert UNSUPPORTED_RAW_MODE not in repr(result)
+    assert UNSUPPORTED_RAW_MODE not in rendered
+    assert UNSUPPORTED_RAW_MODE not in payload
+    assert UNSUPPORTED_SAFE_MODE in rendered
+    assert UNSUPPORTED_SAFE_MODE in payload
 
 
 @pytest.mark.parametrize(
@@ -280,6 +307,9 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "env_access_requested: false" in rendered
     assert "credential_values_read: false" in rendered
     assert "checker_result_available: false" in rendered
+    assert "unsupported_checker_contract_mode_present: false" in rendered
+    assert "raw_checker_contract_mode_displayed: false" in rendered
+    assert "raw_checker_contract_mode_saved: false" in rendered
     assert "CHECKER_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in rendered
     assert "ENV_NAME_SHOULD_NOT_APPEAR" not in rendered
     assert "OPERATOR_SENTINEL_TEXT_SHOULD_NOT_APPEAR" not in rendered
@@ -289,6 +319,7 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "RAW_RESPONSE_SENTINEL" not in rendered
     assert "REAL_ORDER_ID_SENTINEL" not in rendered
     assert "APPROVAL_COMMAND_SENTINEL" not in rendered
+    assert UNSUPPORTED_RAW_MODE not in rendered
 
 
 def test_asdict_does_not_contain_credential_env_checker_or_raw_values() -> None:
@@ -314,6 +345,7 @@ def test_asdict_does_not_contain_credential_env_checker_or_raw_values() -> None:
     assert "REAL_EXECUTION_ID_SENTINEL" not in payload
     assert "REAL_POSITION_ID_SENTINEL" not in payload
     assert "APPROVAL_COMMAND_SENTINEL" not in payload
+    assert UNSUPPORTED_RAW_MODE not in payload
 
 
 def test_new_module_does_not_import_http_private_broker_live_order_once_or_env_access() -> None:

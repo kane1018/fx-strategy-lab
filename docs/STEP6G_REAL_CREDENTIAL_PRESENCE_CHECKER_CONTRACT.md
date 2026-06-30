@@ -4,6 +4,8 @@
 
 Step 6G-PC-C follows the Step 6G-PC-A-V boundary review. It adds a real
 credential presence checker contract for a future checker implementation.
+Step 6G-PC-C-H hardens that contract before any env-adjacent implementation by
+ensuring unsupported mode input is never echoed back as raw text.
 
 This is contract-only. It is not a real checker. It does not perform an actual
 environment presence check. It does not read env or `.env`. It does not use
@@ -65,6 +67,24 @@ Ready still means:
 - `live_order_once_called=false`
 - `post_allowed_this_step=false`
 - `post_executed=false`
+
+## Step 6G-PC-C-H Hardening
+
+Unsupported `checker_contract_mode` input is fail-closed and is not retained as
+raw text in result, renderer, or `asdict` serialization.
+
+- Unsupported mode uses the safe canonical label `UNSUPPORTED_REDACTED`.
+- `unsupported_checker_contract_mode_present=true` records the category only.
+- `raw_checker_contract_mode_displayed=false` remains fixed.
+- `raw_checker_contract_mode_saved=false` remains fixed.
+- Checker result detail, env names, credential metadata, sentinel text, raw
+  request/response, approval command text, and real IDs are still not stored or
+  rendered.
+
+This hardening also keeps no env, no actual credential, no actual checker, no
+API, and no POST behavior. Future real checker implementation remains a
+separate Step, and future real execution still requires a new final
+confirmation and fresh preflight.
 
 ## Blocks
 

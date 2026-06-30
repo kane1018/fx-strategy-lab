@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-C-H checker contract hardening完了 / no env / no actual credential / no API / no POST** —
+  Step 6G-PC-C-V後の次Stepとして、PC-C checker contractのunsupported input echoを補強した。
+  unsupported `checker_contract_mode` は raw inputをresult / renderer / asdictへ残さず、
+  safe canonical label `UNSUPPORTED_REDACTED` と
+  `unsupported_checker_contract_mode_present=true` のboolean/categoryだけに正規化する。
+  `raw_checker_contract_mode_displayed=false`、`raw_checker_contract_mode_saved=false` を固定し、
+  Step 6G-IWの返却snapshotでもPC-C result由来のsafe modeだけを保持する。今回も実API、
+  read-only API、public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、
+  `live_order_once`、実注文、ledger操作、実credential値取得、credential presence実環境確認、
+  env / `.env` access、real checker attachment/execution、checker result detail保存・表示、
+  credential metadata取得・表示、実credential injection、実署名値生成、実headers値生成、
+  raw request/response表示・保存、real ID表示を行わない。future real checker implementationは別Stepで、
+  新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_REAL_CREDENTIAL_PRESENCE_CHECKER_CONTRACT.md](STEP6G_REAL_CREDENTIAL_PRESENCE_CHECKER_CONTRACT.md)。
 - **Step 6G-PC-C real credential presence checker contract完了 / no env / no actual credential / no API / no POST** —
   Step 6G-PC-A-V後の次Stepとして、将来のreal credential presence checker implementationへ進む前に、
   入力・出力・停止条件だけをcontract-onlyで定義した。Step 6G-PC-Cでは

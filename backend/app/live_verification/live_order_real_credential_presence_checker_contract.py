@@ -16,6 +16,7 @@ from app.live_verification.errors import LiveVerificationValidationError
 CREDENTIAL_PRESENCE_CHECKER_CONTRACT_RECOMMENDED_NEXT_STEP = (
     "future_real_credential_presence_check_implementation_must_be_a_separate_step"
 )
+UNSUPPORTED_CHECKER_CONTRACT_MODE_LABEL = "UNSUPPORTED_REDACTED"
 
 
 class LiveOrderRealCredentialPresenceCheckerContractStatus(str, Enum):
@@ -186,6 +187,9 @@ class LiveOrderRealCredentialPresenceCheckerContractResult:
     status: LiveOrderRealCredentialPresenceCheckerContractStatus
     credential_presence_checker_contract_ready: bool
     checker_contract_mode: str
+    unsupported_checker_contract_mode_present: bool
+    raw_checker_contract_mode_displayed: bool
+    raw_checker_contract_mode_saved: bool
     credential_presence_adapter_ready: bool
     credential_presence_check_ready: bool
     credential_boundary_ready: bool
@@ -246,6 +250,9 @@ class LiveOrderRealCredentialPresenceCheckerContractResult:
             self,
             (
                 "credential_presence_checker_contract_ready",
+                "unsupported_checker_contract_mode_present",
+                "raw_checker_contract_mode_displayed",
+                "raw_checker_contract_mode_saved",
                 "credential_presence_adapter_ready",
                 "credential_presence_check_ready",
                 "credential_boundary_ready",
@@ -303,6 +310,12 @@ def build_live_order_real_credential_presence_checker_contract(
 ) -> LiveOrderRealCredentialPresenceCheckerContractResult:
     """Build a checker contract without env, credential values, or real checks."""
     checker_input = input_snapshot or LiveOrderRealCredentialPresenceCheckerContractInput()
+    safe_checker_contract_mode = _safe_checker_contract_mode(
+        checker_input.checker_contract_mode,
+    )
+    unsupported_checker_contract_mode_present = _has_unsupported_checker_contract_mode(
+        checker_input,
+    )
 
     input_reasons = _input_reasons(checker_input)
     real_checker_present_reasons = _real_checker_present_reasons(checker_input)
@@ -411,7 +424,12 @@ def build_live_order_real_credential_presence_checker_contract(
     return LiveOrderRealCredentialPresenceCheckerContractResult(
         status=status,
         credential_presence_checker_contract_ready=ready,
-        checker_contract_mode=checker_input.checker_contract_mode,
+        checker_contract_mode=safe_checker_contract_mode,
+        unsupported_checker_contract_mode_present=(
+            unsupported_checker_contract_mode_present
+        ),
+        raw_checker_contract_mode_displayed=False,
+        raw_checker_contract_mode_saved=False,
         credential_presence_adapter_ready=checker_input.credential_presence_adapter_ready,
         credential_presence_check_ready=checker_input.credential_presence_check_ready,
         credential_boundary_ready=checker_input.credential_boundary_ready,
@@ -494,6 +512,18 @@ def render_live_order_real_credential_presence_checker_contract_markdown(
         ),
         f"- checker_contract_mode: {result.checker_contract_mode}",
         (
+            "- unsupported_checker_contract_mode_present: "
+            f"{_bool_text(result.unsupported_checker_contract_mode_present)}"
+        ),
+        (
+            "- raw_checker_contract_mode_displayed: "
+            f"{_bool_text(result.raw_checker_contract_mode_displayed)}"
+        ),
+        (
+            "- raw_checker_contract_mode_saved: "
+            f"{_bool_text(result.raw_checker_contract_mode_saved)}"
+        ),
+        (
             "- credential_presence_adapter_ready: "
             f"{_bool_text(result.credential_presence_adapter_ready)}"
         ),
@@ -558,6 +588,7 @@ def _build_check_results(
     checker_input: LiveOrderRealCredentialPresenceCheckerContractInput,
 ) -> tuple[LiveOrderRealCredentialPresenceCheckerContractCheckResult, ...]:
     input_reasons = _input_reasons(checker_input)
+    unsupported_reasons = _unsupported_reasons(checker_input)
     real_checker_reasons = _merge_reasons(
         _real_checker_present_reasons(checker_input),
         _real_check_executed_reasons(checker_input),
@@ -577,6 +608,16 @@ def _build_check_results(
             passed=not input_reasons,
             sanitized_value="ready" if not input_reasons else ",".join(input_reasons),
             expected="checker contract mode with credential presence contracts ready",
+        ),
+        LiveOrderRealCredentialPresenceCheckerContractCheckResult(
+            name="unsupported checker contract mode non exposure",
+            passed=not unsupported_reasons,
+            sanitized_value=(
+                "none"
+                if not unsupported_reasons
+                else UNSUPPORTED_CHECKER_CONTRACT_MODE_LABEL
+            ),
+            expected="raw checker contract mode is not retained or rendered",
         ),
         LiveOrderRealCredentialPresenceCheckerContractCheckResult(
             name="no real checker or actual environment check",
@@ -609,11 +650,6 @@ def _input_reasons(
     checker_input: LiveOrderRealCredentialPresenceCheckerContractInput,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
-    if (
-        checker_input.checker_contract_mode
-        != CredentialPresenceCheckerContractMode.CHECKER_CONTRACT_ONLY.value
-    ):
-        reasons.append("checker_contract_mode_not_checker_contract_only")
     for field_name in (
         "credential_presence_adapter_ready",
         "credential_presence_check_ready",
@@ -756,6 +792,8 @@ def _unsupported_reasons(
     checker_input: LiveOrderRealCredentialPresenceCheckerContractInput,
 ) -> tuple[str, ...]:
     reasons: list[str] = []
+    if _has_unsupported_checker_contract_mode(checker_input):
+        reasons.append("unsupported_checker_contract_mode_present")
     if checker_input.retry_allowed:
         reasons.append("retry_allowed_unsupported")
     if checker_input.loop_allowed:
@@ -776,6 +814,8 @@ def _validate_result_safety(
     result: LiveOrderRealCredentialPresenceCheckerContractResult,
 ) -> None:
     unsafe_flags = (
+        result.raw_checker_contract_mode_displayed,
+        result.raw_checker_contract_mode_saved,
         result.real_checker_implementation_present,
         result.real_checker_attached,
         result.real_checker_executed,
@@ -814,6 +854,36 @@ def _validate_result_safety(
         raise LiveVerificationValidationError(
             "credential presence checker contract result is unsafe",
         )
+    if result.unsupported_checker_contract_mode_present:
+        if result.checker_contract_mode != UNSUPPORTED_CHECKER_CONTRACT_MODE_LABEL:
+            raise LiveVerificationValidationError(
+                "unsupported checker contract mode must use safe label",
+            )
+    elif (
+        result.checker_contract_mode
+        != CredentialPresenceCheckerContractMode.CHECKER_CONTRACT_ONLY.value
+    ):
+        raise LiveVerificationValidationError(
+            "checker contract mode must be canonical",
+        )
+
+
+def _has_unsupported_checker_contract_mode(
+    checker_input: LiveOrderRealCredentialPresenceCheckerContractInput,
+) -> bool:
+    return (
+        checker_input.checker_contract_mode
+        != CredentialPresenceCheckerContractMode.CHECKER_CONTRACT_ONLY.value
+    )
+
+
+def _safe_checker_contract_mode(raw_checker_contract_mode: str) -> str:
+    if (
+        raw_checker_contract_mode
+        == CredentialPresenceCheckerContractMode.CHECKER_CONTRACT_ONLY.value
+    ):
+        return CredentialPresenceCheckerContractMode.CHECKER_CONTRACT_ONLY.value
+    return UNSUPPORTED_CHECKER_CONTRACT_MODE_LABEL
 
 
 def _require_non_empty(field_name: str, value: str) -> None:
