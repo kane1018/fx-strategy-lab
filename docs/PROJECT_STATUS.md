@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-TC low-level transport core完了 / pure-fake / no API / no POST** —
+  Step 6G-LTはCASE 2として、既存 `live_order_once.py` のStep 4入口をそのままStep 6Gから使わず、
+  Step 4 approval phrase / ledger `PREPARED` stateに依存しない低レベルtransport coreだけを抽出する方針を
+  確認した。Step 6G-TCでは
+  `backend/app/live_verification/live_order_real_order_transport_core.py` を追加し、Step 6G専用real adapterが
+  将来利用できるpure/fake coreとして、order body allowlist、stable JSON serialization、method/path contract、
+  redacted header-name contract、fake/sanitized transport result classification、one-shot/no-retry contract、
+  raw/secret/real ID exposure blockersを実装した。ready / classified resultでも
+  `http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false`、
+  `post_allowed_this_step=false`、`post_executed=false`、retry/loop/追加/変更/取消/決済禁止を維持する。
+  このStepでは実API、read-only API、public API、Private API、broker、fresh preflight、HTTP POST、
+  order endpoint、`live_order_once`、実注文、ledger操作、実署名値生成、実credentials利用、
+  headers値表示・保存、raw request/response表示・保存、real ID表示を行わない。
+  future real signing / real transport は別Stepで、新しいfinal confirmationとfresh preflightが必要。
+  詳細は [STEP6G_LOW_LEVEL_TRANSPORT_CORE_PLAN.md](STEP6G_LOW_LEVEL_TRANSPORT_CORE_PLAN.md)。
 - **Step 6G-RA real adapter contract完了 / stub transport only / no API / no POST** —
   Step 6G-RTはCASE 2として、既存 `live_order_once.py` のStep 4入口をそのままStep 6Gから使わず、
   Step 4 approval phrase / ledger `PREPARED` stateを偽装・強制変換しない方針を確認した。
