@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-IW internal wiring dry-run完了 / no API / no POST** —
+  Step 6G-IRはCASE 2として、PB / EB / AD / RA / TC / STの個別部品は安全境界を維持している一方、
+  同一fake/sanitized snapshotで一気通貫させる内部E2E dry-run wiringが未実装であると判定した。
+  Step 6G-IWでは `backend/app/live_verification/live_order_real_step6g_internal_wiring.py` を追加し、
+  Step 6G-PB post route bridge、Step 6G-EB fake runtime bridge、Step 6G-AD controlled adapter、
+  Step 6G-RA real adapter contract、Step 6G-TC low-level transport core、Step 6G-ST signing / private
+  transport contractsをfake/sanitizedで接続する。readyでも `http_post_executed=false`、
+  `order_endpoint_called=false`、`live_order_once_called=false`、`credential_values_provided=false`、
+  `signature_value_generated=false`、`header_values_present=false`、`post_allowed_this_step=false`、
+  `post_executed=false` を維持する。このStepでは実API、read-only API、public API、Private API、broker、
+  fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、ledger操作、credential値取得、
+  実署名値生成、実headers値生成、raw request/response表示・保存、real ID表示を行わない。
+  fake final confirmation / fake preflightは実承認・実preflightではなく、future real executionには別Stepで
+  新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_INTERNAL_WIRING_DRY_RUN.md](STEP6G_INTERNAL_WIRING_DRY_RUN.md)。
 - **Step 6G-ST real signing / private order transport contract完了 / no API / no POST / no credential value** —
   Step 6G-SRはCASE 2として、既存 `live_order_once.py` のStep 4入口をそのままStep 6Gから使わず、
   Step 4 approval phrase / ledger stateを偽装・強制変換しないまま、署名・headers・transport分類の
