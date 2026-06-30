@@ -82,6 +82,22 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-ST real signing / private order transport contract完了 / no API / no POST / no credential value** —
+  Step 6G-SRはCASE 2として、既存 `live_order_once.py` のStep 4入口をそのままStep 6Gから使わず、
+  Step 4 approval phrase / ledger stateを偽装・強制変換しないまま、署名・headers・transport分類の
+  低レベル概念だけをStep 4非依存contractへ分離する方針を確認した。Step 6G-STでは
+  `backend/app/live_verification/live_order_real_signing_contract.py` と
+  `backend/app/live_verification/live_order_real_private_order_transport.py` を追加した。real signing contractは
+  method/path、stable body contract、timestamp required、credential presence required、非秘密algorithm label、
+  header-name labels、redacted header contractだけを扱い、credential値、実署名値、実headers値、env / `.env` は
+  扱わない。private order transport contractは実HTTP clientを持たず、HTTP POSTせず、order endpointを呼ばず、
+  sanitized result categoryだけを扱い、unknown / timeout / rejectedでもretryしない。ready / classified resultでも
+  `credential_values_provided=false`、`signature_value_generated=false`、`http_post_executed=false`,
+  `order_endpoint_called=false`、`live_order_once_called=false`、`post_allowed_this_step=false`、
+  `post_executed=false` を維持する。このStepでは実API、read-only API、public API、Private API、broker、
+  fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、ledger操作、final confirmation再利用を
+  行わない。future real signing / real transport は別Stepで、新しいfinal confirmationとfresh preflightが必要。
+  詳細は [STEP6G_REAL_SIGNING_TRANSPORT_CONTRACT.md](STEP6G_REAL_SIGNING_TRANSPORT_CONTRACT.md)。
 - **Step 6G-TC low-level transport core完了 / pure-fake / no API / no POST** —
   Step 6G-LTはCASE 2として、既存 `live_order_once.py` のStep 4入口をそのままStep 6Gから使わず、
   Step 4 approval phrase / ledger `PREPARED` stateに依存しない低レベルtransport coreだけを抽出する方針を
