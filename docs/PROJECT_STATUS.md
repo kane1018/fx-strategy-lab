@@ -82,6 +82,33 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX operator-executed checker workflow skeleton完了 / no env / no actual credential / no API / no POST** —
+  Step 6G-PC-I-R後の次Stepとして、operatorが別途credential presenceを確認し、Codexにはsafe
+  boolean/categoryだけを渡すworkflow skeletonを追加した。Step 6G-PC-OXでは
+  `backend/app/live_verification/live_order_real_operator_executed_checker_workflow.py` を追加し、
+  `OPERATOR_EXECUTED_CHECKER_WORKFLOW_SKELETON_ONLY`、credential presence checker contract / adapter /
+  check ready、operator execution outside Codex、Codex execution/env access/actual environment check=false、
+  operator result provided/boolean-only/fresh、unknown/failed/unavailable/stale/reused/previous-turn=false、
+  operator result save/display/broad propagation/detail=false、credential values/metadata=false、
+  env variable names=false、sentinel value=false、checker result detail=false、real signature / real headers /
+  POST capability=false flagsだけを扱う。readyでは
+  `OPERATOR_CHECKER_WORKFLOW_READY_NO_CODEX_ENV_NO_API_NO_POST`、
+  `operator_checker_workflow_ready=true`、`operator_execution_performed_outside_codex=true`、
+  `codex_execution_performed=false`、`codex_env_access_requested=false`、
+  `actual_environment_presence_check_performed_by_codex=false`、`operator_result_unknown=false`、
+  `operator_result_failed=false`、`operator_result_unavailable=false`、
+  `http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false`、
+  `post_allowed_this_step=false`、`post_executed=false` を維持する。unknown / failed / unavailable /
+  stale / reused / previous-turn result は必ずblockする。Step 6G-IWにも最小連携し、
+  operator checker workflow readyをready条件に加えた。このStepでは実API、read-only API、public API、
+  Private API、broker、fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、
+  ledger操作、実credential値取得、credential presence実環境確認、env / `.env` access、
+  real checker attachment/execution、operator result detail保存・表示、env variable names保存・表示、
+  credential metadata取得・表示、実credential injection、実署名値生成、実headers値生成、
+  raw request/response表示・保存、real ID表示を行わない。future real checker implementation /
+  execution、real credential injection、real signing、real transportは別Stepで、新しいfinal confirmationと
+  fresh preflightが必要。詳細は
+  [STEP6G_OPERATOR_EXECUTED_CHECKER_WORKFLOW.md](STEP6G_OPERATOR_EXECUTED_CHECKER_WORKFLOW.md)。
 - **Step 6G-PC-C-H checker contract hardening完了 / no env / no actual credential / no API / no POST** —
   Step 6G-PC-C-V後の次Stepとして、PC-C checker contractのunsupported input echoを補強した。
   unsupported `checker_contract_mode` は raw inputをresult / renderer / asdictへ残さず、

@@ -117,6 +117,32 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.checker_result_displayed is False
     assert result.checker_result_unknown is False
     assert result.checker_result_failed is False
+    assert result.operator_checker_workflow_ready is True
+    assert (
+        result.operator_checker_workflow_mode
+        == "OPERATOR_EXECUTED_CHECKER_WORKFLOW_SKELETON_ONLY"
+    )
+    assert result.operator_workflow_declared is True
+    assert result.operator_execution_required is True
+    assert result.operator_execution_performed_outside_codex is True
+    assert result.codex_execution_performed is False
+    assert result.codex_env_access_requested is False
+    assert result.actual_environment_presence_check_performed_by_codex is False
+    assert result.operator_result_provided is True
+    assert result.operator_result_is_boolean_only is True
+    assert result.operator_result_fresh is True
+    assert result.operator_result_stale is False
+    assert result.operator_result_reused is False
+    assert result.operator_result_previous_turn is False
+    assert result.operator_result_unknown is False
+    assert result.operator_result_failed is False
+    assert result.operator_result_unavailable is False
+    assert result.operator_result_saved is False
+    assert result.operator_result_displayed is False
+    assert result.operator_result_broadly_propagated is False
+    assert result.operator_result_detail_present is False
+    assert result.env_variable_names_present is False
+    assert result.checker_result_detail_present is False
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
@@ -275,6 +301,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "credential_presence_checker_contract_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
+        (
+            "operator_checker_workflow_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -340,6 +370,14 @@ def test_component_ready_flag_mismatch_blocks(
         {"checker_result_broadly_propagated": True},
         {"checker_result_unknown": True},
         {"checker_result_failed": True},
+        {"codex_env_access_requested": True},
+        {"actual_environment_presence_check_performed_by_codex": True},
+        {"operator_result_saved": True},
+        {"operator_result_displayed": True},
+        {"operator_result_broadly_propagated": True},
+        {"operator_result_detail_present": True},
+        {"env_variable_names_present": True},
+        {"checker_result_detail_present": True},
         {"raw_request_displayed": True},
         {"raw_request_saved": True},
         {"raw_response_displayed": True},
@@ -424,6 +462,7 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
         .credential_presence_checker_contract_ready
         is True
     )
+    assert snapshot.operator_checker_workflow_result.operator_checker_workflow_ready is True
 
 
 @pytest.mark.parametrize(
@@ -505,6 +544,61 @@ def test_unsupported_checker_contract_mode_blocks_without_echoing_raw_value() ->
     assert UNSUPPORTED_SAFE_MODE in payload
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_workflow_declared": False},
+        {"operator_execution_required": False},
+        {"operator_execution_performed_outside_codex": False},
+        {"operator_result_provided": False},
+        {"operator_result_is_boolean_only": False},
+        {"operator_result_fresh": False},
+        {"codex_execution_performed": True},
+        {"operator_result_stale": True},
+        {"operator_result_reused": True},
+        {"operator_result_previous_turn": True},
+        {"operator_result_unknown": True},
+        {"operator_result_failed": True},
+        {"operator_result_unavailable": True},
+    ],
+)
+def test_operator_checker_workflow_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_checker_workflow_ready is False
+
+
+def test_unsupported_operator_checker_workflow_mode_blocks_without_echoing_raw_value() -> None:
+    result = _build(operator_checker_workflow_mode=UNSUPPORTED_RAW_MODE)
+    rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
+    payload = repr(asdict(result))
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_checker_workflow_ready is False
+    assert result.operator_checker_workflow_mode == UNSUPPORTED_SAFE_MODE
+    assert (
+        result.snapshot.operator_checker_workflow_result.workflow_mode
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert (
+        result.snapshot.operator_checker_workflow_result
+        .unsupported_workflow_mode_present
+        is True
+    )
+    assert (
+        result.snapshot.input_snapshot.operator_checker_workflow_mode
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert UNSUPPORTED_RAW_MODE not in repr(result)
+    assert UNSUPPORTED_RAW_MODE not in rendered
+    assert UNSUPPORTED_RAW_MODE not in payload
+    assert UNSUPPORTED_SAFE_MODE in rendered
+    assert UNSUPPORTED_SAFE_MODE in payload
+
+
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     result = _build()
     rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
@@ -568,6 +662,26 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "real_checker_executed: false" in rendered
     assert "credential_presence_checker_contract_ready: true" in rendered
     assert "checker_contract_mode: CHECKER_CONTRACT_ONLY" in rendered
+    assert "operator_checker_workflow_ready: true" in rendered
+    assert (
+        "operator_checker_workflow_mode: "
+        "OPERATOR_EXECUTED_CHECKER_WORKFLOW_SKELETON_ONLY"
+    ) in rendered
+    assert "operator_workflow_declared: true" in rendered
+    assert "operator_execution_required: true" in rendered
+    assert "operator_execution_performed_outside_codex: true" in rendered
+    assert "codex_execution_performed: false" in rendered
+    assert "codex_env_access_requested: false" in rendered
+    assert "actual_environment_presence_check_performed_by_codex: false" in rendered
+    assert "operator_result_provided: true" in rendered
+    assert "operator_result_is_boolean_only: true" in rendered
+    assert "operator_result_fresh: true" in rendered
+    assert "operator_result_unknown: false" in rendered
+    assert "operator_result_failed: false" in rendered
+    assert "operator_result_unavailable: false" in rendered
+    assert "operator_result_detail_present: false" in rendered
+    assert "env_variable_names_present: false" in rendered
+    assert "checker_result_detail_present: false" in rendered
     assert "real_checker_implementation_present: false" in rendered
     assert "env_access_allowed: false" in rendered
     assert "credential_values_read: false" in rendered
@@ -582,6 +696,8 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "RAW_REQUEST_SENTINEL" not in rendered
     assert "RAW_RESPONSE_SENTINEL" not in rendered
     assert "REAL_ORDER_ID_SENTINEL" not in rendered
+    assert "OPERATOR_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in rendered
+    assert "ENV_NAME_SHOULD_NOT_APPEAR" not in rendered
     assert '{"executionType":"MARKET"' not in rendered
     assert UNSUPPORTED_RAW_MODE not in rendered
 
@@ -611,6 +727,9 @@ def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() 
     assert "OPERATOR_SENTINEL_FINGERPRINT_SHOULD_NOT_APPEAR" not in payload
     assert "OPERATOR_SENTINEL_LENGTH_SHOULD_NOT_APPEAR" not in payload
     assert "REAL_PRESENCE_CHECKER_SENTINEL" not in payload
+    assert "OPERATOR_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in payload
+    assert "CHECKER_RESULT_DETAIL_SHOULD_NOT_APPEAR" not in payload
+    assert "ENV_NAME_SHOULD_NOT_APPEAR" not in payload
     assert '{"executionType":"MARKET"' not in payload
 
 
