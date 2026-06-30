@@ -56,6 +56,13 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.can_call_live_order_once is False
     assert result.credential_boundary_ready is True
     assert result.credential_boundary_mode == "BOUNDARY_ONLY"
+    assert result.credential_handle_ready is True
+    assert result.credential_handle_mode == "HANDLE_CONTRACT_ONLY"
+    assert result.handle_requested is True
+    assert result.handle_created is False
+    assert result.handle_contains_value is False
+    assert result.handle_contains_identifier is False
+    assert result.handle_metadata_exposed is False
     assert result.http_post_executed is False
     assert result.order_endpoint_called is False
     assert result.live_order_once_called is False
@@ -194,6 +201,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             "credential_boundary_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
+        (
+            "credential_handle_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
     ],
 )
 def test_component_ready_flag_mismatch_blocks(
@@ -218,6 +229,10 @@ def test_component_ready_flag_mismatch_blocks(
         {"credential_presence_checked_against_environment": True},
         {"env_access_requested": True},
         {"credential_metadata_exposed": True},
+        {"handle_created": True},
+        {"handle_contains_value": True},
+        {"handle_contains_identifier": True},
+        {"handle_metadata_exposed": True},
         {"raw_request_displayed": True},
         {"raw_request_saved": True},
         {"raw_response_displayed": True},
@@ -293,6 +308,7 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert snapshot.dummy_signing_result.dummy_signature_check_passed is True
     assert snapshot.http_transport_interface_result.interface_ready is True
     assert snapshot.credential_boundary_result.credential_boundary_ready is True
+    assert snapshot.credential_handle_result.credential_handle_ready is True
 
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
@@ -311,6 +327,13 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "http_transport_interface_ready: true" in rendered
     assert "credential_boundary_ready: true" in rendered
     assert "credential_boundary_mode: BOUNDARY_ONLY" in rendered
+    assert "credential_handle_ready: true" in rendered
+    assert "credential_handle_mode: HANDLE_CONTRACT_ONLY" in rendered
+    assert "handle_requested: true" in rendered
+    assert "handle_created: false" in rendered
+    assert "handle_contains_value: false" in rendered
+    assert "handle_contains_identifier: false" in rendered
+    assert "handle_metadata_exposed: false" in rendered
     assert "http_client_present: false" in rendered
     assert "can_execute_http_post: false" in rendered
     assert "credential_values_loaded: false" in rendered
@@ -336,6 +359,11 @@ def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() 
     assert "REAL_POSITION_ID_SENTINEL" not in payload
     assert "DUMMY_SIGNATURE_VALUE_SENTINEL" not in payload
     assert "DUMMY_SECRET_MATERIAL_VALUE_SENTINEL" not in payload
+    assert "HANDLE_ID_SENTINEL" not in payload
+    assert "HANDLE_TOKEN_SENTINEL" not in payload
+    assert "HANDLE_SECRET_SENTINEL" not in payload
+    assert "HANDLE_VALUE_SENTINEL" not in payload
+    assert "KEY_MATERIAL_SENTINEL" not in payload
     assert '{"executionType":"MARKET"' not in payload
 
 
