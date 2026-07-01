@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-SIGN-C signing and headers controlled implementation完了 / safe label-status-boolean only / no signature value exposure / no headers value exposure / no API / no POST** —
+  SIGN-GATE CASE 1の判断後、controlled credential injection resultを前提に、signing / headers readinessを
+  safe label / safe status / safe booleanだけへ閉じるcontrolled implementationを追加した。SIGN-Cでは
+  `backend/app/live_verification/live_order_real_signing_headers_controlled.py` を追加し、
+  `SIGNING_HEADERS_CONTROLLED_IMPLEMENTATION_ONLY`、固定safe signing label、固定safe headers label、
+  `SIGNING_HEADERS_READY_NO_TRANSPORT`、signing/headers controlled ready booleans、safe blocked reasonsだけを扱う。
+  このStepのsigning / headersはAPI/POST用の実署名値生成・実headers値生成ではない。credential値、
+  raw handle実体、credential length/hash/fingerprint、credential metadata実体、env actual name、signature値、
+  headers値、signature length/hash/fingerprint、headers metadata実体、raw request、raw response、real IDは
+  result / renderer / asdict / docsに含めない。signing readyでもPOST、API、real transport、order endpoint、
+  `live_order_once`、actual checker execution、actual result receipt、actual receipt handoff、fresh preflight、
+  final confirmation、実資金Step 6G再試行には進めない。Step 6G-IWにも
+  `signing_headers_controlled_ready` gateを最小連携し、missing / unknown / failed / unavailable / timeout /
+  unsafe exposure / credential or signature or headers exposure / transport or API / POST or order / `live_order_once`
+  をfail-closedで検査する。詳細は [STEP6G_SIGNING_HEADERS_CONTROLLED.md](STEP6G_SIGNING_HEADERS_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-SIGN-V signing and headers controlled implementation boundary review /
+  no signature value exposure / no API / no POST / no code change**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-CRED-I-C credential injection controlled implementation完了 / opaque handle only / no signing / no API / no POST** —
   CRED-I-GATE CASE 1の判断後、credential injectionをsafe boundary内で扱うcontrolled implementationを追加した。
   CRED-I-Cでは `backend/app/live_verification/live_order_real_credential_injection_controlled.py` を追加し、

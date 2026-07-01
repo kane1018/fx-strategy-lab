@@ -160,6 +160,14 @@ from app.live_verification.live_order_real_signing_contract import (
     LiveOrderRealSigningInputContract,
     build_live_order_real_signing_contract,
 )
+from app.live_verification.live_order_real_signing_headers_controlled import (
+    SAFE_HEADERS_LABEL,
+    SAFE_SIGNING_LABEL,
+    LiveOrderRealSigningHeadersControlledInput,
+    LiveOrderRealSigningHeadersControlledResult,
+    LiveOrderRealSigningHeadersControlledStatus,
+    build_live_order_real_signing_headers_controlled,
+)
 from app.live_verification.live_order_real_step6g_controlled_adapter import (
     LiveOrderRealStep6GControlledAdapterResult,
     LiveOrderRealStep6GControlledAdapterStatus,
@@ -381,6 +389,37 @@ class LiveOrderRealStep6GInternalWiringInput:
     controlled_credential_hash_exposure_attempted: bool = False
     controlled_credential_fingerprint_exposure_attempted: bool = False
     controlled_env_actual_name_exposure_attempted: bool = False
+    signing_headers_controlled_ready: bool = True
+    signing_headers_controlled_mode: str = (
+        "SIGNING_HEADERS_CONTROLLED_IMPLEMENTATION_ONLY"
+    )
+    signing_headers_controlled_declared: bool = True
+    safe_signing_label: str = SAFE_SIGNING_LABEL
+    safe_headers_label: str = SAFE_HEADERS_LABEL
+    signing_headers_unknown: bool = False
+    signing_headers_failed: bool = False
+    signing_headers_unavailable: bool = False
+    signing_headers_timeout: bool = False
+    signing_headers_unsafe_exposure: bool = False
+    signing_headers_credential_value_exposure_attempted: bool = False
+    signing_headers_credential_raw_handle_exposure_attempted: bool = False
+    signing_headers_credential_metadata_exposure_attempted: bool = False
+    signing_headers_credential_length_exposure_attempted: bool = False
+    signing_headers_credential_hash_exposure_attempted: bool = False
+    signing_headers_credential_fingerprint_exposure_attempted: bool = False
+    signing_headers_env_actual_name_exposure_attempted: bool = False
+    signing_headers_signature_value_exposure_attempted: bool = False
+    signing_headers_signature_length_exposure_attempted: bool = False
+    signing_headers_signature_hash_exposure_attempted: bool = False
+    signing_headers_signature_fingerprint_exposure_attempted: bool = False
+    signing_headers_headers_value_exposure_attempted: bool = False
+    signing_headers_headers_metadata_exposure_attempted: bool = False
+    signing_headers_real_signing_attempted: bool = False
+    signing_headers_real_headers_generation_attempted: bool = False
+    signing_headers_real_transport_allowed: bool = False
+    signing_headers_real_transport_attempted: bool = False
+    signing_headers_api_call_allowed: bool = False
+    signing_headers_api_call_attempted: bool = False
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -633,6 +672,12 @@ class LiveOrderRealStep6GInternalWiringInput:
             self.credential_injection_controlled_mode,
         )
         _require_non_empty("safe_credential_handle_label", self.safe_credential_handle_label)
+        _require_non_empty(
+            "signing_headers_controlled_mode",
+            self.signing_headers_controlled_mode,
+        )
+        _require_non_empty("safe_signing_label", self.safe_signing_label)
+        _require_non_empty("safe_headers_label", self.safe_headers_label)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -797,6 +842,32 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "controlled_credential_hash_exposure_attempted",
                 "controlled_credential_fingerprint_exposure_attempted",
                 "controlled_env_actual_name_exposure_attempted",
+                "signing_headers_controlled_ready",
+                "signing_headers_controlled_declared",
+                "signing_headers_unknown",
+                "signing_headers_failed",
+                "signing_headers_unavailable",
+                "signing_headers_timeout",
+                "signing_headers_unsafe_exposure",
+                "signing_headers_credential_value_exposure_attempted",
+                "signing_headers_credential_raw_handle_exposure_attempted",
+                "signing_headers_credential_metadata_exposure_attempted",
+                "signing_headers_credential_length_exposure_attempted",
+                "signing_headers_credential_hash_exposure_attempted",
+                "signing_headers_credential_fingerprint_exposure_attempted",
+                "signing_headers_env_actual_name_exposure_attempted",
+                "signing_headers_signature_value_exposure_attempted",
+                "signing_headers_signature_length_exposure_attempted",
+                "signing_headers_signature_hash_exposure_attempted",
+                "signing_headers_signature_fingerprint_exposure_attempted",
+                "signing_headers_headers_value_exposure_attempted",
+                "signing_headers_headers_metadata_exposure_attempted",
+                "signing_headers_real_signing_attempted",
+                "signing_headers_real_headers_generation_attempted",
+                "signing_headers_real_transport_allowed",
+                "signing_headers_real_transport_attempted",
+                "signing_headers_api_call_allowed",
+                "signing_headers_api_call_attempted",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -1026,6 +1097,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     credential_injection_controlled_result: (
         LiveOrderRealCredentialInjectionControlledResult
     )
+    signing_headers_controlled_result: LiveOrderRealSigningHeadersControlledResult
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
         LiveOrderRealCredentialPresenceCheckerContractResult
@@ -1163,6 +1235,39 @@ class LiveOrderRealStep6GInternalWiringResult:
     controlled_credential_hash_exposure_attempted: bool
     controlled_credential_fingerprint_exposure_attempted: bool
     controlled_env_actual_name_exposure_attempted: bool
+    signing_headers_controlled_ready: bool
+    signing_controlled_ready: bool
+    headers_controlled_ready: bool
+    signing_headers_controlled_mode: str
+    signing_headers_controlled_declared: bool
+    safe_signing_label: str
+    safe_headers_label: str
+    safe_signing_status: str
+    safe_headers_status: str
+    signing_headers_unknown: bool
+    signing_headers_failed: bool
+    signing_headers_unavailable: bool
+    signing_headers_timeout: bool
+    signing_headers_unsafe_exposure: bool
+    signing_headers_credential_value_exposure_attempted: bool
+    signing_headers_credential_raw_handle_exposure_attempted: bool
+    signing_headers_credential_metadata_exposure_attempted: bool
+    signing_headers_credential_length_exposure_attempted: bool
+    signing_headers_credential_hash_exposure_attempted: bool
+    signing_headers_credential_fingerprint_exposure_attempted: bool
+    signing_headers_env_actual_name_exposure_attempted: bool
+    signing_headers_signature_value_exposure_attempted: bool
+    signing_headers_signature_length_exposure_attempted: bool
+    signing_headers_signature_hash_exposure_attempted: bool
+    signing_headers_signature_fingerprint_exposure_attempted: bool
+    signing_headers_headers_value_exposure_attempted: bool
+    signing_headers_headers_metadata_exposure_attempted: bool
+    signing_headers_real_signing_attempted: bool
+    signing_headers_real_headers_generation_attempted: bool
+    signing_headers_real_transport_allowed: bool
+    signing_headers_real_transport_attempted: bool
+    signing_headers_api_call_allowed: bool
+    signing_headers_api_call_attempted: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -1385,6 +1490,14 @@ class LiveOrderRealStep6GInternalWiringResult:
         )
         _require_non_empty("safe_credential_handle_label", self.safe_credential_handle_label)
         _require_non_empty("safe_injection_status", self.safe_injection_status)
+        _require_non_empty(
+            "signing_headers_controlled_mode",
+            self.signing_headers_controlled_mode,
+        )
+        _require_non_empty("safe_signing_label", self.safe_signing_label)
+        _require_non_empty("safe_headers_label", self.safe_headers_label)
+        _require_non_empty("safe_signing_status", self.safe_signing_status)
+        _require_non_empty("safe_headers_status", self.safe_headers_status)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -1518,6 +1631,34 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "controlled_credential_hash_exposure_attempted",
                 "controlled_credential_fingerprint_exposure_attempted",
                 "controlled_env_actual_name_exposure_attempted",
+                "signing_headers_controlled_ready",
+                "signing_controlled_ready",
+                "headers_controlled_ready",
+                "signing_headers_controlled_declared",
+                "signing_headers_unknown",
+                "signing_headers_failed",
+                "signing_headers_unavailable",
+                "signing_headers_timeout",
+                "signing_headers_unsafe_exposure",
+                "signing_headers_credential_value_exposure_attempted",
+                "signing_headers_credential_raw_handle_exposure_attempted",
+                "signing_headers_credential_metadata_exposure_attempted",
+                "signing_headers_credential_length_exposure_attempted",
+                "signing_headers_credential_hash_exposure_attempted",
+                "signing_headers_credential_fingerprint_exposure_attempted",
+                "signing_headers_env_actual_name_exposure_attempted",
+                "signing_headers_signature_value_exposure_attempted",
+                "signing_headers_signature_length_exposure_attempted",
+                "signing_headers_signature_hash_exposure_attempted",
+                "signing_headers_signature_fingerprint_exposure_attempted",
+                "signing_headers_headers_value_exposure_attempted",
+                "signing_headers_headers_metadata_exposure_attempted",
+                "signing_headers_real_signing_attempted",
+                "signing_headers_real_headers_generation_attempted",
+                "signing_headers_real_transport_allowed",
+                "signing_headers_real_transport_attempted",
+                "signing_headers_api_call_allowed",
+                "signing_headers_api_call_attempted",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -2473,6 +2614,106 @@ def build_valid_step6g_internal_wiring_snapshot(
                 final_confirmation_received=wiring_input.final_confirmation_received,
             ),
             presence_result=credential_presence_controlled_result,
+        )
+    )
+    signing_headers_controlled_result = (
+        build_live_order_real_signing_headers_controlled(
+            input_snapshot=LiveOrderRealSigningHeadersControlledInput(
+                signing_headers_mode=wiring_input.signing_headers_controlled_mode,
+                signing_declared=wiring_input.signing_headers_controlled_declared,
+                headers_declared=wiring_input.signing_headers_controlled_declared,
+                signing_requested=wiring_input.signing_headers_controlled_ready,
+                headers_requested=wiring_input.signing_headers_controlled_ready,
+                safe_signing_label=wiring_input.safe_signing_label,
+                safe_headers_label=wiring_input.safe_headers_label,
+                signing_unknown=wiring_input.signing_headers_unknown,
+                signing_failed=wiring_input.signing_headers_failed,
+                signing_unavailable=wiring_input.signing_headers_unavailable,
+                signing_timeout=wiring_input.signing_headers_timeout,
+                headers_unknown=wiring_input.signing_headers_unknown,
+                headers_failed=wiring_input.signing_headers_failed,
+                headers_unavailable=wiring_input.signing_headers_unavailable,
+                headers_timeout=wiring_input.signing_headers_timeout,
+                unsafe_exposure_attempted=(
+                    wiring_input.signing_headers_unsafe_exposure
+                ),
+                credential_value_exposure_attempted=(
+                    wiring_input
+                    .signing_headers_credential_value_exposure_attempted
+                ),
+                credential_raw_handle_exposure_attempted=(
+                    wiring_input
+                    .signing_headers_credential_raw_handle_exposure_attempted
+                ),
+                credential_metadata_exposure_attempted=(
+                    wiring_input
+                    .signing_headers_credential_metadata_exposure_attempted
+                ),
+                credential_length_exposure_attempted=(
+                    wiring_input
+                    .signing_headers_credential_length_exposure_attempted
+                ),
+                credential_hash_exposure_attempted=(
+                    wiring_input.signing_headers_credential_hash_exposure_attempted
+                ),
+                credential_fingerprint_exposure_attempted=(
+                    wiring_input
+                    .signing_headers_credential_fingerprint_exposure_attempted
+                ),
+                env_actual_name_exposure_attempted=(
+                    wiring_input.signing_headers_env_actual_name_exposure_attempted
+                ),
+                signature_value_exposure_attempted=(
+                    wiring_input.signing_headers_signature_value_exposure_attempted
+                ),
+                signature_length_exposure_attempted=(
+                    wiring_input.signing_headers_signature_length_exposure_attempted
+                ),
+                signature_hash_exposure_attempted=(
+                    wiring_input.signing_headers_signature_hash_exposure_attempted
+                ),
+                signature_fingerprint_exposure_attempted=(
+                    wiring_input
+                    .signing_headers_signature_fingerprint_exposure_attempted
+                ),
+                headers_value_exposure_attempted=(
+                    wiring_input.signing_headers_headers_value_exposure_attempted
+                ),
+                headers_metadata_exposure_attempted=(
+                    wiring_input.signing_headers_headers_metadata_exposure_attempted
+                ),
+                real_signing_attempted=(
+                    wiring_input.signing_headers_real_signing_attempted
+                ),
+                real_headers_generation_attempted=(
+                    wiring_input.signing_headers_real_headers_generation_attempted
+                ),
+                real_transport_allowed=(
+                    wiring_input.signing_headers_real_transport_allowed
+                ),
+                real_transport_attempted=(
+                    wiring_input.signing_headers_real_transport_attempted
+                ),
+                api_call_allowed=wiring_input.signing_headers_api_call_allowed,
+                api_call_attempted=wiring_input.signing_headers_api_call_attempted,
+                http_post_executed=wiring_input.http_post_executed,
+                order_endpoint_called=wiring_input.order_endpoint_called,
+                live_order_once_called=wiring_input.live_order_once_called,
+                post_allowed_this_step=wiring_input.post_allowed_this_step,
+                post_executed=wiring_input.post_executed,
+                actual_checker_execution_performed=(
+                    wiring_input.actual_checker_execution_performed
+                ),
+                actual_result_receipt_received=(
+                    wiring_input.actual_result_receipt_received
+                ),
+                actual_receipt_handoff_executed=(
+                    wiring_input.actual_receipt_handoff_executed
+                ),
+                fresh_preflight_executed=wiring_input.fresh_preflight_executed,
+                final_confirmation_received=wiring_input.final_confirmation_received,
+            ),
+            injection_result=credential_injection_controlled_result,
         )
     )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
@@ -3970,6 +4211,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         credential_injection_controlled_result=(
             credential_injection_controlled_result
         ),
+        signing_headers_controlled_result=signing_headers_controlled_result,
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -4025,6 +4267,9 @@ def build_live_order_real_step6g_internal_wiring(
     credential_injection_controlled_result = (
         wiring_snapshot.credential_injection_controlled_result
     )
+    signing_headers_controlled_result = (
+        wiring_snapshot.signing_headers_controlled_result
+    )
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -4076,6 +4321,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     credential_injection_controlled_reasons = (
         _credential_injection_controlled_reasons(wiring_snapshot)
+    )
+    signing_headers_controlled_reasons = _signing_headers_controlled_reasons(
+        wiring_snapshot,
     )
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
         wiring_snapshot,
@@ -4159,6 +4407,7 @@ def build_live_order_real_step6g_internal_wiring(
         or credential_presence_check_reasons
         or credential_presence_controlled_reasons
         or credential_injection_controlled_reasons
+        or signing_headers_controlled_reasons
         or credential_presence_adapter_reasons
         or credential_presence_checker_contract_reasons
         or operator_checker_workflow_reasons
@@ -4182,6 +4431,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_presence_check_reasons,
             credential_presence_controlled_reasons,
             credential_injection_controlled_reasons,
+            signing_headers_controlled_reasons,
             credential_presence_adapter_reasons,
             credential_presence_checker_contract_reasons,
             operator_checker_workflow_reasons,
@@ -4226,6 +4476,7 @@ def build_live_order_real_step6g_internal_wiring(
         credential_presence_check_reasons,
         credential_presence_controlled_reasons,
         credential_injection_controlled_reasons,
+        signing_headers_controlled_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -4296,6 +4547,11 @@ def build_live_order_real_step6g_internal_wiring(
             safe_credential_handle_label=(
                 credential_injection_controlled_result.safe_credential_handle_label
             ),
+            signing_headers_controlled_mode=(
+                signing_headers_controlled_result.signing_headers_mode
+            ),
+            safe_signing_label=signing_headers_controlled_result.safe_signing_label,
+            safe_headers_label=signing_headers_controlled_result.safe_headers_label,
         ),
     )
     return LiveOrderRealStep6GInternalWiringResult(
@@ -4315,6 +4571,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_presence_check_reasons,
             credential_presence_controlled_reasons,
             credential_injection_controlled_reasons,
+            signing_headers_controlled_reasons,
             credential_presence_adapter_reasons,
             credential_presence_checker_contract_reasons,
             operator_checker_workflow_reasons,
@@ -4453,6 +4710,67 @@ def build_live_order_real_step6g_internal_wiring(
         controlled_credential_hash_exposure_attempted=False,
         controlled_credential_fingerprint_exposure_attempted=False,
         controlled_env_actual_name_exposure_attempted=False,
+        signing_headers_controlled_ready=(
+            not signing_headers_controlled_reasons
+        ),
+        signing_controlled_ready=(
+            signing_headers_controlled_result.signing_controlled_ready
+            and not signing_headers_controlled_reasons
+        ),
+        headers_controlled_ready=(
+            signing_headers_controlled_result.headers_controlled_ready
+            and not signing_headers_controlled_reasons
+        ),
+        signing_headers_controlled_mode=(
+            signing_headers_controlled_result.signing_headers_mode
+        ),
+        signing_headers_controlled_declared=(
+            wiring_input.signing_headers_controlled_declared
+        ),
+        safe_signing_label=signing_headers_controlled_result.safe_signing_label,
+        safe_headers_label=signing_headers_controlled_result.safe_headers_label,
+        safe_signing_status=(
+            signing_headers_controlled_result.safe_signing_status
+        ),
+        safe_headers_status=(
+            signing_headers_controlled_result.safe_headers_status
+        ),
+        signing_headers_unknown=(
+            signing_headers_controlled_result.signing_unknown
+            or signing_headers_controlled_result.headers_unknown
+        ),
+        signing_headers_failed=(
+            signing_headers_controlled_result.signing_failed
+            or signing_headers_controlled_result.headers_failed
+        ),
+        signing_headers_unavailable=(
+            signing_headers_controlled_result.signing_unavailable
+            or signing_headers_controlled_result.headers_unavailable
+        ),
+        signing_headers_timeout=(
+            signing_headers_controlled_result.signing_timeout
+            or signing_headers_controlled_result.headers_timeout
+        ),
+        signing_headers_unsafe_exposure=False,
+        signing_headers_credential_value_exposure_attempted=False,
+        signing_headers_credential_raw_handle_exposure_attempted=False,
+        signing_headers_credential_metadata_exposure_attempted=False,
+        signing_headers_credential_length_exposure_attempted=False,
+        signing_headers_credential_hash_exposure_attempted=False,
+        signing_headers_credential_fingerprint_exposure_attempted=False,
+        signing_headers_env_actual_name_exposure_attempted=False,
+        signing_headers_signature_value_exposure_attempted=False,
+        signing_headers_signature_length_exposure_attempted=False,
+        signing_headers_signature_hash_exposure_attempted=False,
+        signing_headers_signature_fingerprint_exposure_attempted=False,
+        signing_headers_headers_value_exposure_attempted=False,
+        signing_headers_headers_metadata_exposure_attempted=False,
+        signing_headers_real_signing_attempted=False,
+        signing_headers_real_headers_generation_attempted=False,
+        signing_headers_real_transport_allowed=False,
+        signing_headers_real_transport_attempted=False,
+        signing_headers_api_call_allowed=False,
+        signing_headers_api_call_attempted=False,
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
         presence_adapter_mode=wiring_input.presence_adapter_mode,
         operator_provided_presence_result=wiring_input.operator_provided_presence_result,
@@ -5017,6 +5335,122 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- controlled_env_actual_name_exposure_attempted: "
             f"{_bool_text(result.controlled_env_actual_name_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_controlled_ready: "
+            f"{_bool_text(result.signing_headers_controlled_ready)}"
+        ),
+        (
+            "- signing_controlled_ready: "
+            f"{_bool_text(result.signing_controlled_ready)}"
+        ),
+        (
+            "- headers_controlled_ready: "
+            f"{_bool_text(result.headers_controlled_ready)}"
+        ),
+        (
+            "- signing_headers_controlled_mode: "
+            f"{result.signing_headers_controlled_mode}"
+        ),
+        f"- safe_signing_label: {result.safe_signing_label}",
+        f"- safe_headers_label: {result.safe_headers_label}",
+        f"- safe_signing_status: {result.safe_signing_status}",
+        f"- safe_headers_status: {result.safe_headers_status}",
+        (
+            "- signing_headers_unknown: "
+            f"{_bool_text(result.signing_headers_unknown)}"
+        ),
+        (
+            "- signing_headers_failed: "
+            f"{_bool_text(result.signing_headers_failed)}"
+        ),
+        (
+            "- signing_headers_unavailable: "
+            f"{_bool_text(result.signing_headers_unavailable)}"
+        ),
+        (
+            "- signing_headers_timeout: "
+            f"{_bool_text(result.signing_headers_timeout)}"
+        ),
+        (
+            "- signing_headers_unsafe_exposure: "
+            f"{_bool_text(result.signing_headers_unsafe_exposure)}"
+        ),
+        (
+            "- signing_headers_credential_value_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_credential_value_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_credential_raw_handle_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_credential_raw_handle_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_credential_metadata_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_credential_metadata_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_credential_length_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_credential_length_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_credential_hash_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_credential_hash_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_credential_fingerprint_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_credential_fingerprint_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_env_actual_name_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_env_actual_name_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_signature_value_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_signature_value_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_signature_length_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_signature_length_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_signature_hash_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_signature_hash_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_signature_fingerprint_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_signature_fingerprint_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_headers_value_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_headers_value_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_headers_metadata_exposure_attempted: "
+            f"{_bool_text(result.signing_headers_headers_metadata_exposure_attempted)}"
+        ),
+        (
+            "- signing_headers_real_signing_attempted: "
+            f"{_bool_text(result.signing_headers_real_signing_attempted)}"
+        ),
+        (
+            "- signing_headers_real_headers_generation_attempted: "
+            f"{_bool_text(result.signing_headers_real_headers_generation_attempted)}"
+        ),
+        (
+            "- signing_headers_real_transport_allowed: "
+            f"{_bool_text(result.signing_headers_real_transport_allowed)}"
+        ),
+        (
+            "- signing_headers_real_transport_attempted: "
+            f"{_bool_text(result.signing_headers_real_transport_attempted)}"
+        ),
+        (
+            "- signing_headers_api_call_allowed: "
+            f"{_bool_text(result.signing_headers_api_call_allowed)}"
+        ),
+        (
+            "- signing_headers_api_call_attempted: "
+            f"{_bool_text(result.signing_headers_api_call_attempted)}"
         ),
         (
             "- credential_presence_adapter_ready: "
@@ -6371,6 +6805,98 @@ def _credential_injection_controlled_reasons(
     return tuple(reasons)
 
 
+def _signing_headers_controlled_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealSigningHeadersControlledStatus
+        .SIGNING_HEADERS_READY_NO_TRANSPORT
+    )
+    result = snapshot.signing_headers_controlled_result
+    if not snapshot.input_snapshot.signing_headers_controlled_ready:
+        reasons.append("signing_headers_controlled_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(
+            "signing_headers_controlled_status_"
+            f"{result.status.value}",
+        )
+    if not result.signing_headers_controlled_ready:
+        reasons.append("signing_headers_controlled_not_ready")
+    if not result.signing_controlled_ready:
+        reasons.append("signing_controlled_not_ready")
+    if not result.headers_controlled_ready:
+        reasons.append("headers_controlled_not_ready")
+    if not result.injection_prerequisite_checked:
+        reasons.append("signing_headers_injection_not_checked")
+    if not result.injection_prerequisite_satisfied:
+        reasons.append("signing_headers_injection_not_satisfied")
+    if not result.credential_injection_controlled_ready:
+        reasons.append("signing_headers_credential_injection_controlled_not_ready")
+    if not result.credential_injection_ready:
+        reasons.append("signing_headers_credential_injection_not_ready")
+    if result.safe_credential_handle_label != SAFE_CREDENTIAL_HANDLE_LABEL:
+        reasons.append("signing_headers_safe_credential_label_invalid")
+    if result.safe_signing_label != SAFE_SIGNING_LABEL:
+        reasons.append("signing_headers_safe_signing_label_invalid")
+    if result.safe_headers_label != SAFE_HEADERS_LABEL:
+        reasons.append("signing_headers_safe_headers_label_invalid")
+    if result.signing_unknown or result.headers_unknown:
+        reasons.append("signing_headers_unknown")
+    if result.signing_failed or result.headers_failed:
+        reasons.append("signing_headers_failed")
+    if result.signing_unavailable or result.headers_unavailable:
+        reasons.append("signing_headers_unavailable")
+    if result.signing_timeout or result.headers_timeout:
+        reasons.append("signing_headers_timeout")
+    if (
+        result.unsafe_exposure_attempted
+        or result.credential_value_exposure_attempted
+        or result.credential_raw_handle_exposure_attempted
+        or result.credential_metadata_exposure_attempted
+        or result.credential_length_exposure_attempted
+        or result.credential_hash_exposure_attempted
+        or result.credential_fingerprint_exposure_attempted
+        or result.env_actual_name_exposure_attempted
+        or result.signature_value_exposure_attempted
+        or result.signature_length_exposure_attempted
+        or result.signature_hash_exposure_attempted
+        or result.signature_fingerprint_exposure_attempted
+        or result.headers_value_exposure_attempted
+        or result.headers_metadata_exposure_attempted
+    ):
+        reasons.append("signing_headers_controlled_unsafe_exposure")
+    if (
+        result.real_signing_attempted
+        or result.real_headers_generation_attempted
+        or result.real_transport_allowed
+        or result.real_transport_attempted
+        or result.api_call_allowed
+        or result.api_call_attempted
+    ):
+        reasons.append("signing_headers_controlled_transport_or_api")
+    if (
+        result.http_post_executed
+        or result.order_endpoint_called
+        or result.post_allowed_this_step
+        or result.post_executed
+    ):
+        reasons.append("signing_headers_controlled_post_or_order")
+    if result.live_order_once_called:
+        reasons.append("signing_headers_controlled_live_order_once")
+    if result.actual_checker_execution_performed:
+        reasons.append("signing_headers_controlled_actual_checker_execution")
+    if result.actual_result_receipt_received:
+        reasons.append("signing_headers_controlled_actual_result_receipt")
+    if result.actual_receipt_handoff_executed:
+        reasons.append("signing_headers_controlled_actual_receipt_handoff")
+    if result.fresh_preflight_executed:
+        reasons.append("signing_headers_controlled_fresh_preflight")
+    if result.final_confirmation_received:
+        reasons.append("signing_headers_controlled_final_confirmation")
+    return tuple(reasons)
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -7497,6 +8023,20 @@ def _raw_or_secret_reasons(
         "controlled_credential_hash_exposure_attempted",
         "controlled_credential_fingerprint_exposure_attempted",
         "controlled_env_actual_name_exposure_attempted",
+        "signing_headers_unsafe_exposure",
+        "signing_headers_credential_value_exposure_attempted",
+        "signing_headers_credential_raw_handle_exposure_attempted",
+        "signing_headers_credential_metadata_exposure_attempted",
+        "signing_headers_credential_length_exposure_attempted",
+        "signing_headers_credential_hash_exposure_attempted",
+        "signing_headers_credential_fingerprint_exposure_attempted",
+        "signing_headers_env_actual_name_exposure_attempted",
+        "signing_headers_signature_value_exposure_attempted",
+        "signing_headers_signature_length_exposure_attempted",
+        "signing_headers_signature_hash_exposure_attempted",
+        "signing_headers_signature_fingerprint_exposure_attempted",
+        "signing_headers_headers_value_exposure_attempted",
+        "signing_headers_headers_metadata_exposure_attempted",
         "operator_presence_result_reused",
         "operator_presence_result_stale",
         "operator_presence_result_previous_turn",
@@ -7643,6 +8183,11 @@ def _build_check_results(
             "credential injection controlled",
             not _credential_injection_controlled_reasons(snapshot),
             "controlled opaque handle label ready without signing API or POST",
+        ),
+        (
+            "signing headers controlled",
+            not _signing_headers_controlled_reasons(snapshot),
+            "controlled signing headers labels ready without values API or POST",
         ),
         (
             "credential presence adapter",

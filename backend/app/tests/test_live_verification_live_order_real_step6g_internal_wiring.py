@@ -135,6 +135,42 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.controlled_credential_hash_exposure_attempted is False
     assert result.controlled_credential_fingerprint_exposure_attempted is False
     assert result.controlled_env_actual_name_exposure_attempted is False
+    assert result.signing_headers_controlled_ready is True
+    assert result.signing_controlled_ready is True
+    assert result.headers_controlled_ready is True
+    assert (
+        result.signing_headers_controlled_mode
+        == "SIGNING_HEADERS_CONTROLLED_IMPLEMENTATION_ONLY"
+    )
+    assert result.signing_headers_controlled_declared is True
+    assert result.safe_signing_label == "CONTROLLED_SIGNING_BOUNDARY"
+    assert result.safe_headers_label == "CONTROLLED_HEADERS_BOUNDARY"
+    assert result.safe_signing_status == "SIGNING_HEADERS_READY_NO_TRANSPORT"
+    assert result.safe_headers_status == "SIGNING_HEADERS_READY_NO_TRANSPORT"
+    assert result.signing_headers_unknown is False
+    assert result.signing_headers_failed is False
+    assert result.signing_headers_unavailable is False
+    assert result.signing_headers_timeout is False
+    assert result.signing_headers_unsafe_exposure is False
+    assert result.signing_headers_credential_value_exposure_attempted is False
+    assert result.signing_headers_credential_raw_handle_exposure_attempted is False
+    assert result.signing_headers_credential_metadata_exposure_attempted is False
+    assert result.signing_headers_credential_length_exposure_attempted is False
+    assert result.signing_headers_credential_hash_exposure_attempted is False
+    assert result.signing_headers_credential_fingerprint_exposure_attempted is False
+    assert result.signing_headers_env_actual_name_exposure_attempted is False
+    assert result.signing_headers_signature_value_exposure_attempted is False
+    assert result.signing_headers_signature_length_exposure_attempted is False
+    assert result.signing_headers_signature_hash_exposure_attempted is False
+    assert result.signing_headers_signature_fingerprint_exposure_attempted is False
+    assert result.signing_headers_headers_value_exposure_attempted is False
+    assert result.signing_headers_headers_metadata_exposure_attempted is False
+    assert result.signing_headers_real_signing_attempted is False
+    assert result.signing_headers_real_headers_generation_attempted is False
+    assert result.signing_headers_real_transport_allowed is False
+    assert result.signing_headers_real_transport_attempted is False
+    assert result.signing_headers_api_call_allowed is False
+    assert result.signing_headers_api_call_attempted is False
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -480,6 +516,10 @@ def test_attempt_blockers(overrides: dict[str, object]) -> None:
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
         (
+            "signing_headers_controlled_ready",
+            Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
+        ),
+        (
             "credential_presence_adapter_ready",
             Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT,
         ),
@@ -531,6 +571,20 @@ def test_component_ready_flag_mismatch_blocks(
         {"real_credential_values_available": True},
         {"real_credential_values_injected": True},
         {"credential_injection_metadata_available": True},
+        {"signing_headers_unsafe_exposure": True},
+        {"signing_headers_credential_value_exposure_attempted": True},
+        {"signing_headers_credential_raw_handle_exposure_attempted": True},
+        {"signing_headers_credential_metadata_exposure_attempted": True},
+        {"signing_headers_credential_length_exposure_attempted": True},
+        {"signing_headers_credential_hash_exposure_attempted": True},
+        {"signing_headers_credential_fingerprint_exposure_attempted": True},
+        {"signing_headers_env_actual_name_exposure_attempted": True},
+        {"signing_headers_signature_value_exposure_attempted": True},
+        {"signing_headers_signature_length_exposure_attempted": True},
+        {"signing_headers_signature_hash_exposure_attempted": True},
+        {"signing_headers_signature_fingerprint_exposure_attempted": True},
+        {"signing_headers_headers_value_exposure_attempted": True},
+        {"signing_headers_headers_metadata_exposure_attempted": True},
         {"operator_sentinel_reused": True},
         {"operator_sentinel_stale": True},
         {"operator_sentinel_previous_turn": True},
@@ -830,6 +884,80 @@ def test_credential_injection_controlled_api_signing_transport_blocks(
     assert result.credential_injection_controlled_ready is False
     assert result.post_allowed_this_step is False
     assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"signing_headers_controlled_declared": False},
+        {"signing_headers_unknown": True},
+        {"signing_headers_failed": True},
+        {"signing_headers_unavailable": True},
+        {"signing_headers_timeout": True},
+    ],
+)
+def test_signing_headers_controlled_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.signing_headers_controlled_ready is False
+    assert result.signing_controlled_ready is False
+    assert result.headers_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"signing_headers_unsafe_exposure": True},
+        {"signing_headers_credential_value_exposure_attempted": True},
+        {"signing_headers_credential_raw_handle_exposure_attempted": True},
+        {"signing_headers_credential_metadata_exposure_attempted": True},
+        {"signing_headers_credential_length_exposure_attempted": True},
+        {"signing_headers_credential_hash_exposure_attempted": True},
+        {"signing_headers_credential_fingerprint_exposure_attempted": True},
+        {"signing_headers_env_actual_name_exposure_attempted": True},
+        {"signing_headers_signature_value_exposure_attempted": True},
+        {"signing_headers_signature_length_exposure_attempted": True},
+        {"signing_headers_signature_hash_exposure_attempted": True},
+        {"signing_headers_signature_fingerprint_exposure_attempted": True},
+        {"signing_headers_headers_value_exposure_attempted": True},
+        {"signing_headers_headers_metadata_exposure_attempted": True},
+    ],
+)
+def test_signing_headers_controlled_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"signing_headers_real_signing_attempted": True},
+        {"signing_headers_real_headers_generation_attempted": True},
+        {"signing_headers_real_transport_allowed": True},
+        {"signing_headers_real_transport_attempted": True},
+        {"signing_headers_api_call_allowed": True},
+        {"signing_headers_api_call_attempted": True},
+    ],
+)
+def test_signing_headers_controlled_api_transport_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.signing_headers_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
 
 
 @pytest.mark.parametrize(
@@ -1921,6 +2049,30 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "controlled_credential_hash_exposure_attempted: false" in rendered
     assert "controlled_credential_fingerprint_exposure_attempted: false" in rendered
     assert "controlled_env_actual_name_exposure_attempted: false" in rendered
+    assert "signing_headers_controlled_ready: true" in rendered
+    assert "signing_controlled_ready: true" in rendered
+    assert "headers_controlled_ready: true" in rendered
+    assert (
+        "signing_headers_controlled_mode: "
+        "SIGNING_HEADERS_CONTROLLED_IMPLEMENTATION_ONLY"
+    ) in rendered
+    assert "safe_signing_label: CONTROLLED_SIGNING_BOUNDARY" in rendered
+    assert "safe_headers_label: CONTROLLED_HEADERS_BOUNDARY" in rendered
+    assert "safe_signing_status: SIGNING_HEADERS_READY_NO_TRANSPORT" in rendered
+    assert "safe_headers_status: SIGNING_HEADERS_READY_NO_TRANSPORT" in rendered
+    assert "signing_headers_unknown: false" in rendered
+    assert "signing_headers_failed: false" in rendered
+    assert "signing_headers_unavailable: false" in rendered
+    assert "signing_headers_timeout: false" in rendered
+    assert "signing_headers_unsafe_exposure: false" in rendered
+    assert "signing_headers_signature_value_exposure_attempted: false" in rendered
+    assert "signing_headers_headers_value_exposure_attempted: false" in rendered
+    assert "signing_headers_signature_length_exposure_attempted: false" in rendered
+    assert "signing_headers_signature_hash_exposure_attempted: false" in rendered
+    assert "signing_headers_signature_fingerprint_exposure_attempted: false" in rendered
+    assert "signing_headers_headers_metadata_exposure_attempted: false" in rendered
+    assert "signing_headers_real_transport_allowed: false" in rendered
+    assert "signing_headers_api_call_allowed: false" in rendered
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered
@@ -2109,6 +2261,10 @@ def test_asdict_does_not_contain_raw_secret_real_ids_or_full_approval_command() 
     assert UNSUPPORTED_RAW_MODE not in payload
     assert "DUMMY_SIGNATURE_VALUE_SENTINEL" not in payload
     assert "DUMMY_SECRET_MATERIAL_VALUE_SENTINEL" not in payload
+    assert "SIGNATURE_VALUE_SHOULD_NOT_APPEAR" not in payload
+    assert "HEADERS_VALUE_SHOULD_NOT_APPEAR" not in payload
+    assert "SIGNATURE_HASH_SHOULD_NOT_APPEAR" not in payload
+    assert "HEADERS_METADATA_SHOULD_NOT_APPEAR" not in payload
     assert "HANDLE_ID_SENTINEL" not in payload
     assert "HANDLE_TOKEN_SENTINEL" not in payload
     assert "HANDLE_SECRET_SENTINEL" not in payload
