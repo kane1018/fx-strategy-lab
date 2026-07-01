@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-CRED-I-C credential injection controlled implementation完了 / opaque handle only / no signing / no API / no POST** —
+  CRED-I-GATE CASE 1の判断後、credential injectionをsafe boundary内で扱うcontrolled implementationを追加した。
+  CRED-I-Cでは `backend/app/live_verification/live_order_real_credential_injection_controlled.py` を追加し、
+  `CREDENTIAL_INJECTION_CONTROLLED_IMPLEMENTATION_ONLY`、固定safe handle label、
+  `CREDENTIAL_INJECTION_READY_NO_SIGNING`、credential injection ready boolean、safe blocked reasonsだけを扱う。
+  このStepのinjectionはreal signing用のcredential値注入ではない。credential値、raw handle実体、length、hash、
+  fingerprint、metadata実体、env actual name、headers、signature、raw request、raw response、real IDは
+  result / renderer / asdict / docsに含めない。injection readyでもPOST、signing、headers generation、API、
+  `live_order_once`、actual checker execution、actual result receipt、actual receipt handoff、fresh preflight、
+  final confirmation、実資金Step 6G再試行には進めない。Step 6G-IWにも
+  `credential_injection_controlled_ready` gateを最小連携し、missing / unknown / failed / unavailable / timeout /
+  unsafe exposure / value or raw handle or metadata exposure / signing or headers / API or POST / `live_order_once`
+  をfail-closedで検査する。詳細は [STEP6G_CREDENTIAL_INJECTION_CONTROLLED.md](STEP6G_CREDENTIAL_INJECTION_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-CRED-I-V credential injection controlled implementation boundary review /
+  no credential value exposure / no signing / no API / no POST / no code change**。
 - **Step 6G-PC-OX-R-CRED-P-C credential presence check controlled implementation完了 / env access only for presence / no value exposure / no API / no POST** —
   ENV-GATE CASE 1の判断後、credential presenceをsafe booleanへ変換するcontrolled implementationを追加した。
   CRED-P-Cでは `backend/app/live_verification/live_order_real_credential_presence_controlled.py` を追加し、

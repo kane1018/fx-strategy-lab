@@ -34,6 +34,13 @@ from app.live_verification.live_order_real_credential_injection import (
     LiveOrderRealCredentialInjectionStatus,
     build_live_order_real_credential_injection,
 )
+from app.live_verification.live_order_real_credential_injection_controlled import (
+    SAFE_CREDENTIAL_HANDLE_LABEL,
+    LiveOrderRealCredentialInjectionControlledInput,
+    LiveOrderRealCredentialInjectionControlledResult,
+    LiveOrderRealCredentialInjectionControlledStatus,
+    build_live_order_real_credential_injection_controlled,
+)
 from app.live_verification.live_order_real_credential_presence_adapter import (
     LiveOrderRealCredentialPresenceAdapterInput,
     LiveOrderRealCredentialPresenceAdapterResult,
@@ -356,6 +363,24 @@ class LiveOrderRealStep6GInternalWiringInput:
     controlled_api_call_allowed: bool = False
     controlled_signing_allowed: bool = False
     controlled_transport_allowed: bool = False
+    credential_injection_controlled_ready: bool = True
+    credential_injection_controlled_mode: str = (
+        "CREDENTIAL_INJECTION_CONTROLLED_IMPLEMENTATION_ONLY"
+    )
+    credential_injection_controlled_declared: bool = True
+    safe_credential_handle_label: str = SAFE_CREDENTIAL_HANDLE_LABEL
+    controlled_injection_unknown: bool = False
+    controlled_injection_failed: bool = False
+    controlled_injection_unavailable: bool = False
+    controlled_injection_timeout: bool = False
+    controlled_injection_unsafe_exposure: bool = False
+    controlled_credential_value_exposure_attempted: bool = False
+    controlled_credential_raw_handle_exposure_attempted: bool = False
+    controlled_credential_metadata_exposure_attempted: bool = False
+    controlled_credential_length_exposure_attempted: bool = False
+    controlled_credential_hash_exposure_attempted: bool = False
+    controlled_credential_fingerprint_exposure_attempted: bool = False
+    controlled_env_actual_name_exposure_attempted: bool = False
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -603,6 +628,11 @@ class LiveOrderRealStep6GInternalWiringInput:
             "credential_presence_controlled_mode",
             self.credential_presence_controlled_mode,
         )
+        _require_non_empty(
+            "credential_injection_controlled_mode",
+            self.credential_injection_controlled_mode,
+        )
+        _require_non_empty("safe_credential_handle_label", self.safe_credential_handle_label)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -753,6 +783,20 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "controlled_api_call_allowed",
                 "controlled_signing_allowed",
                 "controlled_transport_allowed",
+                "credential_injection_controlled_ready",
+                "credential_injection_controlled_declared",
+                "controlled_injection_unknown",
+                "controlled_injection_failed",
+                "controlled_injection_unavailable",
+                "controlled_injection_timeout",
+                "controlled_injection_unsafe_exposure",
+                "controlled_credential_value_exposure_attempted",
+                "controlled_credential_raw_handle_exposure_attempted",
+                "controlled_credential_metadata_exposure_attempted",
+                "controlled_credential_length_exposure_attempted",
+                "controlled_credential_hash_exposure_attempted",
+                "controlled_credential_fingerprint_exposure_attempted",
+                "controlled_env_actual_name_exposure_attempted",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -979,6 +1023,9 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     credential_injection_result: LiveOrderRealCredentialInjectionResult
     credential_presence_check_result: LiveOrderRealCredentialPresenceCheckResult
     credential_presence_controlled_result: LiveOrderRealCredentialPresenceControlledResult
+    credential_injection_controlled_result: (
+        LiveOrderRealCredentialInjectionControlledResult
+    )
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
         LiveOrderRealCredentialPresenceCheckerContractResult
@@ -1099,6 +1146,23 @@ class LiveOrderRealStep6GInternalWiringResult:
     controlled_api_call_allowed: bool
     controlled_signing_allowed: bool
     controlled_transport_allowed: bool
+    credential_injection_controlled_ready: bool
+    credential_injection_controlled_mode: str
+    credential_injection_controlled_declared: bool
+    safe_credential_handle_label: str
+    safe_injection_status: str
+    controlled_injection_unknown: bool
+    controlled_injection_failed: bool
+    controlled_injection_unavailable: bool
+    controlled_injection_timeout: bool
+    controlled_injection_unsafe_exposure: bool
+    controlled_credential_value_exposure_attempted: bool
+    controlled_credential_raw_handle_exposure_attempted: bool
+    controlled_credential_metadata_exposure_attempted: bool
+    controlled_credential_length_exposure_attempted: bool
+    controlled_credential_hash_exposure_attempted: bool
+    controlled_credential_fingerprint_exposure_attempted: bool
+    controlled_env_actual_name_exposure_attempted: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -1315,6 +1379,12 @@ class LiveOrderRealStep6GInternalWiringResult:
             "credential_presence_controlled_mode",
             self.credential_presence_controlled_mode,
         )
+        _require_non_empty(
+            "credential_injection_controlled_mode",
+            self.credential_injection_controlled_mode,
+        )
+        _require_non_empty("safe_credential_handle_label", self.safe_credential_handle_label)
+        _require_non_empty("safe_injection_status", self.safe_injection_status)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -1434,6 +1504,20 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "controlled_api_call_allowed",
                 "controlled_signing_allowed",
                 "controlled_transport_allowed",
+                "credential_injection_controlled_ready",
+                "credential_injection_controlled_declared",
+                "controlled_injection_unknown",
+                "controlled_injection_failed",
+                "controlled_injection_unavailable",
+                "controlled_injection_timeout",
+                "controlled_injection_unsafe_exposure",
+                "controlled_credential_value_exposure_attempted",
+                "controlled_credential_raw_handle_exposure_attempted",
+                "controlled_credential_metadata_exposure_attempted",
+                "controlled_credential_length_exposure_attempted",
+                "controlled_credential_hash_exposure_attempted",
+                "controlled_credential_fingerprint_exposure_attempted",
+                "controlled_env_actual_name_exposure_attempted",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -2319,6 +2403,78 @@ def build_valid_step6g_internal_wiring_snapshot(
             ),
         )
     )
+    credential_injection_controlled_result = (
+        build_live_order_real_credential_injection_controlled(
+            input_snapshot=LiveOrderRealCredentialInjectionControlledInput(
+                injection_mode=wiring_input.credential_injection_controlled_mode,
+                injection_declared=(
+                    wiring_input.credential_injection_controlled_declared
+                ),
+                injection_requested=wiring_input.injection_requested,
+                safe_credential_handle_label=wiring_input.safe_credential_handle_label,
+                presence_unknown=wiring_input.controlled_injection_unknown,
+                presence_failed=wiring_input.controlled_injection_failed,
+                presence_unavailable=wiring_input.controlled_injection_unavailable,
+                presence_timeout=wiring_input.controlled_injection_timeout,
+                unsafe_exposure_attempted=(
+                    wiring_input.controlled_injection_unsafe_exposure
+                ),
+                credential_value_exposure_attempted=(
+                    wiring_input.controlled_credential_value_exposure_attempted
+                    or wiring_input.controlled_credential_values_present
+                ),
+                credential_raw_handle_exposure_attempted=(
+                    wiring_input
+                    .controlled_credential_raw_handle_exposure_attempted
+                ),
+                credential_metadata_exposure_attempted=(
+                    wiring_input.controlled_credential_metadata_exposure_attempted
+                    or wiring_input.controlled_credential_metadata_present
+                ),
+                credential_length_exposure_attempted=(
+                    wiring_input.controlled_credential_length_exposure_attempted
+                    or wiring_input.controlled_credential_lengths_present
+                ),
+                credential_hash_exposure_attempted=(
+                    wiring_input.controlled_credential_hash_exposure_attempted
+                    or wiring_input.controlled_credential_hashes_present
+                ),
+                credential_fingerprint_exposure_attempted=(
+                    wiring_input
+                    .controlled_credential_fingerprint_exposure_attempted
+                    or wiring_input.controlled_credential_fingerprints_present
+                ),
+                env_actual_name_exposure_attempted=(
+                    wiring_input.controlled_env_actual_name_exposure_attempted
+                    or wiring_input.controlled_env_actual_names_present
+                ),
+                actual_checker_execution_performed=(
+                    wiring_input.actual_checker_execution_performed
+                ),
+                actual_result_receipt_received=(
+                    wiring_input.actual_result_receipt_received
+                ),
+                actual_receipt_handoff_executed=(
+                    wiring_input.actual_receipt_handoff_executed
+                ),
+                can_generate_real_signature=False,
+                can_generate_real_headers=False,
+                real_signing_allowed=wiring_input.controlled_signing_allowed,
+                real_headers_generation_allowed=False,
+                real_transport_allowed=wiring_input.controlled_transport_allowed,
+                api_call_allowed=wiring_input.controlled_api_call_allowed,
+                api_call_attempted=False,
+                http_post_executed=wiring_input.http_post_executed,
+                order_endpoint_called=wiring_input.order_endpoint_called,
+                live_order_once_called=wiring_input.live_order_once_called,
+                post_allowed_this_step=wiring_input.post_allowed_this_step,
+                post_executed=wiring_input.post_executed,
+                fresh_preflight_executed=wiring_input.fresh_preflight_executed,
+                final_confirmation_received=wiring_input.final_confirmation_received,
+            ),
+            presence_result=credential_presence_controlled_result,
+        )
+    )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
         input_snapshot=LiveOrderRealCredentialPresenceAdapterInput(
             adapter_mode=wiring_input.presence_adapter_mode,
@@ -2330,6 +2486,7 @@ def build_valid_step6g_internal_wiring_snapshot(
             credential_handle_ready=credential_handle_result.credential_handle_ready,
             credential_injection_ready=(
                 credential_injection_result.credential_injection_ready
+                and credential_injection_controlled_result.credential_injection_ready
             ),
             operator_provided_presence_result=(
                 wiring_input.operator_provided_presence_result
@@ -3810,6 +3967,9 @@ def build_valid_step6g_internal_wiring_snapshot(
         credential_injection_result=credential_injection_result,
         credential_presence_check_result=credential_presence_check_result,
         credential_presence_controlled_result=credential_presence_controlled_result,
+        credential_injection_controlled_result=(
+            credential_injection_controlled_result
+        ),
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -3862,6 +4022,9 @@ def build_live_order_real_step6g_internal_wiring(
     credential_presence_controlled_result = (
         wiring_snapshot.credential_presence_controlled_result
     )
+    credential_injection_controlled_result = (
+        wiring_snapshot.credential_injection_controlled_result
+    )
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -3910,6 +4073,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     credential_presence_controlled_reasons = _credential_presence_controlled_reasons(
         wiring_snapshot,
+    )
+    credential_injection_controlled_reasons = (
+        _credential_injection_controlled_reasons(wiring_snapshot)
     )
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
         wiring_snapshot,
@@ -3992,6 +4158,7 @@ def build_live_order_real_step6g_internal_wiring(
         or credential_injection_reasons
         or credential_presence_check_reasons
         or credential_presence_controlled_reasons
+        or credential_injection_controlled_reasons
         or credential_presence_adapter_reasons
         or credential_presence_checker_contract_reasons
         or operator_checker_workflow_reasons
@@ -4014,6 +4181,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_injection_reasons,
             credential_presence_check_reasons,
             credential_presence_controlled_reasons,
+            credential_injection_controlled_reasons,
             credential_presence_adapter_reasons,
             credential_presence_checker_contract_reasons,
             operator_checker_workflow_reasons,
@@ -4057,6 +4225,7 @@ def build_live_order_real_step6g_internal_wiring(
         credential_injection_reasons,
         credential_presence_check_reasons,
         credential_presence_controlled_reasons,
+        credential_injection_controlled_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -4121,6 +4290,12 @@ def build_live_order_real_step6g_internal_wiring(
             credential_presence_controlled_mode=(
                 credential_presence_controlled_result.presence_mode
             ),
+            credential_injection_controlled_mode=(
+                credential_injection_controlled_result.injection_mode
+            ),
+            safe_credential_handle_label=(
+                credential_injection_controlled_result.safe_credential_handle_label
+            ),
         ),
     )
     return LiveOrderRealStep6GInternalWiringResult(
@@ -4139,6 +4314,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_injection_reasons,
             credential_presence_check_reasons,
             credential_presence_controlled_reasons,
+            credential_injection_controlled_reasons,
             credential_presence_adapter_reasons,
             credential_presence_checker_contract_reasons,
             operator_checker_workflow_reasons,
@@ -4242,6 +4418,41 @@ def build_live_order_real_step6g_internal_wiring(
         controlled_api_call_allowed=False,
         controlled_signing_allowed=False,
         controlled_transport_allowed=False,
+        credential_injection_controlled_ready=(
+            not credential_injection_controlled_reasons
+        ),
+        credential_injection_controlled_mode=(
+            credential_injection_controlled_result.injection_mode
+        ),
+        credential_injection_controlled_declared=(
+            wiring_input.credential_injection_controlled_declared
+        ),
+        safe_credential_handle_label=(
+            credential_injection_controlled_result.safe_credential_handle_label
+        ),
+        safe_injection_status=(
+            credential_injection_controlled_result.safe_injection_status
+        ),
+        controlled_injection_unknown=(
+            credential_injection_controlled_result.presence_unknown
+        ),
+        controlled_injection_failed=(
+            credential_injection_controlled_result.presence_failed
+        ),
+        controlled_injection_unavailable=(
+            credential_injection_controlled_result.presence_unavailable
+        ),
+        controlled_injection_timeout=(
+            credential_injection_controlled_result.presence_timeout
+        ),
+        controlled_injection_unsafe_exposure=False,
+        controlled_credential_value_exposure_attempted=False,
+        controlled_credential_raw_handle_exposure_attempted=False,
+        controlled_credential_metadata_exposure_attempted=False,
+        controlled_credential_length_exposure_attempted=False,
+        controlled_credential_hash_exposure_attempted=False,
+        controlled_credential_fingerprint_exposure_attempted=False,
+        controlled_env_actual_name_exposure_attempted=False,
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
         presence_adapter_mode=wiring_input.presence_adapter_mode,
         operator_provided_presence_result=wiring_input.operator_provided_presence_result,
@@ -4745,6 +4956,67 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- controlled_credential_metadata_present: "
             f"{_bool_text(result.controlled_credential_metadata_present)}"
+        ),
+        (
+            "- credential_injection_controlled_ready: "
+            f"{_bool_text(result.credential_injection_controlled_ready)}"
+        ),
+        (
+            "- credential_injection_controlled_mode: "
+            f"{result.credential_injection_controlled_mode}"
+        ),
+        (
+            "- safe_credential_handle_label: "
+            f"{result.safe_credential_handle_label}"
+        ),
+        f"- safe_injection_status: {result.safe_injection_status}",
+        (
+            "- controlled_injection_unknown: "
+            f"{_bool_text(result.controlled_injection_unknown)}"
+        ),
+        (
+            "- controlled_injection_failed: "
+            f"{_bool_text(result.controlled_injection_failed)}"
+        ),
+        (
+            "- controlled_injection_unavailable: "
+            f"{_bool_text(result.controlled_injection_unavailable)}"
+        ),
+        (
+            "- controlled_injection_timeout: "
+            f"{_bool_text(result.controlled_injection_timeout)}"
+        ),
+        (
+            "- controlled_injection_unsafe_exposure: "
+            f"{_bool_text(result.controlled_injection_unsafe_exposure)}"
+        ),
+        (
+            "- controlled_credential_value_exposure_attempted: "
+            f"{_bool_text(result.controlled_credential_value_exposure_attempted)}"
+        ),
+        (
+            "- controlled_credential_raw_handle_exposure_attempted: "
+            f"{_bool_text(result.controlled_credential_raw_handle_exposure_attempted)}"
+        ),
+        (
+            "- controlled_credential_metadata_exposure_attempted: "
+            f"{_bool_text(result.controlled_credential_metadata_exposure_attempted)}"
+        ),
+        (
+            "- controlled_credential_length_exposure_attempted: "
+            f"{_bool_text(result.controlled_credential_length_exposure_attempted)}"
+        ),
+        (
+            "- controlled_credential_hash_exposure_attempted: "
+            f"{_bool_text(result.controlled_credential_hash_exposure_attempted)}"
+        ),
+        (
+            "- controlled_credential_fingerprint_exposure_attempted: "
+            f"{_bool_text(result.controlled_credential_fingerprint_exposure_attempted)}"
+        ),
+        (
+            "- controlled_env_actual_name_exposure_attempted: "
+            f"{_bool_text(result.controlled_env_actual_name_exposure_attempted)}"
         ),
         (
             "- credential_presence_adapter_ready: "
@@ -6024,6 +6296,81 @@ def _credential_presence_controlled_reasons(
     return tuple(reasons)
 
 
+def _credential_injection_controlled_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealCredentialInjectionControlledStatus
+        .CREDENTIAL_INJECTION_READY_NO_SIGNING
+    )
+    result = snapshot.credential_injection_controlled_result
+    if not snapshot.input_snapshot.credential_injection_controlled_ready:
+        reasons.append("credential_injection_controlled_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(
+            "credential_injection_controlled_status_"
+            f"{result.status.value}",
+        )
+    if not result.credential_injection_ready:
+        reasons.append("credential_injection_controlled_not_ready")
+    if not result.presence_prerequisite_checked:
+        reasons.append("credential_injection_controlled_presence_not_checked")
+    if not result.presence_prerequisite_satisfied:
+        reasons.append("credential_injection_controlled_presence_not_satisfied")
+    if result.safe_credential_handle_label != SAFE_CREDENTIAL_HANDLE_LABEL:
+        reasons.append("credential_injection_controlled_safe_label_invalid")
+    if result.presence_unknown:
+        reasons.append("credential_injection_controlled_unknown")
+    if result.presence_failed:
+        reasons.append("credential_injection_controlled_failed")
+    if result.presence_unavailable:
+        reasons.append("credential_injection_controlled_unavailable")
+    if result.presence_timeout:
+        reasons.append("credential_injection_controlled_timeout")
+    if (
+        result.unsafe_exposure_attempted
+        or result.credential_value_exposure_attempted
+        or result.credential_raw_handle_exposure_attempted
+        or result.credential_metadata_exposure_attempted
+        or result.credential_length_exposure_attempted
+        or result.credential_hash_exposure_attempted
+        or result.credential_fingerprint_exposure_attempted
+        or result.env_actual_name_exposure_attempted
+    ):
+        reasons.append("credential_injection_controlled_unsafe_exposure")
+    if (
+        result.can_generate_real_signature
+        or result.can_generate_real_headers
+        or result.real_signing_allowed
+        or result.real_headers_generation_allowed
+        or result.real_transport_allowed
+    ):
+        reasons.append("credential_injection_controlled_signing_or_headers")
+    if (
+        result.api_call_allowed
+        or result.api_call_attempted
+        or result.http_post_executed
+        or result.order_endpoint_called
+        or result.post_allowed_this_step
+        or result.post_executed
+    ):
+        reasons.append("credential_injection_controlled_api_or_post")
+    if result.live_order_once_called:
+        reasons.append("credential_injection_controlled_live_order_once")
+    if result.actual_checker_execution_performed:
+        reasons.append("credential_injection_controlled_actual_checker_execution")
+    if result.actual_result_receipt_received:
+        reasons.append("credential_injection_controlled_actual_result_receipt")
+    if result.actual_receipt_handoff_executed:
+        reasons.append("credential_injection_controlled_actual_receipt_handoff")
+    if result.fresh_preflight_executed:
+        reasons.append("credential_injection_controlled_fresh_preflight")
+    if result.final_confirmation_received:
+        reasons.append("credential_injection_controlled_final_confirmation")
+    return tuple(reasons)
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -7142,6 +7489,14 @@ def _raw_or_secret_reasons(
         "controlled_credential_hashes_present",
         "controlled_credential_fingerprints_present",
         "controlled_credential_metadata_present",
+        "controlled_injection_unsafe_exposure",
+        "controlled_credential_value_exposure_attempted",
+        "controlled_credential_raw_handle_exposure_attempted",
+        "controlled_credential_metadata_exposure_attempted",
+        "controlled_credential_length_exposure_attempted",
+        "controlled_credential_hash_exposure_attempted",
+        "controlled_credential_fingerprint_exposure_attempted",
+        "controlled_env_actual_name_exposure_attempted",
         "operator_presence_result_reused",
         "operator_presence_result_stale",
         "operator_presence_result_previous_turn",
@@ -7283,6 +7638,11 @@ def _build_check_results(
             "credential presence controlled",
             not _credential_presence_controlled_reasons(snapshot),
             "controlled process env presence boolean ready without POST",
+        ),
+        (
+            "credential injection controlled",
+            not _credential_injection_controlled_reasons(snapshot),
+            "controlled opaque handle label ready without signing API or POST",
         ),
         (
             "credential presence adapter",
