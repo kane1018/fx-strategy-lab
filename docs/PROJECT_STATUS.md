@@ -82,6 +82,31 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-C operator-side execution result category contract完了 / no env / no actual execution / no API / no POST** —
+  Step 6G-PC-OX-E-B-VのCASE 2結論後の次Stepとして、operator側で将来実行したchecker resultを
+  Codexへ渡す際のsafe categoryだけをpure contractとして追加した。Step 6G-PC-OX-R-Cでは
+  `backend/app/live_verification/live_order_real_operator_execution_result_category_contract.py` を追加し、
+  `OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT_ONLY`、allowed category set declared、operator executed execution
+  boundary ready、operator result handoff safe、operator checker workflow ready、safe enum labels
+  `NOT_PROVIDED` / `READY_CONFIRMED` / `BLOCKED_UNKNOWN` / `BLOCKED_FAILED` / `BLOCKED_UNAVAILABLE` /
+  `BLOCKED_STALE` / `BLOCKED_TIMEOUT` / `BLOCKED_REUSED` / `BLOCKED_PREVIOUS_TURN` /
+  `BLOCKED_UNSAFE_DETAIL` / `BLOCKED_UNSUPPORTED` だけを扱う。ready no resultでは
+  `OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT_READY_NO_RESULT`、`operator_result_category=NOT_PROVIDED`、
+  `operator_result_provided=false`、`operator_result_ready_confirmed=false`、`post_allowed_this_step=false`、
+  `post_executed=false` を維持する。ready confirmedでは
+  `OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT_READY_CONFIRMED_NO_POST` だが、READY_CONFIRMEDはPOST許可ではなく、
+  `can_generate_real_signature=false`、`can_generate_real_headers=false`、`can_execute_http_post=false`、
+  `post_allowed_this_step=false`、`post_executed=false` を維持する。unknown / failed / unavailable / stale /
+  timeout / reused / previous-turn categoriesは必ずblockする。Step 6G-IWにも最小連携し、
+  `operator_execution_result_category_contract_ready` gateをready条件に加えた。このStepでは実API、read-only API、
+  public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、
+  ledger操作、実credential値取得、credential presence実環境確認、env / `.env` access、checker execution、
+  operator actual result受信処理、operator result detail/raw保存・表示、checker result detail保存・表示、
+  env variable names保存・表示、credential metadata取得・表示、実credential injection、実署名値生成、
+  実headers値生成、raw request/response表示・保存、real ID表示を行わない。future actual checker execution /
+  env access / real credential injection / real signing / real transportは別Stepで、新しいfinal confirmationと
+  fresh preflightが必要。詳細は
+  [STEP6G_OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT.md](STEP6G_OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT.md)。
 - **Step 6G-PC-OX-E-B operator-executed execution boundary formalization完了 / no env / no actual credential / no API / no POST** —
   Step 6G-PC-X-P-RのCASE 2結論後の次Stepとして、operator側の将来actual checker executionと
   Codex側safe boolean/category handoffの正式境界をpure skeletonとして追加した。Step 6G-PC-OX-E-Bでは

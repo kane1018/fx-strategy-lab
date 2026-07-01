@@ -169,6 +169,18 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.operator_execution_must_be_outside_codex is True
     assert result.codex_execution_forbidden is True
     assert result.operator_execution_performed is False
+    assert result.operator_execution_result_category_contract_ready is True
+    assert (
+        result.operator_execution_result_category_contract_mode
+        == "OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT_ONLY"
+    )
+    assert result.category_contract_declared is True
+    assert result.allowed_category_set_declared is True
+    assert result.operator_result_category == "NOT_PROVIDED"
+    assert result.operator_result_category_is_safe_label is True
+    assert result.operator_result_category_is_allowed is True
+    assert result.operator_result_ready_confirmed is False
+    assert result.operator_result_blocked is False
     assert result.execution_contract_declared is True
     assert result.execution_inputs_declared is True
     assert result.execution_outputs_declared is True
@@ -1006,6 +1018,120 @@ def test_operator_executed_execution_boundary_post_allowed_blocks_internal_wirin
 
 
 def test_operator_executed_execution_boundary_post_executed_hard_stops_internal_wiring(
+) -> None:
+    with pytest.raises(LiveVerificationValidationError):
+        _build(post_executed=True)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_execution_result_category_contract_ready": False},
+        {"category_contract_declared": False},
+        {"allowed_category_set_declared": False},
+        {"operator_result_category_is_safe_label": False},
+        {"operator_result_category_is_allowed": False},
+    ],
+)
+def test_operator_execution_result_category_contract_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_execution_result_category_contract_ready is False
+    assert result.internal_wiring_ready is False
+
+
+def test_unsupported_operator_result_category_blocks_without_echoing_raw_value(
+) -> None:
+    result = _build(operator_result_category=UNSUPPORTED_RAW_MODE)
+    rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
+    payload = repr(asdict(result))
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_execution_result_category_contract_ready is False
+    assert result.operator_result_category == UNSUPPORTED_SAFE_MODE
+    assert (
+        result.snapshot.operator_execution_result_category_contract_result
+        .operator_result_category
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert result.snapshot.input_snapshot.operator_result_category == (
+        UNSUPPORTED_SAFE_MODE
+    )
+    assert UNSUPPORTED_RAW_MODE not in repr(result)
+    assert UNSUPPORTED_RAW_MODE not in rendered
+    assert UNSUPPORTED_RAW_MODE not in payload
+    assert UNSUPPORTED_SAFE_MODE in rendered
+    assert UNSUPPORTED_SAFE_MODE in payload
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_result_category": "BLOCKED_UNKNOWN"},
+        {"operator_result_category": "BLOCKED_FAILED"},
+        {"operator_result_category": "BLOCKED_UNAVAILABLE"},
+        {"operator_result_category": "BLOCKED_STALE"},
+        {"operator_result_category": "BLOCKED_TIMEOUT"},
+        {"operator_result_category": "BLOCKED_REUSED"},
+        {"operator_result_category": "BLOCKED_PREVIOUS_TURN"},
+    ],
+)
+def test_operator_execution_result_blocked_categories_block_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_execution_result_category_contract_ready is False
+    assert result.operator_result_blocked is True
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+def test_operator_execution_result_ready_confirmed_does_not_allow_post(
+) -> None:
+    result = _build(operator_result_category="READY_CONFIRMED")
+
+    assert result.status is Status.STEP6G_INTERNAL_WIRING_READY_NO_API_NO_POST
+    assert result.operator_execution_result_category_contract_ready is True
+    assert result.operator_result_category == "READY_CONFIRMED"
+    assert result.operator_result_ready_confirmed is True
+    assert result.can_execute_http_post is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_result_raw_value_present": True},
+        {"operator_result_detail_present": True},
+        {"env_access_requested": True},
+        {"credential_read_performed": True},
+        {"operator_execution_performed": True},
+    ],
+)
+def test_operator_execution_result_category_raw_or_secret_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_execution_result_category_post_allowed_blocks_internal_wiring(
+) -> None:
+    result = _build(post_allowed_this_step=True)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_ROUTE_BRIDGE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_execution_result_category_post_executed_hard_stops_internal_wiring(
 ) -> None:
     with pytest.raises(LiveVerificationValidationError):
         _build(post_executed=True)

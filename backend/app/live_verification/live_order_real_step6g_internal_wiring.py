@@ -94,6 +94,13 @@ from app.live_verification.live_order_real_operator_executed_execution_boundary 
     LiveOrderRealOperatorExecutedExecutionBoundaryStatus,
     build_live_order_real_operator_executed_execution_boundary,
 )
+from app.live_verification.live_order_real_operator_execution_result_category_contract import (
+    LiveOrderRealOperatorExecutionResultCategory,
+    LiveOrderRealOperatorExecutionResultCategoryContractInput,
+    LiveOrderRealOperatorExecutionResultCategoryContractResult,
+    LiveOrderRealOperatorExecutionResultCategoryContractStatus,
+    build_live_order_real_operator_execution_result_category_contract,
+)
 from app.live_verification.live_order_real_order_transport_core import (
     LiveOrderRealNoRetryContract,
     LiveOrderRealTransportCoreResult,
@@ -376,6 +383,15 @@ class LiveOrderRealStep6GInternalWiringInput:
     operator_execution_must_be_outside_codex: bool = True
     codex_execution_forbidden: bool = True
     operator_execution_performed: bool = False
+    operator_execution_result_category_contract_ready: bool = True
+    operator_execution_result_category_contract_mode: str = (
+        "OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT_ONLY"
+    )
+    category_contract_declared: bool = True
+    allowed_category_set_declared: bool = True
+    operator_result_category: str = "NOT_PROVIDED"
+    operator_result_category_is_safe_label: bool = True
+    operator_result_category_is_allowed: bool = True
     execution_contract_declared: bool = True
     execution_inputs_declared: bool = True
     execution_outputs_declared: bool = True
@@ -450,6 +466,11 @@ class LiveOrderRealStep6GInternalWiringInput:
             "operator_execution_boundary_mode",
             self.operator_execution_boundary_mode,
         )
+        _require_non_empty(
+            "operator_execution_result_category_contract_mode",
+            self.operator_execution_result_category_contract_mode,
+        )
+        _require_non_empty("operator_result_category", self.operator_result_category)
         _validate_non_negative_int("size", self.size)
         _validate_non_negative_int("open_positions_count", self.open_positions_count)
         _validate_non_negative_int("active_orders_count", self.active_orders_count)
@@ -606,6 +627,11 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "operator_execution_must_be_outside_codex",
                 "codex_execution_forbidden",
                 "operator_execution_performed",
+                "operator_execution_result_category_contract_ready",
+                "category_contract_declared",
+                "allowed_category_set_declared",
+                "operator_result_category_is_safe_label",
+                "operator_result_category_is_allowed",
                 "execution_contract_declared",
                 "execution_inputs_declared",
                 "execution_outputs_declared",
@@ -691,6 +717,9 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     )
     operator_executed_execution_boundary_result: (
         LiveOrderRealOperatorExecutedExecutionBoundaryResult
+    )
+    operator_execution_result_category_contract_result: (
+        LiveOrderRealOperatorExecutionResultCategoryContractResult
     )
 
 
@@ -833,6 +862,15 @@ class LiveOrderRealStep6GInternalWiringResult:
     operator_execution_must_be_outside_codex: bool
     codex_execution_forbidden: bool
     operator_execution_performed: bool
+    operator_execution_result_category_contract_ready: bool
+    operator_execution_result_category_contract_mode: str
+    category_contract_declared: bool
+    allowed_category_set_declared: bool
+    operator_result_category: str
+    operator_result_category_is_safe_label: bool
+    operator_result_category_is_allowed: bool
+    operator_result_ready_confirmed: bool
+    operator_result_blocked: bool
     execution_contract_declared: bool
     execution_inputs_declared: bool
     execution_outputs_declared: bool
@@ -1017,6 +1055,13 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "operator_execution_must_be_outside_codex",
                 "codex_execution_forbidden",
                 "operator_execution_performed",
+                "operator_execution_result_category_contract_ready",
+                "category_contract_declared",
+                "allowed_category_set_declared",
+                "operator_result_category_is_safe_label",
+                "operator_result_category_is_allowed",
+                "operator_result_ready_confirmed",
+                "operator_result_blocked",
                 "execution_contract_declared",
                 "execution_inputs_declared",
                 "execution_outputs_declared",
@@ -2263,6 +2308,121 @@ def build_valid_step6g_internal_wiring_snapshot(
             ),
         )
     )
+    category_value = wiring_input.operator_result_category
+    category_ready_confirmed = (
+        category_value == LiveOrderRealOperatorExecutionResultCategory.READY_CONFIRMED.value
+    )
+    category_blocked = category_value.startswith("BLOCKED_")
+    operator_execution_result_category_contract_result = (
+        build_live_order_real_operator_execution_result_category_contract(
+            input_snapshot=LiveOrderRealOperatorExecutionResultCategoryContractInput(
+                category_contract_mode=(
+                    wiring_input.operator_execution_result_category_contract_mode
+                ),
+                category_contract_declared=(
+                    wiring_input.operator_execution_result_category_contract_ready
+                    and wiring_input.category_contract_declared
+                ),
+                allowed_category_set_declared=wiring_input.allowed_category_set_declared,
+                operator_executed_execution_boundary_ready=(
+                    operator_executed_execution_boundary_result
+                    .operator_executed_execution_boundary_ready
+                    and wiring_input.operator_executed_execution_boundary_ready
+                ),
+                operator_result_handoff_safe=(
+                    operator_checker_workflow_result.operator_result_handoff_safe
+                    and wiring_input.operator_result_handoff_safe
+                ),
+                operator_checker_workflow_ready=(
+                    operator_checker_workflow_result.operator_checker_workflow_ready
+                ),
+                operator_result_category=category_value,
+                operator_result_category_is_safe_label=(
+                    wiring_input.operator_result_category_is_safe_label
+                ),
+                operator_result_category_is_allowed=(
+                    wiring_input.operator_result_category_is_allowed
+                ),
+                operator_result_provided=category_ready_confirmed or category_blocked,
+                operator_result_ready_confirmed=category_ready_confirmed,
+                operator_result_blocked=category_blocked,
+                operator_result_unknown=wiring_input.operator_result_unknown,
+                operator_result_failed=wiring_input.operator_result_failed,
+                operator_result_unavailable=wiring_input.operator_result_unavailable,
+                operator_result_stale=wiring_input.operator_result_stale,
+                operator_result_timeout=wiring_input.operator_result_timeout,
+                operator_result_reused=wiring_input.operator_result_reused,
+                operator_result_previous_turn=(
+                    wiring_input.operator_result_previous_turn
+                ),
+                operator_result_detail_present=(
+                    wiring_input.operator_result_detail_present
+                ),
+                operator_result_raw_value_present=(
+                    wiring_input.operator_result_raw_value_present
+                ),
+                operator_result_saved=wiring_input.operator_result_saved,
+                operator_result_displayed=wiring_input.operator_result_displayed,
+                operator_result_broadly_propagated=(
+                    wiring_input.operator_result_broadly_propagated
+                ),
+                checker_result_detail_present=(
+                    wiring_input.checker_result_detail_present
+                ),
+                env_variable_names_present=wiring_input.env_variable_names_present,
+                credential_values_present=(
+                    wiring_input.credential_values_provided
+                    or wiring_input.credential_values_loaded
+                    or wiring_input.credential_values_available
+                    or wiring_input.credential_values_read
+                ),
+                credential_metadata_present=(
+                    wiring_input.credential_metadata_exposed
+                    or wiring_input.credential_injection_metadata_available
+                    or wiring_input.credential_metadata_available
+                ),
+                sentinel_value_present=wiring_input.sentinel_value_present,
+                actual_execution_performed=(
+                    wiring_input.operator_execution_performed
+                    or wiring_input.execution_performed
+                    or wiring_input.execution_performed_by_operator
+                ),
+                codex_execution_performed=(
+                    wiring_input.codex_execution_performed
+                    or wiring_input.execution_performed_by_codex
+                ),
+                env_access_requested=(
+                    wiring_input.env_access_requested
+                    or wiring_input.codex_env_access_requested
+                ),
+                credential_read_performed=wiring_input.credential_read_performed,
+                can_generate_real_signature=False,
+                can_generate_real_headers=False,
+                can_execute_http_post=False,
+                http_post_executed=wiring_input.http_post_executed,
+                order_endpoint_called=wiring_input.order_endpoint_called,
+                live_order_once_called=wiring_input.live_order_once_called,
+                post_allowed_this_step=wiring_input.post_allowed_this_step,
+                post_executed=wiring_input.post_executed,
+                safe_to_render=not (
+                    wiring_input.operator_result_displayed
+                    or wiring_input.operator_result_detail_present
+                    or wiring_input.operator_result_raw_value_present
+                    or wiring_input.checker_result_detail_present
+                    or wiring_input.env_variable_names_present
+                    or wiring_input.sentinel_value_present
+                ),
+                safe_to_serialize=not (
+                    wiring_input.operator_result_saved
+                    or wiring_input.operator_result_detail_present
+                    or wiring_input.operator_result_raw_value_present
+                    or wiring_input.checker_result_detail_present
+                    or wiring_input.env_variable_names_present
+                    or wiring_input.sentinel_value_present
+                ),
+            ),
+        )
+    )
     return LiveOrderRealStep6GInternalWiringSnapshot(
         input_snapshot=wiring_input,
         pb_result=pb_result,
@@ -2294,6 +2454,9 @@ def build_valid_step6g_internal_wiring_snapshot(
         ),
         operator_executed_execution_boundary_result=(
             operator_executed_execution_boundary_result
+        ),
+        operator_execution_result_category_contract_result=(
+            operator_execution_result_category_contract_result
         ),
     )
 
@@ -2327,6 +2490,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     operator_executed_execution_boundary_result = (
         wiring_snapshot.operator_executed_execution_boundary_result
+    )
+    operator_execution_result_category_contract_result = (
+        wiring_snapshot.operator_execution_result_category_contract_result
     )
     order_reasons = _order_reasons(wiring_input)
     approval_reasons = _approval_reasons(wiring_input)
@@ -2367,6 +2533,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     operator_executed_execution_boundary_reasons = (
         _operator_executed_execution_boundary_reasons(wiring_snapshot)
+    )
+    operator_execution_result_category_contract_reasons = (
+        _operator_execution_result_category_contract_reasons(wiring_snapshot)
     )
     raw_reasons = _raw_or_secret_reasons(wiring_input)
     step4_reasons = _step4_reasons(wiring_input)
@@ -2419,6 +2588,7 @@ def build_live_order_real_step6g_internal_wiring(
         or credential_presence_checker_execution_contract_reasons
         or credential_presence_checker_execution_implementation_reasons
         or operator_executed_execution_boundary_reasons
+        or operator_execution_result_category_contract_reasons
     ):
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
         primary_reasons = _merge_reasons(
@@ -2435,6 +2605,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_presence_checker_execution_contract_reasons,
             credential_presence_checker_execution_implementation_reasons,
             operator_executed_execution_boundary_reasons,
+            operator_execution_result_category_contract_reasons,
         )
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
@@ -2472,6 +2643,7 @@ def build_live_order_real_step6g_internal_wiring(
         credential_presence_checker_execution_contract_reasons,
         credential_presence_checker_execution_implementation_reasons,
         operator_executed_execution_boundary_reasons,
+        operator_execution_result_category_contract_reasons,
         private_transport_reasons,
         http_interface_reasons,
         unsupported_reasons,
@@ -2501,6 +2673,14 @@ def build_live_order_real_step6g_internal_wiring(
             operator_execution_boundary_mode=(
                 operator_executed_execution_boundary_result.boundary_mode
             ),
+            operator_execution_result_category_contract_mode=(
+                operator_execution_result_category_contract_result
+                .category_contract_mode
+            ),
+            operator_result_category=(
+                operator_execution_result_category_contract_result
+                .operator_result_category
+            ),
         ),
     )
     return LiveOrderRealStep6GInternalWiringResult(
@@ -2525,6 +2705,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_presence_checker_execution_contract_reasons,
             credential_presence_checker_execution_implementation_reasons,
             operator_executed_execution_boundary_reasons,
+            operator_execution_result_category_contract_reasons,
         ),
         st_private_transport_ready=not _merge_reasons(
             private_transport_reasons,
@@ -2687,6 +2868,32 @@ def build_live_order_real_step6g_internal_wiring(
         ),
         codex_execution_forbidden=wiring_input.codex_execution_forbidden,
         operator_execution_performed=False,
+        operator_execution_result_category_contract_ready=(
+            not operator_execution_result_category_contract_reasons
+        ),
+        operator_execution_result_category_contract_mode=(
+            operator_execution_result_category_contract_result.category_contract_mode
+        ),
+        category_contract_declared=wiring_input.category_contract_declared,
+        allowed_category_set_declared=wiring_input.allowed_category_set_declared,
+        operator_result_category=(
+            operator_execution_result_category_contract_result.operator_result_category
+        ),
+        operator_result_category_is_safe_label=(
+            operator_execution_result_category_contract_result
+            .operator_result_category_is_safe_label
+        ),
+        operator_result_category_is_allowed=(
+            operator_execution_result_category_contract_result
+            .operator_result_category_is_allowed
+        ),
+        operator_result_ready_confirmed=(
+            operator_execution_result_category_contract_result
+            .operator_result_ready_confirmed
+        ),
+        operator_result_blocked=(
+            operator_execution_result_category_contract_result.operator_result_blocked
+        ),
         execution_contract_declared=wiring_input.execution_contract_declared,
         execution_inputs_declared=wiring_input.execution_inputs_declared,
         execution_outputs_declared=wiring_input.execution_outputs_declared,
@@ -2847,6 +3054,32 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             "- operator_execution_performed: "
             f"{_bool_text(result.operator_execution_performed)}"
         ),
+        (
+            "- operator_execution_result_category_contract_ready: "
+            f"{_bool_text(result.operator_execution_result_category_contract_ready)}"
+        ),
+        (
+            "- operator_execution_result_category_contract_mode: "
+            f"{result.operator_execution_result_category_contract_mode}"
+        ),
+        (
+            "- allowed_category_set_declared: "
+            f"{_bool_text(result.allowed_category_set_declared)}"
+        ),
+        f"- operator_result_category: {result.operator_result_category}",
+        (
+            "- operator_result_category_is_safe_label: "
+            f"{_bool_text(result.operator_result_category_is_safe_label)}"
+        ),
+        (
+            "- operator_result_category_is_allowed: "
+            f"{_bool_text(result.operator_result_category_is_allowed)}"
+        ),
+        (
+            "- operator_result_ready_confirmed: "
+            f"{_bool_text(result.operator_result_ready_confirmed)}"
+        ),
+        f"- operator_result_blocked: {_bool_text(result.operator_result_blocked)}",
         "",
         "## Order Intent",
         f"- symbol: {input_snapshot.symbol}",
@@ -4213,6 +4446,106 @@ def _operator_executed_execution_boundary_reasons(
     return tuple(reasons)
 
 
+def _operator_execution_result_category_contract_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    ready_statuses = (
+        LiveOrderRealOperatorExecutionResultCategoryContractStatus
+        .OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT_READY_NO_RESULT,
+        LiveOrderRealOperatorExecutionResultCategoryContractStatus
+        .OPERATOR_EXECUTION_RESULT_CATEGORY_CONTRACT_READY_CONFIRMED_NO_POST,
+    )
+    result = snapshot.operator_execution_result_category_contract_result
+    if not snapshot.input_snapshot.operator_execution_result_category_contract_ready:
+        reasons.append("operator_result_category_contract_ready_flag_false")
+    if result.status not in ready_statuses:
+        reasons.append(f"operator_result_category_status_{result.status.value}")
+    if result.unsupported_category_present:
+        reasons.append("operator_result_category_unsupported")
+    if not result.category_contract_declared:
+        reasons.append("operator_result_category_contract_not_declared")
+    if not result.allowed_category_set_declared:
+        reasons.append("operator_result_category_set_not_declared")
+    if not result.operator_executed_execution_boundary_ready:
+        reasons.append("operator_result_category_boundary_not_ready")
+    if not result.operator_result_handoff_safe:
+        reasons.append("operator_result_category_handoff_not_safe")
+    if not result.operator_checker_workflow_ready:
+        reasons.append("operator_result_category_workflow_not_ready")
+    if not result.operator_result_category_is_safe_label:
+        reasons.append("operator_result_category_not_safe_label")
+    if not result.operator_result_category_is_allowed:
+        reasons.append("operator_result_category_not_allowed")
+    if result.operator_result_category not in {
+        category.value for category in LiveOrderRealOperatorExecutionResultCategory
+    }:
+        reasons.append("operator_result_category_not_allowlisted")
+    if result.operator_result_unknown:
+        reasons.append("operator_result_category_unknown")
+    if result.operator_result_failed:
+        reasons.append("operator_result_category_failed")
+    if result.operator_result_unavailable:
+        reasons.append("operator_result_category_unavailable")
+    if result.operator_result_stale:
+        reasons.append("operator_result_category_stale")
+    if result.operator_result_timeout:
+        reasons.append("operator_result_category_timeout")
+    if result.operator_result_reused:
+        reasons.append("operator_result_category_reused")
+    if result.operator_result_previous_turn:
+        reasons.append("operator_result_category_previous_turn")
+    if result.operator_result_detail_present:
+        reasons.append("operator_result_category_detail_present")
+    if result.operator_result_raw_value_present:
+        reasons.append("operator_result_category_raw_value_present")
+    if result.operator_result_saved:
+        reasons.append("operator_result_category_saved")
+    if result.operator_result_displayed:
+        reasons.append("operator_result_category_displayed")
+    if result.operator_result_broadly_propagated:
+        reasons.append("operator_result_category_broadly_propagated")
+    if result.checker_result_detail_present:
+        reasons.append("operator_result_category_checker_detail_present")
+    if result.env_variable_names_present:
+        reasons.append("operator_result_category_env_names_present")
+    if result.credential_values_present:
+        reasons.append("operator_result_category_credential_values_present")
+    if result.credential_metadata_present:
+        reasons.append("operator_result_category_credential_metadata_present")
+    if result.sentinel_value_present:
+        reasons.append("operator_result_category_sentinel_present")
+    if result.actual_execution_performed:
+        reasons.append("operator_result_category_actual_execution_performed")
+    if result.codex_execution_performed:
+        reasons.append("operator_result_category_codex_execution_performed")
+    if result.env_access_requested:
+        reasons.append("operator_result_category_env_requested")
+    if result.credential_read_performed:
+        reasons.append("operator_result_category_credential_read")
+    if result.can_generate_real_signature:
+        reasons.append("operator_result_category_can_generate_signature")
+    if result.can_generate_real_headers:
+        reasons.append("operator_result_category_can_generate_headers")
+    if result.can_execute_http_post:
+        reasons.append("operator_result_category_can_execute_post")
+    if result.http_post_executed:
+        reasons.append("operator_result_category_http_post_executed")
+    if result.order_endpoint_called:
+        reasons.append("operator_result_category_order_endpoint_called")
+    if result.live_order_once_called:
+        reasons.append("operator_result_category_live_order_once_called")
+    if result.post_allowed_this_step:
+        reasons.append("operator_result_category_post_allowed")
+    if result.post_executed:
+        reasons.append("operator_result_category_post_executed")
+    if not result.safe_to_render:
+        reasons.append("operator_result_category_render_not_safe")
+    if not result.safe_to_serialize:
+        reasons.append("operator_result_category_serialize_not_safe")
+    return tuple(reasons)
+
+
 def _raw_or_secret_reasons(
     wiring_input: LiveOrderRealStep6GInternalWiringInput,
 ) -> tuple[str, ...]:
@@ -4419,6 +4752,11 @@ def _build_check_results(
             "operator executed execution boundary",
             not _operator_executed_execution_boundary_reasons(snapshot),
             "actual execution outside Codex and safe handoff boundary ready",
+        ),
+        (
+            "operator execution result category contract",
+            not _operator_execution_result_category_contract_reasons(snapshot),
+            "operator execution result category contract ready without POST",
         ),
         ("raw secret IDs", not _raw_or_secret_reasons(input_snapshot), "none"),
         ("Step 4 spoofing", not _step4_reasons(input_snapshot), "none"),
