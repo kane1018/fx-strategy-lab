@@ -89,6 +89,13 @@ from app.live_verification.live_order_real_dummy_signing import (
     LiveOrderRealDummySigningStatus,
     build_live_order_real_dummy_signing_check,
 )
+from app.live_verification.live_order_real_final_exec_stack_controlled import (
+    SAFE_DRY_RUN_STACK_LABEL,
+    LiveOrderRealFinalExecStackControlledInput,
+    LiveOrderRealFinalExecStackControlledResult,
+    LiveOrderRealFinalExecStackControlledStatus,
+    build_live_order_real_final_exec_stack_controlled,
+)
 from app.live_verification.live_order_real_final_readiness_controlled import (
     SAFE_FINAL_READINESS_LABEL,
     LiveOrderRealFinalReadinessControlledInput,
@@ -274,6 +281,9 @@ class LiveOrderRealStep6GInternalWiringStatus(str, Enum):
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_READINESS = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_READINESS"
+    )
+    BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_EXEC_STACK = (
+        "BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_EXEC_STACK"
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT"
@@ -650,6 +660,62 @@ class LiveOrderRealStep6GInternalWiringInput:
     final_readiness_ledger_state_exposure_attempted: bool = False
     final_readiness_approval_command_exposure_attempted: bool = False
     final_readiness_ledger_state_reused: bool = False
+    final_exec_stack_dry_run_ready: bool = True
+    final_exec_stack_mode: str = "FINAL_EXEC_STACK_DRY_RUN_ONLY"
+    final_exec_stack_declared: bool = True
+    safe_dry_run_stack_label: str = SAFE_DRY_RUN_STACK_LABEL
+    final_exec_stack_unknown: bool = False
+    final_exec_stack_failed: bool = False
+    final_exec_stack_unavailable: bool = False
+    final_exec_stack_timeout: bool = False
+    final_exec_stack_stale: bool = False
+    final_exec_stack_reused: bool = False
+    final_exec_stack_dry_run_mode: bool = True
+    final_exec_stack_fake_transport_used: bool = True
+    final_exec_stack_no_network_transport_used: bool = True
+    final_exec_stack_network_transport_used: bool = False
+    final_exec_stack_real_transport_used: bool = False
+    final_exec_stack_raw_request_generated: bool = False
+    final_exec_stack_raw_response_received: bool = False
+    final_exec_stack_broker_response_received: bool = False
+    final_exec_stack_api_response_received: bool = False
+    final_exec_stack_one_shot_decision_safe: bool = True
+    final_exec_stack_sanitized_result_ready: bool = True
+    final_exec_stack_reconciliation_preview_ready: bool = True
+    final_exec_stack_receipt_handoff_preview_ready: bool = True
+    final_exec_stack_ledger_attempt_preview_ready: bool = True
+    final_exec_stack_api_call_allowed: bool = False
+    final_exec_stack_api_call_executed: bool = False
+    final_exec_stack_api_call_attempted: bool = False
+    final_exec_stack_http_client_present: bool = False
+    final_exec_stack_post_allowed_this_step: bool = False
+    final_exec_stack_post_executed: bool = False
+    final_exec_stack_http_post_executed: bool = False
+    final_exec_stack_order_endpoint_called: bool = False
+    final_exec_stack_live_order_once_called: bool = False
+    final_exec_stack_fresh_preflight_executed: bool = False
+    final_exec_stack_final_confirmation_received: bool = False
+    final_exec_stack_ledger_update_allowed: bool = False
+    final_exec_stack_ledger_updated: bool = False
+    final_exec_stack_ledger_update_attempted: bool = False
+    final_exec_stack_attempt_counter_persistence_allowed: bool = False
+    final_exec_stack_attempt_counter_persisted: bool = False
+    final_exec_stack_actual_result_receipt_received: bool = False
+    final_exec_stack_actual_receipt_handoff_executed: bool = False
+    final_exec_stack_actual_receipt_handoff_allowed: bool = False
+    final_exec_stack_one_shot_post_allowed: bool = False
+    final_exec_stack_one_shot_post_readiness_blocked: bool = True
+    final_exec_stack_unsafe_exposure_attempted: bool = False
+    final_exec_stack_raw_request_exposure_attempted: bool = False
+    final_exec_stack_raw_response_exposure_attempted: bool = False
+    final_exec_stack_broker_response_exposure_attempted: bool = False
+    final_exec_stack_api_response_exposure_attempted: bool = False
+    final_exec_stack_credential_value_exposure_attempted: bool = False
+    final_exec_stack_signature_value_exposure_attempted: bool = False
+    final_exec_stack_headers_value_exposure_attempted: bool = False
+    final_exec_stack_real_id_exposure_attempted: bool = False
+    final_exec_stack_confirmation_phrase_exposure_attempted: bool = False
+    final_exec_stack_ledger_state_exposure_attempted: bool = False
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -931,6 +997,11 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty(
             "safe_final_readiness_label",
             self.safe_final_readiness_label,
+        )
+        _require_non_empty("final_exec_stack_mode", self.final_exec_stack_mode)
+        _require_non_empty(
+            "safe_dry_run_stack_label",
+            self.safe_dry_run_stack_label,
         )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
@@ -1300,6 +1371,60 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "final_readiness_ledger_state_exposure_attempted",
                 "final_readiness_approval_command_exposure_attempted",
                 "final_readiness_ledger_state_reused",
+                "final_exec_stack_dry_run_ready",
+                "final_exec_stack_declared",
+                "final_exec_stack_unknown",
+                "final_exec_stack_failed",
+                "final_exec_stack_unavailable",
+                "final_exec_stack_timeout",
+                "final_exec_stack_stale",
+                "final_exec_stack_reused",
+                "final_exec_stack_dry_run_mode",
+                "final_exec_stack_fake_transport_used",
+                "final_exec_stack_no_network_transport_used",
+                "final_exec_stack_network_transport_used",
+                "final_exec_stack_real_transport_used",
+                "final_exec_stack_raw_request_generated",
+                "final_exec_stack_raw_response_received",
+                "final_exec_stack_broker_response_received",
+                "final_exec_stack_api_response_received",
+                "final_exec_stack_one_shot_decision_safe",
+                "final_exec_stack_sanitized_result_ready",
+                "final_exec_stack_reconciliation_preview_ready",
+                "final_exec_stack_receipt_handoff_preview_ready",
+                "final_exec_stack_ledger_attempt_preview_ready",
+                "final_exec_stack_api_call_allowed",
+                "final_exec_stack_api_call_executed",
+                "final_exec_stack_api_call_attempted",
+                "final_exec_stack_http_client_present",
+                "final_exec_stack_post_allowed_this_step",
+                "final_exec_stack_post_executed",
+                "final_exec_stack_http_post_executed",
+                "final_exec_stack_order_endpoint_called",
+                "final_exec_stack_live_order_once_called",
+                "final_exec_stack_fresh_preflight_executed",
+                "final_exec_stack_final_confirmation_received",
+                "final_exec_stack_ledger_update_allowed",
+                "final_exec_stack_ledger_updated",
+                "final_exec_stack_ledger_update_attempted",
+                "final_exec_stack_attempt_counter_persistence_allowed",
+                "final_exec_stack_attempt_counter_persisted",
+                "final_exec_stack_actual_result_receipt_received",
+                "final_exec_stack_actual_receipt_handoff_executed",
+                "final_exec_stack_actual_receipt_handoff_allowed",
+                "final_exec_stack_one_shot_post_allowed",
+                "final_exec_stack_one_shot_post_readiness_blocked",
+                "final_exec_stack_unsafe_exposure_attempted",
+                "final_exec_stack_raw_request_exposure_attempted",
+                "final_exec_stack_raw_response_exposure_attempted",
+                "final_exec_stack_broker_response_exposure_attempted",
+                "final_exec_stack_api_response_exposure_attempted",
+                "final_exec_stack_credential_value_exposure_attempted",
+                "final_exec_stack_signature_value_exposure_attempted",
+                "final_exec_stack_headers_value_exposure_attempted",
+                "final_exec_stack_real_id_exposure_attempted",
+                "final_exec_stack_confirmation_phrase_exposure_attempted",
+                "final_exec_stack_ledger_state_exposure_attempted",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -1534,6 +1659,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     post_guard_controlled_result: LiveOrderRealPostGuardControlledResult
     sanitized_post_result_result: LiveOrderRealSanitizedPostResultResult
     final_readiness_controlled_result: LiveOrderRealFinalReadinessControlledResult
+    final_exec_stack_controlled_result: LiveOrderRealFinalExecStackControlledResult
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
         LiveOrderRealCredentialPresenceCheckerContractResult
@@ -1874,6 +2000,41 @@ class LiveOrderRealStep6GInternalWiringResult:
     final_readiness_actual_receipt_handoff_executed: bool
     final_readiness_one_shot_post_readiness_blocked: bool
     final_readiness_one_shot_post_allowed: bool
+    final_exec_stack_dry_run_ready: bool
+    final_exec_stack_mode: str
+    safe_dry_run_stack_label: str
+    safe_dry_run_stack_status: str
+    final_exec_stack_dry_run_mode: bool
+    final_exec_stack_fake_transport_used: bool
+    final_exec_stack_no_network_transport_used: bool
+    final_exec_stack_network_transport_used: bool
+    final_exec_stack_real_transport_used: bool
+    final_exec_stack_raw_request_generated: bool
+    final_exec_stack_raw_response_received: bool
+    final_exec_stack_broker_response_received: bool
+    final_exec_stack_api_response_received: bool
+    final_exec_stack_one_shot_decision: str
+    final_exec_stack_result_category: str
+    final_exec_stack_reconciliation_preview_label: str
+    final_exec_stack_receipt_handoff_preview_label: str
+    final_exec_stack_ledger_attempt_preview_label: str
+    final_exec_stack_sanitized_result_ready: bool
+    final_exec_stack_reconciliation_preview_ready: bool
+    final_exec_stack_receipt_handoff_preview_ready: bool
+    final_exec_stack_ledger_attempt_preview_ready: bool
+    final_exec_stack_api_call_executed: bool
+    final_exec_stack_post_executed: bool
+    final_exec_stack_http_post_executed: bool
+    final_exec_stack_order_endpoint_called: bool
+    final_exec_stack_live_order_once_called: bool
+    final_exec_stack_fresh_preflight_executed: bool
+    final_exec_stack_final_confirmation_received: bool
+    final_exec_stack_ledger_updated: bool
+    final_exec_stack_attempt_counter_persisted: bool
+    final_exec_stack_actual_result_receipt_received: bool
+    final_exec_stack_actual_receipt_handoff_executed: bool
+    final_exec_stack_one_shot_post_allowed: bool
+    final_exec_stack_one_shot_post_readiness_blocked: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -2139,6 +2300,35 @@ class LiveOrderRealStep6GInternalWiringResult:
         _require_non_empty(
             "safe_final_readiness_status",
             self.safe_final_readiness_status,
+        )
+        _require_non_empty("final_exec_stack_mode", self.final_exec_stack_mode)
+        _require_non_empty(
+            "safe_dry_run_stack_label",
+            self.safe_dry_run_stack_label,
+        )
+        _require_non_empty(
+            "safe_dry_run_stack_status",
+            self.safe_dry_run_stack_status,
+        )
+        _require_non_empty(
+            "final_exec_stack_one_shot_decision",
+            self.final_exec_stack_one_shot_decision,
+        )
+        _require_non_empty(
+            "final_exec_stack_result_category",
+            self.final_exec_stack_result_category,
+        )
+        _require_non_empty(
+            "final_exec_stack_reconciliation_preview_label",
+            self.final_exec_stack_reconciliation_preview_label,
+        )
+        _require_non_empty(
+            "final_exec_stack_receipt_handoff_preview_label",
+            self.final_exec_stack_receipt_handoff_preview_label,
+        )
+        _require_non_empty(
+            "final_exec_stack_ledger_attempt_preview_label",
+            self.final_exec_stack_ledger_attempt_preview_label,
         )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
@@ -2456,6 +2646,33 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "final_readiness_actual_receipt_handoff_executed",
                 "final_readiness_one_shot_post_readiness_blocked",
                 "final_readiness_one_shot_post_allowed",
+                "final_exec_stack_dry_run_ready",
+                "final_exec_stack_dry_run_mode",
+                "final_exec_stack_fake_transport_used",
+                "final_exec_stack_no_network_transport_used",
+                "final_exec_stack_network_transport_used",
+                "final_exec_stack_real_transport_used",
+                "final_exec_stack_raw_request_generated",
+                "final_exec_stack_raw_response_received",
+                "final_exec_stack_broker_response_received",
+                "final_exec_stack_api_response_received",
+                "final_exec_stack_sanitized_result_ready",
+                "final_exec_stack_reconciliation_preview_ready",
+                "final_exec_stack_receipt_handoff_preview_ready",
+                "final_exec_stack_ledger_attempt_preview_ready",
+                "final_exec_stack_api_call_executed",
+                "final_exec_stack_post_executed",
+                "final_exec_stack_http_post_executed",
+                "final_exec_stack_order_endpoint_called",
+                "final_exec_stack_live_order_once_called",
+                "final_exec_stack_fresh_preflight_executed",
+                "final_exec_stack_final_confirmation_received",
+                "final_exec_stack_ledger_updated",
+                "final_exec_stack_attempt_counter_persisted",
+                "final_exec_stack_actual_result_receipt_received",
+                "final_exec_stack_actual_receipt_handoff_executed",
+                "final_exec_stack_one_shot_post_allowed",
+                "final_exec_stack_one_shot_post_readiness_blocked",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -4172,6 +4389,218 @@ def build_valid_step6g_internal_wiring_snapshot(
             sanitized_result=sanitized_post_result_result,
         )
     )
+    final_exec_stack_controlled_result = (
+        build_live_order_real_final_exec_stack_controlled(
+            input_snapshot=LiveOrderRealFinalExecStackControlledInput(
+                final_exec_stack_mode=wiring_input.final_exec_stack_mode,
+                final_exec_stack_declared=wiring_input.final_exec_stack_declared,
+                final_exec_stack_requested=(
+                    wiring_input.final_exec_stack_dry_run_ready
+                ),
+                safe_dry_run_stack_label=wiring_input.safe_dry_run_stack_label,
+                final_readiness_prerequisite_checked=True,
+                final_readiness_controlled_ready=(
+                    final_readiness_controlled_result
+                    .final_readiness_controlled_ready
+                ),
+                final_readiness_prerequisite_satisfied=(
+                    final_readiness_controlled_result
+                    .final_readiness_controlled_ready
+                ),
+                safe_final_readiness_label=(
+                    final_readiness_controlled_result.safe_final_readiness_label
+                ),
+                safe_final_readiness_status=(
+                    final_readiness_controlled_result.safe_final_readiness_status
+                ),
+                post_guard_prerequisite_checked=True,
+                post_guard_controlled_ready=(
+                    post_guard_controlled_result.post_guard_ready
+                ),
+                post_guard_prerequisite_satisfied=(
+                    post_guard_controlled_result.post_guard_ready
+                ),
+                safe_post_guard_label=(
+                    post_guard_controlled_result.safe_post_guard_label
+                ),
+                safe_post_guard_status=(
+                    post_guard_controlled_result.safe_post_guard_status
+                ),
+                sanitized_result_prerequisite_checked=True,
+                sanitized_post_result_ready=(
+                    sanitized_post_result_result.sanitized_post_result_ready
+                ),
+                reconciliation_ready=(
+                    sanitized_post_result_result.reconciliation_ready
+                ),
+                sanitized_result_prerequisite_satisfied=(
+                    sanitized_post_result_result.sanitized_post_result_ready
+                    and sanitized_post_result_result.reconciliation_ready
+                ),
+                safe_post_result_label=(
+                    sanitized_post_result_result.safe_post_result_label
+                ),
+                safe_post_result_status=(
+                    sanitized_post_result_result.safe_post_result_status
+                ),
+                safe_reconciliation_label=(
+                    sanitized_post_result_result.safe_reconciliation_label
+                ),
+                safe_reconciliation_status=(
+                    sanitized_post_result_result.safe_reconciliation_status
+                ),
+                dry_run_stack_unknown=wiring_input.final_exec_stack_unknown,
+                dry_run_stack_failed=wiring_input.final_exec_stack_failed,
+                dry_run_stack_unavailable=(
+                    wiring_input.final_exec_stack_unavailable
+                ),
+                dry_run_stack_timeout=wiring_input.final_exec_stack_timeout,
+                dry_run_stack_stale=wiring_input.final_exec_stack_stale,
+                dry_run_stack_reused=wiring_input.final_exec_stack_reused,
+                dry_run_mode=wiring_input.final_exec_stack_dry_run_mode,
+                fake_transport_used=(
+                    wiring_input.final_exec_stack_fake_transport_used
+                ),
+                no_network_transport_used=(
+                    wiring_input.final_exec_stack_no_network_transport_used
+                ),
+                network_transport_used=(
+                    wiring_input.final_exec_stack_network_transport_used
+                ),
+                real_transport_used=(
+                    wiring_input.final_exec_stack_real_transport_used
+                ),
+                raw_request_generated=(
+                    wiring_input.final_exec_stack_raw_request_generated
+                ),
+                raw_response_received=(
+                    wiring_input.final_exec_stack_raw_response_received
+                ),
+                broker_response_received=(
+                    wiring_input.final_exec_stack_broker_response_received
+                ),
+                api_response_received=(
+                    wiring_input.final_exec_stack_api_response_received
+                ),
+                dry_run_one_shot_decision_safe=(
+                    wiring_input.final_exec_stack_one_shot_decision_safe
+                ),
+                dry_run_sanitized_result_ready=(
+                    wiring_input.final_exec_stack_sanitized_result_ready
+                ),
+                dry_run_reconciliation_preview_ready=(
+                    wiring_input
+                    .final_exec_stack_reconciliation_preview_ready
+                ),
+                dry_run_receipt_handoff_preview_ready=(
+                    wiring_input
+                    .final_exec_stack_receipt_handoff_preview_ready
+                ),
+                dry_run_ledger_attempt_preview_ready=(
+                    wiring_input.final_exec_stack_ledger_attempt_preview_ready
+                ),
+                api_call_allowed=wiring_input.final_exec_stack_api_call_allowed,
+                api_call_executed=wiring_input.final_exec_stack_api_call_executed,
+                api_call_attempted=wiring_input.final_exec_stack_api_call_attempted,
+                http_client_present=wiring_input.final_exec_stack_http_client_present,
+                post_allowed_this_step=(
+                    wiring_input.final_exec_stack_post_allowed_this_step
+                ),
+                post_executed=wiring_input.final_exec_stack_post_executed,
+                http_post_executed=(
+                    wiring_input.final_exec_stack_http_post_executed
+                ),
+                order_endpoint_called=(
+                    wiring_input.final_exec_stack_order_endpoint_called
+                ),
+                live_order_once_called=(
+                    wiring_input.final_exec_stack_live_order_once_called
+                ),
+                fresh_preflight_executed=(
+                    wiring_input.final_exec_stack_fresh_preflight_executed
+                ),
+                final_confirmation_received=(
+                    wiring_input.final_exec_stack_final_confirmation_received
+                ),
+                ledger_update_allowed=(
+                    wiring_input.final_exec_stack_ledger_update_allowed
+                ),
+                ledger_updated=wiring_input.final_exec_stack_ledger_updated,
+                ledger_update_attempted=(
+                    wiring_input.final_exec_stack_ledger_update_attempted
+                ),
+                attempt_counter_persistence_allowed=(
+                    wiring_input
+                    .final_exec_stack_attempt_counter_persistence_allowed
+                ),
+                attempt_counter_persisted=(
+                    wiring_input.final_exec_stack_attempt_counter_persisted
+                ),
+                actual_result_receipt_received=(
+                    wiring_input
+                    .final_exec_stack_actual_result_receipt_received
+                ),
+                actual_receipt_handoff_executed=(
+                    wiring_input.final_exec_stack_actual_receipt_handoff_executed
+                ),
+                actual_receipt_handoff_allowed=(
+                    wiring_input.final_exec_stack_actual_receipt_handoff_allowed
+                ),
+                one_shot_post_allowed=(
+                    wiring_input.final_exec_stack_one_shot_post_allowed
+                ),
+                one_shot_post_readiness_blocked=(
+                    wiring_input
+                    .final_exec_stack_one_shot_post_readiness_blocked
+                ),
+                unsafe_exposure_attempted=(
+                    wiring_input.final_exec_stack_unsafe_exposure_attempted
+                ),
+                raw_request_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_raw_request_exposure_attempted
+                ),
+                raw_response_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_raw_response_exposure_attempted
+                ),
+                broker_response_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_broker_response_exposure_attempted
+                ),
+                api_response_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_api_response_exposure_attempted
+                ),
+                credential_value_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_credential_value_exposure_attempted
+                ),
+                signature_value_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_signature_value_exposure_attempted
+                ),
+                headers_value_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_headers_value_exposure_attempted
+                ),
+                real_id_exposure_attempted=(
+                    wiring_input.final_exec_stack_real_id_exposure_attempted
+                ),
+                confirmation_phrase_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_confirmation_phrase_exposure_attempted
+                ),
+                ledger_state_exposure_attempted=(
+                    wiring_input
+                    .final_exec_stack_ledger_state_exposure_attempted
+                ),
+            ),
+            final_readiness_result=final_readiness_controlled_result,
+            post_guard_result=post_guard_controlled_result,
+            sanitized_result=sanitized_post_result_result,
+        )
+    )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
         input_snapshot=LiveOrderRealCredentialPresenceAdapterInput(
             adapter_mode=wiring_input.presence_adapter_mode,
@@ -5672,6 +6101,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         post_guard_controlled_result=post_guard_controlled_result,
         sanitized_post_result_result=sanitized_post_result_result,
         final_readiness_controlled_result=final_readiness_controlled_result,
+        final_exec_stack_controlled_result=final_exec_stack_controlled_result,
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -5736,6 +6166,9 @@ def build_live_order_real_step6g_internal_wiring(
     final_readiness_controlled_result = (
         wiring_snapshot.final_readiness_controlled_result
     )
+    final_exec_stack_controlled_result = (
+        wiring_snapshot.final_exec_stack_controlled_result
+    )
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -5795,6 +6228,9 @@ def build_live_order_real_step6g_internal_wiring(
     post_guard_controlled_reasons = _post_guard_controlled_reasons(wiring_snapshot)
     sanitized_post_result_reasons = _sanitized_post_result_reasons(wiring_snapshot)
     final_readiness_controlled_reasons = _final_readiness_controlled_reasons(
+        wiring_snapshot,
+    )
+    final_exec_stack_controlled_reasons = _final_exec_stack_controlled_reasons(
         wiring_snapshot,
     )
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
@@ -5935,6 +6371,12 @@ def build_live_order_real_step6g_internal_wiring(
             .BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_READINESS
         )
         primary_reasons = final_readiness_controlled_reasons
+    elif final_exec_stack_controlled_reasons:
+        status = (
+            InternalWiringStatus
+            .BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_EXEC_STACK
+        )
+        primary_reasons = final_exec_stack_controlled_reasons
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
         primary_reasons = _merge_reasons(private_transport_reasons, http_interface_reasons)
@@ -5971,6 +6413,7 @@ def build_live_order_real_step6g_internal_wiring(
         post_guard_controlled_reasons,
         sanitized_post_result_reasons,
         final_readiness_controlled_reasons,
+        final_exec_stack_controlled_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -6064,6 +6507,12 @@ def build_live_order_real_step6g_internal_wiring(
             ),
             safe_final_readiness_label=(
                 final_readiness_controlled_result.safe_final_readiness_label
+            ),
+            final_exec_stack_mode=(
+                final_exec_stack_controlled_result.final_exec_stack_mode
+            ),
+            safe_dry_run_stack_label=(
+                final_exec_stack_controlled_result.safe_dry_run_stack_label
             ),
         ),
     )
@@ -6578,6 +7027,117 @@ def build_live_order_real_step6g_internal_wiring(
         ),
         final_readiness_one_shot_post_allowed=(
             final_readiness_controlled_result.one_shot_post_allowed
+        ),
+        final_exec_stack_dry_run_ready=(
+            not final_exec_stack_controlled_reasons
+        ),
+        final_exec_stack_mode=(
+            final_exec_stack_controlled_result.final_exec_stack_mode
+        ),
+        safe_dry_run_stack_label=(
+            final_exec_stack_controlled_result.safe_dry_run_stack_label
+        ),
+        safe_dry_run_stack_status=(
+            final_exec_stack_controlled_result.safe_dry_run_stack_status
+        ),
+        final_exec_stack_dry_run_mode=(
+            final_exec_stack_controlled_result.dry_run_mode
+        ),
+        final_exec_stack_fake_transport_used=(
+            final_exec_stack_controlled_result.fake_transport_used
+        ),
+        final_exec_stack_no_network_transport_used=(
+            final_exec_stack_controlled_result.no_network_transport_used
+        ),
+        final_exec_stack_network_transport_used=(
+            final_exec_stack_controlled_result.network_transport_used
+        ),
+        final_exec_stack_real_transport_used=(
+            final_exec_stack_controlled_result.real_transport_used
+        ),
+        final_exec_stack_raw_request_generated=(
+            final_exec_stack_controlled_result.raw_request_generated
+        ),
+        final_exec_stack_raw_response_received=(
+            final_exec_stack_controlled_result.raw_response_received
+        ),
+        final_exec_stack_broker_response_received=(
+            final_exec_stack_controlled_result.broker_response_received
+        ),
+        final_exec_stack_api_response_received=(
+            final_exec_stack_controlled_result.api_response_received
+        ),
+        final_exec_stack_one_shot_decision=(
+            final_exec_stack_controlled_result.dry_run_one_shot_decision
+        ),
+        final_exec_stack_result_category=(
+            final_exec_stack_controlled_result.safe_dry_run_result_category
+        ),
+        final_exec_stack_reconciliation_preview_label=(
+            final_exec_stack_controlled_result
+            .safe_dry_run_reconciliation_preview_label
+        ),
+        final_exec_stack_receipt_handoff_preview_label=(
+            final_exec_stack_controlled_result
+            .safe_dry_run_receipt_handoff_preview_label
+        ),
+        final_exec_stack_ledger_attempt_preview_label=(
+            final_exec_stack_controlled_result
+            .safe_dry_run_ledger_attempt_preview_label
+        ),
+        final_exec_stack_sanitized_result_ready=(
+            final_exec_stack_controlled_result.dry_run_sanitized_result_ready
+        ),
+        final_exec_stack_reconciliation_preview_ready=(
+            final_exec_stack_controlled_result
+            .dry_run_reconciliation_preview_ready
+        ),
+        final_exec_stack_receipt_handoff_preview_ready=(
+            final_exec_stack_controlled_result
+            .dry_run_receipt_handoff_preview_ready
+        ),
+        final_exec_stack_ledger_attempt_preview_ready=(
+            final_exec_stack_controlled_result
+            .dry_run_ledger_attempt_preview_ready
+        ),
+        final_exec_stack_api_call_executed=(
+            final_exec_stack_controlled_result.api_call_executed
+        ),
+        final_exec_stack_post_executed=(
+            final_exec_stack_controlled_result.post_executed
+        ),
+        final_exec_stack_http_post_executed=(
+            final_exec_stack_controlled_result.http_post_executed
+        ),
+        final_exec_stack_order_endpoint_called=(
+            final_exec_stack_controlled_result.order_endpoint_called
+        ),
+        final_exec_stack_live_order_once_called=(
+            final_exec_stack_controlled_result.live_order_once_called
+        ),
+        final_exec_stack_fresh_preflight_executed=(
+            final_exec_stack_controlled_result.fresh_preflight_executed
+        ),
+        final_exec_stack_final_confirmation_received=(
+            final_exec_stack_controlled_result.final_confirmation_received
+        ),
+        final_exec_stack_ledger_updated=(
+            final_exec_stack_controlled_result.ledger_updated
+        ),
+        final_exec_stack_attempt_counter_persisted=(
+            final_exec_stack_controlled_result.attempt_counter_persisted
+        ),
+        final_exec_stack_actual_result_receipt_received=(
+            final_exec_stack_controlled_result.actual_result_receipt_received
+        ),
+        final_exec_stack_actual_receipt_handoff_executed=(
+            final_exec_stack_controlled_result.actual_receipt_handoff_executed
+        ),
+        final_exec_stack_one_shot_post_allowed=(
+            final_exec_stack_controlled_result.one_shot_post_allowed
+        ),
+        final_exec_stack_one_shot_post_readiness_blocked=(
+            final_exec_stack_controlled_result.one_shot_post_readiness_blocked
         ),
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
         presence_adapter_mode=wiring_input.presence_adapter_mode,
@@ -7606,6 +8166,81 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- final_readiness_one_shot_post_allowed: "
             f"{_bool_text(result.final_readiness_one_shot_post_allowed)}"
+        ),
+        (
+            "- final_exec_stack_dry_run_ready: "
+            f"{_bool_text(result.final_exec_stack_dry_run_ready)}"
+        ),
+        f"- final_exec_stack_mode: {result.final_exec_stack_mode}",
+        f"- safe_dry_run_stack_label: {result.safe_dry_run_stack_label}",
+        f"- safe_dry_run_stack_status: {result.safe_dry_run_stack_status}",
+        (
+            "- final_exec_stack_dry_run_mode: "
+            f"{_bool_text(result.final_exec_stack_dry_run_mode)}"
+        ),
+        (
+            "- final_exec_stack_fake_transport_used: "
+            f"{_bool_text(result.final_exec_stack_fake_transport_used)}"
+        ),
+        (
+            "- final_exec_stack_network_transport_used: "
+            f"{_bool_text(result.final_exec_stack_network_transport_used)}"
+        ),
+        (
+            "- final_exec_stack_real_transport_used: "
+            f"{_bool_text(result.final_exec_stack_real_transport_used)}"
+        ),
+        (
+            "- final_exec_stack_one_shot_decision: "
+            f"{result.final_exec_stack_one_shot_decision}"
+        ),
+        (
+            "- final_exec_stack_result_category: "
+            f"{result.final_exec_stack_result_category}"
+        ),
+        (
+            "- final_exec_stack_reconciliation_preview_label: "
+            f"{result.final_exec_stack_reconciliation_preview_label}"
+        ),
+        (
+            "- final_exec_stack_receipt_handoff_preview_label: "
+            f"{result.final_exec_stack_receipt_handoff_preview_label}"
+        ),
+        (
+            "- final_exec_stack_ledger_attempt_preview_label: "
+            f"{result.final_exec_stack_ledger_attempt_preview_label}"
+        ),
+        (
+            "- final_exec_stack_api_call_executed: "
+            f"{_bool_text(result.final_exec_stack_api_call_executed)}"
+        ),
+        (
+            "- final_exec_stack_post_executed: "
+            f"{_bool_text(result.final_exec_stack_post_executed)}"
+        ),
+        (
+            "- final_exec_stack_fresh_preflight_executed: "
+            f"{_bool_text(result.final_exec_stack_fresh_preflight_executed)}"
+        ),
+        (
+            "- final_exec_stack_final_confirmation_received: "
+            f"{_bool_text(result.final_exec_stack_final_confirmation_received)}"
+        ),
+        (
+            "- final_exec_stack_ledger_updated: "
+            f"{_bool_text(result.final_exec_stack_ledger_updated)}"
+        ),
+        (
+            "- final_exec_stack_attempt_counter_persisted: "
+            f"{_bool_text(result.final_exec_stack_attempt_counter_persisted)}"
+        ),
+        (
+            "- final_exec_stack_actual_receipt_handoff_executed: "
+            f"{_bool_text(result.final_exec_stack_actual_receipt_handoff_executed)}"
+        ),
+        (
+            "- final_exec_stack_one_shot_post_allowed: "
+            f"{_bool_text(result.final_exec_stack_one_shot_post_allowed)}"
         ),
         (
             "- credential_presence_adapter_ready: "
@@ -9629,6 +10264,161 @@ def _final_readiness_controlled_reasons(
     return tuple(reasons)
 
 
+def _final_exec_stack_controlled_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealFinalExecStackControlledStatus
+        .FINAL_EXEC_STACK_READY_DRY_RUN_ONLY
+    )
+    result = snapshot.final_exec_stack_controlled_result
+    if not snapshot.input_snapshot.final_exec_stack_dry_run_ready:
+        reasons.append("final_exec_stack_dry_run_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(f"final_exec_stack_status_{result.status.value}")
+    if not result.dry_run_stack_ready:
+        reasons.append("final_exec_stack_not_ready")
+    if not result.final_exec_stack_declared:
+        reasons.append("final_exec_stack_not_declared")
+    if not result.final_exec_stack_requested:
+        reasons.append("final_exec_stack_not_requested")
+    if result.safe_dry_run_stack_label != SAFE_DRY_RUN_STACK_LABEL:
+        reasons.append("final_exec_stack_safe_label_invalid")
+    if result.safe_dry_run_stack_status != expected.value:
+        reasons.append("final_exec_stack_safe_status_not_ready")
+    if not result.final_readiness_prerequisite_checked:
+        reasons.append("final_exec_stack_final_readiness_not_checked")
+    if not result.final_readiness_prerequisite_satisfied:
+        reasons.append("final_exec_stack_final_readiness_not_satisfied")
+    if not result.final_readiness_controlled_ready:
+        reasons.append("final_exec_stack_final_readiness_not_ready")
+    if result.safe_final_readiness_label != SAFE_FINAL_READINESS_LABEL:
+        reasons.append("final_exec_stack_final_readiness_label_invalid")
+    if result.safe_final_readiness_status != (
+        LiveOrderRealFinalReadinessControlledStatus
+        .FINAL_READINESS_READY_NO_POST
+        .value
+    ):
+        reasons.append("final_exec_stack_final_readiness_status_not_ready")
+    if not result.post_guard_prerequisite_checked:
+        reasons.append("final_exec_stack_post_guard_not_checked")
+    if not result.post_guard_prerequisite_satisfied:
+        reasons.append("final_exec_stack_post_guard_not_satisfied")
+    if not result.post_guard_controlled_ready:
+        reasons.append("final_exec_stack_post_guard_not_ready")
+    if result.safe_post_guard_label != SAFE_POST_GUARD_LABEL:
+        reasons.append("final_exec_stack_post_guard_label_invalid")
+    if result.safe_post_guard_status != (
+        LiveOrderRealPostGuardControlledStatus.POST_GUARD_READY_NO_POST.value
+    ):
+        reasons.append("final_exec_stack_post_guard_status_not_ready")
+    if not result.sanitized_result_prerequisite_checked:
+        reasons.append("final_exec_stack_sanitized_result_not_checked")
+    if not result.sanitized_result_prerequisite_satisfied:
+        reasons.append("final_exec_stack_sanitized_result_not_satisfied")
+    if not result.sanitized_post_result_ready:
+        reasons.append("final_exec_stack_sanitized_result_not_ready")
+    if not result.reconciliation_ready:
+        reasons.append("final_exec_stack_reconciliation_not_ready")
+    if result.safe_post_result_label != SAFE_POST_RESULT_LABEL:
+        reasons.append("final_exec_stack_safe_result_label_invalid")
+    if result.safe_post_result_status != (
+        LiveOrderRealSanitizedPostResultStatus.SANITIZED_RESULT_READY_NO_RECEIPT.value
+    ):
+        reasons.append("final_exec_stack_safe_result_status_not_ready")
+    if result.safe_reconciliation_label != SAFE_RECONCILIATION_LABEL:
+        reasons.append("final_exec_stack_reconciliation_label_invalid")
+    if result.safe_reconciliation_status != (
+        LiveOrderRealSafeReconciliationStatus
+        .RECONCILIATION_READY_NO_RECEIPT_HANDOFF
+        .value
+    ):
+        reasons.append("final_exec_stack_reconciliation_status_not_ready")
+    if result.dry_run_stack_unknown:
+        reasons.append("final_exec_stack_unknown")
+    if result.dry_run_stack_failed:
+        reasons.append("final_exec_stack_failed")
+    if result.dry_run_stack_unavailable:
+        reasons.append("final_exec_stack_unavailable")
+    if result.dry_run_stack_timeout:
+        reasons.append("final_exec_stack_timeout")
+    if result.dry_run_stack_stale:
+        reasons.append("final_exec_stack_stale")
+    if result.dry_run_stack_reused:
+        reasons.append("final_exec_stack_reused")
+    if not result.dry_run_mode:
+        reasons.append("final_exec_stack_dry_run_mode_false")
+    if not result.fake_transport_used:
+        reasons.append("final_exec_stack_fake_transport_not_used")
+    if not result.no_network_transport_used:
+        reasons.append("final_exec_stack_no_network_transport_not_used")
+    if result.network_transport_used:
+        reasons.append("final_exec_stack_network_transport_used")
+    if result.real_transport_used:
+        reasons.append("final_exec_stack_real_transport_used")
+    if (
+        result.raw_request_generated
+        or result.raw_response_received
+        or result.broker_response_received
+        or result.api_response_received
+    ):
+        reasons.append("final_exec_stack_raw_or_response_received")
+    if not result.dry_run_sanitized_result_ready:
+        reasons.append("final_exec_stack_dry_run_sanitized_result_not_ready")
+    if not result.dry_run_reconciliation_preview_ready:
+        reasons.append("final_exec_stack_reconciliation_preview_not_ready")
+    if not result.dry_run_receipt_handoff_preview_ready:
+        reasons.append("final_exec_stack_receipt_handoff_preview_not_ready")
+    if not result.dry_run_ledger_attempt_preview_ready:
+        reasons.append("final_exec_stack_ledger_attempt_preview_not_ready")
+    if (
+        result.api_call_allowed
+        or result.api_call_executed
+        or result.post_allowed_this_step
+        or result.post_executed
+        or result.http_post_executed
+        or result.order_endpoint_called
+        or result.live_order_once_called
+    ):
+        reasons.append("final_exec_stack_api_post_or_live_order_once")
+    if result.fresh_preflight_executed or result.final_confirmation_received:
+        reasons.append("final_exec_stack_fresh_or_final_executed")
+    if (
+        result.ledger_update_allowed
+        or result.ledger_updated
+        or result.attempt_counter_persistence_allowed
+        or result.attempt_counter_persisted
+    ):
+        reasons.append("final_exec_stack_ledger_or_attempt_counter_executed")
+    if (
+        result.actual_result_receipt_received
+        or result.actual_receipt_handoff_executed
+        or result.actual_receipt_handoff_allowed
+    ):
+        reasons.append("final_exec_stack_actual_receipt_or_handoff_executed")
+    if (
+        result.raw_request_stored
+        or result.raw_response_stored
+        or result.broker_response_exposed
+        or result.api_response_exposed
+        or result.real_id_exposed
+        or result.ledger_state_actual_value_exposed
+        or result.raw_broker_api_response_exposed
+    ):
+        reasons.append("final_exec_stack_raw_or_id_exposed")
+    if not result.one_shot_post_readiness_blocked:
+        reasons.append("final_exec_stack_one_shot_post_not_blocked")
+    if result.one_shot_post_allowed:
+        reasons.append("final_exec_stack_one_shot_post_allowed")
+    if not result.safe_to_render:
+        reasons.append("final_exec_stack_render_not_safe")
+    if not result.safe_to_serialize:
+        reasons.append("final_exec_stack_serialize_not_safe")
+    reasons.extend(result.blocked_reasons)
+    return tuple(dict.fromkeys(reasons))
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -10941,6 +11731,12 @@ def _build_check_results(
             not _final_readiness_controlled_reasons(snapshot),
             "final readiness contract ready without API POST fresh final "
             "ledger or receipt execution",
+        ),
+        (
+            "final exec stack controlled",
+            not _final_exec_stack_controlled_reasons(snapshot),
+            "dry-run execution stack ready without API POST real transport "
+            "fresh final ledger or receipt execution",
         ),
         (
             "credential presence adapter",

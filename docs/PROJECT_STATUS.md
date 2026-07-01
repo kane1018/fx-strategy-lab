@@ -82,6 +82,29 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-FINAL-EXEC-STACK-C dry-run only one-shot execution stack implementation完了 / dry-run only / fake no-network transport / no API call / no POST / no live_order_once / no real transport** —
+  FINAL-READINESS-V CASE 1 PASSの判断後、final readiness / POST guard / sanitized resultがsafe boundaryとして成立している前提で、
+  dry-run one-shot execution orchestrator、fake/no-network transport path、dry-run one-shot decision、dry-run sanitized result /
+  reconciliation path、dry-run receipt handoff preview、dry-run ledger / attempt counter previewを1つのfinal exec stack controlled
+  contractへ統合した。FINAL-EXEC-STACK-Cでは
+  `backend/app/live_verification/live_order_real_final_exec_stack_controlled.py` を追加し、
+  `FINAL_EXEC_STACK_DRY_RUN_ONLY`、固定safe dry-run stack label、
+  `FINAL_EXEC_STACK_READY_DRY_RUN_ONLY`、`dry_run_stack_ready`、`dry_run_mode=true`、
+  `fake_transport_used=true`、`network_transport_used=false`、`real_transport_used=false`、
+  `one_shot_post_allowed=false`、safe dry-run preview labels、safe blocked reasonsだけを扱う。
+  このStepはdry-run only implementationであり、API call、HTTP POST、order endpoint、`live_order_once`、
+  real transport、network I/O、fresh preflight execution、final confirmation execution、ledger更新、attempt counter永続化、
+  actual result receipt、actual receipt handoff、実資金Step 6G再試行には進まない。credential値、signature値、headers値、
+  raw request、raw response、broker/API response実体、endpoint actual value、real ID、account ID、order ID、transaction ID、
+  confirmation phrase actual value、Step 4 approval phrase actual value、ledger state actual value、approval command actual valueは
+  result / renderer / asdict / docsに含めない。dry-run stack readyでもPOST、API、order endpoint、`live_order_once`、
+  fresh preflight済み、final confirmation済み、ledger更新済み、actual receipt handoff済み、実資金Step 6G再試行可にはならない。
+  Step 6G-IWにも `final_exec_stack_dry_run_ready` gateを最小連携し、final readiness missing、one-shot POST allowed、
+  network/real transport、API/POST/order endpoint/`live_order_once`、fresh/final execution、ledger/attempt persistence、
+  actual receipt/handoff、raw/broker/API/ID/value exposureをfail-closedで検査する。
+  詳細は [STEP6G_FINAL_EXEC_STACK_CONTROLLED.md](STEP6G_FINAL_EXEC_STACK_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-FINAL-EXEC-STACK-V dry-run one-shot execution stack boundary review /
+  no API call / no POST / no code change**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-FINAL-READINESS-C consolidated final readiness contract implementation完了 / contract implementation only / no API call / no POST / no fresh preflight execution / no final confirmation execution** —
   FINAL-GATE CASE 1の判断後、POST guard resultとsanitized result / reconciliation resultを前提に、
   fresh preflight required、final confirmation required、ledger / attempt counter required、actual receipt handoff

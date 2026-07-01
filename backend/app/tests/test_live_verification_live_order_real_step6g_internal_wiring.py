@@ -329,6 +329,40 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.final_readiness_actual_receipt_handoff_executed is False
     assert result.final_readiness_one_shot_post_readiness_blocked is True
     assert result.final_readiness_one_shot_post_allowed is False
+    assert result.final_exec_stack_dry_run_ready is True
+    assert result.final_exec_stack_mode == "FINAL_EXEC_STACK_DRY_RUN_ONLY"
+    assert result.safe_dry_run_stack_label == (
+        "CONTROLLED_FINAL_EXEC_STACK_DRY_RUN_ONLY"
+    )
+    assert result.safe_dry_run_stack_status == (
+        "FINAL_EXEC_STACK_READY_DRY_RUN_ONLY"
+    )
+    assert result.final_exec_stack_dry_run_mode is True
+    assert result.final_exec_stack_fake_transport_used is True
+    assert result.final_exec_stack_no_network_transport_used is True
+    assert result.final_exec_stack_network_transport_used is False
+    assert result.final_exec_stack_real_transport_used is False
+    assert result.final_exec_stack_raw_request_generated is False
+    assert result.final_exec_stack_raw_response_received is False
+    assert result.final_exec_stack_broker_response_received is False
+    assert result.final_exec_stack_api_response_received is False
+    assert result.final_exec_stack_sanitized_result_ready is True
+    assert result.final_exec_stack_reconciliation_preview_ready is True
+    assert result.final_exec_stack_receipt_handoff_preview_ready is True
+    assert result.final_exec_stack_ledger_attempt_preview_ready is True
+    assert result.final_exec_stack_api_call_executed is False
+    assert result.final_exec_stack_post_executed is False
+    assert result.final_exec_stack_http_post_executed is False
+    assert result.final_exec_stack_order_endpoint_called is False
+    assert result.final_exec_stack_live_order_once_called is False
+    assert result.final_exec_stack_fresh_preflight_executed is False
+    assert result.final_exec_stack_final_confirmation_received is False
+    assert result.final_exec_stack_ledger_updated is False
+    assert result.final_exec_stack_attempt_counter_persisted is False
+    assert result.final_exec_stack_actual_result_receipt_received is False
+    assert result.final_exec_stack_actual_receipt_handoff_executed is False
+    assert result.final_exec_stack_one_shot_post_allowed is False
+    assert result.final_exec_stack_one_shot_post_readiness_blocked is True
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -1538,6 +1572,79 @@ def test_final_readiness_not_ready_blocks_internal_wiring(
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"final_exec_stack_dry_run_ready": False},
+        {"final_exec_stack_unknown": True},
+        {"final_exec_stack_failed": True},
+        {"final_exec_stack_unavailable": True},
+        {"final_exec_stack_timeout": True},
+        {"final_exec_stack_stale": True},
+        {"final_exec_stack_reused": True},
+        {"final_exec_stack_dry_run_mode": False},
+        {"final_exec_stack_fake_transport_used": False},
+        {"final_exec_stack_no_network_transport_used": False},
+        {"final_exec_stack_network_transport_used": True},
+        {"final_exec_stack_real_transport_used": True},
+        {"final_exec_stack_raw_request_generated": True},
+        {"final_exec_stack_raw_response_received": True},
+        {"final_exec_stack_broker_response_received": True},
+        {"final_exec_stack_api_response_received": True},
+        {"final_exec_stack_one_shot_decision_safe": False},
+        {"final_exec_stack_sanitized_result_ready": False},
+        {"final_exec_stack_reconciliation_preview_ready": False},
+        {"final_exec_stack_receipt_handoff_preview_ready": False},
+        {"final_exec_stack_ledger_attempt_preview_ready": False},
+        {"final_exec_stack_api_call_executed": True},
+        {"final_exec_stack_post_executed": True},
+        {"final_exec_stack_http_post_executed": True},
+        {"final_exec_stack_order_endpoint_called": True},
+        {"final_exec_stack_live_order_once_called": True},
+        {"final_exec_stack_fresh_preflight_executed": True},
+        {"final_exec_stack_final_confirmation_received": True},
+        {"final_exec_stack_ledger_updated": True},
+        {"final_exec_stack_attempt_counter_persisted": True},
+        {"final_exec_stack_actual_result_receipt_received": True},
+        {"final_exec_stack_actual_receipt_handoff_executed": True},
+        {"final_exec_stack_one_shot_post_allowed": True},
+        {"final_exec_stack_one_shot_post_readiness_blocked": False},
+        {"final_exec_stack_raw_request_exposure_attempted": True},
+        {"final_exec_stack_raw_response_exposure_attempted": True},
+        {"final_exec_stack_broker_response_exposure_attempted": True},
+        {"final_exec_stack_api_response_exposure_attempted": True},
+        {"final_exec_stack_credential_value_exposure_attempted": True},
+        {"final_exec_stack_signature_value_exposure_attempted": True},
+        {"final_exec_stack_headers_value_exposure_attempted": True},
+        {"final_exec_stack_real_id_exposure_attempted": True},
+        {"final_exec_stack_confirmation_phrase_exposure_attempted": True},
+        {"final_exec_stack_ledger_state_exposure_attempted": True},
+    ],
+)
+def test_final_exec_stack_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_EXEC_STACK
+    assert result.final_exec_stack_dry_run_ready is False
+    assert result.final_exec_stack_network_transport_used is False
+    assert result.final_exec_stack_real_transport_used is False
+    assert result.final_exec_stack_post_executed is False
+    assert result.final_exec_stack_http_post_executed is False
+    assert result.final_exec_stack_order_endpoint_called is False
+    assert result.final_exec_stack_live_order_once_called is False
+    assert result.final_exec_stack_fresh_preflight_executed is False
+    assert result.final_exec_stack_final_confirmation_received is False
+    assert result.final_exec_stack_ledger_updated is False
+    assert result.final_exec_stack_attempt_counter_persisted is False
+    assert result.final_exec_stack_actual_receipt_handoff_executed is False
+    assert result.final_exec_stack_one_shot_post_allowed is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
         {"operator_provided_presence_result": False},
         {"operator_presence_result_is_boolean_only": False},
         {"operator_presence_result_fresh": False},
@@ -2727,6 +2834,29 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "final_readiness_actual_receipt_handoff_executed: false" in rendered
     assert "final_readiness_one_shot_post_readiness_blocked: true" in rendered
     assert "final_readiness_one_shot_post_allowed: false" in rendered
+    assert "final_exec_stack_dry_run_ready: true" in rendered
+    assert "final_exec_stack_mode: FINAL_EXEC_STACK_DRY_RUN_ONLY" in rendered
+    assert (
+        "safe_dry_run_stack_label: CONTROLLED_FINAL_EXEC_STACK_DRY_RUN_ONLY"
+        in rendered
+    )
+    assert "safe_dry_run_stack_status: FINAL_EXEC_STACK_READY_DRY_RUN_ONLY" in rendered
+    assert "final_exec_stack_dry_run_mode: true" in rendered
+    assert "final_exec_stack_fake_transport_used: true" in rendered
+    assert "final_exec_stack_network_transport_used: false" in rendered
+    assert "final_exec_stack_real_transport_used: false" in rendered
+    assert (
+        "final_exec_stack_one_shot_decision: "
+        "DRY_RUN_ONE_SHOT_DECISION_BLOCKED_NO_POST"
+    ) in rendered
+    assert "final_exec_stack_api_call_executed: false" in rendered
+    assert "final_exec_stack_post_executed: false" in rendered
+    assert "final_exec_stack_fresh_preflight_executed: false" in rendered
+    assert "final_exec_stack_final_confirmation_received: false" in rendered
+    assert "final_exec_stack_ledger_updated: false" in rendered
+    assert "final_exec_stack_attempt_counter_persisted: false" in rendered
+    assert "final_exec_stack_actual_receipt_handoff_executed: false" in rendered
+    assert "final_exec_stack_one_shot_post_allowed: false" in rendered
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered
