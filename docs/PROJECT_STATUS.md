@@ -82,6 +82,29 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-FINAL-READINESS-C consolidated final readiness contract implementation完了 / contract implementation only / no API call / no POST / no fresh preflight execution / no final confirmation execution** —
+  FINAL-GATE CASE 1の判断後、POST guard resultとsanitized result / reconciliation resultを前提に、
+  fresh preflight required、final confirmation required、ledger / attempt counter required、actual receipt handoff
+  required、one-shot POST readiness blockedを1つのfinal readiness controlled contractへ統合した。
+  FINAL-READINESS-Cでは `backend/app/live_verification/live_order_real_final_readiness_controlled.py` を追加し、
+  `FINAL_READINESS_CONTROLLED_IMPLEMENTATION_ONLY`、固定safe final readiness label、
+  `FINAL_READINESS_READY_NO_POST`、final readiness controlled ready boolean、safe blocked reasonsだけを扱う。
+  fresh preflightはrequiredだが未実行、final confirmationはrequiredだが未取得、ledger / attempt counterはrequired
+  だが更新・永続化しない、actual receipt handoffはrequiredだが未実行、`one_shot_post_allowed=false`を固定する。
+  このStepはcontract implementationであり、API call、HTTP POST、order endpoint、`live_order_once`、
+  fresh preflight execution、final confirmation execution、ledger更新、attempt counter永続化、actual result receipt、
+  actual receipt handoff、実資金Step 6G再試行には進まない。credential値、signature値、headers値、raw request、
+  raw response、broker/API response実体、endpoint actual value、real ID、account ID、order ID、transaction ID、
+  confirmation phrase actual value、Step 4 approval phrase actual value、ledger state actual value、approval command
+  actual valueはresult / renderer / asdict / docsに含めない。final readiness readyでもPOST、API、order endpoint、
+  `live_order_once`、fresh preflight済み、final confirmation済み、ledger更新済み、actual receipt handoff済み、
+  実資金Step 6G再試行可にはならない。Step 6G-IWにも `final_readiness_controlled_ready` gateを最小連携し、
+  missing / unknown / failed / unavailable / timeout / stale / previous-turn / reused / fresh preflight missing or executed /
+  final confirmation missing or executed / ledger update / attempt counter persistence / actual receipt handoff / API / POST /
+  order endpoint / `live_order_once` / unsafe exposureをfail-closedで検査する。
+  詳細は [STEP6G_FINAL_READINESS_CONTROLLED.md](STEP6G_FINAL_READINESS_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-FINAL-READINESS-V final readiness contract boundary review /
+  no API call / no POST / no code change**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-RESULT-C sanitized POST result / reconciliation contract implementation完了 / contract implementation only / no API call / no POST / no live_order_once** —
   POST-GUARD-V CASE 1の判断後、controlled POST guard resultを前提に、将来POST result / reconciliationを
   safe label / safe status / safe boolean / sanitized categoryだけへ閉じるcontract implementationを追加した。

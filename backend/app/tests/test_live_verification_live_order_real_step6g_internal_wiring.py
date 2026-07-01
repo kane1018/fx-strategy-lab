@@ -301,6 +301,34 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.sanitized_result_final_confirmation_required is True
     assert result.sanitized_result_ledger_design_required is True
     assert result.sanitized_result_attempt_counter_design_required is True
+    assert result.final_readiness_controlled_ready is True
+    assert result.final_readiness_mode == "FINAL_READINESS_CONTROLLED_IMPLEMENTATION_ONLY"
+    assert result.final_readiness_declared is True
+    assert result.safe_final_readiness_label == "CONTROLLED_FINAL_READINESS_BOUNDARY"
+    assert result.safe_final_readiness_status == "FINAL_READINESS_READY_NO_POST"
+    assert result.final_readiness_unknown is False
+    assert result.final_readiness_failed is False
+    assert result.final_readiness_unavailable is False
+    assert result.final_readiness_timeout is False
+    assert result.final_readiness_stale is False
+    assert result.final_readiness_previous_turn is False
+    assert result.final_readiness_reused is False
+    assert result.final_readiness_fresh_preflight_required is True
+    assert result.final_readiness_fresh_preflight_current_required is True
+    assert result.final_readiness_fresh_preflight_non_reuse_required is True
+    assert result.final_readiness_fresh_preflight_executed is False
+    assert result.final_readiness_final_confirmation_required is True
+    assert result.final_readiness_final_confirmation_current_turn_required is True
+    assert result.final_readiness_final_confirmation_one_time_required is True
+    assert result.final_readiness_final_confirmation_received is False
+    assert result.final_readiness_ledger_attempt_counter_required is True
+    assert result.final_readiness_ledger_update_allowed is False
+    assert result.final_readiness_attempt_counter_persistence_allowed is False
+    assert result.final_readiness_actual_receipt_handoff_required is True
+    assert result.final_readiness_actual_receipt_handoff_allowed is False
+    assert result.final_readiness_actual_receipt_handoff_executed is False
+    assert result.final_readiness_one_shot_post_readiness_blocked is True
+    assert result.final_readiness_one_shot_post_allowed is False
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -1463,6 +1491,48 @@ def test_sanitized_post_result_final_gate_blockers_required(
     assert result.post_allowed_this_step is False
     assert result.post_executed is False
     assert result.live_order_once_called is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"final_readiness_declared": False},
+        {"final_readiness_unknown": True},
+        {"final_readiness_failed": True},
+        {"final_readiness_unavailable": True},
+        {"final_readiness_timeout": True},
+        {"final_readiness_stale": True},
+        {"final_readiness_previous_turn": True},
+        {"final_readiness_reused": True},
+        {"final_readiness_fresh_preflight_required": False},
+        {"final_readiness_fresh_preflight_current_required": False},
+        {"final_readiness_fresh_preflight_non_reuse_required": False},
+        {"final_readiness_final_confirmation_required": False},
+        {"final_readiness_final_confirmation_current_turn_required": False},
+        {"final_readiness_final_confirmation_one_time_required": False},
+        {"final_readiness_ledger_attempt_counter_required": False},
+        {"final_readiness_ledger_update_allowed": True},
+        {"final_readiness_attempt_counter_persistence_allowed": True},
+        {"final_readiness_actual_receipt_handoff_required": False},
+        {"final_readiness_actual_receipt_handoff_allowed": True},
+        {"final_readiness_one_shot_post_readiness_blocked": False},
+        {"final_readiness_one_shot_post_allowed": True},
+        {"final_readiness_confirmation_phrase_exposure_attempted": True},
+        {"final_readiness_ledger_state_exposure_attempted": True},
+        {"final_readiness_approval_command_exposure_attempted": True},
+    ],
+)
+def test_final_readiness_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_READINESS
+    assert result.final_readiness_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
+    assert result.final_readiness_one_shot_post_allowed is False
 
 
 @pytest.mark.parametrize(
@@ -2631,6 +2701,32 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "sanitized_result_fresh_preflight_required: true" in rendered
     assert "sanitized_result_final_confirmation_required: true" in rendered
     assert "sanitized_result_ledger_design_required: true" in rendered
+    assert "final_readiness_controlled_ready: true" in rendered
+    assert (
+        "final_readiness_mode: FINAL_READINESS_CONTROLLED_IMPLEMENTATION_ONLY"
+        in rendered
+    )
+    assert (
+        "safe_final_readiness_label: CONTROLLED_FINAL_READINESS_BOUNDARY"
+        in rendered
+    )
+    assert "safe_final_readiness_status: FINAL_READINESS_READY_NO_POST" in rendered
+    assert "final_readiness_fresh_preflight_required: true" in rendered
+    assert "final_readiness_fresh_preflight_current_required: true" in rendered
+    assert "final_readiness_fresh_preflight_non_reuse_required: true" in rendered
+    assert "final_readiness_fresh_preflight_executed: false" in rendered
+    assert "final_readiness_final_confirmation_required: true" in rendered
+    assert "final_readiness_final_confirmation_current_turn_required: true" in rendered
+    assert "final_readiness_final_confirmation_one_time_required: true" in rendered
+    assert "final_readiness_final_confirmation_received: false" in rendered
+    assert "final_readiness_ledger_attempt_counter_required: true" in rendered
+    assert "final_readiness_ledger_update_allowed: false" in rendered
+    assert "final_readiness_attempt_counter_persistence_allowed: false" in rendered
+    assert "final_readiness_actual_receipt_handoff_required: true" in rendered
+    assert "final_readiness_actual_receipt_handoff_allowed: false" in rendered
+    assert "final_readiness_actual_receipt_handoff_executed: false" in rendered
+    assert "final_readiness_one_shot_post_readiness_blocked: true" in rendered
+    assert "final_readiness_one_shot_post_allowed: false" in rendered
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered

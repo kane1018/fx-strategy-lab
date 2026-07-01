@@ -114,16 +114,17 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-SIGN-C, the recommended next Step is a review-only
-boundary check before any further high-risk movement:
+After Step 6G-PC-OX-R-FINAL-READINESS-C, the recommended next Step is a
+review-only boundary check before any further high-risk movement:
 
 ```text
-Step 6G-PC-OX-R-SIGN-V:
-signing and headers controlled implementation boundary review / no signature value exposure / no API / no POST / no code change
+Step 6G-PC-OX-R-FINAL-READINESS-V:
+final readiness contract boundary review / no API call / no POST / no code change
 ```
 
-That Step must still avoid env access, credential read, credential value or raw
-handle exposure, signature value exposure, headers value exposure, actual
-checker execution, actual result receipt, API calls, POST, order endpoints,
-`live_order_once`, real transport, final confirmation, fresh preflight, and
-live-money Step 6G retry.
+That Step must still avoid env access, credential read, credential value
+exposure, signature value exposure, headers value exposure, raw request/response
+exposure, broker/API response exposure, actual checker execution, actual result
+receipt, actual receipt handoff, API calls, POST, order endpoints,
+`live_order_once`, ledger updates, attempt counter persistence, final
+confirmation execution, fresh preflight execution, and live-money Step 6G retry.
