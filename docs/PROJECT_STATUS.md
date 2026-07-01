@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-SPP-D safe pace-up policy documentation完了 / docs only / no env / no API / no POST** —
+  Step 6G-PC-OX-R-A-VはCASE 1 PASSで、Step 6G-PC-OX-R-Aのoperator result handoff receipt skeletonは
+  receipt-only / skeleton-only / no env / no credential / no actual execution / no API / no POSTの境界として
+  安全に閉じている。Step 6G-SPP-Dでは [STEP6G_SAFE_PACE_POLICY.md](STEP6G_SAFE_PACE_POLICY.md) を追加し、
+  今後のCodex作業でsafe pace-up policyをrepo docs参照にできるよう固定した。safe pace-up policyは
+  安全境界内の重複調査、過剰レビュー、細かすぎるStep分割を減らすための方針であり、未レビュー領域、
+  env / `.env` access、credential read/injection、actual checker execution、actual result receipt、API、
+  read-only API、public API、Private API、HTTP POST、order endpoint、`live_order_once`、real signing、
+  real transport、fresh preflight、final confirmation、実資金Step 6G再試行へ進む許可ではない。
+  `READY_CONFIRMED`はPOST許可・final confirmation・fresh preflight済みを意味せず、`NOT_PROVIDED`は
+  actual result receiptではない。今後のプロンプトでは
+  `docs/STEP6G_SAFE_PACE_POLICY.md` と `docs/CODEX_HANDOFF.md` のsafe pace-up policyを前提にできる。
+  次の推奨Stepは **Step 6G-PC-OX-R-AH actual receipt handoff policy hardening / still no env /
+  no actual execution / no API / no POST**。ただし次Stepでもactual receipt handoff、env、credential、
+  API、POST、実資金Step 6G再試行には進まない。
 - **Step 6G-PC-OX-R-A operator result handoff artifact / receipt skeleton完了 / no env / no actual execution / no API / no POST** —
   Step 6G-PC-OX-R-C-VのCASE 2結論後の次Stepとして、operator側で将来確認したsafe categoryを
   Codexへ渡すためのone-time / fresh / non-reuse / non-raw / non-detail receipt contractを追加した。
