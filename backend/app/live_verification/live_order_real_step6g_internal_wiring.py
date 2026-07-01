@@ -58,6 +58,12 @@ from app.live_verification.live_order_real_credential_presence_checker_execution
     LiveOrderRealCredentialPresenceCheckerExecutionContractStatus,
     build_live_order_real_credential_presence_checker_execution_contract,
 )
+from app.live_verification.live_order_real_credential_presence_checker_execution_implementation import (  # noqa: E501
+    LiveOrderRealCredentialPresenceCheckerExecutionImplementationInput,
+    LiveOrderRealCredentialPresenceCheckerExecutionImplementationResult,
+    LiveOrderRealCredentialPresenceCheckerExecutionImplementationStatus,
+    build_live_order_real_credential_presence_checker_execution_implementation,
+)
 from app.live_verification.live_order_real_credential_presence_checker_implementation import (
     LiveOrderRealCredentialPresenceCheckerImplementationInput,
     LiveOrderRealCredentialPresenceCheckerImplementationResult,
@@ -352,12 +358,20 @@ class LiveOrderRealStep6GInternalWiringInput:
     checker_implementation_mode: str = "CHECKER_IMPLEMENTATION_SKELETON_ONLY"
     checker_execution_contract_ready: bool = True
     checker_execution_contract_mode: str = "CHECKER_EXECUTION_CONTRACT_SKELETON_ONLY"
+    checker_execution_implementation_skeleton_ready: bool = True
+    checker_execution_implementation_mode: str = (
+        "CHECKER_EXECUTION_IMPLEMENTATION_SKELETON_ONLY"
+    )
     execution_contract_declared: bool = True
     execution_inputs_declared: bool = True
     execution_outputs_declared: bool = True
     execution_stop_conditions_declared: bool = True
+    execution_implementation_declared: bool = True
+    execution_interface_declared: bool = True
     implementation_interface_declared: bool = True
     implementation_lifecycle_declared: bool = True
+    execution_lifecycle_declared: bool = True
+    execution_result_mapping_declared: bool = True
     execution_deferred_to_future_step: bool = True
     execution_performed: bool = False
     execution_performed_by_codex: bool = False
@@ -413,6 +427,14 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty(
             "checker_execution_contract_mode",
             self.checker_execution_contract_mode,
+        )
+        _require_non_empty(
+            "checker_execution_implementation_mode",
+            self.checker_execution_implementation_mode,
+        )
+        _require_non_empty(
+            "checker_execution_implementation_mode",
+            self.checker_execution_implementation_mode,
         )
         _validate_non_negative_int("size", self.size)
         _validate_non_negative_int("open_positions_count", self.open_positions_count)
@@ -564,12 +586,17 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "checker_result_detail_present",
                 "checker_implementation_skeleton_ready",
                 "checker_execution_contract_ready",
+                "checker_execution_implementation_skeleton_ready",
                 "execution_contract_declared",
                 "execution_inputs_declared",
                 "execution_outputs_declared",
                 "execution_stop_conditions_declared",
+                "execution_implementation_declared",
+                "execution_interface_declared",
                 "signature_value_generated",
                 "header_values_present",
+                "execution_lifecycle_declared",
+                "execution_result_mapping_declared",
                 "execution_performed_by_codex",
                 "execution_performed_by_operator",
                 "credential_read_performed",
@@ -639,6 +666,9 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     )
     credential_presence_checker_execution_contract_result: (
         LiveOrderRealCredentialPresenceCheckerExecutionContractResult
+    )
+    credential_presence_checker_execution_implementation_result: (
+        LiveOrderRealCredentialPresenceCheckerExecutionImplementationResult
     )
 
 
@@ -773,12 +803,18 @@ class LiveOrderRealStep6GInternalWiringResult:
     checker_implementation_mode: str
     checker_execution_contract_ready: bool
     checker_execution_contract_mode: str
+    checker_execution_implementation_skeleton_ready: bool
+    checker_execution_implementation_mode: str
     execution_contract_declared: bool
     execution_inputs_declared: bool
     execution_outputs_declared: bool
     execution_stop_conditions_declared: bool
+    execution_implementation_declared: bool
+    execution_interface_declared: bool
     implementation_interface_declared: bool
     implementation_lifecycle_declared: bool
+    execution_lifecycle_declared: bool
+    execution_result_mapping_declared: bool
     execution_deferred_to_future_step: bool
     execution_performed: bool
     execution_performed_by_codex: bool
@@ -943,12 +979,17 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "checker_result_detail_present",
                 "checker_implementation_skeleton_ready",
                 "checker_execution_contract_ready",
+                "checker_execution_implementation_skeleton_ready",
                 "execution_contract_declared",
                 "execution_inputs_declared",
                 "execution_outputs_declared",
                 "execution_stop_conditions_declared",
+                "execution_implementation_declared",
+                "execution_interface_declared",
                 "implementation_interface_declared",
                 "implementation_lifecycle_declared",
+                "execution_lifecycle_declared",
+                "execution_result_mapping_declared",
                 "execution_deferred_to_future_step",
                 "execution_performed",
                 "execution_performed_by_codex",
@@ -1963,6 +2004,119 @@ def build_valid_step6g_internal_wiring_snapshot(
             ),
         )
     )
+    credential_presence_checker_execution_implementation_result = (
+        build_live_order_real_credential_presence_checker_execution_implementation(
+            input_snapshot=(
+                LiveOrderRealCredentialPresenceCheckerExecutionImplementationInput(
+                    execution_implementation_mode=(
+                        wiring_input.checker_execution_implementation_mode
+                    ),
+                    checker_execution_contract_ready=(
+                        credential_presence_checker_execution_contract_result
+                        .checker_execution_contract_ready
+                        and wiring_input.checker_execution_implementation_skeleton_ready
+                    ),
+                    checker_implementation_skeleton_ready=(
+                        credential_presence_checker_implementation_result
+                        .checker_implementation_skeleton_ready
+                    ),
+                    operator_result_handoff_safe=(
+                        operator_checker_workflow_result.operator_result_handoff_safe
+                        and wiring_input.operator_result_handoff_safe
+                    ),
+                    operator_checker_workflow_ready=(
+                        operator_checker_workflow_result.operator_checker_workflow_ready
+                    ),
+                    execution_implementation_declared=(
+                        wiring_input.execution_implementation_declared
+                    ),
+                    execution_interface_declared=(
+                        wiring_input.execution_interface_declared
+                    ),
+                    execution_lifecycle_declared=(
+                        wiring_input.execution_lifecycle_declared
+                    ),
+                    execution_result_mapping_declared=(
+                        wiring_input.execution_result_mapping_declared
+                    ),
+                    execution_stop_conditions_declared=(
+                        wiring_input.execution_stop_conditions_declared
+                    ),
+                    execution_deferred_to_future_step=(
+                        wiring_input.execution_deferred_to_future_step
+                    ),
+                    execution_performed=wiring_input.execution_performed,
+                    execution_performed_by_codex=(
+                        wiring_input.execution_performed_by_codex
+                    ),
+                    execution_performed_by_operator=(
+                        wiring_input.execution_performed_by_operator
+                    ),
+                    env_access_requested=wiring_input.env_access_requested,
+                    codex_env_access_requested=wiring_input.codex_env_access_requested,
+                    actual_environment_presence_check_performed=(
+                        wiring_input.actual_environment_presence_check_performed
+                    ),
+                    credential_read_performed=wiring_input.credential_read_performed,
+                    credential_values_present=(
+                        wiring_input.credential_values_provided
+                        or wiring_input.credential_values_loaded
+                        or wiring_input.credential_values_available
+                        or wiring_input.credential_values_read
+                    ),
+                    credential_metadata_present=(
+                        wiring_input.credential_metadata_exposed
+                        or wiring_input.credential_injection_metadata_available
+                        or wiring_input.credential_metadata_available
+                    ),
+                    checker_result_available=wiring_input.checker_result_available,
+                    checker_result_detail_present=(
+                        wiring_input.checker_result_detail_present
+                    ),
+                    checker_result_unknown=wiring_input.checker_result_unknown,
+                    checker_result_failed=wiring_input.checker_result_failed,
+                    checker_result_unavailable=wiring_input.checker_result_unavailable,
+                    checker_result_stale=wiring_input.checker_result_stale,
+                    checker_result_timeout=wiring_input.checker_result_timeout,
+                    checker_result_saved=wiring_input.checker_result_saved,
+                    checker_result_displayed=wiring_input.checker_result_displayed,
+                    operator_result_detail_present=(
+                        wiring_input.operator_result_detail_present
+                    ),
+                    operator_result_raw_value_present=(
+                        wiring_input.operator_result_raw_value_present
+                    ),
+                    operator_result_reused=wiring_input.operator_result_reused,
+                    operator_result_previous_turn=(
+                        wiring_input.operator_result_previous_turn
+                    ),
+                    operator_result_timeout=wiring_input.operator_result_timeout,
+                    can_generate_real_signature=False,
+                    can_generate_real_headers=False,
+                    can_execute_http_post=False,
+                    http_post_executed=wiring_input.http_post_executed,
+                    order_endpoint_called=wiring_input.order_endpoint_called,
+                    live_order_once_called=wiring_input.live_order_once_called,
+                    post_allowed_this_step=wiring_input.post_allowed_this_step,
+                    post_executed=wiring_input.post_executed,
+                    safe_to_render=not (
+                        wiring_input.checker_result_displayed
+                        or wiring_input.checker_result_detail_present
+                        or wiring_input.operator_result_detail_present
+                        or wiring_input.operator_result_raw_value_present
+                    ),
+                    safe_to_serialize=not (
+                        wiring_input.checker_result_saved
+                        or wiring_input.checker_result_detail_present
+                        or wiring_input.operator_result_detail_present
+                        or wiring_input.operator_result_raw_value_present
+                    ),
+                    retry_allowed=wiring_input.retry_allowed,
+                    loop_allowed=wiring_input.loop_allowed,
+                )
+            ),
+        )
+    )
     return LiveOrderRealStep6GInternalWiringSnapshot(
         input_snapshot=wiring_input,
         pb_result=pb_result,
@@ -1988,6 +2142,9 @@ def build_valid_step6g_internal_wiring_snapshot(
         ),
         credential_presence_checker_execution_contract_result=(
             credential_presence_checker_execution_contract_result
+        ),
+        credential_presence_checker_execution_implementation_result=(
+            credential_presence_checker_execution_implementation_result
         ),
     )
 
@@ -2015,6 +2172,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     credential_presence_checker_execution_contract_result = (
         wiring_snapshot.credential_presence_checker_execution_contract_result
+    )
+    credential_presence_checker_execution_implementation_result = (
+        wiring_snapshot.credential_presence_checker_execution_implementation_result
     )
     order_reasons = _order_reasons(wiring_input)
     approval_reasons = _approval_reasons(wiring_input)
@@ -2049,6 +2209,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     credential_presence_checker_execution_contract_reasons = (
         _credential_presence_checker_execution_contract_reasons(wiring_snapshot)
+    )
+    credential_presence_checker_execution_implementation_reasons = (
+        _credential_presence_checker_execution_implementation_reasons(wiring_snapshot)
     )
     raw_reasons = _raw_or_secret_reasons(wiring_input)
     step4_reasons = _step4_reasons(wiring_input)
@@ -2099,6 +2262,7 @@ def build_live_order_real_step6g_internal_wiring(
         or operator_checker_workflow_reasons
         or credential_presence_checker_implementation_reasons
         or credential_presence_checker_execution_contract_reasons
+        or credential_presence_checker_execution_implementation_reasons
     ):
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
         primary_reasons = _merge_reasons(
@@ -2113,6 +2277,7 @@ def build_live_order_real_step6g_internal_wiring(
             operator_checker_workflow_reasons,
             credential_presence_checker_implementation_reasons,
             credential_presence_checker_execution_contract_reasons,
+            credential_presence_checker_execution_implementation_reasons,
         )
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
@@ -2148,6 +2313,7 @@ def build_live_order_real_step6g_internal_wiring(
         operator_checker_workflow_reasons,
         credential_presence_checker_implementation_reasons,
         credential_presence_checker_execution_contract_reasons,
+        credential_presence_checker_execution_implementation_reasons,
         private_transport_reasons,
         http_interface_reasons,
         unsupported_reasons,
@@ -2169,6 +2335,10 @@ def build_live_order_real_step6g_internal_wiring(
             checker_execution_contract_mode=(
                 credential_presence_checker_execution_contract_result
                 .execution_contract_mode
+            ),
+            checker_execution_implementation_mode=(
+                credential_presence_checker_execution_implementation_result
+                .execution_implementation_mode
             ),
         ),
     )
@@ -2192,6 +2362,7 @@ def build_live_order_real_step6g_internal_wiring(
             operator_checker_workflow_reasons,
             credential_presence_checker_implementation_reasons,
             credential_presence_checker_execution_contract_reasons,
+            credential_presence_checker_execution_implementation_reasons,
         ),
         st_private_transport_ready=not _merge_reasons(
             private_transport_reasons,
@@ -2333,17 +2504,32 @@ def build_live_order_real_step6g_internal_wiring(
         checker_execution_contract_mode=(
             credential_presence_checker_execution_contract_result.execution_contract_mode
         ),
+        checker_execution_implementation_skeleton_ready=(
+            not credential_presence_checker_execution_implementation_reasons
+        ),
+        checker_execution_implementation_mode=(
+            credential_presence_checker_execution_implementation_result
+            .execution_implementation_mode
+        ),
         execution_contract_declared=wiring_input.execution_contract_declared,
         execution_inputs_declared=wiring_input.execution_inputs_declared,
         execution_outputs_declared=wiring_input.execution_outputs_declared,
         execution_stop_conditions_declared=(
             wiring_input.execution_stop_conditions_declared
         ),
+        execution_implementation_declared=(
+            wiring_input.execution_implementation_declared
+        ),
+        execution_interface_declared=wiring_input.execution_interface_declared,
         implementation_interface_declared=(
             wiring_input.implementation_interface_declared
         ),
         implementation_lifecycle_declared=(
             wiring_input.implementation_lifecycle_declared
+        ),
+        execution_lifecycle_declared=wiring_input.execution_lifecycle_declared,
+        execution_result_mapping_declared=(
+            wiring_input.execution_result_mapping_declared
         ),
         execution_deferred_to_future_step=(
             wiring_input.execution_deferred_to_future_step
@@ -2456,6 +2642,14 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             f"{_bool_text(result.checker_execution_contract_ready)}"
         ),
         f"- checker_execution_contract_mode: {result.checker_execution_contract_mode}",
+        (
+            "- checker_execution_implementation_skeleton_ready: "
+            f"{_bool_text(result.checker_execution_implementation_skeleton_ready)}"
+        ),
+        (
+            "- checker_execution_implementation_mode: "
+            f"{result.checker_execution_implementation_mode}"
+        ),
         "",
         "## Order Intent",
         f"- symbol: {input_snapshot.symbol}",
@@ -2695,6 +2889,14 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             f"{_bool_text(result.implementation_interface_declared)}"
         ),
         (
+            "- execution_implementation_declared: "
+            f"{_bool_text(result.execution_implementation_declared)}"
+        ),
+        (
+            "- execution_interface_declared: "
+            f"{_bool_text(result.execution_interface_declared)}"
+        ),
+        (
             "- execution_contract_declared: "
             f"{_bool_text(result.execution_contract_declared)}"
         ),
@@ -2713,6 +2915,14 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- implementation_lifecycle_declared: "
             f"{_bool_text(result.implementation_lifecycle_declared)}"
+        ),
+        (
+            "- execution_lifecycle_declared: "
+            f"{_bool_text(result.execution_lifecycle_declared)}"
+        ),
+        (
+            "- execution_result_mapping_declared: "
+            f"{_bool_text(result.execution_result_mapping_declared)}"
         ),
         (
             "- execution_deferred_to_future_step: "
@@ -3638,6 +3848,90 @@ def _credential_presence_checker_execution_contract_reasons(
     return tuple(reasons)
 
 
+def _credential_presence_checker_execution_implementation_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealCredentialPresenceCheckerExecutionImplementationStatus
+        .CREDENTIAL_PRESENCE_CHECKER_EXECUTION_IMPLEMENTATION_READY_NO_ENV_NO_CHECK
+    )
+    result = snapshot.credential_presence_checker_execution_implementation_result
+    if not snapshot.input_snapshot.checker_execution_implementation_skeleton_ready:
+        reasons.append("checker_execution_implementation_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(f"checker_execution_implementation_status_{result.status.value}")
+    if result.unsupported_execution_implementation_mode_present:
+        reasons.append("checker_execution_implementation_unsupported_mode")
+    if not result.checker_execution_contract_ready:
+        reasons.append("checker_execution_implementation_contract_not_ready")
+    if not result.checker_implementation_skeleton_ready:
+        reasons.append("checker_execution_implementation_skeleton_not_ready")
+    if not result.operator_result_handoff_safe:
+        reasons.append("checker_execution_implementation_operator_handoff_not_safe")
+    if not result.operator_checker_workflow_ready:
+        reasons.append("checker_execution_implementation_operator_workflow_not_ready")
+    if not result.execution_implementation_declared:
+        reasons.append("checker_execution_implementation_not_declared")
+    if not result.execution_interface_declared:
+        reasons.append("checker_execution_implementation_interface_not_declared")
+    if not result.execution_lifecycle_declared:
+        reasons.append("checker_execution_implementation_lifecycle_not_declared")
+    if not result.execution_result_mapping_declared:
+        reasons.append("checker_execution_implementation_mapping_not_declared")
+    if not result.execution_stop_conditions_declared:
+        reasons.append("checker_execution_implementation_stop_conditions_not_declared")
+    if not result.execution_deferred_to_future_step:
+        reasons.append("checker_execution_implementation_execution_not_deferred")
+    if result.execution_performed:
+        reasons.append("checker_execution_implementation_execution_performed")
+    if result.execution_performed_by_codex:
+        reasons.append("checker_execution_implementation_codex_execution_performed")
+    if result.execution_performed_by_operator:
+        reasons.append("checker_execution_implementation_operator_execution_performed")
+    if result.env_access_requested:
+        reasons.append("checker_execution_implementation_env_requested")
+    if result.codex_env_access_requested:
+        reasons.append("checker_execution_implementation_codex_env_requested")
+    if result.actual_environment_presence_check_performed:
+        reasons.append("checker_execution_implementation_real_environment_checked")
+    if result.credential_read_performed:
+        reasons.append("checker_execution_implementation_credential_read_performed")
+    if result.credential_values_present:
+        reasons.append("checker_execution_implementation_values_present")
+    if result.credential_metadata_present:
+        reasons.append("checker_execution_implementation_metadata_present")
+    if result.checker_result_available:
+        reasons.append("checker_execution_implementation_result_available")
+    if result.checker_result_detail_present:
+        reasons.append("checker_execution_implementation_result_detail_present")
+    if result.checker_result_unknown:
+        reasons.append("checker_execution_implementation_result_unknown")
+    if result.checker_result_failed:
+        reasons.append("checker_execution_implementation_result_failed")
+    if result.checker_result_unavailable:
+        reasons.append("checker_execution_implementation_result_unavailable")
+    if result.checker_result_stale:
+        reasons.append("checker_execution_implementation_result_stale")
+    if result.checker_result_timeout:
+        reasons.append("checker_execution_implementation_result_timeout")
+    if result.checker_result_saved:
+        reasons.append("checker_execution_implementation_result_saved")
+    if result.checker_result_displayed:
+        reasons.append("checker_execution_implementation_result_displayed")
+    if result.operator_result_detail_present:
+        reasons.append("checker_execution_implementation_operator_detail_present")
+    if result.operator_result_raw_value_present:
+        reasons.append("checker_execution_implementation_operator_raw_value_present")
+    if result.operator_result_reused:
+        reasons.append("checker_execution_implementation_operator_result_reused")
+    if result.operator_result_previous_turn:
+        reasons.append("checker_execution_implementation_operator_previous_turn")
+    if result.operator_result_timeout:
+        reasons.append("checker_execution_implementation_operator_timeout")
+    return tuple(reasons)
+
+
 def _raw_or_secret_reasons(
     wiring_input: LiveOrderRealStep6GInternalWiringInput,
 ) -> tuple[str, ...]:
@@ -3833,6 +4127,11 @@ def _build_check_results(
             "credential presence checker execution contract",
             not _credential_presence_checker_execution_contract_reasons(snapshot),
             "checker execution contract skeleton ready",
+        ),
+        (
+            "credential presence checker execution implementation",
+            not _credential_presence_checker_execution_implementation_reasons(snapshot),
+            "checker execution implementation skeleton ready",
         ),
         ("raw secret IDs", not _raw_or_secret_reasons(input_snapshot), "none"),
         ("Step 4 spoofing", not _step4_reasons(input_snapshot), "none"),
