@@ -181,6 +181,38 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.operator_result_category_is_allowed is True
     assert result.operator_result_ready_confirmed is False
     assert result.operator_result_blocked is False
+    assert result.operator_result_handoff_receipt_ready is True
+    assert (
+        result.operator_result_handoff_receipt_mode
+        == "OPERATOR_RESULT_HANDOFF_RECEIPT_SKELETON_ONLY"
+    )
+    assert result.receipt_contract_declared is True
+    assert result.receipt_boundary_declared is True
+    assert result.receipt_one_time_required is True
+    assert result.receipt_fresh_required is True
+    assert result.receipt_non_reuse_required is True
+    assert result.receipt_non_raw_required is True
+    assert result.receipt_non_detail_required is True
+    assert result.receipt_provided is False
+    assert result.receipt_category_confirmed is False
+    assert result.receipt_current_turn is True
+    assert result.receipt_fresh is True
+    assert result.receipt_stale is False
+    assert result.receipt_reused is False
+    assert result.receipt_previous_turn is False
+    assert result.receipt_expired is False
+    assert result.receipt_timeout is False
+    assert result.receipt_unknown is False
+    assert result.receipt_failed is False
+    assert result.receipt_unavailable is False
+    assert result.receipt_raw_value_present is False
+    assert result.receipt_detail_present is False
+    assert result.receipt_id_present is False
+    assert result.receipt_token_present is False
+    assert result.receipt_nonce_present is False
+    assert result.receipt_hash_present is False
+    assert result.receipt_fingerprint_present is False
+    assert result.receipt_length_present is False
     assert result.execution_contract_declared is True
     assert result.execution_inputs_declared is True
     assert result.execution_outputs_declared is True
@@ -1102,6 +1134,104 @@ def test_operator_execution_result_ready_confirmed_does_not_allow_post(
     assert result.can_execute_http_post is False
     assert result.post_allowed_this_step is False
     assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_result_handoff_receipt_ready": False},
+        {"receipt_contract_declared": False},
+        {"receipt_boundary_declared": False},
+        {"receipt_one_time_required": False},
+        {"receipt_fresh_required": False},
+        {"receipt_non_reuse_required": False},
+        {"receipt_non_raw_required": False},
+        {"receipt_non_detail_required": False},
+    ],
+)
+def test_operator_result_handoff_receipt_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_receipt_ready is False
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_receipt_ready_confirmed_does_not_allow_post(
+) -> None:
+    result = _build(operator_result_category="READY_CONFIRMED")
+
+    assert result.status is Status.STEP6G_INTERNAL_WIRING_READY_NO_API_NO_POST
+    assert result.operator_result_handoff_receipt_ready is True
+    assert result.operator_result_category == "READY_CONFIRMED"
+    assert result.receipt_provided is True
+    assert result.receipt_category_confirmed is True
+    assert result.receipt_current_turn is True
+    assert result.receipt_fresh is True
+    assert result.can_execute_http_post is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"receipt_current_turn": False},
+        {"receipt_fresh": False},
+        {"receipt_stale": True},
+        {"receipt_reused": True},
+        {"receipt_previous_turn": True},
+        {"receipt_expired": True},
+        {"receipt_timeout": True},
+        {"actual_execution_performed": True},
+    ],
+)
+def test_operator_result_handoff_receipt_state_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_receipt_ready is False
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"receipt_raw_value_present": True},
+        {"receipt_detail_present": True},
+        {"receipt_id_present": True},
+        {"receipt_token_present": True},
+        {"receipt_nonce_present": True},
+        {"receipt_hash_present": True},
+        {"receipt_fingerprint_present": True},
+        {"receipt_length_present": True},
+        {"env_access_requested": True},
+    ],
+)
+def test_operator_result_handoff_receipt_raw_secret_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_receipt_post_allowed_blocks_internal_wiring() -> None:
+    result = _build(post_allowed_this_step=True)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_ROUTE_BRIDGE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_receipt_post_executed_hard_stops_internal_wiring(
+) -> None:
+    with pytest.raises(LiveVerificationValidationError):
+        _build(post_executed=True)
 
 
 @pytest.mark.parametrize(

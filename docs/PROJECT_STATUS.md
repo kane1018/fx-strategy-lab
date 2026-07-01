@@ -82,6 +82,33 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-A operator result handoff artifact / receipt skeleton完了 / no env / no actual execution / no API / no POST** —
+  Step 6G-PC-OX-R-C-VのCASE 2結論後の次Stepとして、operator側で将来確認したsafe categoryを
+  Codexへ渡すためのone-time / fresh / non-reuse / non-raw / non-detail receipt contractを追加した。
+  Step 6G-PC-OX-R-Aでは
+  `backend/app/live_verification/live_order_real_operator_result_handoff_receipt.py` を追加し、
+  `OPERATOR_RESULT_HANDOFF_RECEIPT_SKELETON_ONLY`、receipt contract/boundary declared、receipt one-time/fresh/
+  non-reuse/non-raw/non-detail required、operator execution result category contract ready、operator executed
+  execution boundary ready、operator result handoff safe、safe category label/allowed、receipt current turn/fresh、
+  receipt stale/reused/previous-turn/expired/timeout/unknown/failed/unavailable=false、receipt raw/detail=false、
+  receipt id/token/nonce/hash/fingerprint/length=false、actual execution/Codex execution=false、env access/credential
+  read=false、real signature / real headers / HTTP POST capability=false flagsだけを扱う。ready not providedでは
+  `OPERATOR_RESULT_HANDOFF_RECEIPT_READY_NOT_PROVIDED`、`operator_result_category=NOT_PROVIDED`、
+  `receipt_provided=false`、`receipt_category_confirmed=false`、`post_allowed_this_step=false`、
+  `post_executed=false` を維持する。ready confirmedでは
+  `OPERATOR_RESULT_HANDOFF_RECEIPT_READY_CONFIRMED_NO_POST` だが、READY_CONFIRMED receiptはPOST許可ではなく、
+  `can_generate_real_signature=false`、`can_generate_real_headers=false`、`can_execute_http_post=false`、
+  `post_allowed_this_step=false`、`post_executed=false` を維持する。unknown / failed / unavailable / stale /
+  timeout / reused / previous-turn receiptは必ずblockする。Step 6G-IWにも最小連携し、
+  `operator_result_handoff_receipt_ready` gateをready条件に加えた。このStepでは実API、read-only API、
+  public API、Private API、broker、fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、
+  ledger操作、実credential値取得、credential presence実環境確認、env / `.env` access、checker execution、
+  operator actual result受信処理、receipt raw/id/token/nonce/hash/fingerprint/length保存・表示、operator result
+  detail/raw保存・表示、checker result detail保存・表示、env variable names保存・表示、credential metadata取得・表示、
+  実credential injection、実署名値生成、実headers値生成、raw request/response表示・保存、real ID表示を行わない。
+  future actual receipt handoff / checker execution / env access / real credential injection / real signing /
+  real transportは別Stepで、新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_OPERATOR_RESULT_HANDOFF_RECEIPT.md](STEP6G_OPERATOR_RESULT_HANDOFF_RECEIPT.md)。
 - **Step 6G-PC-OX-R-C operator-side execution result category contract完了 / no env / no actual execution / no API / no POST** —
   Step 6G-PC-OX-E-B-VのCASE 2結論後の次Stepとして、operator側で将来実行したchecker resultを
   Codexへ渡す際のsafe categoryだけをpure contractとして追加した。Step 6G-PC-OX-R-Cでは
