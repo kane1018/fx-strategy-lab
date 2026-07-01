@@ -1520,6 +1520,144 @@ def test_operator_result_handoff_receipt_post_executed_hard_stops_internal_wirin
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"operator_result_handoff_non_execution_boundary_ready": False},
+        {"non_execution_boundary_declared": False},
+        {"actual_handoff_prohibited": False},
+        {"actual_receipt_prohibited": False},
+        {"actual_checker_execution_prohibited": False},
+        {"env_access_prohibited": False},
+        {"credential_read_prohibited": False},
+        {"credential_injection_prohibited": False},
+        {"api_prohibited": False},
+        {"post_prohibited": False},
+        {"live_order_once_prohibited": False},
+        {"fresh_preflight_prohibited": False},
+        {"final_confirmation_prohibited": False},
+        {"raw_detail_identifier_prohibited": False},
+        {"ready_flags_are_not_post_permission": False},
+        {"ready_flags_are_not_actual_handoff_permission": False},
+    ],
+)
+def test_operator_result_handoff_non_execution_boundary_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_non_execution_boundary_ready is False
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_non_execution_boundary_ready_confirmed_no_post(
+) -> None:
+    result = _build(operator_result_category="READY_CONFIRMED")
+
+    assert result.status is Status.STEP6G_INTERNAL_WIRING_READY_NO_API_NO_POST
+    assert result.operator_result_handoff_non_execution_boundary_ready is True
+    assert result.operator_result_category == "READY_CONFIRMED"
+    assert result.ready_flags_are_not_post_permission is True
+    assert result.ready_flags_are_not_actual_handoff_permission is True
+    assert result.actual_handoff_prohibited is True
+    assert result.actual_receipt_prohibited is True
+    assert result.actual_checker_execution_prohibited is True
+    assert result.actual_receipt_handoff_executed is False
+    assert result.actual_result_receipt_received is False
+    assert result.actual_checker_execution_performed is False
+    assert result.env_access_prohibited is True
+    assert result.credential_read_prohibited is True
+    assert result.credential_injection_prohibited is True
+    assert result.api_prohibited is True
+    assert result.post_prohibited is True
+    assert result.live_order_once_prohibited is True
+    assert result.can_execute_http_post is False
+    assert result.order_endpoint_called is False
+    assert result.live_order_once_called is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.final_confirmation_received is False
+    assert result.fresh_preflight_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_result_handoff_receipt_ready": False},
+        {"operator_result_handoff_policy_ready": False},
+        {"operator_result_handoff_lifecycle_ready": False},
+    ],
+)
+def test_non_execution_boundary_requires_receipt_policy_lifecycle_ready(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_non_execution_boundary_ready is False
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"receipt_raw_value_present": True},
+        {"receipt_detail_present": True},
+        {"receipt_id_present": True},
+        {"receipt_token_present": True},
+        {"receipt_nonce_present": True},
+        {"receipt_hash_present": True},
+        {"receipt_fingerprint_present": True},
+        {"receipt_length_present": True},
+        {"operator_result_raw_value_present": True},
+        {"operator_result_detail_present": True},
+        {"checker_result_detail_present": True},
+        {"env_access_requested": True},
+        {"credential_read_performed": True},
+        {"actual_receipt_handoff_executed": True},
+        {"actual_result_receipt_received": True},
+        {"actual_checker_execution_performed": True},
+    ],
+)
+def test_non_execution_boundary_raw_secret_or_actual_attempt_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"final_confirmation_received": True},
+        {"fresh_preflight_executed": True},
+    ],
+)
+def test_non_execution_boundary_confirmation_or_preflight_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_non_execution_boundary_ready is False
+    assert result.internal_wiring_ready is False
+
+
+def test_non_execution_boundary_post_allowed_blocks_internal_wiring() -> None:
+    result = _build(post_allowed_this_step=True)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_ROUTE_BRIDGE
+    assert result.internal_wiring_ready is False
+
+
+def test_non_execution_boundary_post_executed_hard_stops_internal_wiring() -> None:
+    with pytest.raises(LiveVerificationValidationError):
+        _build(post_executed=True)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
         {"operator_result_raw_value_present": True},
         {"operator_result_detail_present": True},
         {"env_access_requested": True},

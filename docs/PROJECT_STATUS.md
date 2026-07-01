@@ -82,6 +82,25 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-RH-C receipt handoff non-execution boundary consolidation完了 / shortest safe route / no env / no actual receipt / no API / no POST** —
+  Step 6G-PC-OX-R-AL完了後の最短安全ルートとして、receipt skeleton / policy hardening / lifecycle contractの
+  ready状態を統合するnon-execution boundary contractを追加した。RH-Cでは
+  `backend/app/live_verification/live_order_real_operator_result_handoff_non_execution_boundary.py` を追加し、
+  `OPERATOR_RESULT_HANDOFF_NON_EXECUTION_BOUNDARY_SKELETON_ONLY`、boundary declared、
+  receipt/policy/lifecycle contract ready、receipt/policy/lifecycle ready、actual handoff prohibited、
+  actual receipt prohibited、actual checker execution prohibited、env access prohibited、credential read/injection
+  prohibited、API/POST/live_order_once prohibited、fresh preflight/final confirmation prohibited、safe category only、
+  raw/detail/identifier prohibited、ready flags are not POST permission、ready flags are not actual handoff permission
+  だけを扱う。Step 6G-IWにも `operator_result_handoff_non_execution_boundary_ready` gateを最小連携し、
+  receipt/policy/lifecycle readyがtrueでもactual receipt handoff、actual result receipt、checker execution、
+  env access、credential read/injection、API、POST、order endpoint、`live_order_once`、real signing、real transport、
+  fresh preflight、final confirmation、実資金Step 6G再試行には進めないことをfail-closedで検査する。
+  このStepはsafe pace-up policy上の低リスクcontract/docs/tests領域として、独立review-only Stepを挟まず、
+  実装・自己境界レビュー・検証・次Step提案を1Step内で完了した。詳細は
+  [STEP6G_OPERATOR_RESULT_HANDOFF_NON_EXECUTION_BOUNDARY.md](STEP6G_OPERATOR_RESULT_HANDOFF_NON_EXECUTION_BOUNDARY.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-ENV-GATE env access decision gate / review-only / no env read /
+  no credential read / no API / no POST**。この次Stepでもまだenv / `.env` を読まず、実資金Step 6G再試行は
+  まだ不可。
 - **Step 6G-PC-OX-R-AL actual receipt lifecycle contract skeleton完了 / still no env / no actual receipt / no API / no POST** —
   Step 6G-PC-OX-R-AH-VのCASE 1 PASS後の次Stepとして、将来のoperator result handoff receiptを扱う前の
   lifecycle state / event / transition policyをsafe enum / dataclass / pure functionとして追加した。
@@ -98,8 +117,8 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   order endpoint、`live_order_once`、real signing、real transport、fresh preflight、final confirmation、
   実資金Step 6G再試行には進んでいない。詳細は
   [STEP6G_OPERATOR_RESULT_HANDOFF_LIFECYCLE.md](STEP6G_OPERATOR_RESULT_HANDOFF_LIFECYCLE.md)。
-  次の推奨Stepは **Step 6G-PC-OX-R-AL-V actual receipt lifecycle contract boundary review / no env /
-  no actual receipt / no API / no POST / no code change**。実資金Step 6G再試行はまだ不可。
+  Step 6G-PC-OX-R-AH-VはCASE 1 PASSで完了し、次StepとしてStep 6G-PC-OX-R-ALへ進んだ。
+  実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-AH actual receipt handoff policy hardening完了 / still no env / no actual execution / no API / no POST** —
   Step 6G-SPP-Dで固定した [STEP6G_SAFE_PACE_POLICY.md](STEP6G_SAFE_PACE_POLICY.md) を前提に、将来の
   actual receipt handoffへ進む前のpolicy / lifecycle / freshness / non-reuse / current-turn / no-raw /

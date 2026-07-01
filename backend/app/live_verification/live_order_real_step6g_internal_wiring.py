@@ -107,6 +107,12 @@ from app.live_verification.live_order_real_operator_result_handoff_lifecycle imp
     LiveOrderRealOperatorResultHandoffLifecycleStatus,
     build_live_order_real_operator_result_handoff_lifecycle,
 )
+from app.live_verification.live_order_real_operator_result_handoff_non_execution_boundary import (
+    LiveOrderRealOperatorResultHandoffNonExecutionBoundaryInput,
+    LiveOrderRealOperatorResultHandoffNonExecutionBoundaryResult,
+    LiveOrderRealOperatorResultHandoffNonExecutionBoundaryStatus,
+    build_live_order_real_operator_result_handoff_non_execution_boundary,
+)
 from app.live_verification.live_order_real_operator_result_handoff_policy import (
     LiveOrderRealOperatorResultHandoffPolicyInput,
     LiveOrderRealOperatorResultHandoffPolicyResult,
@@ -487,6 +493,25 @@ class LiveOrderRealStep6GInternalWiringInput:
     receipt_saved: bool = False
     receipt_displayed: bool = False
     receipt_broadly_propagated: bool = False
+    operator_result_handoff_non_execution_boundary_ready: bool = True
+    operator_result_handoff_non_execution_boundary_mode: str = (
+        "OPERATOR_RESULT_HANDOFF_NON_EXECUTION_BOUNDARY_SKELETON_ONLY"
+    )
+    non_execution_boundary_declared: bool = True
+    actual_handoff_prohibited: bool = True
+    actual_receipt_prohibited: bool = True
+    actual_checker_execution_prohibited: bool = True
+    env_access_prohibited: bool = True
+    credential_read_prohibited: bool = True
+    credential_injection_prohibited: bool = True
+    api_prohibited: bool = True
+    post_prohibited: bool = True
+    live_order_once_prohibited: bool = True
+    fresh_preflight_prohibited: bool = True
+    final_confirmation_prohibited: bool = True
+    raw_detail_identifier_prohibited: bool = True
+    ready_flags_are_not_post_permission: bool = True
+    ready_flags_are_not_actual_handoff_permission: bool = True
     execution_contract_declared: bool = True
     execution_inputs_declared: bool = True
     execution_outputs_declared: bool = True
@@ -578,6 +603,10 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty(
             "operator_result_handoff_receipt_mode",
             self.operator_result_handoff_receipt_mode,
+        )
+        _require_non_empty(
+            "operator_result_handoff_non_execution_boundary_mode",
+            self.operator_result_handoff_non_execution_boundary_mode,
         )
         _require_non_empty("operator_result_category", self.operator_result_category)
         _validate_non_negative_int("size", self.size)
@@ -807,6 +836,22 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "receipt_saved",
                 "receipt_displayed",
                 "receipt_broadly_propagated",
+                "operator_result_handoff_non_execution_boundary_ready",
+                "non_execution_boundary_declared",
+                "actual_handoff_prohibited",
+                "actual_receipt_prohibited",
+                "actual_checker_execution_prohibited",
+                "env_access_prohibited",
+                "credential_read_prohibited",
+                "credential_injection_prohibited",
+                "api_prohibited",
+                "post_prohibited",
+                "live_order_once_prohibited",
+                "fresh_preflight_prohibited",
+                "final_confirmation_prohibited",
+                "raw_detail_identifier_prohibited",
+                "ready_flags_are_not_post_permission",
+                "ready_flags_are_not_actual_handoff_permission",
                 "execution_contract_declared",
                 "execution_inputs_declared",
                 "execution_outputs_declared",
@@ -904,6 +949,9 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     )
     operator_result_handoff_receipt_result: (
         LiveOrderRealOperatorResultHandoffReceiptResult
+    )
+    operator_result_handoff_non_execution_boundary_result: (
+        LiveOrderRealOperatorResultHandoffNonExecutionBoundaryResult
     )
 
 
@@ -1123,6 +1171,23 @@ class LiveOrderRealStep6GInternalWiringResult:
     receipt_hash_present: bool
     receipt_fingerprint_present: bool
     receipt_length_present: bool
+    operator_result_handoff_non_execution_boundary_ready: bool
+    operator_result_handoff_non_execution_boundary_mode: str
+    non_execution_boundary_declared: bool
+    actual_handoff_prohibited: bool
+    actual_receipt_prohibited: bool
+    actual_checker_execution_prohibited: bool
+    env_access_prohibited: bool
+    credential_read_prohibited: bool
+    credential_injection_prohibited: bool
+    api_prohibited: bool
+    post_prohibited: bool
+    live_order_once_prohibited: bool
+    fresh_preflight_prohibited: bool
+    final_confirmation_prohibited: bool
+    raw_detail_identifier_prohibited: bool
+    ready_flags_are_not_post_permission: bool
+    ready_flags_are_not_actual_handoff_permission: bool
     execution_contract_declared: bool
     execution_inputs_declared: bool
     execution_outputs_declared: bool
@@ -1198,6 +1263,10 @@ class LiveOrderRealStep6GInternalWiringResult:
         _require_non_empty(
             "operator_result_handoff_receipt_mode",
             self.operator_result_handoff_receipt_mode,
+        )
+        _require_non_empty(
+            "operator_result_handoff_non_execution_boundary_mode",
+            self.operator_result_handoff_non_execution_boundary_mode,
         )
         _require_non_empty("operator_result_category", self.operator_result_category)
         _validate_bool_fields(
@@ -1396,6 +1465,22 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "receipt_hash_present",
                 "receipt_fingerprint_present",
                 "receipt_length_present",
+                "operator_result_handoff_non_execution_boundary_ready",
+                "non_execution_boundary_declared",
+                "actual_handoff_prohibited",
+                "actual_receipt_prohibited",
+                "actual_checker_execution_prohibited",
+                "env_access_prohibited",
+                "credential_read_prohibited",
+                "credential_injection_prohibited",
+                "api_prohibited",
+                "post_prohibited",
+                "live_order_once_prohibited",
+                "fresh_preflight_prohibited",
+                "final_confirmation_prohibited",
+                "raw_detail_identifier_prohibited",
+                "ready_flags_are_not_post_permission",
+                "ready_flags_are_not_actual_handoff_permission",
                 "execution_contract_declared",
                 "execution_inputs_declared",
                 "execution_outputs_declared",
@@ -3312,6 +3397,229 @@ def build_valid_step6g_internal_wiring_snapshot(
             ),
         )
     )
+    operator_result_handoff_non_execution_boundary_result = (
+        build_live_order_real_operator_result_handoff_non_execution_boundary(
+            input_snapshot=(
+                LiveOrderRealOperatorResultHandoffNonExecutionBoundaryInput(
+                    boundary_mode=(
+                        wiring_input
+                        .operator_result_handoff_non_execution_boundary_mode
+                    ),
+                    boundary_declared=(
+                        wiring_input.operator_result_handoff_non_execution_boundary_ready
+                        and wiring_input.non_execution_boundary_declared
+                    ),
+                    receipt_contract_ready=(
+                        operator_result_handoff_receipt_result
+                        .operator_result_handoff_receipt_ready
+                        and wiring_input.operator_result_handoff_receipt_ready
+                    ),
+                    policy_contract_ready=(
+                        operator_result_handoff_policy_result
+                        .operator_result_handoff_policy_ready
+                        and wiring_input.operator_result_handoff_policy_ready
+                    ),
+                    lifecycle_contract_ready=(
+                        operator_result_handoff_lifecycle_result
+                        .operator_result_handoff_lifecycle_ready
+                        and wiring_input.operator_result_handoff_lifecycle_ready
+                    ),
+                    receipt_ready=(
+                        operator_result_handoff_receipt_result
+                        .operator_result_handoff_receipt_ready
+                    ),
+                    policy_ready=(
+                        operator_result_handoff_policy_result
+                        .operator_result_handoff_policy_ready
+                    ),
+                    lifecycle_ready=(
+                        operator_result_handoff_lifecycle_result
+                        .operator_result_handoff_lifecycle_ready
+                    ),
+                    actual_handoff_prohibited=(
+                        wiring_input.actual_handoff_prohibited
+                    ),
+                    actual_receipt_prohibited=(
+                        wiring_input.actual_receipt_prohibited
+                    ),
+                    actual_checker_execution_prohibited=(
+                        wiring_input.actual_checker_execution_prohibited
+                    ),
+                    env_access_prohibited=wiring_input.env_access_prohibited,
+                    credential_read_prohibited=(
+                        wiring_input.credential_read_prohibited
+                    ),
+                    credential_injection_prohibited=(
+                        wiring_input.credential_injection_prohibited
+                    ),
+                    api_prohibited=wiring_input.api_prohibited,
+                    post_prohibited=wiring_input.post_prohibited,
+                    live_order_once_prohibited=(
+                        wiring_input.live_order_once_prohibited
+                    ),
+                    fresh_preflight_prohibited=(
+                        wiring_input.fresh_preflight_prohibited
+                    ),
+                    final_confirmation_prohibited=(
+                        wiring_input.final_confirmation_prohibited
+                    ),
+                    safe_category_only=(
+                        wiring_input.policy_safe_category_only
+                        and wiring_input.lifecycle_safe_category_only
+                    ),
+                    raw_detail_identifier_prohibited=(
+                        wiring_input.raw_detail_identifier_prohibited
+                    ),
+                    ready_flags_are_not_post_permission=(
+                        wiring_input.ready_flags_are_not_post_permission
+                    ),
+                    ready_flags_are_not_actual_handoff_permission=(
+                        wiring_input.ready_flags_are_not_actual_handoff_permission
+                    ),
+                    operator_result_category=(
+                        operator_execution_result_category_contract_result
+                        .operator_result_category
+                    ),
+                    operator_result_category_is_safe_label=(
+                        operator_execution_result_category_contract_result
+                        .operator_result_category_is_safe_label
+                    ),
+                    operator_result_category_is_allowed=(
+                        operator_execution_result_category_contract_result
+                        .operator_result_category_is_allowed
+                    ),
+                    ready_confirmed_is_not_post_permission=(
+                        wiring_input.ready_confirmed_is_not_post_permission
+                    ),
+                    not_provided_is_not_actual_receipt=(
+                        wiring_input.not_provided_is_not_actual_receipt
+                    ),
+                    receipt_raw_value_present=wiring_input.receipt_raw_value_present,
+                    receipt_detail_present=wiring_input.receipt_detail_present,
+                    receipt_id_present=wiring_input.receipt_id_present,
+                    receipt_token_present=wiring_input.receipt_token_present,
+                    receipt_nonce_present=wiring_input.receipt_nonce_present,
+                    receipt_hash_present=wiring_input.receipt_hash_present,
+                    receipt_fingerprint_present=(
+                        wiring_input.receipt_fingerprint_present
+                    ),
+                    receipt_length_present=wiring_input.receipt_length_present,
+                    receipt_saved=wiring_input.receipt_saved,
+                    receipt_displayed=wiring_input.receipt_displayed,
+                    receipt_broadly_propagated=(
+                        wiring_input.receipt_broadly_propagated
+                    ),
+                    operator_result_detail_present=(
+                        wiring_input.operator_result_detail_present
+                    ),
+                    operator_result_raw_value_present=(
+                        wiring_input.operator_result_raw_value_present
+                    ),
+                    checker_result_detail_present=(
+                        wiring_input.checker_result_detail_present
+                    ),
+                    env_variable_names_present=(
+                        wiring_input.env_variable_names_present
+                    ),
+                    credential_values_present=(
+                        wiring_input.credential_values_provided
+                        or wiring_input.credential_values_loaded
+                        or wiring_input.credential_values_available
+                        or wiring_input.credential_values_read
+                    ),
+                    credential_metadata_present=(
+                        wiring_input.credential_metadata_exposed
+                        or wiring_input.credential_injection_metadata_available
+                        or wiring_input.credential_metadata_available
+                    ),
+                    sentinel_value_present=wiring_input.sentinel_value_present,
+                    actual_receipt_handoff_executed=(
+                        wiring_input.actual_receipt_handoff_executed
+                    ),
+                    actual_result_receipt_received=(
+                        wiring_input.actual_result_receipt_received
+                    ),
+                    actual_checker_execution_performed=(
+                        wiring_input.actual_checker_execution_performed
+                    ),
+                    actual_execution_performed=(
+                        wiring_input.actual_execution_performed
+                        or wiring_input.operator_execution_performed
+                        or wiring_input.execution_performed
+                        or wiring_input.execution_performed_by_operator
+                    ),
+                    codex_execution_performed=(
+                        wiring_input.codex_execution_performed
+                        or wiring_input.execution_performed_by_codex
+                    ),
+                    env_access_requested=(
+                        wiring_input.env_access_requested
+                        or wiring_input.codex_env_access_requested
+                    ),
+                    env_access_allowed=wiring_input.env_access_allowed,
+                    credential_read_performed=(
+                        wiring_input.credential_read_performed
+                    ),
+                    credential_read_allowed=False,
+                    credential_injection_allowed=False,
+                    can_generate_real_signature=False,
+                    can_generate_real_headers=False,
+                    can_execute_http_post=False,
+                    real_signing_allowed=False,
+                    real_transport_allowed=False,
+                    api_call_attempted=False,
+                    read_only_api_call_attempted=False,
+                    public_api_call_attempted=False,
+                    private_api_call_attempted=False,
+                    http_post_executed=wiring_input.http_post_executed,
+                    order_endpoint_called=wiring_input.order_endpoint_called,
+                    live_order_once_called=wiring_input.live_order_once_called,
+                    post_allowed_this_step=wiring_input.post_allowed_this_step,
+                    post_executed=wiring_input.post_executed,
+                    fresh_preflight_executed=(
+                        wiring_input.fresh_preflight_executed
+                    ),
+                    final_confirmation_received=(
+                        wiring_input.final_confirmation_received
+                    ),
+                    safe_to_render=not (
+                        wiring_input.receipt_displayed
+                        or wiring_input.receipt_raw_value_present
+                        or wiring_input.receipt_detail_present
+                        or wiring_input.receipt_id_present
+                        or wiring_input.receipt_token_present
+                        or wiring_input.receipt_nonce_present
+                        or wiring_input.receipt_hash_present
+                        or wiring_input.receipt_fingerprint_present
+                        or wiring_input.receipt_length_present
+                        or wiring_input.operator_result_displayed
+                        or wiring_input.operator_result_detail_present
+                        or wiring_input.operator_result_raw_value_present
+                        or wiring_input.checker_result_detail_present
+                        or wiring_input.env_variable_names_present
+                        or wiring_input.sentinel_value_present
+                    ),
+                    safe_to_serialize=not (
+                        wiring_input.receipt_saved
+                        or wiring_input.receipt_raw_value_present
+                        or wiring_input.receipt_detail_present
+                        or wiring_input.receipt_id_present
+                        or wiring_input.receipt_token_present
+                        or wiring_input.receipt_nonce_present
+                        or wiring_input.receipt_hash_present
+                        or wiring_input.receipt_fingerprint_present
+                        or wiring_input.receipt_length_present
+                        or wiring_input.operator_result_saved
+                        or wiring_input.operator_result_detail_present
+                        or wiring_input.operator_result_raw_value_present
+                        or wiring_input.checker_result_detail_present
+                        or wiring_input.env_variable_names_present
+                        or wiring_input.sentinel_value_present
+                    ),
+                )
+            ),
+        )
+    )
     return LiveOrderRealStep6GInternalWiringSnapshot(
         input_snapshot=wiring_input,
         pb_result=pb_result,
@@ -3352,6 +3660,9 @@ def build_valid_step6g_internal_wiring_snapshot(
             operator_result_handoff_lifecycle_result
         ),
         operator_result_handoff_receipt_result=operator_result_handoff_receipt_result,
+        operator_result_handoff_non_execution_boundary_result=(
+            operator_result_handoff_non_execution_boundary_result
+        ),
     )
 
 
@@ -3396,6 +3707,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     operator_result_handoff_receipt_result = (
         wiring_snapshot.operator_result_handoff_receipt_result
+    )
+    operator_result_handoff_non_execution_boundary_result = (
+        wiring_snapshot.operator_result_handoff_non_execution_boundary_result
     )
     order_reasons = _order_reasons(wiring_input)
     approval_reasons = _approval_reasons(wiring_input)
@@ -3448,6 +3762,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     operator_result_handoff_receipt_reasons = (
         _operator_result_handoff_receipt_reasons(wiring_snapshot)
+    )
+    operator_result_handoff_non_execution_boundary_reasons = (
+        _operator_result_handoff_non_execution_boundary_reasons(wiring_snapshot)
     )
     raw_reasons = _raw_or_secret_reasons(wiring_input)
     step4_reasons = _step4_reasons(wiring_input)
@@ -3504,6 +3821,7 @@ def build_live_order_real_step6g_internal_wiring(
         or operator_result_handoff_policy_reasons
         or operator_result_handoff_lifecycle_reasons
         or operator_result_handoff_receipt_reasons
+        or operator_result_handoff_non_execution_boundary_reasons
     ):
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
         primary_reasons = _merge_reasons(
@@ -3524,6 +3842,7 @@ def build_live_order_real_step6g_internal_wiring(
             operator_result_handoff_policy_reasons,
             operator_result_handoff_lifecycle_reasons,
             operator_result_handoff_receipt_reasons,
+            operator_result_handoff_non_execution_boundary_reasons,
         )
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
@@ -3565,6 +3884,7 @@ def build_live_order_real_step6g_internal_wiring(
         operator_result_handoff_policy_reasons,
         operator_result_handoff_lifecycle_reasons,
         operator_result_handoff_receipt_reasons,
+        operator_result_handoff_non_execution_boundary_reasons,
         private_transport_reasons,
         http_interface_reasons,
         unsupported_reasons,
@@ -3611,6 +3931,9 @@ def build_live_order_real_step6g_internal_wiring(
             operator_result_handoff_receipt_mode=(
                 operator_result_handoff_receipt_result.receipt_mode
             ),
+            operator_result_handoff_non_execution_boundary_mode=(
+                operator_result_handoff_non_execution_boundary_result.boundary_mode
+            ),
         ),
     )
     return LiveOrderRealStep6GInternalWiringResult(
@@ -3639,6 +3962,7 @@ def build_live_order_real_step6g_internal_wiring(
             operator_result_handoff_policy_reasons,
             operator_result_handoff_lifecycle_reasons,
             operator_result_handoff_receipt_reasons,
+            operator_result_handoff_non_execution_boundary_reasons,
         ),
         st_private_transport_ready=not _merge_reasons(
             private_transport_reasons,
@@ -3978,6 +4302,69 @@ def build_live_order_real_step6g_internal_wiring(
         receipt_hash_present=False,
         receipt_fingerprint_present=False,
         receipt_length_present=False,
+        operator_result_handoff_non_execution_boundary_ready=(
+            not operator_result_handoff_non_execution_boundary_reasons
+        ),
+        operator_result_handoff_non_execution_boundary_mode=(
+            operator_result_handoff_non_execution_boundary_result.boundary_mode
+        ),
+        non_execution_boundary_declared=(
+            operator_result_handoff_non_execution_boundary_result.boundary_declared
+        ),
+        actual_handoff_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .actual_handoff_prohibited
+        ),
+        actual_receipt_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .actual_receipt_prohibited
+        ),
+        actual_checker_execution_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .actual_checker_execution_prohibited
+        ),
+        env_access_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .env_access_prohibited
+        ),
+        credential_read_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .credential_read_prohibited
+        ),
+        credential_injection_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .credential_injection_prohibited
+        ),
+        api_prohibited=(
+            operator_result_handoff_non_execution_boundary_result.api_prohibited
+        ),
+        post_prohibited=(
+            operator_result_handoff_non_execution_boundary_result.post_prohibited
+        ),
+        live_order_once_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .live_order_once_prohibited
+        ),
+        fresh_preflight_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .fresh_preflight_prohibited
+        ),
+        final_confirmation_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .final_confirmation_prohibited
+        ),
+        raw_detail_identifier_prohibited=(
+            operator_result_handoff_non_execution_boundary_result
+            .raw_detail_identifier_prohibited
+        ),
+        ready_flags_are_not_post_permission=(
+            operator_result_handoff_non_execution_boundary_result
+            .ready_flags_are_not_post_permission
+        ),
+        ready_flags_are_not_actual_handoff_permission=(
+            operator_result_handoff_non_execution_boundary_result
+            .ready_flags_are_not_actual_handoff_permission
+        ),
         execution_contract_declared=wiring_input.execution_contract_declared,
         execution_inputs_declared=wiring_input.execution_inputs_declared,
         execution_outputs_declared=wiring_input.execution_outputs_declared,
@@ -4324,6 +4711,65 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         f"- receipt_timeout: {_bool_text(result.receipt_timeout)}",
         f"- receipt_raw_value_present: {_bool_text(result.receipt_raw_value_present)}",
         f"- receipt_detail_present: {_bool_text(result.receipt_detail_present)}",
+        (
+            "- operator_result_handoff_non_execution_boundary_ready: "
+            f"{_bool_text(result.operator_result_handoff_non_execution_boundary_ready)}"
+        ),
+        (
+            "- operator_result_handoff_non_execution_boundary_mode: "
+            f"{result.operator_result_handoff_non_execution_boundary_mode}"
+        ),
+        (
+            "- non_execution_boundary_declared: "
+            f"{_bool_text(result.non_execution_boundary_declared)}"
+        ),
+        (
+            "- actual_handoff_prohibited: "
+            f"{_bool_text(result.actual_handoff_prohibited)}"
+        ),
+        (
+            "- actual_receipt_prohibited: "
+            f"{_bool_text(result.actual_receipt_prohibited)}"
+        ),
+        (
+            "- actual_checker_execution_prohibited: "
+            f"{_bool_text(result.actual_checker_execution_prohibited)}"
+        ),
+        f"- env_access_prohibited: {_bool_text(result.env_access_prohibited)}",
+        (
+            "- credential_read_prohibited: "
+            f"{_bool_text(result.credential_read_prohibited)}"
+        ),
+        (
+            "- credential_injection_prohibited: "
+            f"{_bool_text(result.credential_injection_prohibited)}"
+        ),
+        f"- api_prohibited: {_bool_text(result.api_prohibited)}",
+        f"- post_prohibited: {_bool_text(result.post_prohibited)}",
+        (
+            "- live_order_once_prohibited: "
+            f"{_bool_text(result.live_order_once_prohibited)}"
+        ),
+        (
+            "- fresh_preflight_prohibited: "
+            f"{_bool_text(result.fresh_preflight_prohibited)}"
+        ),
+        (
+            "- final_confirmation_prohibited: "
+            f"{_bool_text(result.final_confirmation_prohibited)}"
+        ),
+        (
+            "- raw_detail_identifier_prohibited: "
+            f"{_bool_text(result.raw_detail_identifier_prohibited)}"
+        ),
+        (
+            "- ready_flags_are_not_post_permission: "
+            f"{_bool_text(result.ready_flags_are_not_post_permission)}"
+        ),
+        (
+            "- ready_flags_are_not_actual_handoff_permission: "
+            f"{_bool_text(result.ready_flags_are_not_actual_handoff_permission)}"
+        ),
         "",
         "## Order Intent",
         f"- symbol: {input_snapshot.symbol}",
@@ -6137,6 +6583,154 @@ def _operator_result_handoff_receipt_reasons(
     return tuple(reasons)
 
 
+def _operator_result_handoff_non_execution_boundary_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    ready_statuses = (
+        LiveOrderRealOperatorResultHandoffNonExecutionBoundaryStatus
+        .NON_EXECUTION_BOUNDARY_READY_NO_HANDOFF,
+    )
+    result = snapshot.operator_result_handoff_non_execution_boundary_result
+    if not snapshot.input_snapshot.operator_result_handoff_non_execution_boundary_ready:
+        reasons.append("operator_result_handoff_non_execution_boundary_flag_false")
+    if result.status not in ready_statuses:
+        reasons.append(
+            "operator_result_handoff_non_execution_boundary_status_"
+            f"{result.status.value}"
+        )
+    if result.unsupported_mode_present:
+        reasons.append("operator_result_handoff_non_execution_boundary_unsupported_mode")
+    if result.unsupported_category_present:
+        reasons.append(
+            "operator_result_handoff_non_execution_boundary_unsupported_category",
+        )
+    if result.blocked_category_present:
+        reasons.append("operator_result_handoff_non_execution_boundary_blocked_category")
+    for field_name, reason in (
+        (
+            "boundary_declared",
+            "operator_result_handoff_non_execution_boundary_not_declared",
+        ),
+        ("receipt_contract_ready", "non_execution_receipt_contract_not_ready"),
+        ("policy_contract_ready", "non_execution_policy_contract_not_ready"),
+        ("lifecycle_contract_ready", "non_execution_lifecycle_contract_not_ready"),
+        ("receipt_ready", "non_execution_receipt_not_ready"),
+        ("policy_ready", "non_execution_policy_not_ready"),
+        ("lifecycle_ready", "non_execution_lifecycle_not_ready"),
+        ("actual_handoff_prohibited", "actual_handoff_not_prohibited"),
+        ("actual_receipt_prohibited", "actual_receipt_not_prohibited"),
+        (
+            "actual_checker_execution_prohibited",
+            "actual_checker_execution_not_prohibited",
+        ),
+        ("env_access_prohibited", "env_access_not_prohibited"),
+        ("credential_read_prohibited", "credential_read_not_prohibited"),
+        (
+            "credential_injection_prohibited",
+            "credential_injection_not_prohibited",
+        ),
+        ("api_prohibited", "api_not_prohibited"),
+        ("post_prohibited", "post_not_prohibited"),
+        ("live_order_once_prohibited", "live_order_once_not_prohibited"),
+        ("fresh_preflight_prohibited", "fresh_preflight_not_prohibited"),
+        ("final_confirmation_prohibited", "final_confirmation_not_prohibited"),
+        ("safe_category_only", "non_execution_safe_category_only_not_required"),
+        (
+            "raw_detail_identifier_prohibited",
+            "raw_detail_identifier_not_prohibited",
+        ),
+        (
+            "ready_flags_are_not_post_permission",
+            "ready_flags_post_boundary_missing",
+        ),
+        (
+            "ready_flags_are_not_actual_handoff_permission",
+            "ready_flags_actual_handoff_boundary_missing",
+        ),
+        (
+            "operator_result_category_is_safe_label",
+            "non_execution_category_not_safe_label",
+        ),
+        (
+            "operator_result_category_is_allowed",
+            "non_execution_category_not_allowed",
+        ),
+        (
+            "ready_confirmed_is_not_post_permission",
+            "non_execution_ready_confirmed_post_boundary_missing",
+        ),
+        (
+            "not_provided_is_not_actual_receipt",
+            "non_execution_not_provided_actual_receipt_boundary_missing",
+        ),
+    ):
+        if not getattr(result, field_name):
+            reasons.append(reason)
+    if result.operator_result_category not in {
+        category.value for category in LiveOrderRealOperatorExecutionResultCategory
+    }:
+        reasons.append("operator_result_handoff_non_execution_category_not_allowlisted")
+    for field_name in (
+        "receipt_raw_value_present",
+        "receipt_detail_present",
+        "receipt_id_present",
+        "receipt_token_present",
+        "receipt_nonce_present",
+        "receipt_hash_present",
+        "receipt_fingerprint_present",
+        "receipt_length_present",
+        "receipt_saved",
+        "receipt_displayed",
+        "receipt_broadly_propagated",
+        "operator_result_detail_present",
+        "operator_result_raw_value_present",
+        "checker_result_detail_present",
+        "env_variable_names_present",
+        "credential_values_present",
+        "credential_metadata_present",
+        "sentinel_value_present",
+        "actual_receipt_handoff_executed",
+        "actual_result_receipt_received",
+        "actual_checker_execution_performed",
+        "actual_execution_performed",
+        "codex_execution_performed",
+        "env_access_requested",
+        "env_access_allowed",
+        "credential_read_performed",
+        "credential_read_allowed",
+        "credential_injection_allowed",
+        "can_generate_real_signature",
+        "can_generate_real_headers",
+        "can_execute_http_post",
+        "real_signing_allowed",
+        "real_transport_allowed",
+        "api_call_attempted",
+        "read_only_api_call_attempted",
+        "public_api_call_attempted",
+        "private_api_call_attempted",
+        "http_post_executed",
+        "order_endpoint_called",
+        "live_order_once_called",
+        "post_allowed_this_step",
+        "post_executed",
+        "fresh_preflight_executed",
+        "final_confirmation_received",
+    ):
+        if getattr(result, field_name):
+            reasons.append(
+                "operator_result_handoff_non_execution_boundary_"
+                f"{field_name}_unsafe"
+            )
+    if not result.safe_to_render:
+        reasons.append("operator_result_handoff_non_execution_boundary_render_not_safe")
+    if not result.safe_to_serialize:
+        reasons.append(
+            "operator_result_handoff_non_execution_boundary_serialize_not_safe",
+        )
+    return tuple(reasons)
+
+
 def _raw_or_secret_reasons(
     wiring_input: LiveOrderRealStep6GInternalWiringInput,
 ) -> tuple[str, ...]:
@@ -6377,6 +6971,11 @@ def _build_check_results(
             "operator result handoff receipt",
             not _operator_result_handoff_receipt_reasons(snapshot),
             "one-time fresh non-raw receipt ready without POST",
+        ),
+        (
+            "operator result handoff non-execution boundary",
+            not _operator_result_handoff_non_execution_boundary_reasons(snapshot),
+            "receipt policy lifecycle ready without actual handoff or POST",
         ),
         ("raw secret IDs", not _raw_or_secret_reasons(input_snapshot), "none"),
         ("Step 4 spoofing", not _step4_reasons(input_snapshot), "none"),
