@@ -202,6 +202,30 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.actual_receipt_handoff_executed is False
     assert result.actual_result_receipt_received is False
     assert result.actual_checker_execution_performed is False
+    assert result.operator_result_handoff_lifecycle_ready is True
+    assert (
+        result.operator_result_handoff_lifecycle_mode
+        == "OPERATOR_RESULT_HANDOFF_LIFECYCLE_SKELETON_ONLY"
+    )
+    assert result.lifecycle_declared is True
+    assert result.lifecycle_transition_policy_declared is True
+    assert result.lifecycle_from_state == "LIFECYCLE_POLICY_READY"
+    assert result.lifecycle_to_state == "LIFECYCLE_RECEIPT_NOT_PROVIDED"
+    assert result.lifecycle_event == "DECLARE_RECEIPT_NOT_PROVIDED"
+    assert result.lifecycle_one_time_required is True
+    assert result.lifecycle_fresh_required is True
+    assert result.lifecycle_current_turn_required is True
+    assert result.lifecycle_non_reuse_required is True
+    assert result.lifecycle_previous_turn_prohibited is True
+    assert result.lifecycle_stale_prohibited is True
+    assert result.lifecycle_timeout_prohibited is True
+    assert result.lifecycle_expired_prohibited is True
+    assert result.lifecycle_non_raw_required is True
+    assert result.lifecycle_non_detail_required is True
+    assert result.lifecycle_non_identifier_required is True
+    assert result.lifecycle_safe_category_only is True
+    assert result.final_confirmation_received is False
+    assert result.fresh_preflight_executed is False
     assert result.operator_result_handoff_receipt_ready is True
     assert (
         result.operator_result_handoff_receipt_mode
@@ -1269,6 +1293,135 @@ def test_operator_result_handoff_policy_post_executed_hard_stops_internal_wiring
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"operator_result_handoff_lifecycle_ready": False},
+        {"lifecycle_declared": False},
+        {"lifecycle_transition_policy_declared": False},
+        {"lifecycle_one_time_required": False},
+        {"lifecycle_fresh_required": False},
+        {"lifecycle_current_turn_required": False},
+        {"lifecycle_non_reuse_required": False},
+        {"lifecycle_previous_turn_prohibited": False},
+        {"lifecycle_stale_prohibited": False},
+        {"lifecycle_timeout_prohibited": False},
+        {"lifecycle_expired_prohibited": False},
+        {"lifecycle_non_raw_required": False},
+        {"lifecycle_non_detail_required": False},
+        {"lifecycle_non_identifier_required": False},
+        {"lifecycle_safe_category_only": False},
+        {"ready_confirmed_is_not_post_permission": False},
+        {"not_provided_is_not_actual_receipt": False},
+    ],
+)
+def test_operator_result_handoff_lifecycle_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_lifecycle_ready is False
+    assert result.operator_result_handoff_receipt_ready is False
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_lifecycle_ready_confirmed_does_not_allow_post(
+) -> None:
+    result = _build(operator_result_category="READY_CONFIRMED")
+
+    assert result.status is Status.STEP6G_INTERNAL_WIRING_READY_NO_API_NO_POST
+    assert result.operator_result_handoff_lifecycle_ready is True
+    assert result.operator_result_category == "READY_CONFIRMED"
+    assert result.lifecycle_to_state == "LIFECYCLE_READY_CONFIRMED_NO_POST"
+    assert result.ready_confirmed_is_not_post_permission is True
+    assert result.not_provided_is_not_actual_receipt is True
+    assert result.actual_receipt_handoff_executed is False
+    assert result.actual_result_receipt_received is False
+    assert result.actual_checker_execution_performed is False
+    assert result.can_execute_http_post is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.final_confirmation_received is False
+    assert result.fresh_preflight_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"lifecycle_event": "DECLARE_STALE"},
+        {"lifecycle_event": "DECLARE_REUSED"},
+        {"lifecycle_event": "DECLARE_PREVIOUS_TURN"},
+        {"lifecycle_event": "DECLARE_TIMEOUT"},
+        {"lifecycle_event": "DECLARE_UNKNOWN"},
+        {"lifecycle_event": "DECLARE_FAILED"},
+        {"lifecycle_event": "DECLARE_UNAVAILABLE"},
+        {"lifecycle_event": "DECLARE_RAW_PRESENT"},
+        {"lifecycle_event": "DECLARE_DETAIL_PRESENT"},
+        {"lifecycle_event": "DECLARE_IDENTIFIER_PRESENT"},
+        {"receipt_current_turn": False},
+        {"receipt_fresh": False},
+        {"receipt_stale": True},
+        {"receipt_reused": True},
+        {"receipt_previous_turn": True},
+        {"receipt_expired": True},
+        {"receipt_timeout": True},
+        {"receipt_unknown": True},
+        {"receipt_failed": True},
+        {"receipt_unavailable": True},
+        {"final_confirmation_received": True},
+        {"fresh_preflight_executed": True},
+    ],
+)
+def test_operator_result_handoff_lifecycle_state_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_lifecycle_ready is False
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"receipt_raw_value_present": True},
+        {"receipt_detail_present": True},
+        {"receipt_id_present": True},
+        {"receipt_token_present": True},
+        {"receipt_nonce_present": True},
+        {"receipt_hash_present": True},
+        {"receipt_fingerprint_present": True},
+        {"receipt_length_present": True},
+        {"env_access_requested": True},
+        {"actual_receipt_handoff_executed": True},
+        {"actual_result_receipt_received": True},
+        {"actual_checker_execution_performed": True},
+    ],
+)
+def test_operator_result_handoff_lifecycle_raw_secret_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_lifecycle_post_allowed_blocks_internal_wiring() -> None:
+    result = _build(post_allowed_this_step=True)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_ROUTE_BRIDGE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_lifecycle_post_executed_hard_stops_internal_wiring(
+) -> None:
+    with pytest.raises(LiveVerificationValidationError):
+        _build(post_executed=True)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
         {"operator_result_handoff_receipt_ready": False},
         {"receipt_contract_declared": False},
         {"receipt_boundary_declared": False},
@@ -1530,6 +1683,27 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "actual_receipt_handoff_executed: false" in rendered
     assert "actual_result_receipt_received: false" in rendered
     assert "actual_checker_execution_performed: false" in rendered
+    assert "operator_result_handoff_lifecycle_ready: true" in rendered
+    assert (
+        "operator_result_handoff_lifecycle_mode: "
+        "OPERATOR_RESULT_HANDOFF_LIFECYCLE_SKELETON_ONLY"
+    ) in rendered
+    assert "lifecycle_from_state: LIFECYCLE_POLICY_READY" in rendered
+    assert "lifecycle_to_state: LIFECYCLE_RECEIPT_NOT_PROVIDED" in rendered
+    assert "lifecycle_event: DECLARE_RECEIPT_NOT_PROVIDED" in rendered
+    assert "lifecycle_declared: true" in rendered
+    assert "lifecycle_transition_policy_declared: true" in rendered
+    assert "lifecycle_one_time_required: true" in rendered
+    assert "lifecycle_fresh_required: true" in rendered
+    assert "lifecycle_current_turn_required: true" in rendered
+    assert "lifecycle_non_reuse_required: true" in rendered
+    assert "lifecycle_previous_turn_prohibited: true" in rendered
+    assert "lifecycle_non_raw_required: true" in rendered
+    assert "lifecycle_non_detail_required: true" in rendered
+    assert "lifecycle_non_identifier_required: true" in rendered
+    assert "lifecycle_safe_category_only: true" in rendered
+    assert "final_confirmation_received: false" in rendered
+    assert "fresh_preflight_executed: false" in rendered
     assert "execution_contract_declared: true" in rendered
     assert "execution_inputs_declared: true" in rendered
     assert "execution_outputs_declared: true" in rendered
