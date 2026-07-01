@@ -181,6 +181,27 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.operator_result_category_is_allowed is True
     assert result.operator_result_ready_confirmed is False
     assert result.operator_result_blocked is False
+    assert result.operator_result_handoff_policy_ready is True
+    assert (
+        result.operator_result_handoff_policy_mode
+        == "OPERATOR_RESULT_HANDOFF_POLICY_SKELETON_ONLY"
+    )
+    assert result.policy_declared is True
+    assert result.receipt_lifecycle_policy_declared is True
+    assert result.policy_freshness_required is True
+    assert result.policy_one_time_required is True
+    assert result.policy_non_reuse_required is True
+    assert result.policy_current_turn_required is True
+    assert result.policy_previous_turn_prohibited is True
+    assert result.policy_non_raw_required is True
+    assert result.policy_non_detail_required is True
+    assert result.policy_non_identifier_required is True
+    assert result.policy_safe_category_only is True
+    assert result.ready_confirmed_is_not_post_permission is True
+    assert result.not_provided_is_not_actual_receipt is True
+    assert result.actual_receipt_handoff_executed is False
+    assert result.actual_result_receipt_received is False
+    assert result.actual_checker_execution_performed is False
     assert result.operator_result_handoff_receipt_ready is True
     assert (
         result.operator_result_handoff_receipt_mode
@@ -1139,6 +1160,115 @@ def test_operator_execution_result_ready_confirmed_does_not_allow_post(
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"operator_result_handoff_policy_ready": False},
+        {"policy_declared": False},
+        {"receipt_lifecycle_policy_declared": False},
+        {"policy_freshness_required": False},
+        {"policy_one_time_required": False},
+        {"policy_non_reuse_required": False},
+        {"policy_current_turn_required": False},
+        {"policy_previous_turn_prohibited": False},
+        {"policy_non_raw_required": False},
+        {"policy_non_detail_required": False},
+        {"policy_non_identifier_required": False},
+        {"policy_safe_category_only": False},
+        {"ready_confirmed_is_not_post_permission": False},
+        {"not_provided_is_not_actual_receipt": False},
+    ],
+)
+def test_operator_result_handoff_policy_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_policy_ready is False
+    assert result.operator_result_handoff_receipt_ready is False
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_policy_ready_confirmed_does_not_allow_post(
+) -> None:
+    result = _build(operator_result_category="READY_CONFIRMED")
+
+    assert result.status is Status.STEP6G_INTERNAL_WIRING_READY_NO_API_NO_POST
+    assert result.operator_result_handoff_policy_ready is True
+    assert result.operator_result_category == "READY_CONFIRMED"
+    assert result.ready_confirmed_is_not_post_permission is True
+    assert result.not_provided_is_not_actual_receipt is True
+    assert result.actual_receipt_handoff_executed is False
+    assert result.actual_result_receipt_received is False
+    assert result.actual_checker_execution_performed is False
+    assert result.can_execute_http_post is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"receipt_current_turn": False},
+        {"receipt_fresh": False},
+        {"receipt_stale": True},
+        {"receipt_reused": True},
+        {"receipt_previous_turn": True},
+        {"receipt_expired": True},
+        {"receipt_timeout": True},
+        {"actual_execution_performed": True},
+    ],
+)
+def test_operator_result_handoff_policy_state_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_result_handoff_policy_ready is False
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"receipt_raw_value_present": True},
+        {"receipt_detail_present": True},
+        {"receipt_id_present": True},
+        {"receipt_token_present": True},
+        {"receipt_nonce_present": True},
+        {"receipt_hash_present": True},
+        {"receipt_fingerprint_present": True},
+        {"receipt_length_present": True},
+        {"env_access_requested": True},
+        {"actual_receipt_handoff_executed": True},
+        {"actual_result_receipt_received": True},
+        {"actual_checker_execution_performed": True},
+    ],
+)
+def test_operator_result_handoff_policy_raw_secret_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_policy_post_allowed_blocks_internal_wiring() -> None:
+    result = _build(post_allowed_this_step=True)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_ROUTE_BRIDGE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_result_handoff_policy_post_executed_hard_stops_internal_wiring(
+) -> None:
+    with pytest.raises(LiveVerificationValidationError):
+        _build(post_executed=True)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
         {"operator_result_handoff_receipt_ready": False},
         {"receipt_contract_declared": False},
         {"receipt_boundary_declared": False},
@@ -1379,6 +1509,27 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "operator_execution_must_be_outside_codex: true" in rendered
     assert "codex_execution_forbidden: true" in rendered
     assert "operator_execution_performed: false" in rendered
+    assert "operator_result_handoff_policy_ready: true" in rendered
+    assert (
+        "operator_result_handoff_policy_mode: "
+        "OPERATOR_RESULT_HANDOFF_POLICY_SKELETON_ONLY"
+    ) in rendered
+    assert "policy_declared: true" in rendered
+    assert "receipt_lifecycle_policy_declared: true" in rendered
+    assert "policy_freshness_required: true" in rendered
+    assert "policy_one_time_required: true" in rendered
+    assert "policy_non_reuse_required: true" in rendered
+    assert "policy_current_turn_required: true" in rendered
+    assert "policy_previous_turn_prohibited: true" in rendered
+    assert "policy_non_raw_required: true" in rendered
+    assert "policy_non_detail_required: true" in rendered
+    assert "policy_non_identifier_required: true" in rendered
+    assert "policy_safe_category_only: true" in rendered
+    assert "ready_confirmed_is_not_post_permission: true" in rendered
+    assert "not_provided_is_not_actual_receipt: true" in rendered
+    assert "actual_receipt_handoff_executed: false" in rendered
+    assert "actual_result_receipt_received: false" in rendered
+    assert "actual_checker_execution_performed: false" in rendered
     assert "execution_contract_declared: true" in rendered
     assert "execution_inputs_declared: true" in rendered
     assert "execution_outputs_declared: true" in rendered

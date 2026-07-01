@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-AH actual receipt handoff policy hardening完了 / still no env / no actual execution / no API / no POST** —
+  Step 6G-SPP-Dで固定した [STEP6G_SAFE_PACE_POLICY.md](STEP6G_SAFE_PACE_POLICY.md) を前提に、将来の
+  actual receipt handoffへ進む前のpolicy / lifecycle / freshness / non-reuse / current-turn / no-raw /
+  no-detail / no-identifier boundaryをpure contractとして追加した。R-AHでは
+  `backend/app/live_verification/live_order_real_operator_result_handoff_policy.py` を追加し、
+  `OPERATOR_RESULT_HANDOFF_POLICY_SKELETON_ONLY`、policy declared、receipt lifecycle policy declared、
+  freshness/one-time/non-reuse/current-turn/previous-turn prohibited、non-raw/non-detail/non-identifier、
+  safe category only、`READY_CONFIRMED` is not POST permission、`NOT_PROVIDED` is not actual receipt、
+  actual receipt handoff executed=false、actual result receipt received=false、actual checker execution performed=false、
+  env access=false、credential read=false、API/POST/live_order_once flags=falseだけを扱う。Step 6G-IWにも
+  `operator_result_handoff_policy_ready` gateを最小連携し、receipt gateの前にfail-closedで検査する。
+  このStepでもactual receipt handoff、actual result receipt、actual checker execution、env / `.env` access、
+  credential read/injection、API、read-only API、public API、Private API、HTTP POST、order endpoint、
+  `live_order_once`、real signing、real transport、fresh preflight、final confirmation、実資金Step 6G再試行には
+  進んでいない。詳細は [STEP6G_OPERATOR_RESULT_HANDOFF_POLICY.md](STEP6G_OPERATOR_RESULT_HANDOFF_POLICY.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-AH-V operator result handoff policy hardening boundary review / no env /
+  no API / no POST / no code change**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-SPP-D safe pace-up policy documentation完了 / docs only / no env / no API / no POST** —
   Step 6G-PC-OX-R-A-VはCASE 1 PASSで、Step 6G-PC-OX-R-Aのoperator result handoff receipt skeletonは
   receipt-only / skeleton-only / no env / no credential / no actual execution / no API / no POSTの境界として
@@ -94,9 +111,6 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   `READY_CONFIRMED`はPOST許可・final confirmation・fresh preflight済みを意味せず、`NOT_PROVIDED`は
   actual result receiptではない。今後のプロンプトでは
   `docs/STEP6G_SAFE_PACE_POLICY.md` と `docs/CODEX_HANDOFF.md` のsafe pace-up policyを前提にできる。
-  次の推奨Stepは **Step 6G-PC-OX-R-AH actual receipt handoff policy hardening / still no env /
-  no actual execution / no API / no POST**。ただし次Stepでもactual receipt handoff、env、credential、
-  API、POST、実資金Step 6G再試行には進まない。
 - **Step 6G-PC-OX-R-A operator result handoff artifact / receipt skeleton完了 / no env / no actual execution / no API / no POST** —
   Step 6G-PC-OX-R-C-VのCASE 2結論後の次Stepとして、operator側で将来確認したsafe categoryを
   Codexへ渡すためのone-time / fresh / non-reuse / non-raw / non-detail receipt contractを追加した。
