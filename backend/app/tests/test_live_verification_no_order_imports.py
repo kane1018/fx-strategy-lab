@@ -83,10 +83,13 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
 
     for path in _source_files():
         path_blocked_modules = set(blocked_modules)
+        path_blocked_attrs = set(blocked_attrs)
         if path.name == "actual_headers_signature.py":
             path_blocked_modules.discard("hmac")
         if path.name == "live_order_once.py":
             path_blocked_modules = path_blocked_modules - {"hmac", "httpx"}
+        if path.name == "live_order_real_credential_presence_controlled.py":
+            path_blocked_attrs.discard("en" + "viron")
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -99,7 +102,7 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
             if isinstance(node, ast.Name):
                 assert node.id not in blocked_names
             if isinstance(node, ast.Attribute):
-                assert node.attr not in blocked_attrs
+                assert node.attr not in path_blocked_attrs
 
 
 def test_signature_request_design_has_no_crypto_or_http_imports() -> None:
@@ -1773,6 +1776,68 @@ def test_step6g_credential_presence_check_has_no_api_order_or_credential_depende
     }
     blocked_attrs = {"en" + "viron", "get" + "env"}
     path = PACKAGE_ROOT / "live_order_real_credential_presence_check.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+        if isinstance(node, ast.Call):
+            assert _call_name(node) not in blocked_call_names
+
+
+def test_step6g_credential_presence_controlled_has_only_presence_env_access() -> None:
+    blocked_modules = {
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+        "app.live_verification.live_order_once",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+        "post_live_order_with_httpx",
+        "execute_one_shot_live_order",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+    }
+    blocked_call_names = {
+        "execute_one_shot_live_order",
+        "post_live_order_with_httpx",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+        "read_text",
+        "write_text",
+        "getenv",
+        "print",
+        "post",
+        "request",
+    }
+    blocked_attrs = {"get" + "env"}
+    path = PACKAGE_ROOT / "live_order_real_credential_presence_controlled.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
 
     for node in ast.walk(tree):

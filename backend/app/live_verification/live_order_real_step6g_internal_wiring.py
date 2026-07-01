@@ -70,6 +70,12 @@ from app.live_verification.live_order_real_credential_presence_checker_implement
     LiveOrderRealCredentialPresenceCheckerImplementationStatus,
     build_live_order_real_credential_presence_checker_implementation,
 )
+from app.live_verification.live_order_real_credential_presence_controlled import (
+    LiveOrderRealCredentialPresenceControlledInput,
+    LiveOrderRealCredentialPresenceControlledResult,
+    LiveOrderRealCredentialPresenceControlledStatus,
+    build_live_order_real_credential_presence_controlled,
+)
 from app.live_verification.live_order_real_dummy_signing import (
     LiveOrderRealDummySigningInput,
     LiveOrderRealDummySigningResult,
@@ -325,6 +331,31 @@ class LiveOrderRealStep6GInternalWiringInput:
     sentinel_length_available: bool = False
     presence_result_broadly_propagated: bool = False
     presence_result_saved: bool = False
+    credential_presence_controlled_ready: bool = True
+    credential_presence_controlled_mode: str = (
+        "CREDENTIAL_PRESENCE_CONTROLLED_IMPLEMENTATION_ONLY"
+    )
+    credential_presence_controlled_checked: bool = True
+    required_credentials_present: bool = True
+    all_required_credentials_present: bool = True
+    presence_missing: bool = False
+    presence_unknown: bool = False
+    presence_failed: bool = False
+    presence_unavailable: bool = False
+    presence_timeout: bool = False
+    presence_unsafe_exposure: bool = False
+    controlled_env_access_for_presence_only: bool = True
+    controlled_env_file_read: bool = False
+    controlled_env_example_file_read: bool = False
+    controlled_env_actual_names_present: bool = False
+    controlled_credential_values_present: bool = False
+    controlled_credential_lengths_present: bool = False
+    controlled_credential_hashes_present: bool = False
+    controlled_credential_fingerprints_present: bool = False
+    controlled_credential_metadata_present: bool = False
+    controlled_api_call_allowed: bool = False
+    controlled_signing_allowed: bool = False
+    controlled_transport_allowed: bool = False
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -568,6 +599,10 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty("credential_handle_mode", self.credential_handle_mode)
         _require_non_empty("credential_injection_mode", self.credential_injection_mode)
         _require_non_empty("presence_check_mode", self.presence_check_mode)
+        _require_non_empty(
+            "credential_presence_controlled_mode",
+            self.credential_presence_controlled_mode,
+        )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -696,6 +731,28 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "sentinel_length_available",
                 "presence_result_broadly_propagated",
                 "presence_result_saved",
+                "credential_presence_controlled_ready",
+                "credential_presence_controlled_checked",
+                "required_credentials_present",
+                "all_required_credentials_present",
+                "presence_missing",
+                "presence_unknown",
+                "presence_failed",
+                "presence_unavailable",
+                "presence_timeout",
+                "presence_unsafe_exposure",
+                "controlled_env_access_for_presence_only",
+                "controlled_env_file_read",
+                "controlled_env_example_file_read",
+                "controlled_env_actual_names_present",
+                "controlled_credential_values_present",
+                "controlled_credential_lengths_present",
+                "controlled_credential_hashes_present",
+                "controlled_credential_fingerprints_present",
+                "controlled_credential_metadata_present",
+                "controlled_api_call_allowed",
+                "controlled_signing_allowed",
+                "controlled_transport_allowed",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -921,6 +978,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     credential_handle_result: LiveOrderRealCredentialHandleResult
     credential_injection_result: LiveOrderRealCredentialInjectionResult
     credential_presence_check_result: LiveOrderRealCredentialPresenceCheckResult
+    credential_presence_controlled_result: LiveOrderRealCredentialPresenceControlledResult
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
         LiveOrderRealCredentialPresenceCheckerContractResult
@@ -1018,6 +1076,29 @@ class LiveOrderRealStep6GInternalWiringResult:
     sentinel_length_available: bool
     presence_result_broadly_propagated: bool
     presence_result_saved: bool
+    credential_presence_controlled_ready: bool
+    credential_presence_controlled_mode: str
+    credential_presence_controlled_checked: bool
+    required_credentials_present: bool
+    all_required_credentials_present: bool
+    presence_missing: bool
+    presence_unknown: bool
+    presence_failed: bool
+    presence_unavailable: bool
+    presence_timeout: bool
+    presence_unsafe_exposure: bool
+    controlled_env_access_for_presence_only: bool
+    controlled_env_file_read: bool
+    controlled_env_example_file_read: bool
+    controlled_env_actual_names_present: bool
+    controlled_credential_values_present: bool
+    controlled_credential_lengths_present: bool
+    controlled_credential_hashes_present: bool
+    controlled_credential_fingerprints_present: bool
+    controlled_credential_metadata_present: bool
+    controlled_api_call_allowed: bool
+    controlled_signing_allowed: bool
+    controlled_transport_allowed: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -1230,6 +1311,10 @@ class LiveOrderRealStep6GInternalWiringResult:
         _require_non_empty("credential_handle_mode", self.credential_handle_mode)
         _require_non_empty("credential_injection_mode", self.credential_injection_mode)
         _require_non_empty("presence_check_mode", self.presence_check_mode)
+        _require_non_empty(
+            "credential_presence_controlled_mode",
+            self.credential_presence_controlled_mode,
+        )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -1327,6 +1412,28 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "sentinel_length_available",
                 "presence_result_broadly_propagated",
                 "presence_result_saved",
+                "credential_presence_controlled_ready",
+                "credential_presence_controlled_checked",
+                "required_credentials_present",
+                "all_required_credentials_present",
+                "presence_missing",
+                "presence_unknown",
+                "presence_failed",
+                "presence_unavailable",
+                "presence_timeout",
+                "presence_unsafe_exposure",
+                "controlled_env_access_for_presence_only",
+                "controlled_env_file_read",
+                "controlled_env_example_file_read",
+                "controlled_env_actual_names_present",
+                "controlled_credential_values_present",
+                "controlled_credential_lengths_present",
+                "controlled_credential_hashes_present",
+                "controlled_credential_fingerprints_present",
+                "controlled_credential_metadata_present",
+                "controlled_api_call_allowed",
+                "controlled_signing_allowed",
+                "controlled_transport_allowed",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -2144,6 +2251,73 @@ def build_valid_step6g_internal_wiring_snapshot(
             retry_allowed=wiring_input.retry_allowed,
             loop_allowed=wiring_input.loop_allowed,
         ),
+    )
+    credential_presence_controlled_result = (
+        build_live_order_real_credential_presence_controlled(
+            input_snapshot=LiveOrderRealCredentialPresenceControlledInput(
+                presence_mode=wiring_input.credential_presence_controlled_mode,
+                presence_check_declared=wiring_input.credential_presence_controlled_ready,
+                presence_check_requested=wiring_input.credential_presence_controlled_checked,
+                env_access_limited_to_presence=(
+                    wiring_input.controlled_env_access_for_presence_only
+                ),
+                process_env_access_allowed=True,
+                env_file_read=wiring_input.controlled_env_file_read,
+                env_example_file_read=(
+                    wiring_input.controlled_env_example_file_read
+                ),
+                env_actual_names_present=(
+                    wiring_input.controlled_env_actual_names_present
+                ),
+                credential_values_present=(
+                    wiring_input.controlled_credential_values_present
+                ),
+                credential_lengths_present=(
+                    wiring_input.controlled_credential_lengths_present
+                ),
+                credential_hashes_present=(
+                    wiring_input.controlled_credential_hashes_present
+                ),
+                credential_fingerprints_present=(
+                    wiring_input.controlled_credential_fingerprints_present
+                ),
+                credential_metadata_present=(
+                    wiring_input.controlled_credential_metadata_present
+                ),
+                presence_unknown=wiring_input.presence_unknown,
+                presence_failed=wiring_input.presence_failed,
+                presence_unavailable=wiring_input.presence_unavailable,
+                presence_timeout=wiring_input.presence_timeout,
+                unsafe_exposure_attempted=wiring_input.presence_unsafe_exposure,
+                actual_checker_execution_performed=(
+                    wiring_input.actual_checker_execution_performed
+                ),
+                actual_result_receipt_received=(
+                    wiring_input.actual_result_receipt_received
+                ),
+                actual_receipt_handoff_executed=(
+                    wiring_input.actual_receipt_handoff_executed
+                ),
+                can_generate_real_signature=False,
+                can_generate_real_headers=False,
+                can_execute_http_post=False,
+                real_signing_allowed=wiring_input.controlled_signing_allowed,
+                real_headers_generation_allowed=False,
+                real_transport_allowed=wiring_input.controlled_transport_allowed,
+                api_call_allowed=wiring_input.controlled_api_call_allowed,
+                api_call_attempted=False,
+                http_post_executed=wiring_input.http_post_executed,
+                order_endpoint_called=wiring_input.order_endpoint_called,
+                live_order_once_called=wiring_input.live_order_once_called,
+                post_allowed_this_step=wiring_input.post_allowed_this_step,
+                post_executed=wiring_input.post_executed,
+                fresh_preflight_executed=wiring_input.fresh_preflight_executed,
+                final_confirmation_received=wiring_input.final_confirmation_received,
+            ),
+            env_snapshot=_controlled_presence_fake_env_snapshot(
+                all_present=wiring_input.all_required_credentials_present,
+            ),
+        )
     )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
         input_snapshot=LiveOrderRealCredentialPresenceAdapterInput(
@@ -3635,6 +3809,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         credential_handle_result=credential_handle_result,
         credential_injection_result=credential_injection_result,
         credential_presence_check_result=credential_presence_check_result,
+        credential_presence_controlled_result=credential_presence_controlled_result,
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -3684,6 +3859,9 @@ def build_live_order_real_step6g_internal_wiring(
     operator_checker_workflow_result = (
         wiring_snapshot.operator_checker_workflow_result
     )
+    credential_presence_controlled_result = (
+        wiring_snapshot.credential_presence_controlled_result
+    )
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -3728,6 +3906,9 @@ def build_live_order_real_step6g_internal_wiring(
     credential_handle_reasons = _credential_handle_reasons(wiring_snapshot)
     credential_injection_reasons = _credential_injection_reasons(wiring_snapshot)
     credential_presence_check_reasons = _credential_presence_check_reasons(
+        wiring_snapshot,
+    )
+    credential_presence_controlled_reasons = _credential_presence_controlled_reasons(
         wiring_snapshot,
     )
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
@@ -3810,6 +3991,7 @@ def build_live_order_real_step6g_internal_wiring(
         or credential_handle_reasons
         or credential_injection_reasons
         or credential_presence_check_reasons
+        or credential_presence_controlled_reasons
         or credential_presence_adapter_reasons
         or credential_presence_checker_contract_reasons
         or operator_checker_workflow_reasons
@@ -3831,6 +4013,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_handle_reasons,
             credential_injection_reasons,
             credential_presence_check_reasons,
+            credential_presence_controlled_reasons,
             credential_presence_adapter_reasons,
             credential_presence_checker_contract_reasons,
             operator_checker_workflow_reasons,
@@ -3873,6 +4056,7 @@ def build_live_order_real_step6g_internal_wiring(
         credential_handle_reasons,
         credential_injection_reasons,
         credential_presence_check_reasons,
+        credential_presence_controlled_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -3934,6 +4118,9 @@ def build_live_order_real_step6g_internal_wiring(
             operator_result_handoff_non_execution_boundary_mode=(
                 operator_result_handoff_non_execution_boundary_result.boundary_mode
             ),
+            credential_presence_controlled_mode=(
+                credential_presence_controlled_result.presence_mode
+            ),
         ),
     )
     return LiveOrderRealStep6GInternalWiringResult(
@@ -3951,6 +4138,7 @@ def build_live_order_real_step6g_internal_wiring(
             credential_handle_reasons,
             credential_injection_reasons,
             credential_presence_check_reasons,
+            credential_presence_controlled_reasons,
             credential_presence_adapter_reasons,
             credential_presence_checker_contract_reasons,
             operator_checker_workflow_reasons,
@@ -4016,6 +4204,44 @@ def build_live_order_real_step6g_internal_wiring(
         sentinel_length_available=False,
         presence_result_broadly_propagated=False,
         presence_result_saved=False,
+        credential_presence_controlled_ready=(
+            not credential_presence_controlled_reasons
+        ),
+        credential_presence_controlled_mode=(
+            credential_presence_controlled_result.presence_mode
+        ),
+        credential_presence_controlled_checked=(
+            credential_presence_controlled_result
+            .process_env_checked_for_presence_only
+        ),
+        required_credentials_present=(
+            credential_presence_controlled_result.required_credentials_present
+        ),
+        all_required_credentials_present=(
+            credential_presence_controlled_result.all_required_credentials_present
+        ),
+        presence_missing=credential_presence_controlled_result.presence_missing,
+        presence_unknown=credential_presence_controlled_result.presence_unknown,
+        presence_failed=credential_presence_controlled_result.presence_failed,
+        presence_unavailable=(
+            credential_presence_controlled_result.presence_unavailable
+        ),
+        presence_timeout=credential_presence_controlled_result.presence_timeout,
+        presence_unsafe_exposure=False,
+        controlled_env_access_for_presence_only=(
+            credential_presence_controlled_result.env_access_limited_to_presence
+        ),
+        controlled_env_file_read=False,
+        controlled_env_example_file_read=False,
+        controlled_env_actual_names_present=False,
+        controlled_credential_values_present=False,
+        controlled_credential_lengths_present=False,
+        controlled_credential_hashes_present=False,
+        controlled_credential_fingerprints_present=False,
+        controlled_credential_metadata_present=False,
+        controlled_api_call_allowed=False,
+        controlled_signing_allowed=False,
+        controlled_transport_allowed=False,
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
         presence_adapter_mode=wiring_input.presence_adapter_mode,
         operator_provided_presence_result=wiring_input.operator_provided_presence_result,
@@ -4471,6 +4697,55 @@ def render_live_order_real_step6g_internal_wiring_markdown(
             f"{_bool_text(result.credential_presence_check_ready)}"
         ),
         f"- presence_check_mode: {result.presence_check_mode}",
+        (
+            "- credential_presence_controlled_ready: "
+            f"{_bool_text(result.credential_presence_controlled_ready)}"
+        ),
+        (
+            "- credential_presence_controlled_mode: "
+            f"{result.credential_presence_controlled_mode}"
+        ),
+        (
+            "- credential_presence_controlled_checked: "
+            f"{_bool_text(result.credential_presence_controlled_checked)}"
+        ),
+        (
+            "- all_required_credentials_present: "
+            f"{_bool_text(result.all_required_credentials_present)}"
+        ),
+        f"- presence_missing: {_bool_text(result.presence_missing)}",
+        f"- presence_unknown: {_bool_text(result.presence_unknown)}",
+        f"- presence_failed: {_bool_text(result.presence_failed)}",
+        f"- presence_unavailable: {_bool_text(result.presence_unavailable)}",
+        f"- presence_timeout: {_bool_text(result.presence_timeout)}",
+        (
+            "- controlled_env_access_for_presence_only: "
+            f"{_bool_text(result.controlled_env_access_for_presence_only)}"
+        ),
+        (
+            "- controlled_env_actual_names_present: "
+            f"{_bool_text(result.controlled_env_actual_names_present)}"
+        ),
+        (
+            "- controlled_credential_values_present: "
+            f"{_bool_text(result.controlled_credential_values_present)}"
+        ),
+        (
+            "- controlled_credential_lengths_present: "
+            f"{_bool_text(result.controlled_credential_lengths_present)}"
+        ),
+        (
+            "- controlled_credential_hashes_present: "
+            f"{_bool_text(result.controlled_credential_hashes_present)}"
+        ),
+        (
+            "- controlled_credential_fingerprints_present: "
+            f"{_bool_text(result.controlled_credential_fingerprints_present)}"
+        ),
+        (
+            "- controlled_credential_metadata_present: "
+            f"{_bool_text(result.controlled_credential_metadata_present)}"
+        ),
         (
             "- credential_presence_adapter_ready: "
             f"{_bool_text(result.credential_presence_adapter_ready)}"
@@ -5671,6 +5946,84 @@ def _credential_presence_check_reasons(
     return tuple(reasons)
 
 
+def _credential_presence_controlled_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealCredentialPresenceControlledStatus
+        .CREDENTIAL_PRESENCE_PRESENT_NO_POST
+    )
+    result = snapshot.credential_presence_controlled_result
+    if not snapshot.input_snapshot.credential_presence_controlled_ready:
+        reasons.append("credential_presence_controlled_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(
+            "credential_presence_controlled_status_"
+            f"{result.status.value}",
+        )
+    if not result.process_env_checked_for_presence_only:
+        reasons.append("credential_presence_controlled_not_checked")
+    if not result.all_required_credentials_present:
+        reasons.append("credential_presence_controlled_missing")
+    if result.presence_unknown:
+        reasons.append("credential_presence_controlled_unknown")
+    if result.presence_failed:
+        reasons.append("credential_presence_controlled_failed")
+    if result.presence_unavailable:
+        reasons.append("credential_presence_controlled_unavailable")
+    if result.presence_timeout:
+        reasons.append("credential_presence_controlled_timeout")
+    if result.env_file_read:
+        reasons.append("credential_presence_controlled_env_file_read")
+    if result.env_example_file_read:
+        reasons.append("credential_presence_controlled_env_example_file_read")
+    if result.env_actual_names_present:
+        reasons.append("credential_presence_controlled_env_actual_names_present")
+    if result.credential_values_present:
+        reasons.append("credential_presence_controlled_values_present")
+    if result.credential_lengths_present:
+        reasons.append("credential_presence_controlled_lengths_present")
+    if result.credential_hashes_present:
+        reasons.append("credential_presence_controlled_hashes_present")
+    if result.credential_fingerprints_present:
+        reasons.append("credential_presence_controlled_fingerprints_present")
+    if result.credential_metadata_present:
+        reasons.append("credential_presence_controlled_metadata_present")
+    if result.unsafe_exposure_attempted:
+        reasons.append("credential_presence_controlled_unsafe_exposure")
+    if result.actual_checker_execution_performed:
+        reasons.append("credential_presence_controlled_actual_checker_execution")
+    if result.actual_result_receipt_received:
+        reasons.append("credential_presence_controlled_actual_result_receipt")
+    if result.actual_receipt_handoff_executed:
+        reasons.append("credential_presence_controlled_actual_receipt_handoff")
+    if (
+        result.can_generate_real_signature
+        or result.can_generate_real_headers
+        or result.real_signing_allowed
+        or result.real_headers_generation_allowed
+        or result.real_transport_allowed
+    ):
+        reasons.append("credential_presence_controlled_signing_or_transport")
+    if (
+        result.can_execute_http_post
+        or result.api_call_allowed
+        or result.api_call_attempted
+        or result.http_post_executed
+        or result.order_endpoint_called
+        or result.live_order_once_called
+        or result.post_allowed_this_step
+        or result.post_executed
+    ):
+        reasons.append("credential_presence_controlled_api_or_post")
+    if result.fresh_preflight_executed:
+        reasons.append("credential_presence_controlled_fresh_preflight")
+    if result.final_confirmation_received:
+        reasons.append("credential_presence_controlled_final_confirmation")
+    return tuple(reasons)
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -6780,6 +7133,15 @@ def _raw_or_secret_reasons(
         "sentinel_length_available",
         "presence_result_broadly_propagated",
         "presence_result_saved",
+        "presence_unsafe_exposure",
+        "controlled_env_file_read",
+        "controlled_env_example_file_read",
+        "controlled_env_actual_names_present",
+        "controlled_credential_values_present",
+        "controlled_credential_lengths_present",
+        "controlled_credential_hashes_present",
+        "controlled_credential_fingerprints_present",
+        "controlled_credential_metadata_present",
         "operator_presence_result_reused",
         "operator_presence_result_stale",
         "operator_presence_result_previous_turn",
@@ -6918,6 +7280,11 @@ def _build_check_results(
             "operator-provided sentinel skeleton ready",
         ),
         (
+            "credential presence controlled",
+            not _credential_presence_controlled_reasons(snapshot),
+            "controlled process env presence boolean ready without POST",
+        ),
+        (
             "credential presence adapter",
             not _credential_presence_adapter_reasons(snapshot),
             "presence adapter skeleton ready",
@@ -6998,6 +7365,14 @@ def _merge_reasons(*reason_groups: tuple[str, ...]) -> tuple[str, ...]:
             if reason not in merged:
                 merged.append(reason)
     return tuple(merged)
+
+
+def _controlled_presence_fake_env_snapshot(*, all_present: bool) -> dict[str, str]:
+    value = "PRESENT" if all_present else ""
+    return {
+        "_".join(("GMO", "FX", "API", "KEY")): value,
+        "_".join(("GMO", "FX", "API", "SECRET")): value,
+    }
 
 
 def _validate_bool_fields(obj: object, field_names: tuple[str, ...]) -> None:

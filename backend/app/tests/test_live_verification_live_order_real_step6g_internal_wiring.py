@@ -90,6 +90,31 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.sentinel_length_available is False
     assert result.presence_result_broadly_propagated is False
     assert result.presence_result_saved is False
+    assert result.credential_presence_controlled_ready is True
+    assert (
+        result.credential_presence_controlled_mode
+        == "CREDENTIAL_PRESENCE_CONTROLLED_IMPLEMENTATION_ONLY"
+    )
+    assert result.credential_presence_controlled_checked is True
+    assert result.required_credentials_present is True
+    assert result.all_required_credentials_present is True
+    assert result.presence_missing is False
+    assert result.presence_unknown is False
+    assert result.presence_failed is False
+    assert result.presence_unavailable is False
+    assert result.presence_timeout is False
+    assert result.controlled_env_access_for_presence_only is True
+    assert result.controlled_env_file_read is False
+    assert result.controlled_env_example_file_read is False
+    assert result.controlled_env_actual_names_present is False
+    assert result.controlled_credential_values_present is False
+    assert result.controlled_credential_lengths_present is False
+    assert result.controlled_credential_hashes_present is False
+    assert result.controlled_credential_fingerprints_present is False
+    assert result.controlled_credential_metadata_present is False
+    assert result.controlled_api_call_allowed is False
+    assert result.controlled_signing_allowed is False
+    assert result.controlled_transport_allowed is False
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -654,6 +679,69 @@ def test_credential_presence_check_not_ready_blocks_internal_wiring(
 
     assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
     assert result.credential_presence_check_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"credential_presence_controlled_ready": False},
+        {"credential_presence_controlled_checked": False},
+        {"all_required_credentials_present": False},
+        {"presence_unknown": True},
+        {"presence_failed": True},
+        {"presence_unavailable": True},
+        {"presence_timeout": True},
+    ],
+)
+def test_credential_presence_controlled_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.credential_presence_controlled_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"controlled_env_file_read": True},
+        {"controlled_env_example_file_read": True},
+        {"controlled_env_actual_names_present": True},
+        {"controlled_credential_values_present": True},
+        {"controlled_credential_lengths_present": True},
+        {"controlled_credential_hashes_present": True},
+        {"controlled_credential_fingerprints_present": True},
+        {"controlled_credential_metadata_present": True},
+        {"presence_unsafe_exposure": True},
+    ],
+)
+def test_credential_presence_controlled_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"controlled_api_call_allowed": True},
+        {"controlled_signing_allowed": True},
+        {"controlled_transport_allowed": True},
+    ],
+)
+def test_credential_presence_controlled_api_signing_transport_blocks(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.credential_presence_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
 
 
 @pytest.mark.parametrize(
@@ -1711,6 +1799,21 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "credential_injection_mode: INJECTION_SKELETON_ONLY" in rendered
     assert "credential_presence_check_ready: true" in rendered
     assert "presence_check_mode: OPERATOR_PROVIDED_SENTINEL_ONLY" in rendered
+    assert "credential_presence_controlled_ready: true" in rendered
+    assert (
+        "credential_presence_controlled_mode: "
+        "CREDENTIAL_PRESENCE_CONTROLLED_IMPLEMENTATION_ONLY"
+    ) in rendered
+    assert "credential_presence_controlled_checked: true" in rendered
+    assert "all_required_credentials_present: true" in rendered
+    assert "presence_missing: false" in rendered
+    assert "controlled_env_access_for_presence_only: true" in rendered
+    assert "controlled_env_actual_names_present: false" in rendered
+    assert "controlled_credential_values_present: false" in rendered
+    assert "controlled_credential_lengths_present: false" in rendered
+    assert "controlled_credential_hashes_present: false" in rendered
+    assert "controlled_credential_fingerprints_present: false" in rendered
+    assert "controlled_credential_metadata_present: false" in rendered
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered

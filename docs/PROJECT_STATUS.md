@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-CRED-P-C credential presence check controlled implementation完了 / env access only for presence / no value exposure / no API / no POST** —
+  ENV-GATE CASE 1の判断後、credential presenceをsafe booleanへ変換するcontrolled implementationを追加した。
+  CRED-P-Cでは `backend/app/live_verification/live_order_real_credential_presence_controlled.py` を追加し、
+  `CREDENTIAL_PRESENCE_CONTROLLED_IMPLEMENTATION_ONLY`、required credential safe labels、
+  per-safe-label present boolean、all required present boolean、safe status、blocked reasonsだけを扱う。
+  このStepで許可したenv accessはprocess envのpresence判定のみで、`.env` / `.env.example` は読まない。
+  credential値、length、hash、fingerprint、metadata実体、env actual name、headers、signature、raw request、
+  raw response、real IDはresult / renderer / asdict / docsに含めない。presence trueでもPOST、signing、API、
+  `live_order_once`、actual checker execution beyond presence、actual result receipt、actual receipt handoff、
+  fresh preflight、final confirmation、実資金Step 6G再試行には進めない。Step 6G-IWにも
+  `credential_presence_controlled_ready` gateを最小連携し、missing / unknown / failed / unavailable / timeout /
+  unsafe exposure / API or POST / signing or transportをfail-closedで検査する。詳細は
+  [STEP6G_CREDENTIAL_PRESENCE_CONTROLLED.md](STEP6G_CREDENTIAL_PRESENCE_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-CRED-P-V credential presence controlled implementation boundary review /
+  no credential value exposure / no API / no POST / no code change**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-RH-C receipt handoff non-execution boundary consolidation完了 / shortest safe route / no env / no actual receipt / no API / no POST** —
   Step 6G-PC-OX-R-AL完了後の最短安全ルートとして、receipt skeleton / policy hardening / lifecycle contractの
   ready状態を統合するnon-execution boundary contractを追加した。RH-Cでは
