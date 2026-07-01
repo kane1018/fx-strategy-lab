@@ -160,6 +160,15 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
         result.checker_execution_implementation_mode
         == "CHECKER_EXECUTION_IMPLEMENTATION_SKELETON_ONLY"
     )
+    assert result.operator_executed_execution_boundary_ready is True
+    assert (
+        result.operator_execution_boundary_mode
+        == "OPERATOR_EXECUTED_EXECUTION_BOUNDARY_SKELETON_ONLY"
+    )
+    assert result.operator_execution_boundary_declared is True
+    assert result.operator_execution_must_be_outside_codex is True
+    assert result.codex_execution_forbidden is True
+    assert result.operator_execution_performed is False
     assert result.execution_contract_declared is True
     assert result.execution_inputs_declared is True
     assert result.execution_outputs_declared is True
@@ -531,6 +540,11 @@ def test_build_valid_snapshot_uses_existing_safe_piece_results() -> None:
     assert (
         snapshot.credential_presence_checker_execution_implementation_result
         .checker_execution_implementation_skeleton_ready
+        is True
+    )
+    assert (
+        snapshot.operator_executed_execution_boundary_result
+        .operator_executed_execution_boundary_ready
         is True
     )
 
@@ -912,6 +926,91 @@ def test_checker_execution_implementation_post_executed_hard_stops_internal_wiri
         _build(post_executed=True)
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_executed_execution_boundary_ready": False},
+        {"operator_execution_boundary_declared": False},
+        {"operator_execution_must_be_outside_codex": False},
+        {"codex_execution_forbidden": False},
+    ],
+)
+def test_operator_executed_execution_boundary_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_executed_execution_boundary_ready is False
+
+
+def test_unsupported_operator_execution_boundary_mode_blocks_without_echoing_raw_value(
+) -> None:
+    result = _build(operator_execution_boundary_mode=UNSUPPORTED_RAW_MODE)
+    rendered = render_live_order_real_step6g_internal_wiring_markdown(result)
+    payload = repr(asdict(result))
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.operator_executed_execution_boundary_ready is False
+    assert result.operator_execution_boundary_mode == UNSUPPORTED_SAFE_MODE
+    assert (
+        result.snapshot.operator_executed_execution_boundary_result.boundary_mode
+        == UNSUPPORTED_SAFE_MODE
+    )
+    assert (
+        result.snapshot.operator_executed_execution_boundary_result
+        .unsupported_boundary_mode_present
+        is True
+    )
+    assert result.snapshot.input_snapshot.operator_execution_boundary_mode == (
+        UNSUPPORTED_SAFE_MODE
+    )
+    assert UNSUPPORTED_RAW_MODE not in repr(result)
+    assert UNSUPPORTED_RAW_MODE not in rendered
+    assert UNSUPPORTED_RAW_MODE not in payload
+    assert UNSUPPORTED_SAFE_MODE in rendered
+    assert UNSUPPORTED_SAFE_MODE in payload
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"operator_execution_performed": True},
+        {"env_access_requested": True},
+        {"actual_environment_presence_check_performed": True},
+        {"operator_result_raw_value_present": True},
+    ],
+)
+def test_operator_executed_execution_boundary_raw_or_secret_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_RAW_OR_SECRET_EXPOSURE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_executed_execution_boundary_codex_execution_blocks_internal_wiring(
+) -> None:
+    result = _build(codex_execution_performed=True)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_executed_execution_boundary_post_allowed_blocks_internal_wiring() -> None:
+    result = _build(post_allowed_this_step=True)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_ROUTE_BRIDGE
+    assert result.internal_wiring_ready is False
+
+
+def test_operator_executed_execution_boundary_post_executed_hard_stops_internal_wiring(
+) -> None:
+    with pytest.raises(LiveVerificationValidationError):
+        _build(post_executed=True)
+
+
 
 def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     result = _build()
@@ -1015,6 +1114,15 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
         "checker_execution_implementation_mode: "
         "CHECKER_EXECUTION_IMPLEMENTATION_SKELETON_ONLY"
     ) in rendered
+    assert "operator_executed_execution_boundary_ready: true" in rendered
+    assert (
+        "operator_execution_boundary_mode: "
+        "OPERATOR_EXECUTED_EXECUTION_BOUNDARY_SKELETON_ONLY"
+    ) in rendered
+    assert "operator_execution_boundary_declared: true" in rendered
+    assert "operator_execution_must_be_outside_codex: true" in rendered
+    assert "codex_execution_forbidden: true" in rendered
+    assert "operator_execution_performed: false" in rendered
     assert "execution_contract_declared: true" in rendered
     assert "execution_inputs_declared: true" in rendered
     assert "execution_outputs_declared: true" in rendered

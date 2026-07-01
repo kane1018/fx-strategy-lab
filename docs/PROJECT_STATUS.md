@@ -82,6 +82,34 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-E-B operator-executed execution boundary formalization完了 / no env / no actual credential / no API / no POST** —
+  Step 6G-PC-X-P-RのCASE 2結論後の次Stepとして、operator側の将来actual checker executionと
+  Codex側safe boolean/category handoffの正式境界をpure skeletonとして追加した。Step 6G-PC-OX-E-Bでは
+  `backend/app/live_verification/live_order_real_operator_executed_execution_boundary.py` を追加し、
+  `OPERATOR_EXECUTED_EXECUTION_BOUNDARY_SKELETON_ONLY`、boundary declared、operator execution boundary
+  declared、operator execution must be outside Codex、Codex execution forbidden、checker execution implementation
+  skeleton ready、checker execution contract ready、operator result handoff safe、operator checker workflow ready、
+  operator execution performed=false、Codex execution performed=false、env access requested=false、Codex env access
+  requested=false、actual environment presence check performed=false、credential read performed=false、credential
+  values/metadata present=false、operator result provided=false、operator result safe boolean/category only=true、
+  operator result detail/raw=false、operator result unknown/failed/unavailable/stale/timeout=false、operator result
+  reused/previous-turn=false、checker result detail=false、env variable names=false、sentinel value=false、real signature /
+  real headers / HTTP POST capability=false flagsだけを扱う。readyでは
+  `OPERATOR_EXECUTED_EXECUTION_BOUNDARY_READY_NO_ENV_NO_CHECK`、
+  `operator_executed_execution_boundary_ready=true`、`operator_execution_must_be_outside_codex=true`,
+  `codex_execution_forbidden=true`、`operator_execution_performed=false`、`codex_execution_performed=false`、
+  `env_access_requested=false`、`actual_environment_presence_check_performed=false`、
+  `credential_read_performed=false`、`operator_result_provided=false`、`operator_result_raw_value_present=false`、
+  `operator_result_timeout=false`、`post_allowed_this_step=false`、`post_executed=false` を維持する。unknown /
+  failed / unavailable / stale / timeout / reused / previous-turnは必ずblockする。Step 6G-IWにも最小連携し、
+  operator executed execution boundary readyをready条件に加えた。このStepでは実API、read-only API、public API、
+  Private API、broker、fresh preflight、HTTP POST、order endpoint、`live_order_once`、実注文、ledger操作、
+  実credential値取得、credential presence実環境確認、env / `.env` access、checker execution、operator result
+  detail/raw保存・表示、checker result detail保存・表示、env variable names保存・表示、credential metadata取得・表示、
+  実credential injection、実署名値生成、実headers値生成、raw request/response表示・保存、real ID表示を行わない。
+  future actual checker execution / env access / real credential injection / real signing / real transportは別Stepで、
+  新しいfinal confirmationとfresh preflightが必要。詳細は
+  [STEP6G_OPERATOR_EXECUTED_EXECUTION_BOUNDARY.md](STEP6G_OPERATOR_EXECUTED_EXECUTION_BOUNDARY.md)。
 - **Step 6G-PC-X-I-S checker execution implementation skeleton完了 / no env / no actual credential / no actual check / no API / no POST** —
   Step 6G-PC-OX-H-VのCASE 2結論後の次Stepとして、checker executionのimplementation interface /
   lifecycle / result mapping / stop condition hooksだけをskeletonとして追加した。Step 6G-PC-X-I-Sでは
