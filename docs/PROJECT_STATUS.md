@@ -82,6 +82,28 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-RESULT-C sanitized POST result / reconciliation contract implementation完了 / contract implementation only / no API call / no POST / no live_order_once** —
+  POST-GUARD-V CASE 1の判断後、controlled POST guard resultを前提に、将来POST result / reconciliationを
+  safe label / safe status / safe boolean / sanitized categoryだけへ閉じるcontract implementationを追加した。
+  RESULT-Cでは `backend/app/live_verification/live_order_real_sanitized_post_result.py` を追加し、
+  `SANITIZED_POST_RESULT_CONTRACT_ONLY`、固定safe POST result label、固定safe reconciliation label、
+  `SANITIZED_RESULT_READY_NO_RECEIPT`、safe result category、safe reconciliation status、
+  sanitized result ready boolean、reconciliation ready boolean、safe blocked reasonsだけを扱う。このStepの
+  sanitized result / reconciliationはPOST実行後の実レスポンス処理ではなく、将来の結果境界contractであり、
+  API call、HTTP POST、order endpoint、`live_order_once`、raw request generation、raw response receipt、
+  broker/API response parsing、fresh preflight execution、final confirmation execution、actual result receipt、
+  actual receipt handoff、ledger更新、attempt counter永続化、実資金Step 6G再試行には進まない。credential値、
+  signature値、headers値、raw request、raw response、request body、response body、broker/API response実体、
+  endpoint actual value、real ID、account ID、order ID、transaction ID、confirmation phrase actual value、
+  ledger state actual valueはresult / renderer / asdict / docsに含めない。sanitized result readyでもPOST、
+  API、order endpoint、`live_order_once`、fresh preflight、final confirmation、ledger更新、actual receipt
+  handoff、実資金Step 6G再試行には進めない。Step 6G-IWにも `sanitized_post_result_ready` gateを最小連携し、
+  unknown / failed / unavailable / timeout / rejected / partial / ambiguous / unmatched / stale / previous-turn /
+  reused / raw response exposure / broker API response exposure / ID exposure / ledger update / actual receipt /
+  API / POST / order endpoint / `live_order_once` をfail-closedで検査する。
+  詳細は [STEP6G_SANITIZED_POST_RESULT.md](STEP6G_SANITIZED_POST_RESULT.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-RESULT-V sanitized POST result / reconciliation contract boundary review /
+  no API call / no POST / no code change**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-POST-GUARD-C one POST max / no retry / timeout fail-closed guard implementation完了 / guard implementation only / no API call / no POST / no live_order_once** —
   TRANSPORT-V CASE 1の判断後、controlled transport resultを前提に、POST前guard readinessを
   safe label / safe status / safe booleanだけへ閉じるcontrolled implementationを追加した。POST-GUARD-Cでは

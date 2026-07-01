@@ -160,6 +160,16 @@ from app.live_verification.live_order_real_private_order_transport import (
     LiveOrderRealPrivateOrderTransportStatus,
     build_live_order_real_private_order_transport_contract,
 )
+from app.live_verification.live_order_real_sanitized_post_result import (
+    SAFE_POST_RESULT_LABEL,
+    SAFE_RECONCILIATION_LABEL,
+    LiveOrderRealSafePostResultCategory,
+    LiveOrderRealSafeReconciliationStatus,
+    LiveOrderRealSanitizedPostResultInput,
+    LiveOrderRealSanitizedPostResultResult,
+    LiveOrderRealSanitizedPostResultStatus,
+    build_live_order_real_sanitized_post_result,
+)
 from app.live_verification.live_order_real_signing_contract import (
     LiveOrderRealRedactedHeaderContract,
     LiveOrderRealSigningContractResult,
@@ -251,6 +261,9 @@ class LiveOrderRealStep6GInternalWiringStatus(str, Enum):
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD"
+    )
+    BLOCKED_STEP6G_INTERNAL_WIRING_SANITIZED_RESULT = (
+        "BLOCKED_STEP6G_INTERNAL_WIRING_SANITIZED_RESULT"
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT"
@@ -519,6 +532,63 @@ class LiveOrderRealStep6GInternalWiringInput:
     post_guard_confirmation_must_be_new_for_this_step: bool = True
     post_guard_step4_approval_phrase_reuse_blocked: bool = True
     post_guard_ledger_state_reuse_blocked: bool = True
+    sanitized_post_result_ready: bool = True
+    sanitized_post_result_mode: str = "SANITIZED_POST_RESULT_CONTRACT_ONLY"
+    sanitized_post_result_declared: bool = True
+    safe_post_result_label: str = SAFE_POST_RESULT_LABEL
+    safe_reconciliation_label: str = SAFE_RECONCILIATION_LABEL
+    sanitized_result_unknown: bool = False
+    sanitized_result_failed: bool = False
+    sanitized_result_unavailable: bool = False
+    sanitized_result_timeout: bool = False
+    sanitized_result_rejected: bool = False
+    sanitized_result_partial: bool = False
+    sanitized_result_ambiguous: bool = False
+    sanitized_result_unmatched: bool = False
+    sanitized_result_stale: bool = False
+    sanitized_result_previous_turn: bool = False
+    sanitized_result_reused: bool = False
+    sanitized_result_unsafe_exposure: bool = False
+    sanitized_result_credential_value_exposure_attempted: bool = False
+    sanitized_result_signature_value_exposure_attempted: bool = False
+    sanitized_result_headers_value_exposure_attempted: bool = False
+    sanitized_result_raw_request_exposure_attempted: bool = False
+    sanitized_result_raw_response_exposure_attempted: bool = False
+    sanitized_result_request_body_exposure_attempted: bool = False
+    sanitized_result_response_body_exposure_attempted: bool = False
+    sanitized_result_broker_response_exposure_attempted: bool = False
+    sanitized_result_api_response_exposure_attempted: bool = False
+    sanitized_result_endpoint_actual_value_exposure_attempted: bool = False
+    sanitized_result_account_id_exposure_attempted: bool = False
+    sanitized_result_order_id_exposure_attempted: bool = False
+    sanitized_result_transaction_id_exposure_attempted: bool = False
+    sanitized_result_position_id_exposure_attempted: bool = False
+    sanitized_result_trade_id_exposure_attempted: bool = False
+    sanitized_result_real_id_exposure_attempted: bool = False
+    sanitized_result_confirmation_phrase_exposure_attempted: bool = False
+    sanitized_result_preflight_detail_exposure_attempted: bool = False
+    sanitized_result_ledger_state_exposure_attempted: bool = False
+    sanitized_result_raw_request_stored: bool = False
+    sanitized_result_raw_response_stored: bool = False
+    sanitized_result_broker_response_exposed: bool = False
+    sanitized_result_api_response_exposed: bool = False
+    sanitized_result_real_id_exposed: bool = False
+    sanitized_result_api_call_allowed: bool = False
+    sanitized_result_api_call_attempted: bool = False
+    sanitized_result_http_client_present: bool = False
+    sanitized_result_ledger_update_allowed: bool = False
+    sanitized_result_ledger_update_attempted: bool = False
+    sanitized_result_attempt_counter_persisted: bool = False
+    sanitized_result_actual_receipt_handoff_allowed: bool = False
+    sanitized_result_raw_request_blocked: bool = True
+    sanitized_result_raw_response_blocked: bool = True
+    sanitized_result_broker_api_response_blocked: bool = True
+    sanitized_result_real_id_blocked: bool = True
+    sanitized_result_credential_signature_headers_blocked: bool = True
+    sanitized_result_fresh_preflight_required: bool = True
+    sanitized_result_final_confirmation_required: bool = True
+    sanitized_result_ledger_design_required: bool = True
+    sanitized_result_attempt_counter_design_required: bool = True
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -787,6 +857,15 @@ class LiveOrderRealStep6GInternalWiringInput:
             self.post_guard_controlled_mode,
         )
         _require_non_empty("safe_post_guard_label", self.safe_post_guard_label)
+        _require_non_empty(
+            "sanitized_post_result_mode",
+            self.sanitized_post_result_mode,
+        )
+        _require_non_empty("safe_post_result_label", self.safe_post_result_label)
+        _require_non_empty(
+            "safe_reconciliation_label",
+            self.safe_reconciliation_label,
+        )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -1052,6 +1131,60 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "post_guard_confirmation_must_be_new_for_this_step",
                 "post_guard_step4_approval_phrase_reuse_blocked",
                 "post_guard_ledger_state_reuse_blocked",
+                "sanitized_post_result_ready",
+                "sanitized_post_result_declared",
+                "sanitized_result_unknown",
+                "sanitized_result_failed",
+                "sanitized_result_unavailable",
+                "sanitized_result_timeout",
+                "sanitized_result_rejected",
+                "sanitized_result_partial",
+                "sanitized_result_ambiguous",
+                "sanitized_result_unmatched",
+                "sanitized_result_stale",
+                "sanitized_result_previous_turn",
+                "sanitized_result_reused",
+                "sanitized_result_unsafe_exposure",
+                "sanitized_result_credential_value_exposure_attempted",
+                "sanitized_result_signature_value_exposure_attempted",
+                "sanitized_result_headers_value_exposure_attempted",
+                "sanitized_result_raw_request_exposure_attempted",
+                "sanitized_result_raw_response_exposure_attempted",
+                "sanitized_result_request_body_exposure_attempted",
+                "sanitized_result_response_body_exposure_attempted",
+                "sanitized_result_broker_response_exposure_attempted",
+                "sanitized_result_api_response_exposure_attempted",
+                "sanitized_result_endpoint_actual_value_exposure_attempted",
+                "sanitized_result_account_id_exposure_attempted",
+                "sanitized_result_order_id_exposure_attempted",
+                "sanitized_result_transaction_id_exposure_attempted",
+                "sanitized_result_position_id_exposure_attempted",
+                "sanitized_result_trade_id_exposure_attempted",
+                "sanitized_result_real_id_exposure_attempted",
+                "sanitized_result_confirmation_phrase_exposure_attempted",
+                "sanitized_result_preflight_detail_exposure_attempted",
+                "sanitized_result_ledger_state_exposure_attempted",
+                "sanitized_result_raw_request_stored",
+                "sanitized_result_raw_response_stored",
+                "sanitized_result_broker_response_exposed",
+                "sanitized_result_api_response_exposed",
+                "sanitized_result_real_id_exposed",
+                "sanitized_result_api_call_allowed",
+                "sanitized_result_api_call_attempted",
+                "sanitized_result_http_client_present",
+                "sanitized_result_ledger_update_allowed",
+                "sanitized_result_ledger_update_attempted",
+                "sanitized_result_attempt_counter_persisted",
+                "sanitized_result_actual_receipt_handoff_allowed",
+                "sanitized_result_raw_request_blocked",
+                "sanitized_result_raw_response_blocked",
+                "sanitized_result_broker_api_response_blocked",
+                "sanitized_result_real_id_blocked",
+                "sanitized_result_credential_signature_headers_blocked",
+                "sanitized_result_fresh_preflight_required",
+                "sanitized_result_final_confirmation_required",
+                "sanitized_result_ledger_design_required",
+                "sanitized_result_attempt_counter_design_required",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -1284,6 +1417,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     signing_headers_controlled_result: LiveOrderRealSigningHeadersControlledResult
     transport_controlled_result: LiveOrderRealTransportControlledResult
     post_guard_controlled_result: LiveOrderRealPostGuardControlledResult
+    sanitized_post_result_result: LiveOrderRealSanitizedPostResultResult
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
         LiveOrderRealCredentialPresenceCheckerContractResult
@@ -1535,6 +1669,67 @@ class LiveOrderRealStep6GInternalWiringResult:
     post_guard_confirmation_must_be_new_for_this_step: bool
     post_guard_step4_approval_phrase_reuse_blocked: bool
     post_guard_ledger_state_reuse_blocked: bool
+    sanitized_post_result_ready: bool
+    sanitized_post_result_mode: str
+    sanitized_post_result_declared: bool
+    safe_post_result_label: str
+    safe_post_result_status: str
+    safe_result_category: str
+    reconciliation_ready: bool
+    safe_reconciliation_label: str
+    safe_reconciliation_status: str
+    sanitized_result_unknown: bool
+    sanitized_result_failed: bool
+    sanitized_result_unavailable: bool
+    sanitized_result_timeout: bool
+    sanitized_result_rejected: bool
+    sanitized_result_partial: bool
+    sanitized_result_ambiguous: bool
+    sanitized_result_unmatched: bool
+    sanitized_result_stale: bool
+    sanitized_result_previous_turn: bool
+    sanitized_result_reused: bool
+    sanitized_result_unsafe_exposure: bool
+    sanitized_result_credential_value_exposure_attempted: bool
+    sanitized_result_signature_value_exposure_attempted: bool
+    sanitized_result_headers_value_exposure_attempted: bool
+    sanitized_result_raw_request_exposure_attempted: bool
+    sanitized_result_raw_response_exposure_attempted: bool
+    sanitized_result_request_body_exposure_attempted: bool
+    sanitized_result_response_body_exposure_attempted: bool
+    sanitized_result_broker_response_exposure_attempted: bool
+    sanitized_result_api_response_exposure_attempted: bool
+    sanitized_result_endpoint_actual_value_exposure_attempted: bool
+    sanitized_result_account_id_exposure_attempted: bool
+    sanitized_result_order_id_exposure_attempted: bool
+    sanitized_result_transaction_id_exposure_attempted: bool
+    sanitized_result_position_id_exposure_attempted: bool
+    sanitized_result_trade_id_exposure_attempted: bool
+    sanitized_result_real_id_exposure_attempted: bool
+    sanitized_result_confirmation_phrase_exposure_attempted: bool
+    sanitized_result_preflight_detail_exposure_attempted: bool
+    sanitized_result_ledger_state_exposure_attempted: bool
+    sanitized_result_raw_request_stored: bool
+    sanitized_result_raw_response_stored: bool
+    sanitized_result_broker_response_exposed: bool
+    sanitized_result_api_response_exposed: bool
+    sanitized_result_real_id_exposed: bool
+    sanitized_result_api_call_allowed: bool
+    sanitized_result_api_call_attempted: bool
+    sanitized_result_http_client_present: bool
+    sanitized_result_ledger_update_allowed: bool
+    sanitized_result_ledger_update_attempted: bool
+    sanitized_result_attempt_counter_persisted: bool
+    sanitized_result_actual_receipt_handoff_allowed: bool
+    sanitized_result_raw_request_blocked: bool
+    sanitized_result_raw_response_blocked: bool
+    sanitized_result_broker_api_response_blocked: bool
+    sanitized_result_real_id_blocked: bool
+    sanitized_result_credential_signature_headers_blocked: bool
+    sanitized_result_fresh_preflight_required: bool
+    sanitized_result_final_confirmation_required: bool
+    sanitized_result_ledger_design_required: bool
+    sanitized_result_attempt_counter_design_required: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -1777,6 +1972,21 @@ class LiveOrderRealStep6GInternalWiringResult:
         )
         _require_non_empty("safe_post_guard_label", self.safe_post_guard_label)
         _require_non_empty("safe_post_guard_status", self.safe_post_guard_status)
+        _require_non_empty(
+            "sanitized_post_result_mode",
+            self.sanitized_post_result_mode,
+        )
+        _require_non_empty("safe_post_result_label", self.safe_post_result_label)
+        _require_non_empty("safe_post_result_status", self.safe_post_result_status)
+        _require_non_empty("safe_result_category", self.safe_result_category)
+        _require_non_empty(
+            "safe_reconciliation_label",
+            self.safe_reconciliation_label,
+        )
+        _require_non_empty(
+            "safe_reconciliation_status",
+            self.safe_reconciliation_status,
+        )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -2013,6 +2223,61 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "post_guard_confirmation_must_be_new_for_this_step",
                 "post_guard_step4_approval_phrase_reuse_blocked",
                 "post_guard_ledger_state_reuse_blocked",
+                "sanitized_post_result_ready",
+                "sanitized_post_result_declared",
+                "reconciliation_ready",
+                "sanitized_result_unknown",
+                "sanitized_result_failed",
+                "sanitized_result_unavailable",
+                "sanitized_result_timeout",
+                "sanitized_result_rejected",
+                "sanitized_result_partial",
+                "sanitized_result_ambiguous",
+                "sanitized_result_unmatched",
+                "sanitized_result_stale",
+                "sanitized_result_previous_turn",
+                "sanitized_result_reused",
+                "sanitized_result_unsafe_exposure",
+                "sanitized_result_credential_value_exposure_attempted",
+                "sanitized_result_signature_value_exposure_attempted",
+                "sanitized_result_headers_value_exposure_attempted",
+                "sanitized_result_raw_request_exposure_attempted",
+                "sanitized_result_raw_response_exposure_attempted",
+                "sanitized_result_request_body_exposure_attempted",
+                "sanitized_result_response_body_exposure_attempted",
+                "sanitized_result_broker_response_exposure_attempted",
+                "sanitized_result_api_response_exposure_attempted",
+                "sanitized_result_endpoint_actual_value_exposure_attempted",
+                "sanitized_result_account_id_exposure_attempted",
+                "sanitized_result_order_id_exposure_attempted",
+                "sanitized_result_transaction_id_exposure_attempted",
+                "sanitized_result_position_id_exposure_attempted",
+                "sanitized_result_trade_id_exposure_attempted",
+                "sanitized_result_real_id_exposure_attempted",
+                "sanitized_result_confirmation_phrase_exposure_attempted",
+                "sanitized_result_preflight_detail_exposure_attempted",
+                "sanitized_result_ledger_state_exposure_attempted",
+                "sanitized_result_raw_request_stored",
+                "sanitized_result_raw_response_stored",
+                "sanitized_result_broker_response_exposed",
+                "sanitized_result_api_response_exposed",
+                "sanitized_result_real_id_exposed",
+                "sanitized_result_api_call_allowed",
+                "sanitized_result_api_call_attempted",
+                "sanitized_result_http_client_present",
+                "sanitized_result_ledger_update_allowed",
+                "sanitized_result_ledger_update_attempted",
+                "sanitized_result_attempt_counter_persisted",
+                "sanitized_result_actual_receipt_handoff_allowed",
+                "sanitized_result_raw_request_blocked",
+                "sanitized_result_raw_response_blocked",
+                "sanitized_result_broker_api_response_blocked",
+                "sanitized_result_real_id_blocked",
+                "sanitized_result_credential_signature_headers_blocked",
+                "sanitized_result_fresh_preflight_required",
+                "sanitized_result_final_confirmation_required",
+                "sanitized_result_ledger_design_required",
+                "sanitized_result_attempt_counter_design_required",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -3329,6 +3594,160 @@ def build_valid_step6g_internal_wiring_snapshot(
             ),
         ),
         transport_result=transport_controlled_result,
+    )
+    sanitized_post_result_result = build_live_order_real_sanitized_post_result(
+        input_snapshot=LiveOrderRealSanitizedPostResultInput(
+            result_mode=wiring_input.sanitized_post_result_mode,
+            result_contract_declared=wiring_input.sanitized_post_result_declared,
+            result_contract_requested=wiring_input.sanitized_post_result_ready,
+            post_guard_prerequisite_checked=True,
+            post_guard_controlled_ready=post_guard_controlled_result.post_guard_ready,
+            post_guard_prerequisite_satisfied=(
+                post_guard_controlled_result.post_guard_ready
+            ),
+            safe_post_guard_label=post_guard_controlled_result.safe_post_guard_label,
+            safe_post_guard_status=(
+                post_guard_controlled_result.safe_post_guard_status
+            ),
+            safe_post_result_label=wiring_input.safe_post_result_label,
+            safe_reconciliation_label=wiring_input.safe_reconciliation_label,
+            result_unknown=wiring_input.sanitized_result_unknown,
+            result_failed=wiring_input.sanitized_result_failed,
+            result_unavailable=wiring_input.sanitized_result_unavailable,
+            result_timeout=wiring_input.sanitized_result_timeout,
+            result_rejected=wiring_input.sanitized_result_rejected,
+            result_partial=wiring_input.sanitized_result_partial,
+            result_ambiguous=wiring_input.sanitized_result_ambiguous,
+            result_unmatched=wiring_input.sanitized_result_unmatched,
+            result_stale=wiring_input.sanitized_result_stale,
+            result_previous_turn=wiring_input.sanitized_result_previous_turn,
+            result_reused=wiring_input.sanitized_result_reused,
+            unsafe_exposure_attempted=(
+                wiring_input.sanitized_result_unsafe_exposure
+            ),
+            credential_value_exposure_attempted=(
+                wiring_input
+                .sanitized_result_credential_value_exposure_attempted
+            ),
+            signature_value_exposure_attempted=(
+                wiring_input
+                .sanitized_result_signature_value_exposure_attempted
+            ),
+            headers_value_exposure_attempted=(
+                wiring_input.sanitized_result_headers_value_exposure_attempted
+            ),
+            raw_request_exposure_attempted=(
+                wiring_input.sanitized_result_raw_request_exposure_attempted
+            ),
+            raw_response_exposure_attempted=(
+                wiring_input.sanitized_result_raw_response_exposure_attempted
+            ),
+            request_body_exposure_attempted=(
+                wiring_input.sanitized_result_request_body_exposure_attempted
+            ),
+            response_body_exposure_attempted=(
+                wiring_input.sanitized_result_response_body_exposure_attempted
+            ),
+            broker_response_exposure_attempted=(
+                wiring_input.sanitized_result_broker_response_exposure_attempted
+            ),
+            api_response_exposure_attempted=(
+                wiring_input.sanitized_result_api_response_exposure_attempted
+            ),
+            endpoint_actual_value_exposure_attempted=(
+                wiring_input
+                .sanitized_result_endpoint_actual_value_exposure_attempted
+            ),
+            account_id_exposure_attempted=(
+                wiring_input.sanitized_result_account_id_exposure_attempted
+            ),
+            order_id_exposure_attempted=(
+                wiring_input.sanitized_result_order_id_exposure_attempted
+            ),
+            transaction_id_exposure_attempted=(
+                wiring_input.sanitized_result_transaction_id_exposure_attempted
+            ),
+            position_id_exposure_attempted=(
+                wiring_input.sanitized_result_position_id_exposure_attempted
+            ),
+            trade_id_exposure_attempted=(
+                wiring_input.sanitized_result_trade_id_exposure_attempted
+            ),
+            real_id_exposure_attempted=(
+                wiring_input.sanitized_result_real_id_exposure_attempted
+            ),
+            confirmation_phrase_exposure_attempted=(
+                wiring_input
+                .sanitized_result_confirmation_phrase_exposure_attempted
+            ),
+            preflight_detail_exposure_attempted=(
+                wiring_input.sanitized_result_preflight_detail_exposure_attempted
+            ),
+            ledger_state_exposure_attempted=(
+                wiring_input.sanitized_result_ledger_state_exposure_attempted
+            ),
+            raw_request_stored=wiring_input.sanitized_result_raw_request_stored,
+            raw_response_stored=wiring_input.sanitized_result_raw_response_stored,
+            broker_response_exposed=(
+                wiring_input.sanitized_result_broker_response_exposed
+            ),
+            api_response_exposed=wiring_input.sanitized_result_api_response_exposed,
+            real_id_exposed=wiring_input.sanitized_result_real_id_exposed,
+            api_call_allowed=wiring_input.sanitized_result_api_call_allowed,
+            api_call_attempted=wiring_input.sanitized_result_api_call_attempted,
+            http_client_present=wiring_input.sanitized_result_http_client_present,
+            http_post_executed=wiring_input.http_post_executed,
+            post_allowed_this_step=wiring_input.post_allowed_this_step,
+            post_executed=wiring_input.post_executed,
+            order_endpoint_called=wiring_input.order_endpoint_called,
+            live_order_once_called=wiring_input.live_order_once_called,
+            actual_checker_execution_performed=(
+                wiring_input.actual_checker_execution_performed
+            ),
+            actual_result_receipt_received=(
+                wiring_input.actual_result_receipt_received
+            ),
+            actual_receipt_handoff_executed=(
+                wiring_input.actual_receipt_handoff_executed
+            ),
+            actual_receipt_handoff_allowed=(
+                wiring_input.sanitized_result_actual_receipt_handoff_allowed
+            ),
+            ledger_update_allowed=(
+                wiring_input.sanitized_result_ledger_update_allowed
+            ),
+            ledger_update_attempted=(
+                wiring_input.sanitized_result_ledger_update_attempted
+            ),
+            attempt_counter_persisted=(
+                wiring_input.sanitized_result_attempt_counter_persisted
+            ),
+            fresh_preflight_executed=wiring_input.fresh_preflight_executed,
+            final_confirmation_received=wiring_input.final_confirmation_received,
+            raw_request_blocked=wiring_input.sanitized_result_raw_request_blocked,
+            raw_response_blocked=wiring_input.sanitized_result_raw_response_blocked,
+            broker_api_response_blocked=(
+                wiring_input.sanitized_result_broker_api_response_blocked
+            ),
+            real_id_blocked=wiring_input.sanitized_result_real_id_blocked,
+            credential_signature_headers_blocked=(
+                wiring_input
+                .sanitized_result_credential_signature_headers_blocked
+            ),
+            fresh_preflight_required=(
+                wiring_input.sanitized_result_fresh_preflight_required
+            ),
+            final_confirmation_required=(
+                wiring_input.sanitized_result_final_confirmation_required
+            ),
+            ledger_design_required=(
+                wiring_input.sanitized_result_ledger_design_required
+            ),
+            attempt_counter_design_required=(
+                wiring_input.sanitized_result_attempt_counter_design_required
+            ),
+        ),
+        post_guard_result=post_guard_controlled_result,
     )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
         input_snapshot=LiveOrderRealCredentialPresenceAdapterInput(
@@ -4828,6 +5247,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         signing_headers_controlled_result=signing_headers_controlled_result,
         transport_controlled_result=transport_controlled_result,
         post_guard_controlled_result=post_guard_controlled_result,
+        sanitized_post_result_result=sanitized_post_result_result,
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -4888,6 +5308,7 @@ def build_live_order_real_step6g_internal_wiring(
     )
     transport_controlled_result = wiring_snapshot.transport_controlled_result
     post_guard_controlled_result = wiring_snapshot.post_guard_controlled_result
+    sanitized_post_result_result = wiring_snapshot.sanitized_post_result_result
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -4945,6 +5366,7 @@ def build_live_order_real_step6g_internal_wiring(
     )
     transport_controlled_reasons = _transport_controlled_reasons(wiring_snapshot)
     post_guard_controlled_reasons = _post_guard_controlled_reasons(wiring_snapshot)
+    sanitized_post_result_reasons = _sanitized_post_result_reasons(wiring_snapshot)
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
         wiring_snapshot,
     )
@@ -5071,6 +5493,12 @@ def build_live_order_real_step6g_internal_wiring(
     elif post_guard_controlled_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD
         primary_reasons = post_guard_controlled_reasons
+    elif sanitized_post_result_reasons:
+        status = (
+            InternalWiringStatus
+            .BLOCKED_STEP6G_INTERNAL_WIRING_SANITIZED_RESULT
+        )
+        primary_reasons = sanitized_post_result_reasons
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
         primary_reasons = _merge_reasons(private_transport_reasons, http_interface_reasons)
@@ -5105,6 +5533,7 @@ def build_live_order_real_step6g_internal_wiring(
         signing_headers_controlled_reasons,
         transport_controlled_reasons,
         post_guard_controlled_reasons,
+        sanitized_post_result_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -5185,6 +5614,13 @@ def build_live_order_real_step6g_internal_wiring(
             post_guard_controlled_mode=post_guard_controlled_result.post_guard_mode,
             safe_post_guard_label=(
                 post_guard_controlled_result.safe_post_guard_label
+            ),
+            sanitized_post_result_mode=sanitized_post_result_result.result_mode,
+            safe_post_result_label=(
+                sanitized_post_result_result.safe_post_result_label
+            ),
+            safe_reconciliation_label=(
+                sanitized_post_result_result.safe_reconciliation_label
             ),
         ),
     )
@@ -5521,6 +5957,100 @@ def build_live_order_real_step6g_internal_wiring(
         ),
         post_guard_ledger_state_reuse_blocked=(
             post_guard_controlled_result.ledger_state_reuse_blocked
+        ),
+        sanitized_post_result_ready=not sanitized_post_result_reasons,
+        sanitized_post_result_mode=sanitized_post_result_result.result_mode,
+        sanitized_post_result_declared=(
+            wiring_input.sanitized_post_result_declared
+        ),
+        safe_post_result_label=sanitized_post_result_result.safe_post_result_label,
+        safe_post_result_status=(
+            sanitized_post_result_result.safe_post_result_status
+        ),
+        safe_result_category=sanitized_post_result_result.safe_result_category,
+        reconciliation_ready=(
+            sanitized_post_result_result.reconciliation_ready
+            and not sanitized_post_result_reasons
+        ),
+        safe_reconciliation_label=(
+            sanitized_post_result_result.safe_reconciliation_label
+        ),
+        safe_reconciliation_status=(
+            sanitized_post_result_result.safe_reconciliation_status
+        ),
+        sanitized_result_unknown=sanitized_post_result_result.result_unknown,
+        sanitized_result_failed=sanitized_post_result_result.result_failed,
+        sanitized_result_unavailable=(
+            sanitized_post_result_result.result_unavailable
+        ),
+        sanitized_result_timeout=sanitized_post_result_result.result_timeout,
+        sanitized_result_rejected=sanitized_post_result_result.result_rejected,
+        sanitized_result_partial=sanitized_post_result_result.result_partial,
+        sanitized_result_ambiguous=sanitized_post_result_result.result_ambiguous,
+        sanitized_result_unmatched=sanitized_post_result_result.result_unmatched,
+        sanitized_result_stale=sanitized_post_result_result.result_stale,
+        sanitized_result_previous_turn=(
+            sanitized_post_result_result.result_previous_turn
+        ),
+        sanitized_result_reused=sanitized_post_result_result.result_reused,
+        sanitized_result_unsafe_exposure=False,
+        sanitized_result_credential_value_exposure_attempted=False,
+        sanitized_result_signature_value_exposure_attempted=False,
+        sanitized_result_headers_value_exposure_attempted=False,
+        sanitized_result_raw_request_exposure_attempted=False,
+        sanitized_result_raw_response_exposure_attempted=False,
+        sanitized_result_request_body_exposure_attempted=False,
+        sanitized_result_response_body_exposure_attempted=False,
+        sanitized_result_broker_response_exposure_attempted=False,
+        sanitized_result_api_response_exposure_attempted=False,
+        sanitized_result_endpoint_actual_value_exposure_attempted=False,
+        sanitized_result_account_id_exposure_attempted=False,
+        sanitized_result_order_id_exposure_attempted=False,
+        sanitized_result_transaction_id_exposure_attempted=False,
+        sanitized_result_position_id_exposure_attempted=False,
+        sanitized_result_trade_id_exposure_attempted=False,
+        sanitized_result_real_id_exposure_attempted=False,
+        sanitized_result_confirmation_phrase_exposure_attempted=False,
+        sanitized_result_preflight_detail_exposure_attempted=False,
+        sanitized_result_ledger_state_exposure_attempted=False,
+        sanitized_result_raw_request_stored=False,
+        sanitized_result_raw_response_stored=False,
+        sanitized_result_broker_response_exposed=False,
+        sanitized_result_api_response_exposed=False,
+        sanitized_result_real_id_exposed=False,
+        sanitized_result_api_call_allowed=False,
+        sanitized_result_api_call_attempted=False,
+        sanitized_result_http_client_present=False,
+        sanitized_result_ledger_update_allowed=False,
+        sanitized_result_ledger_update_attempted=False,
+        sanitized_result_attempt_counter_persisted=False,
+        sanitized_result_actual_receipt_handoff_allowed=False,
+        sanitized_result_raw_request_blocked=(
+            sanitized_post_result_result.raw_request_blocked
+        ),
+        sanitized_result_raw_response_blocked=(
+            sanitized_post_result_result.raw_response_blocked
+        ),
+        sanitized_result_broker_api_response_blocked=(
+            sanitized_post_result_result.broker_api_response_blocked
+        ),
+        sanitized_result_real_id_blocked=(
+            sanitized_post_result_result.real_id_blocked
+        ),
+        sanitized_result_credential_signature_headers_blocked=(
+            sanitized_post_result_result.credential_signature_headers_blocked
+        ),
+        sanitized_result_fresh_preflight_required=(
+            sanitized_post_result_result.fresh_preflight_required
+        ),
+        sanitized_result_final_confirmation_required=(
+            sanitized_post_result_result.final_confirmation_required
+        ),
+        sanitized_result_ledger_design_required=(
+            sanitized_post_result_result.ledger_design_required
+        ),
+        sanitized_result_attempt_counter_design_required=(
+            sanitized_post_result_result.attempt_counter_design_required
         ),
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
         presence_adapter_mode=wiring_input.presence_adapter_mode,
@@ -6357,6 +6887,127 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- post_guard_ledger_state_reuse_blocked: "
             f"{_bool_text(result.post_guard_ledger_state_reuse_blocked)}"
+        ),
+        (
+            "- sanitized_post_result_ready: "
+            f"{_bool_text(result.sanitized_post_result_ready)}"
+        ),
+        f"- sanitized_post_result_mode: {result.sanitized_post_result_mode}",
+        f"- safe_post_result_label: {result.safe_post_result_label}",
+        f"- safe_post_result_status: {result.safe_post_result_status}",
+        f"- safe_result_category: {result.safe_result_category}",
+        f"- reconciliation_ready: {_bool_text(result.reconciliation_ready)}",
+        f"- safe_reconciliation_label: {result.safe_reconciliation_label}",
+        f"- safe_reconciliation_status: {result.safe_reconciliation_status}",
+        f"- sanitized_result_unknown: {_bool_text(result.sanitized_result_unknown)}",
+        f"- sanitized_result_failed: {_bool_text(result.sanitized_result_failed)}",
+        (
+            "- sanitized_result_unavailable: "
+            f"{_bool_text(result.sanitized_result_unavailable)}"
+        ),
+        f"- sanitized_result_timeout: {_bool_text(result.sanitized_result_timeout)}",
+        (
+            "- sanitized_result_rejected: "
+            f"{_bool_text(result.sanitized_result_rejected)}"
+        ),
+        f"- sanitized_result_partial: {_bool_text(result.sanitized_result_partial)}",
+        (
+            "- sanitized_result_ambiguous: "
+            f"{_bool_text(result.sanitized_result_ambiguous)}"
+        ),
+        (
+            "- sanitized_result_unmatched: "
+            f"{_bool_text(result.sanitized_result_unmatched)}"
+        ),
+        f"- sanitized_result_stale: {_bool_text(result.sanitized_result_stale)}",
+        (
+            "- sanitized_result_previous_turn: "
+            f"{_bool_text(result.sanitized_result_previous_turn)}"
+        ),
+        f"- sanitized_result_reused: {_bool_text(result.sanitized_result_reused)}",
+        (
+            "- sanitized_result_raw_request_exposure_attempted: "
+            f"{_bool_text(result.sanitized_result_raw_request_exposure_attempted)}"
+        ),
+        (
+            "- sanitized_result_raw_response_exposure_attempted: "
+            f"{_bool_text(result.sanitized_result_raw_response_exposure_attempted)}"
+        ),
+        (
+            "- sanitized_result_broker_response_exposure_attempted: "
+            f"{_bool_text(result.sanitized_result_broker_response_exposure_attempted)}"
+        ),
+        (
+            "- sanitized_result_api_response_exposure_attempted: "
+            f"{_bool_text(result.sanitized_result_api_response_exposure_attempted)}"
+        ),
+        (
+            "- sanitized_result_real_id_exposure_attempted: "
+            f"{_bool_text(result.sanitized_result_real_id_exposure_attempted)}"
+        ),
+        (
+            "- sanitized_result_raw_request_stored: "
+            f"{_bool_text(result.sanitized_result_raw_request_stored)}"
+        ),
+        (
+            "- sanitized_result_raw_response_stored: "
+            f"{_bool_text(result.sanitized_result_raw_response_stored)}"
+        ),
+        (
+            "- sanitized_result_broker_response_exposed: "
+            f"{_bool_text(result.sanitized_result_broker_response_exposed)}"
+        ),
+        (
+            "- sanitized_result_api_response_exposed: "
+            f"{_bool_text(result.sanitized_result_api_response_exposed)}"
+        ),
+        (
+            "- sanitized_result_real_id_exposed: "
+            f"{_bool_text(result.sanitized_result_real_id_exposed)}"
+        ),
+        (
+            "- sanitized_result_api_call_allowed: "
+            f"{_bool_text(result.sanitized_result_api_call_allowed)}"
+        ),
+        (
+            "- sanitized_result_http_client_present: "
+            f"{_bool_text(result.sanitized_result_http_client_present)}"
+        ),
+        (
+            "- sanitized_result_ledger_update_allowed: "
+            f"{_bool_text(result.sanitized_result_ledger_update_allowed)}"
+        ),
+        (
+            "- sanitized_result_actual_receipt_handoff_allowed: "
+            f"{_bool_text(result.sanitized_result_actual_receipt_handoff_allowed)}"
+        ),
+        (
+            "- sanitized_result_raw_request_blocked: "
+            f"{_bool_text(result.sanitized_result_raw_request_blocked)}"
+        ),
+        (
+            "- sanitized_result_raw_response_blocked: "
+            f"{_bool_text(result.sanitized_result_raw_response_blocked)}"
+        ),
+        (
+            "- sanitized_result_broker_api_response_blocked: "
+            f"{_bool_text(result.sanitized_result_broker_api_response_blocked)}"
+        ),
+        (
+            "- sanitized_result_real_id_blocked: "
+            f"{_bool_text(result.sanitized_result_real_id_blocked)}"
+        ),
+        (
+            "- sanitized_result_fresh_preflight_required: "
+            f"{_bool_text(result.sanitized_result_fresh_preflight_required)}"
+        ),
+        (
+            "- sanitized_result_final_confirmation_required: "
+            f"{_bool_text(result.sanitized_result_final_confirmation_required)}"
+        ),
+        (
+            "- sanitized_result_ledger_design_required: "
+            f"{_bool_text(result.sanitized_result_ledger_design_required)}"
         ),
         (
             "- credential_presence_adapter_ready: "
@@ -8025,6 +8676,156 @@ def _post_guard_controlled_reasons(
     return tuple(reasons)
 
 
+def _sanitized_post_result_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealSanitizedPostResultStatus.SANITIZED_RESULT_READY_NO_RECEIPT
+    )
+    expected_category = LiveOrderRealSafePostResultCategory.RESULT_NOT_RECEIVED.value
+    expected_reconciliation = (
+        LiveOrderRealSafeReconciliationStatus
+        .RECONCILIATION_READY_NO_RECEIPT_HANDOFF
+        .value
+    )
+    result = snapshot.sanitized_post_result_result
+    if not snapshot.input_snapshot.sanitized_post_result_ready:
+        reasons.append("sanitized_post_result_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(f"sanitized_post_result_status_{result.status.value}")
+    if not result.sanitized_post_result_ready:
+        reasons.append("sanitized_post_result_not_ready")
+    if not result.result_contract_declared:
+        reasons.append("sanitized_result_contract_not_declared")
+    if not result.result_contract_requested:
+        reasons.append("sanitized_result_contract_not_requested")
+    if not result.post_guard_prerequisite_checked:
+        reasons.append("sanitized_result_post_guard_not_checked")
+    if not result.post_guard_prerequisite_satisfied:
+        reasons.append("sanitized_result_post_guard_not_satisfied")
+    if not result.post_guard_controlled_ready:
+        reasons.append("sanitized_result_post_guard_not_ready")
+    if result.safe_post_guard_label != SAFE_POST_GUARD_LABEL:
+        reasons.append("sanitized_result_safe_post_guard_label_invalid")
+    if result.safe_post_guard_status != (
+        LiveOrderRealPostGuardControlledStatus.POST_GUARD_READY_NO_POST.value
+    ):
+        reasons.append("sanitized_result_safe_post_guard_status_not_ready")
+    if result.safe_post_result_label != SAFE_POST_RESULT_LABEL:
+        reasons.append("sanitized_result_safe_label_invalid")
+    if result.safe_result_category != expected_category:
+        reasons.append("sanitized_result_category_not_not_received")
+    if result.safe_reconciliation_label != SAFE_RECONCILIATION_LABEL:
+        reasons.append("sanitized_result_reconciliation_label_invalid")
+    if result.safe_reconciliation_status != expected_reconciliation:
+        reasons.append("sanitized_result_reconciliation_status_not_ready")
+    if not result.reconciliation_ready:
+        reasons.append("sanitized_result_reconciliation_not_ready")
+    if result.result_unknown:
+        reasons.append("sanitized_result_unknown")
+    if result.result_failed:
+        reasons.append("sanitized_result_failed")
+    if result.result_unavailable:
+        reasons.append("sanitized_result_unavailable")
+    if result.result_timeout:
+        reasons.append("sanitized_result_timeout")
+    if result.result_rejected:
+        reasons.append("sanitized_result_rejected")
+    if result.result_partial:
+        reasons.append("sanitized_result_partial")
+    if result.result_ambiguous:
+        reasons.append("sanitized_result_ambiguous")
+    if result.result_unmatched:
+        reasons.append("sanitized_result_unmatched")
+    if result.result_stale:
+        reasons.append("sanitized_result_stale")
+    if result.result_previous_turn:
+        reasons.append("sanitized_result_previous_turn")
+    if result.result_reused:
+        reasons.append("sanitized_result_reused")
+    if (
+        result.unsafe_exposure_attempted
+        or result.credential_value_exposure_attempted
+        or result.signature_value_exposure_attempted
+        or result.headers_value_exposure_attempted
+        or result.raw_request_exposure_attempted
+        or result.raw_response_exposure_attempted
+        or result.request_body_exposure_attempted
+        or result.response_body_exposure_attempted
+        or result.broker_response_exposure_attempted
+        or result.api_response_exposure_attempted
+        or result.endpoint_actual_value_exposure_attempted
+        or result.account_id_exposure_attempted
+        or result.order_id_exposure_attempted
+        or result.transaction_id_exposure_attempted
+        or result.position_id_exposure_attempted
+        or result.trade_id_exposure_attempted
+        or result.real_id_exposure_attempted
+        or result.confirmation_phrase_exposure_attempted
+        or result.preflight_detail_exposure_attempted
+        or result.ledger_state_exposure_attempted
+    ):
+        reasons.append("sanitized_result_unsafe_exposure")
+    if (
+        result.raw_request_stored
+        or result.raw_response_stored
+        or result.broker_response_exposed
+        or result.api_response_exposed
+        or result.real_id_exposed
+    ):
+        reasons.append("sanitized_result_raw_or_response_or_id_exposed")
+    if (
+        result.api_call_allowed
+        or result.api_call_attempted
+        or result.http_client_present
+    ):
+        reasons.append("sanitized_result_api")
+    if result.http_post_executed or result.post_allowed_this_step or result.post_executed:
+        reasons.append("sanitized_result_post")
+    if result.order_endpoint_called:
+        reasons.append("sanitized_result_order_endpoint")
+    if result.live_order_once_called:
+        reasons.append("sanitized_result_live_order_once")
+    if result.actual_checker_execution_performed:
+        reasons.append("sanitized_result_actual_checker_execution")
+    if result.actual_result_receipt_received:
+        reasons.append("sanitized_result_actual_result_receipt")
+    if result.actual_receipt_handoff_executed:
+        reasons.append("sanitized_result_actual_receipt_handoff")
+    if result.actual_receipt_handoff_allowed:
+        reasons.append("sanitized_result_receipt_handoff_allowed")
+    if result.ledger_update_allowed:
+        reasons.append("sanitized_result_ledger_update_allowed")
+    if result.ledger_update_attempted:
+        reasons.append("sanitized_result_ledger_update_attempted")
+    if result.attempt_counter_persisted:
+        reasons.append("sanitized_result_attempt_counter_persisted")
+    if result.fresh_preflight_executed:
+        reasons.append("sanitized_result_fresh_preflight")
+    if result.final_confirmation_received:
+        reasons.append("sanitized_result_final_confirmation")
+    if not result.raw_request_blocked:
+        reasons.append("sanitized_result_raw_request_not_blocked")
+    if not result.raw_response_blocked:
+        reasons.append("sanitized_result_raw_response_not_blocked")
+    if not result.broker_api_response_blocked:
+        reasons.append("sanitized_result_broker_api_response_not_blocked")
+    if not result.real_id_blocked:
+        reasons.append("sanitized_result_real_id_not_blocked")
+    if not result.credential_signature_headers_blocked:
+        reasons.append("sanitized_result_credential_signature_headers_not_blocked")
+    if not result.fresh_preflight_required:
+        reasons.append("sanitized_result_fresh_preflight_not_required")
+    if not result.final_confirmation_required:
+        reasons.append("sanitized_result_final_confirmation_not_required")
+    if not result.ledger_design_required:
+        reasons.append("sanitized_result_ledger_design_not_required")
+    if not result.attempt_counter_design_required:
+        reasons.append("sanitized_result_attempt_counter_design_not_required")
+    return tuple(reasons)
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -9326,6 +10127,11 @@ def _build_check_results(
             "post guard controlled",
             not _post_guard_controlled_reasons(snapshot),
             "controlled POST guard ready without API POST or live_order_once",
+        ),
+        (
+            "sanitized post result",
+            not _sanitized_post_result_reasons(snapshot),
+            "sanitized result ready without API POST ledger or receipt handoff",
         ),
         (
             "credential presence adapter",

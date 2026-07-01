@@ -252,6 +252,55 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.post_guard_confirmation_must_be_new_for_this_step is True
     assert result.post_guard_step4_approval_phrase_reuse_blocked is True
     assert result.post_guard_ledger_state_reuse_blocked is True
+    assert result.sanitized_post_result_ready is True
+    assert result.sanitized_post_result_mode == "SANITIZED_POST_RESULT_CONTRACT_ONLY"
+    assert result.sanitized_post_result_declared is True
+    assert result.safe_post_result_label == "CONTROLLED_SANITIZED_POST_RESULT_BOUNDARY"
+    assert result.safe_post_result_status == "SANITIZED_RESULT_READY_NO_RECEIPT"
+    assert result.safe_result_category == "RESULT_NOT_RECEIVED"
+    assert result.reconciliation_ready is True
+    assert result.safe_reconciliation_label == "CONTROLLED_RECONCILIATION_BOUNDARY"
+    assert (
+        result.safe_reconciliation_status
+        == "RECONCILIATION_READY_NO_RECEIPT_HANDOFF"
+    )
+    assert result.sanitized_result_unknown is False
+    assert result.sanitized_result_failed is False
+    assert result.sanitized_result_unavailable is False
+    assert result.sanitized_result_timeout is False
+    assert result.sanitized_result_rejected is False
+    assert result.sanitized_result_partial is False
+    assert result.sanitized_result_ambiguous is False
+    assert result.sanitized_result_unmatched is False
+    assert result.sanitized_result_stale is False
+    assert result.sanitized_result_previous_turn is False
+    assert result.sanitized_result_reused is False
+    assert result.sanitized_result_credential_value_exposure_attempted is False
+    assert result.sanitized_result_signature_value_exposure_attempted is False
+    assert result.sanitized_result_headers_value_exposure_attempted is False
+    assert result.sanitized_result_raw_request_exposure_attempted is False
+    assert result.sanitized_result_raw_response_exposure_attempted is False
+    assert result.sanitized_result_broker_response_exposure_attempted is False
+    assert result.sanitized_result_api_response_exposure_attempted is False
+    assert result.sanitized_result_real_id_exposure_attempted is False
+    assert result.sanitized_result_raw_request_stored is False
+    assert result.sanitized_result_raw_response_stored is False
+    assert result.sanitized_result_broker_response_exposed is False
+    assert result.sanitized_result_api_response_exposed is False
+    assert result.sanitized_result_real_id_exposed is False
+    assert result.sanitized_result_api_call_allowed is False
+    assert result.sanitized_result_http_client_present is False
+    assert result.sanitized_result_ledger_update_allowed is False
+    assert result.sanitized_result_actual_receipt_handoff_allowed is False
+    assert result.sanitized_result_raw_request_blocked is True
+    assert result.sanitized_result_raw_response_blocked is True
+    assert result.sanitized_result_broker_api_response_blocked is True
+    assert result.sanitized_result_real_id_blocked is True
+    assert result.sanitized_result_credential_signature_headers_blocked is True
+    assert result.sanitized_result_fresh_preflight_required is True
+    assert result.sanitized_result_final_confirmation_required is True
+    assert result.sanitized_result_ledger_design_required is True
+    assert result.sanitized_result_attempt_counter_design_required is True
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -1270,6 +1319,150 @@ def test_post_guard_controlled_final_gate_blockers_required(
     )
     assert result.post_allowed_this_step is False
     assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sanitized_post_result_declared": False},
+        {"sanitized_result_unknown": True},
+        {"sanitized_result_failed": True},
+        {"sanitized_result_unavailable": True},
+        {"sanitized_result_timeout": True},
+        {"sanitized_result_rejected": True},
+        {"sanitized_result_partial": True},
+        {"sanitized_result_ambiguous": True},
+        {"sanitized_result_unmatched": True},
+        {"sanitized_result_stale": True},
+        {"sanitized_result_previous_turn": True},
+        {"sanitized_result_reused": True},
+    ],
+)
+def test_sanitized_post_result_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SANITIZED_RESULT
+    assert result.sanitized_post_result_ready is False
+    assert result.reconciliation_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sanitized_result_unsafe_exposure": True},
+        {"sanitized_result_credential_value_exposure_attempted": True},
+        {"sanitized_result_signature_value_exposure_attempted": True},
+        {"sanitized_result_headers_value_exposure_attempted": True},
+        {"sanitized_result_raw_request_exposure_attempted": True},
+        {"sanitized_result_raw_response_exposure_attempted": True},
+        {"sanitized_result_request_body_exposure_attempted": True},
+        {"sanitized_result_response_body_exposure_attempted": True},
+        {"sanitized_result_broker_response_exposure_attempted": True},
+        {"sanitized_result_api_response_exposure_attempted": True},
+        {"sanitized_result_endpoint_actual_value_exposure_attempted": True},
+        {"sanitized_result_account_id_exposure_attempted": True},
+        {"sanitized_result_order_id_exposure_attempted": True},
+        {"sanitized_result_transaction_id_exposure_attempted": True},
+        {"sanitized_result_position_id_exposure_attempted": True},
+        {"sanitized_result_trade_id_exposure_attempted": True},
+        {"sanitized_result_real_id_exposure_attempted": True},
+        {"sanitized_result_confirmation_phrase_exposure_attempted": True},
+        {"sanitized_result_preflight_detail_exposure_attempted": True},
+        {"sanitized_result_ledger_state_exposure_attempted": True},
+        {"sanitized_result_raw_request_stored": True},
+        {"sanitized_result_raw_response_stored": True},
+        {"sanitized_result_broker_response_exposed": True},
+        {"sanitized_result_api_response_exposed": True},
+        {"sanitized_result_real_id_exposed": True},
+    ],
+)
+def test_sanitized_post_result_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SANITIZED_RESULT
+    assert result.sanitized_post_result_ready is False
+    assert result.sanitized_result_raw_request_exposure_attempted is False
+    assert result.sanitized_result_raw_response_exposure_attempted is False
+    assert result.sanitized_result_broker_response_exposed is False
+    assert result.sanitized_result_api_response_exposed is False
+    assert result.sanitized_result_real_id_exposed is False
+    assert result.sanitized_result_ledger_state_exposure_attempted is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sanitized_result_api_call_allowed": True},
+        {"sanitized_result_api_call_attempted": True},
+        {"sanitized_result_http_client_present": True},
+    ],
+)
+def test_sanitized_post_result_api_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SANITIZED_RESULT
+    assert result.sanitized_post_result_ready is False
+    assert result.sanitized_result_api_call_allowed is False
+    assert result.sanitized_result_api_call_attempted is False
+    assert result.sanitized_result_http_client_present is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sanitized_result_ledger_update_allowed": True},
+        {"sanitized_result_ledger_update_attempted": True},
+        {"sanitized_result_attempt_counter_persisted": True},
+        {"sanitized_result_actual_receipt_handoff_allowed": True},
+    ],
+)
+def test_sanitized_post_result_ledger_or_receipt_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SANITIZED_RESULT
+    assert result.sanitized_post_result_ready is False
+    assert result.sanitized_result_ledger_update_allowed is False
+    assert result.sanitized_result_attempt_counter_persisted is False
+    assert result.sanitized_result_actual_receipt_handoff_allowed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"sanitized_result_raw_request_blocked": False},
+        {"sanitized_result_raw_response_blocked": False},
+        {"sanitized_result_broker_api_response_blocked": False},
+        {"sanitized_result_real_id_blocked": False},
+        {"sanitized_result_credential_signature_headers_blocked": False},
+        {"sanitized_result_fresh_preflight_required": False},
+        {"sanitized_result_final_confirmation_required": False},
+        {"sanitized_result_ledger_design_required": False},
+        {"sanitized_result_attempt_counter_design_required": False},
+    ],
+)
+def test_sanitized_post_result_final_gate_blockers_required(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_SANITIZED_RESULT
+    assert result.sanitized_post_result_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
 
 
 @pytest.mark.parametrize(
@@ -2411,6 +2604,33 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "post_guard_fresh_preflight_required: true" in rendered
     assert "post_guard_final_confirmation_required: true" in rendered
     assert "post_guard_sanitized_result_required: true" in rendered
+    assert "sanitized_post_result_ready: true" in rendered
+    assert "sanitized_post_result_mode: SANITIZED_POST_RESULT_CONTRACT_ONLY" in rendered
+    assert "safe_post_result_label: CONTROLLED_SANITIZED_POST_RESULT_BOUNDARY" in rendered
+    assert "safe_post_result_status: SANITIZED_RESULT_READY_NO_RECEIPT" in rendered
+    assert "safe_result_category: RESULT_NOT_RECEIVED" in rendered
+    assert "reconciliation_ready: true" in rendered
+    assert "safe_reconciliation_label: CONTROLLED_RECONCILIATION_BOUNDARY" in rendered
+    assert (
+        "safe_reconciliation_status: RECONCILIATION_READY_NO_RECEIPT_HANDOFF"
+        in rendered
+    )
+    assert "sanitized_result_raw_request_exposure_attempted: false" in rendered
+    assert "sanitized_result_raw_response_exposure_attempted: false" in rendered
+    assert "sanitized_result_broker_response_exposed: false" in rendered
+    assert "sanitized_result_api_response_exposed: false" in rendered
+    assert "sanitized_result_real_id_exposed: false" in rendered
+    assert "sanitized_result_api_call_allowed: false" in rendered
+    assert "sanitized_result_http_client_present: false" in rendered
+    assert "sanitized_result_ledger_update_allowed: false" in rendered
+    assert "sanitized_result_actual_receipt_handoff_allowed: false" in rendered
+    assert "sanitized_result_raw_request_blocked: true" in rendered
+    assert "sanitized_result_raw_response_blocked: true" in rendered
+    assert "sanitized_result_broker_api_response_blocked: true" in rendered
+    assert "sanitized_result_real_id_blocked: true" in rendered
+    assert "sanitized_result_fresh_preflight_required: true" in rendered
+    assert "sanitized_result_final_confirmation_required: true" in rendered
+    assert "sanitized_result_ledger_design_required: true" in rendered
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered
