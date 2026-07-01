@@ -82,6 +82,27 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-POST-GUARD-C one POST max / no retry / timeout fail-closed guard implementation完了 / guard implementation only / no API call / no POST / no live_order_once** —
+  TRANSPORT-V CASE 1の判断後、controlled transport resultを前提に、POST前guard readinessを
+  safe label / safe status / safe booleanだけへ閉じるcontrolled implementationを追加した。POST-GUARD-Cでは
+  `backend/app/live_verification/live_order_real_post_guard_controlled.py` を追加し、
+  `POST_GUARD_CONTROLLED_IMPLEMENTATION_ONLY`、固定safe POST guard label、
+  `POST_GUARD_READY_NO_POST`、post guard ready boolean、safe blocked reasons、one POST max enforced /
+  no retry enforced / timeout fail-closed enforced / fresh preflight required / final confirmation required /
+  sanitized result required booleansだけを扱う。このStepのPOST guardはPOST実行前の安全契約であり、
+  API call、HTTP POST、order endpoint、`live_order_once`、raw request generation、raw response receipt、
+  fresh preflight execution、final confirmation execution、actual checker execution、actual result receipt、
+  actual receipt handoff、ledger更新、実資金Step 6G再試行には進まない。credential値、signature値、
+  headers値、raw request、raw response、request body、response body、endpoint actual value、order endpoint
+  actual value、real ID、account ID、order ID、broker/API response、confirmation phrase actual value、
+  ledger state actual valueはresult / renderer / asdict / docsに含めない。post guard readyでもPOST、
+  API、order endpoint、`live_order_once`、fresh preflight、final confirmation、実資金Step 6G再試行には
+  進めない。Step 6G-IWにも `post_guard_controlled_ready` gateを最小連携し、unknown / failed /
+  unavailable / timeout / rejected / stale / previous-turn / reused / retry attempted / second POST attempted /
+  multiple POST attempts / API / POST / order endpoint / `live_order_once` をfail-closedで検査する。
+  詳細は [STEP6G_POST_GUARD_CONTROLLED.md](STEP6G_POST_GUARD_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-POST-GUARD-V one POST max / no retry / timeout fail-closed guard
+  boundary review / no API call / no POST / no code change**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-TRANSPORT-C transport controlled implementation完了 / safe label-status-boolean only / no API call / no POST / no live_order_once** —
   TRANSPORT-GATE CASE 1の判断後、controlled signing/headers resultを前提に、transport readinessを
   safe label / safe status / safe booleanだけへ閉じるcontrolled implementationを追加した。TRANSPORT-Cでは

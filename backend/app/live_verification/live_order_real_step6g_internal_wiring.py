@@ -147,6 +147,13 @@ from app.live_verification.live_order_real_order_transport_core import (
     build_private_order_header_contract_without_exposure,
     make_live_order_real_transport_endpoint_contract,
 )
+from app.live_verification.live_order_real_post_guard_controlled import (
+    SAFE_POST_GUARD_LABEL,
+    LiveOrderRealPostGuardControlledInput,
+    LiveOrderRealPostGuardControlledResult,
+    LiveOrderRealPostGuardControlledStatus,
+    build_live_order_real_post_guard_controlled,
+)
 from app.live_verification.live_order_real_private_order_transport import (
     LiveOrderRealPrivateOrderTransportPrerequisites,
     LiveOrderRealPrivateOrderTransportResult,
@@ -241,6 +248,9 @@ class LiveOrderRealStep6GInternalWiringStatus(str, Enum):
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED"
+    )
+    BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD = (
+        "BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD"
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT"
@@ -460,6 +470,55 @@ class LiveOrderRealStep6GInternalWiringInput:
     transport_fresh_preflight_required: bool = True
     transport_final_confirmation_required: bool = True
     sanitized_result_required: bool = True
+    post_guard_controlled_ready: bool = True
+    post_guard_controlled_mode: str = "POST_GUARD_CONTROLLED_IMPLEMENTATION_ONLY"
+    post_guard_controlled_declared: bool = True
+    safe_post_guard_label: str = SAFE_POST_GUARD_LABEL
+    post_guard_unknown: bool = False
+    post_guard_failed: bool = False
+    post_guard_unavailable: bool = False
+    post_guard_timeout: bool = False
+    post_guard_rejected: bool = False
+    post_guard_stale: bool = False
+    post_guard_previous_turn: bool = False
+    post_guard_reused: bool = False
+    post_guard_unsafe_exposure: bool = False
+    post_guard_credential_value_exposure_attempted: bool = False
+    post_guard_signature_value_exposure_attempted: bool = False
+    post_guard_headers_value_exposure_attempted: bool = False
+    post_guard_raw_request_exposure_attempted: bool = False
+    post_guard_raw_response_exposure_attempted: bool = False
+    post_guard_request_body_exposure_attempted: bool = False
+    post_guard_response_body_exposure_attempted: bool = False
+    post_guard_endpoint_actual_value_exposure_attempted: bool = False
+    post_guard_account_id_exposure_attempted: bool = False
+    post_guard_order_id_exposure_attempted: bool = False
+    post_guard_real_id_exposure_attempted: bool = False
+    post_guard_broker_api_response_exposure_attempted: bool = False
+    post_guard_confirmation_phrase_exposure_attempted: bool = False
+    post_guard_preflight_detail_exposure_attempted: bool = False
+    post_guard_ledger_state_exposure_attempted: bool = False
+    post_guard_api_call_allowed: bool = False
+    post_guard_api_call_attempted: bool = False
+    post_guard_http_client_present: bool = False
+    post_guard_retry_attempted: bool = False
+    post_guard_second_post_attempted: bool = False
+    post_guard_multiple_post_attempts_attempted: bool = False
+    post_guard_one_post_max_enforced: bool = True
+    post_guard_no_retry_enforced: bool = True
+    post_guard_timeout_fail_closed_enforced: bool = True
+    post_guard_second_post_attempt_blocked: bool = True
+    post_guard_multiple_post_attempts_blocked: bool = True
+    post_guard_retry_after_failure_blocked: bool = True
+    post_guard_retry_after_timeout_blocked: bool = True
+    post_guard_retry_after_unknown_blocked: bool = True
+    post_guard_fresh_preflight_required: bool = True
+    post_guard_final_confirmation_required: bool = True
+    post_guard_sanitized_result_required: bool = True
+    post_guard_preflight_must_be_current: bool = True
+    post_guard_confirmation_must_be_new_for_this_step: bool = True
+    post_guard_step4_approval_phrase_reuse_blocked: bool = True
+    post_guard_ledger_state_reuse_blocked: bool = True
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -723,6 +782,11 @@ class LiveOrderRealStep6GInternalWiringInput:
             self.transport_controlled_mode,
         )
         _require_non_empty("safe_transport_label", self.safe_transport_label)
+        _require_non_empty(
+            "post_guard_controlled_mode",
+            self.post_guard_controlled_mode,
+        )
+        _require_non_empty("safe_post_guard_label", self.safe_post_guard_label)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -941,6 +1005,53 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "transport_fresh_preflight_required",
                 "transport_final_confirmation_required",
                 "sanitized_result_required",
+                "post_guard_controlled_ready",
+                "post_guard_controlled_declared",
+                "post_guard_unknown",
+                "post_guard_failed",
+                "post_guard_unavailable",
+                "post_guard_timeout",
+                "post_guard_rejected",
+                "post_guard_stale",
+                "post_guard_previous_turn",
+                "post_guard_reused",
+                "post_guard_unsafe_exposure",
+                "post_guard_credential_value_exposure_attempted",
+                "post_guard_signature_value_exposure_attempted",
+                "post_guard_headers_value_exposure_attempted",
+                "post_guard_raw_request_exposure_attempted",
+                "post_guard_raw_response_exposure_attempted",
+                "post_guard_request_body_exposure_attempted",
+                "post_guard_response_body_exposure_attempted",
+                "post_guard_endpoint_actual_value_exposure_attempted",
+                "post_guard_account_id_exposure_attempted",
+                "post_guard_order_id_exposure_attempted",
+                "post_guard_real_id_exposure_attempted",
+                "post_guard_broker_api_response_exposure_attempted",
+                "post_guard_confirmation_phrase_exposure_attempted",
+                "post_guard_preflight_detail_exposure_attempted",
+                "post_guard_ledger_state_exposure_attempted",
+                "post_guard_api_call_allowed",
+                "post_guard_api_call_attempted",
+                "post_guard_http_client_present",
+                "post_guard_retry_attempted",
+                "post_guard_second_post_attempted",
+                "post_guard_multiple_post_attempts_attempted",
+                "post_guard_one_post_max_enforced",
+                "post_guard_no_retry_enforced",
+                "post_guard_timeout_fail_closed_enforced",
+                "post_guard_second_post_attempt_blocked",
+                "post_guard_multiple_post_attempts_blocked",
+                "post_guard_retry_after_failure_blocked",
+                "post_guard_retry_after_timeout_blocked",
+                "post_guard_retry_after_unknown_blocked",
+                "post_guard_fresh_preflight_required",
+                "post_guard_final_confirmation_required",
+                "post_guard_sanitized_result_required",
+                "post_guard_preflight_must_be_current",
+                "post_guard_confirmation_must_be_new_for_this_step",
+                "post_guard_step4_approval_phrase_reuse_blocked",
+                "post_guard_ledger_state_reuse_blocked",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -1172,6 +1283,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     )
     signing_headers_controlled_result: LiveOrderRealSigningHeadersControlledResult
     transport_controlled_result: LiveOrderRealTransportControlledResult
+    post_guard_controlled_result: LiveOrderRealPostGuardControlledResult
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
         LiveOrderRealCredentialPresenceCheckerContractResult
@@ -1373,6 +1485,56 @@ class LiveOrderRealStep6GInternalWiringResult:
     transport_fresh_preflight_required: bool
     transport_final_confirmation_required: bool
     sanitized_result_required: bool
+    post_guard_controlled_ready: bool
+    post_guard_controlled_mode: str
+    post_guard_controlled_declared: bool
+    safe_post_guard_label: str
+    safe_post_guard_status: str
+    post_guard_unknown: bool
+    post_guard_failed: bool
+    post_guard_unavailable: bool
+    post_guard_timeout: bool
+    post_guard_rejected: bool
+    post_guard_stale: bool
+    post_guard_previous_turn: bool
+    post_guard_reused: bool
+    post_guard_unsafe_exposure: bool
+    post_guard_credential_value_exposure_attempted: bool
+    post_guard_signature_value_exposure_attempted: bool
+    post_guard_headers_value_exposure_attempted: bool
+    post_guard_raw_request_exposure_attempted: bool
+    post_guard_raw_response_exposure_attempted: bool
+    post_guard_request_body_exposure_attempted: bool
+    post_guard_response_body_exposure_attempted: bool
+    post_guard_endpoint_actual_value_exposure_attempted: bool
+    post_guard_account_id_exposure_attempted: bool
+    post_guard_order_id_exposure_attempted: bool
+    post_guard_real_id_exposure_attempted: bool
+    post_guard_broker_api_response_exposure_attempted: bool
+    post_guard_confirmation_phrase_exposure_attempted: bool
+    post_guard_preflight_detail_exposure_attempted: bool
+    post_guard_ledger_state_exposure_attempted: bool
+    post_guard_api_call_allowed: bool
+    post_guard_api_call_attempted: bool
+    post_guard_http_client_present: bool
+    post_guard_retry_attempted: bool
+    post_guard_second_post_attempted: bool
+    post_guard_multiple_post_attempts_attempted: bool
+    post_guard_one_post_max_enforced: bool
+    post_guard_no_retry_enforced: bool
+    post_guard_timeout_fail_closed_enforced: bool
+    post_guard_second_post_attempt_blocked: bool
+    post_guard_multiple_post_attempts_blocked: bool
+    post_guard_retry_after_failure_blocked: bool
+    post_guard_retry_after_timeout_blocked: bool
+    post_guard_retry_after_unknown_blocked: bool
+    post_guard_fresh_preflight_required: bool
+    post_guard_final_confirmation_required: bool
+    post_guard_sanitized_result_required: bool
+    post_guard_preflight_must_be_current: bool
+    post_guard_confirmation_must_be_new_for_this_step: bool
+    post_guard_step4_approval_phrase_reuse_blocked: bool
+    post_guard_ledger_state_reuse_blocked: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -1609,6 +1771,12 @@ class LiveOrderRealStep6GInternalWiringResult:
         )
         _require_non_empty("safe_transport_label", self.safe_transport_label)
         _require_non_empty("safe_transport_status", self.safe_transport_status)
+        _require_non_empty(
+            "post_guard_controlled_mode",
+            self.post_guard_controlled_mode,
+        )
+        _require_non_empty("safe_post_guard_label", self.safe_post_guard_label)
+        _require_non_empty("safe_post_guard_status", self.safe_post_guard_status)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -1798,6 +1966,53 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "transport_fresh_preflight_required",
                 "transport_final_confirmation_required",
                 "sanitized_result_required",
+                "post_guard_controlled_ready",
+                "post_guard_controlled_declared",
+                "post_guard_unknown",
+                "post_guard_failed",
+                "post_guard_unavailable",
+                "post_guard_timeout",
+                "post_guard_rejected",
+                "post_guard_stale",
+                "post_guard_previous_turn",
+                "post_guard_reused",
+                "post_guard_unsafe_exposure",
+                "post_guard_credential_value_exposure_attempted",
+                "post_guard_signature_value_exposure_attempted",
+                "post_guard_headers_value_exposure_attempted",
+                "post_guard_raw_request_exposure_attempted",
+                "post_guard_raw_response_exposure_attempted",
+                "post_guard_request_body_exposure_attempted",
+                "post_guard_response_body_exposure_attempted",
+                "post_guard_endpoint_actual_value_exposure_attempted",
+                "post_guard_account_id_exposure_attempted",
+                "post_guard_order_id_exposure_attempted",
+                "post_guard_real_id_exposure_attempted",
+                "post_guard_broker_api_response_exposure_attempted",
+                "post_guard_confirmation_phrase_exposure_attempted",
+                "post_guard_preflight_detail_exposure_attempted",
+                "post_guard_ledger_state_exposure_attempted",
+                "post_guard_api_call_allowed",
+                "post_guard_api_call_attempted",
+                "post_guard_http_client_present",
+                "post_guard_retry_attempted",
+                "post_guard_second_post_attempted",
+                "post_guard_multiple_post_attempts_attempted",
+                "post_guard_one_post_max_enforced",
+                "post_guard_no_retry_enforced",
+                "post_guard_timeout_fail_closed_enforced",
+                "post_guard_second_post_attempt_blocked",
+                "post_guard_multiple_post_attempts_blocked",
+                "post_guard_retry_after_failure_blocked",
+                "post_guard_retry_after_timeout_blocked",
+                "post_guard_retry_after_unknown_blocked",
+                "post_guard_fresh_preflight_required",
+                "post_guard_final_confirmation_required",
+                "post_guard_sanitized_result_required",
+                "post_guard_preflight_must_be_current",
+                "post_guard_confirmation_must_be_new_for_this_step",
+                "post_guard_step4_approval_phrase_reuse_blocked",
+                "post_guard_ledger_state_reuse_blocked",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -2977,6 +3192,143 @@ def build_valid_step6g_internal_wiring_snapshot(
             sanitized_result_required=wiring_input.sanitized_result_required,
         ),
         signing_headers_result=signing_headers_controlled_result,
+    )
+    post_guard_controlled_result = build_live_order_real_post_guard_controlled(
+        input_snapshot=LiveOrderRealPostGuardControlledInput(
+            post_guard_mode=wiring_input.post_guard_controlled_mode,
+            post_guard_declared=wiring_input.post_guard_controlled_declared,
+            post_guard_requested=wiring_input.post_guard_controlled_ready,
+            transport_prerequisite_checked=True,
+            transport_controlled_ready=(
+                transport_controlled_result.transport_controlled_ready
+            ),
+            transport_prerequisite_satisfied=(
+                transport_controlled_result.transport_controlled_ready
+            ),
+            safe_transport_label=transport_controlled_result.safe_transport_label,
+            safe_transport_status=transport_controlled_result.safe_transport_status,
+            safe_post_guard_label=wiring_input.safe_post_guard_label,
+            post_guard_unknown=wiring_input.post_guard_unknown,
+            post_guard_failed=wiring_input.post_guard_failed,
+            post_guard_unavailable=wiring_input.post_guard_unavailable,
+            post_guard_timeout=wiring_input.post_guard_timeout,
+            post_guard_rejected=wiring_input.post_guard_rejected,
+            post_guard_stale=wiring_input.post_guard_stale,
+            post_guard_previous_turn=wiring_input.post_guard_previous_turn,
+            post_guard_reused=wiring_input.post_guard_reused,
+            unsafe_exposure_attempted=wiring_input.post_guard_unsafe_exposure,
+            credential_value_exposure_attempted=(
+                wiring_input.post_guard_credential_value_exposure_attempted
+            ),
+            signature_value_exposure_attempted=(
+                wiring_input.post_guard_signature_value_exposure_attempted
+            ),
+            headers_value_exposure_attempted=(
+                wiring_input.post_guard_headers_value_exposure_attempted
+            ),
+            raw_request_exposure_attempted=(
+                wiring_input.post_guard_raw_request_exposure_attempted
+            ),
+            raw_response_exposure_attempted=(
+                wiring_input.post_guard_raw_response_exposure_attempted
+            ),
+            request_body_exposure_attempted=(
+                wiring_input.post_guard_request_body_exposure_attempted
+            ),
+            response_body_exposure_attempted=(
+                wiring_input.post_guard_response_body_exposure_attempted
+            ),
+            endpoint_actual_value_exposure_attempted=(
+                wiring_input.post_guard_endpoint_actual_value_exposure_attempted
+            ),
+            account_id_exposure_attempted=(
+                wiring_input.post_guard_account_id_exposure_attempted
+            ),
+            order_id_exposure_attempted=(
+                wiring_input.post_guard_order_id_exposure_attempted
+            ),
+            real_id_exposure_attempted=(
+                wiring_input.post_guard_real_id_exposure_attempted
+            ),
+            broker_api_response_exposure_attempted=(
+                wiring_input.post_guard_broker_api_response_exposure_attempted
+            ),
+            confirmation_phrase_exposure_attempted=(
+                wiring_input.post_guard_confirmation_phrase_exposure_attempted
+            ),
+            preflight_detail_exposure_attempted=(
+                wiring_input.post_guard_preflight_detail_exposure_attempted
+            ),
+            ledger_state_exposure_attempted=(
+                wiring_input.post_guard_ledger_state_exposure_attempted
+            ),
+            api_call_allowed=wiring_input.post_guard_api_call_allowed,
+            api_call_attempted=wiring_input.post_guard_api_call_attempted,
+            http_client_present=wiring_input.post_guard_http_client_present,
+            http_post_executed=wiring_input.http_post_executed,
+            post_allowed_this_step=wiring_input.post_allowed_this_step,
+            post_executed=wiring_input.post_executed,
+            order_endpoint_called=wiring_input.order_endpoint_called,
+            live_order_once_called=wiring_input.live_order_once_called,
+            retry_attempted=wiring_input.post_guard_retry_attempted,
+            second_post_attempted=wiring_input.post_guard_second_post_attempted,
+            multiple_post_attempts_attempted=(
+                wiring_input.post_guard_multiple_post_attempts_attempted
+            ),
+            actual_checker_execution_performed=(
+                wiring_input.actual_checker_execution_performed
+            ),
+            actual_result_receipt_received=(
+                wiring_input.actual_result_receipt_received
+            ),
+            actual_receipt_handoff_executed=(
+                wiring_input.actual_receipt_handoff_executed
+            ),
+            fresh_preflight_executed=wiring_input.fresh_preflight_executed,
+            final_confirmation_received=wiring_input.final_confirmation_received,
+            one_post_max_enforced=wiring_input.post_guard_one_post_max_enforced,
+            no_retry_enforced=wiring_input.post_guard_no_retry_enforced,
+            timeout_fail_closed_enforced=(
+                wiring_input.post_guard_timeout_fail_closed_enforced
+            ),
+            second_post_attempt_blocked=(
+                wiring_input.post_guard_second_post_attempt_blocked
+            ),
+            multiple_post_attempts_blocked=(
+                wiring_input.post_guard_multiple_post_attempts_blocked
+            ),
+            retry_after_failure_blocked=(
+                wiring_input.post_guard_retry_after_failure_blocked
+            ),
+            retry_after_timeout_blocked=(
+                wiring_input.post_guard_retry_after_timeout_blocked
+            ),
+            retry_after_unknown_blocked=(
+                wiring_input.post_guard_retry_after_unknown_blocked
+            ),
+            fresh_preflight_required=(
+                wiring_input.post_guard_fresh_preflight_required
+            ),
+            final_confirmation_required=(
+                wiring_input.post_guard_final_confirmation_required
+            ),
+            sanitized_result_required=(
+                wiring_input.post_guard_sanitized_result_required
+            ),
+            preflight_must_be_current=(
+                wiring_input.post_guard_preflight_must_be_current
+            ),
+            confirmation_must_be_new_for_this_step=(
+                wiring_input.post_guard_confirmation_must_be_new_for_this_step
+            ),
+            step4_approval_phrase_reuse_blocked=(
+                wiring_input.post_guard_step4_approval_phrase_reuse_blocked
+            ),
+            ledger_state_reuse_blocked=(
+                wiring_input.post_guard_ledger_state_reuse_blocked
+            ),
+        ),
+        transport_result=transport_controlled_result,
     )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
         input_snapshot=LiveOrderRealCredentialPresenceAdapterInput(
@@ -4475,6 +4827,7 @@ def build_valid_step6g_internal_wiring_snapshot(
         ),
         signing_headers_controlled_result=signing_headers_controlled_result,
         transport_controlled_result=transport_controlled_result,
+        post_guard_controlled_result=post_guard_controlled_result,
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -4534,6 +4887,7 @@ def build_live_order_real_step6g_internal_wiring(
         wiring_snapshot.signing_headers_controlled_result
     )
     transport_controlled_result = wiring_snapshot.transport_controlled_result
+    post_guard_controlled_result = wiring_snapshot.post_guard_controlled_result
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -4590,6 +4944,7 @@ def build_live_order_real_step6g_internal_wiring(
         wiring_snapshot,
     )
     transport_controlled_reasons = _transport_controlled_reasons(wiring_snapshot)
+    post_guard_controlled_reasons = _post_guard_controlled_reasons(wiring_snapshot)
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
         wiring_snapshot,
     )
@@ -4713,6 +5068,9 @@ def build_live_order_real_step6g_internal_wiring(
     elif transport_controlled_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED
         primary_reasons = transport_controlled_reasons
+    elif post_guard_controlled_reasons:
+        status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD
+        primary_reasons = post_guard_controlled_reasons
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
         primary_reasons = _merge_reasons(private_transport_reasons, http_interface_reasons)
@@ -4746,6 +5104,7 @@ def build_live_order_real_step6g_internal_wiring(
         credential_injection_controlled_reasons,
         signing_headers_controlled_reasons,
         transport_controlled_reasons,
+        post_guard_controlled_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -4823,6 +5182,10 @@ def build_live_order_real_step6g_internal_wiring(
             safe_headers_label=signing_headers_controlled_result.safe_headers_label,
             transport_controlled_mode=transport_controlled_result.transport_mode,
             safe_transport_label=transport_controlled_result.safe_transport_label,
+            post_guard_controlled_mode=post_guard_controlled_result.post_guard_mode,
+            safe_post_guard_label=(
+                post_guard_controlled_result.safe_post_guard_label
+            ),
         ),
     )
     return LiveOrderRealStep6GInternalWiringResult(
@@ -5077,6 +5440,88 @@ def build_live_order_real_step6g_internal_wiring(
             transport_controlled_result.final_confirmation_required
         ),
         sanitized_result_required=transport_controlled_result.sanitized_result_required,
+        post_guard_controlled_ready=not post_guard_controlled_reasons,
+        post_guard_controlled_mode=post_guard_controlled_result.post_guard_mode,
+        post_guard_controlled_declared=wiring_input.post_guard_controlled_declared,
+        safe_post_guard_label=post_guard_controlled_result.safe_post_guard_label,
+        safe_post_guard_status=post_guard_controlled_result.safe_post_guard_status,
+        post_guard_unknown=post_guard_controlled_result.post_guard_unknown,
+        post_guard_failed=post_guard_controlled_result.post_guard_failed,
+        post_guard_unavailable=post_guard_controlled_result.post_guard_unavailable,
+        post_guard_timeout=post_guard_controlled_result.post_guard_timeout,
+        post_guard_rejected=post_guard_controlled_result.post_guard_rejected,
+        post_guard_stale=post_guard_controlled_result.post_guard_stale,
+        post_guard_previous_turn=(
+            post_guard_controlled_result.post_guard_previous_turn
+        ),
+        post_guard_reused=post_guard_controlled_result.post_guard_reused,
+        post_guard_unsafe_exposure=False,
+        post_guard_credential_value_exposure_attempted=False,
+        post_guard_signature_value_exposure_attempted=False,
+        post_guard_headers_value_exposure_attempted=False,
+        post_guard_raw_request_exposure_attempted=False,
+        post_guard_raw_response_exposure_attempted=False,
+        post_guard_request_body_exposure_attempted=False,
+        post_guard_response_body_exposure_attempted=False,
+        post_guard_endpoint_actual_value_exposure_attempted=False,
+        post_guard_account_id_exposure_attempted=False,
+        post_guard_order_id_exposure_attempted=False,
+        post_guard_real_id_exposure_attempted=False,
+        post_guard_broker_api_response_exposure_attempted=False,
+        post_guard_confirmation_phrase_exposure_attempted=False,
+        post_guard_preflight_detail_exposure_attempted=False,
+        post_guard_ledger_state_exposure_attempted=False,
+        post_guard_api_call_allowed=False,
+        post_guard_api_call_attempted=False,
+        post_guard_http_client_present=False,
+        post_guard_retry_attempted=False,
+        post_guard_second_post_attempted=False,
+        post_guard_multiple_post_attempts_attempted=False,
+        post_guard_one_post_max_enforced=(
+            post_guard_controlled_result.one_post_max_enforced
+        ),
+        post_guard_no_retry_enforced=(
+            post_guard_controlled_result.no_retry_enforced
+        ),
+        post_guard_timeout_fail_closed_enforced=(
+            post_guard_controlled_result.timeout_fail_closed_enforced
+        ),
+        post_guard_second_post_attempt_blocked=(
+            post_guard_controlled_result.second_post_attempt_blocked
+        ),
+        post_guard_multiple_post_attempts_blocked=(
+            post_guard_controlled_result.multiple_post_attempts_blocked
+        ),
+        post_guard_retry_after_failure_blocked=(
+            post_guard_controlled_result.retry_after_failure_blocked
+        ),
+        post_guard_retry_after_timeout_blocked=(
+            post_guard_controlled_result.retry_after_timeout_blocked
+        ),
+        post_guard_retry_after_unknown_blocked=(
+            post_guard_controlled_result.retry_after_unknown_blocked
+        ),
+        post_guard_fresh_preflight_required=(
+            post_guard_controlled_result.fresh_preflight_required
+        ),
+        post_guard_final_confirmation_required=(
+            post_guard_controlled_result.final_confirmation_required
+        ),
+        post_guard_sanitized_result_required=(
+            post_guard_controlled_result.sanitized_result_required
+        ),
+        post_guard_preflight_must_be_current=(
+            post_guard_controlled_result.preflight_must_be_current
+        ),
+        post_guard_confirmation_must_be_new_for_this_step=(
+            post_guard_controlled_result.confirmation_must_be_new_for_this_step
+        ),
+        post_guard_step4_approval_phrase_reuse_blocked=(
+            post_guard_controlled_result.step4_approval_phrase_reuse_blocked
+        ),
+        post_guard_ledger_state_reuse_blocked=(
+            post_guard_controlled_result.ledger_state_reuse_blocked
+        ),
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
         presence_adapter_mode=wiring_input.presence_adapter_mode,
         operator_provided_presence_result=wiring_input.operator_provided_presence_result,
@@ -5818,6 +6263,100 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- sanitized_result_required: "
             f"{_bool_text(result.sanitized_result_required)}"
+        ),
+        (
+            "- post_guard_controlled_ready: "
+            f"{_bool_text(result.post_guard_controlled_ready)}"
+        ),
+        f"- post_guard_controlled_mode: {result.post_guard_controlled_mode}",
+        f"- safe_post_guard_label: {result.safe_post_guard_label}",
+        f"- safe_post_guard_status: {result.safe_post_guard_status}",
+        f"- post_guard_unknown: {_bool_text(result.post_guard_unknown)}",
+        f"- post_guard_failed: {_bool_text(result.post_guard_failed)}",
+        f"- post_guard_unavailable: {_bool_text(result.post_guard_unavailable)}",
+        f"- post_guard_timeout: {_bool_text(result.post_guard_timeout)}",
+        f"- post_guard_rejected: {_bool_text(result.post_guard_rejected)}",
+        f"- post_guard_stale: {_bool_text(result.post_guard_stale)}",
+        (
+            "- post_guard_previous_turn: "
+            f"{_bool_text(result.post_guard_previous_turn)}"
+        ),
+        f"- post_guard_reused: {_bool_text(result.post_guard_reused)}",
+        (
+            "- post_guard_credential_value_exposure_attempted: "
+            f"{_bool_text(result.post_guard_credential_value_exposure_attempted)}"
+        ),
+        (
+            "- post_guard_signature_value_exposure_attempted: "
+            f"{_bool_text(result.post_guard_signature_value_exposure_attempted)}"
+        ),
+        (
+            "- post_guard_headers_value_exposure_attempted: "
+            f"{_bool_text(result.post_guard_headers_value_exposure_attempted)}"
+        ),
+        (
+            "- post_guard_raw_request_exposure_attempted: "
+            f"{_bool_text(result.post_guard_raw_request_exposure_attempted)}"
+        ),
+        (
+            "- post_guard_raw_response_exposure_attempted: "
+            f"{_bool_text(result.post_guard_raw_response_exposure_attempted)}"
+        ),
+        (
+            "- post_guard_api_call_allowed: "
+            f"{_bool_text(result.post_guard_api_call_allowed)}"
+        ),
+        (
+            "- post_guard_api_call_attempted: "
+            f"{_bool_text(result.post_guard_api_call_attempted)}"
+        ),
+        (
+            "- post_guard_http_client_present: "
+            f"{_bool_text(result.post_guard_http_client_present)}"
+        ),
+        (
+            "- post_guard_retry_attempted: "
+            f"{_bool_text(result.post_guard_retry_attempted)}"
+        ),
+        (
+            "- post_guard_second_post_attempted: "
+            f"{_bool_text(result.post_guard_second_post_attempted)}"
+        ),
+        (
+            "- post_guard_multiple_post_attempts_attempted: "
+            f"{_bool_text(result.post_guard_multiple_post_attempts_attempted)}"
+        ),
+        (
+            "- post_guard_one_post_max_enforced: "
+            f"{_bool_text(result.post_guard_one_post_max_enforced)}"
+        ),
+        (
+            "- post_guard_no_retry_enforced: "
+            f"{_bool_text(result.post_guard_no_retry_enforced)}"
+        ),
+        (
+            "- post_guard_timeout_fail_closed_enforced: "
+            f"{_bool_text(result.post_guard_timeout_fail_closed_enforced)}"
+        ),
+        (
+            "- post_guard_fresh_preflight_required: "
+            f"{_bool_text(result.post_guard_fresh_preflight_required)}"
+        ),
+        (
+            "- post_guard_final_confirmation_required: "
+            f"{_bool_text(result.post_guard_final_confirmation_required)}"
+        ),
+        (
+            "- post_guard_sanitized_result_required: "
+            f"{_bool_text(result.post_guard_sanitized_result_required)}"
+        ),
+        (
+            "- post_guard_step4_approval_phrase_reuse_blocked: "
+            f"{_bool_text(result.post_guard_step4_approval_phrase_reuse_blocked)}"
+        ),
+        (
+            "- post_guard_ledger_state_reuse_blocked: "
+            f"{_bool_text(result.post_guard_ledger_state_reuse_blocked)}"
         ),
         (
             "- credential_presence_adapter_ready: "
@@ -7358,6 +7897,134 @@ def _transport_controlled_reasons(
     return tuple(reasons)
 
 
+def _post_guard_controlled_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = LiveOrderRealPostGuardControlledStatus.POST_GUARD_READY_NO_POST
+    result = snapshot.post_guard_controlled_result
+    if not snapshot.input_snapshot.post_guard_controlled_ready:
+        reasons.append("post_guard_controlled_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(f"post_guard_controlled_status_{result.status.value}")
+    if not result.post_guard_ready:
+        reasons.append("post_guard_controlled_not_ready")
+    if not result.post_guard_declared:
+        reasons.append("post_guard_controlled_not_declared")
+    if not result.post_guard_requested:
+        reasons.append("post_guard_controlled_not_requested")
+    if not result.transport_prerequisite_checked:
+        reasons.append("post_guard_transport_not_checked")
+    if not result.transport_prerequisite_satisfied:
+        reasons.append("post_guard_transport_not_satisfied")
+    if not result.transport_controlled_ready:
+        reasons.append("post_guard_transport_not_ready")
+    if result.safe_transport_label != SAFE_TRANSPORT_LABEL:
+        reasons.append("post_guard_safe_transport_label_invalid")
+    if result.safe_transport_status != (
+        LiveOrderRealTransportControlledStatus.TRANSPORT_READY_NO_API_NO_POST.value
+    ):
+        reasons.append("post_guard_safe_transport_status_not_ready")
+    if result.safe_post_guard_label != SAFE_POST_GUARD_LABEL:
+        reasons.append("post_guard_safe_label_invalid")
+    if result.post_guard_unknown:
+        reasons.append("post_guard_unknown")
+    if result.post_guard_failed:
+        reasons.append("post_guard_failed")
+    if result.post_guard_unavailable:
+        reasons.append("post_guard_unavailable")
+    if result.post_guard_timeout:
+        reasons.append("post_guard_timeout")
+    if result.post_guard_rejected:
+        reasons.append("post_guard_rejected")
+    if result.post_guard_stale:
+        reasons.append("post_guard_stale")
+    if result.post_guard_previous_turn:
+        reasons.append("post_guard_previous_turn")
+    if result.post_guard_reused:
+        reasons.append("post_guard_reused")
+    if (
+        result.unsafe_exposure_attempted
+        or result.credential_value_exposure_attempted
+        or result.signature_value_exposure_attempted
+        or result.headers_value_exposure_attempted
+        or result.raw_request_exposure_attempted
+        or result.raw_response_exposure_attempted
+        or result.request_body_exposure_attempted
+        or result.response_body_exposure_attempted
+        or result.endpoint_actual_value_exposure_attempted
+        or result.account_id_exposure_attempted
+        or result.order_id_exposure_attempted
+        or result.real_id_exposure_attempted
+        or result.broker_api_response_exposure_attempted
+        or result.confirmation_phrase_exposure_attempted
+        or result.preflight_detail_exposure_attempted
+        or result.ledger_state_exposure_attempted
+    ):
+        reasons.append("post_guard_controlled_unsafe_exposure")
+    if (
+        result.api_call_allowed
+        or result.api_call_attempted
+        or result.http_client_present
+    ):
+        reasons.append("post_guard_controlled_api")
+    if result.http_post_executed or result.post_allowed_this_step or result.post_executed:
+        reasons.append("post_guard_controlled_post")
+    if result.order_endpoint_called:
+        reasons.append("post_guard_controlled_order_endpoint")
+    if result.live_order_once_called:
+        reasons.append("post_guard_controlled_live_order_once")
+    if result.retry_attempted:
+        reasons.append("post_guard_retry_attempted")
+    if result.second_post_attempted:
+        reasons.append("post_guard_second_post_attempted")
+    if result.multiple_post_attempts_attempted:
+        reasons.append("post_guard_multiple_post_attempts_attempted")
+    if result.actual_checker_execution_performed:
+        reasons.append("post_guard_actual_checker_execution")
+    if result.actual_result_receipt_received:
+        reasons.append("post_guard_actual_result_receipt")
+    if result.actual_receipt_handoff_executed:
+        reasons.append("post_guard_actual_receipt_handoff")
+    if result.fresh_preflight_executed:
+        reasons.append("post_guard_fresh_preflight")
+    if result.final_confirmation_received:
+        reasons.append("post_guard_final_confirmation")
+    if not result.one_post_max_enforced:
+        reasons.append("post_guard_one_post_max_not_enforced")
+    if not result.no_retry_enforced:
+        reasons.append("post_guard_no_retry_not_enforced")
+    if not result.timeout_fail_closed_enforced:
+        reasons.append("post_guard_timeout_fail_closed_not_enforced")
+    if result.max_post_attempts_allowed != 1:
+        reasons.append("post_guard_max_attempts_not_one")
+    if not result.second_post_attempt_blocked:
+        reasons.append("post_guard_second_post_not_blocked")
+    if not result.multiple_post_attempts_blocked:
+        reasons.append("post_guard_multiple_post_not_blocked")
+    if not result.retry_after_failure_blocked:
+        reasons.append("post_guard_retry_after_failure_not_blocked")
+    if not result.retry_after_timeout_blocked:
+        reasons.append("post_guard_retry_after_timeout_not_blocked")
+    if not result.retry_after_unknown_blocked:
+        reasons.append("post_guard_retry_after_unknown_not_blocked")
+    if not result.fresh_preflight_required:
+        reasons.append("post_guard_fresh_preflight_not_required")
+    if not result.final_confirmation_required:
+        reasons.append("post_guard_final_confirmation_not_required")
+    if not result.sanitized_result_required:
+        reasons.append("post_guard_sanitized_result_not_required")
+    if not result.preflight_must_be_current:
+        reasons.append("post_guard_preflight_not_current_required")
+    if not result.confirmation_must_be_new_for_this_step:
+        reasons.append("post_guard_confirmation_not_new_required")
+    if not result.step4_approval_phrase_reuse_blocked:
+        reasons.append("post_guard_step4_phrase_reuse_not_blocked")
+    if not result.ledger_state_reuse_blocked:
+        reasons.append("post_guard_ledger_state_reuse_not_blocked")
+    return tuple(reasons)
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -8654,6 +9321,11 @@ def _build_check_results(
             "transport controlled",
             not _transport_controlled_reasons(snapshot),
             "controlled transport label ready without API POST or live_order_once",
+        ),
+        (
+            "post guard controlled",
+            not _post_guard_controlled_reasons(snapshot),
+            "controlled POST guard ready without API POST or live_order_once",
         ),
         (
             "credential presence adapter",

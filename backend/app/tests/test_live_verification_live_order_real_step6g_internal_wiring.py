@@ -202,6 +202,56 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.transport_fresh_preflight_required is True
     assert result.transport_final_confirmation_required is True
     assert result.sanitized_result_required is True
+    assert result.post_guard_controlled_ready is True
+    assert result.post_guard_controlled_mode == "POST_GUARD_CONTROLLED_IMPLEMENTATION_ONLY"
+    assert result.post_guard_controlled_declared is True
+    assert result.safe_post_guard_label == "CONTROLLED_POST_GUARD_BOUNDARY"
+    assert result.safe_post_guard_status == "POST_GUARD_READY_NO_POST"
+    assert result.post_guard_unknown is False
+    assert result.post_guard_failed is False
+    assert result.post_guard_unavailable is False
+    assert result.post_guard_timeout is False
+    assert result.post_guard_rejected is False
+    assert result.post_guard_stale is False
+    assert result.post_guard_previous_turn is False
+    assert result.post_guard_reused is False
+    assert result.post_guard_unsafe_exposure is False
+    assert result.post_guard_credential_value_exposure_attempted is False
+    assert result.post_guard_signature_value_exposure_attempted is False
+    assert result.post_guard_headers_value_exposure_attempted is False
+    assert result.post_guard_raw_request_exposure_attempted is False
+    assert result.post_guard_raw_response_exposure_attempted is False
+    assert result.post_guard_request_body_exposure_attempted is False
+    assert result.post_guard_response_body_exposure_attempted is False
+    assert result.post_guard_endpoint_actual_value_exposure_attempted is False
+    assert result.post_guard_account_id_exposure_attempted is False
+    assert result.post_guard_order_id_exposure_attempted is False
+    assert result.post_guard_real_id_exposure_attempted is False
+    assert result.post_guard_broker_api_response_exposure_attempted is False
+    assert result.post_guard_confirmation_phrase_exposure_attempted is False
+    assert result.post_guard_preflight_detail_exposure_attempted is False
+    assert result.post_guard_ledger_state_exposure_attempted is False
+    assert result.post_guard_api_call_allowed is False
+    assert result.post_guard_api_call_attempted is False
+    assert result.post_guard_http_client_present is False
+    assert result.post_guard_retry_attempted is False
+    assert result.post_guard_second_post_attempted is False
+    assert result.post_guard_multiple_post_attempts_attempted is False
+    assert result.post_guard_one_post_max_enforced is True
+    assert result.post_guard_no_retry_enforced is True
+    assert result.post_guard_timeout_fail_closed_enforced is True
+    assert result.post_guard_second_post_attempt_blocked is True
+    assert result.post_guard_multiple_post_attempts_blocked is True
+    assert result.post_guard_retry_after_failure_blocked is True
+    assert result.post_guard_retry_after_timeout_blocked is True
+    assert result.post_guard_retry_after_unknown_blocked is True
+    assert result.post_guard_fresh_preflight_required is True
+    assert result.post_guard_final_confirmation_required is True
+    assert result.post_guard_sanitized_result_required is True
+    assert result.post_guard_preflight_must_be_current is True
+    assert result.post_guard_confirmation_must_be_new_for_this_step is True
+    assert result.post_guard_step4_approval_phrase_reuse_blocked is True
+    assert result.post_guard_ledger_state_reuse_blocked is True
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -1078,6 +1128,146 @@ def test_transport_controlled_future_post_blockers_required(
 
     assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED
     assert result.transport_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"post_guard_controlled_declared": False},
+        {"post_guard_unknown": True},
+        {"post_guard_failed": True},
+        {"post_guard_unavailable": True},
+        {"post_guard_timeout": True},
+        {"post_guard_rejected": True},
+        {"post_guard_stale": True},
+        {"post_guard_previous_turn": True},
+        {"post_guard_reused": True},
+    ],
+)
+def test_post_guard_controlled_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD
+    assert result.post_guard_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"post_guard_unsafe_exposure": True},
+        {"post_guard_credential_value_exposure_attempted": True},
+        {"post_guard_signature_value_exposure_attempted": True},
+        {"post_guard_headers_value_exposure_attempted": True},
+        {"post_guard_raw_request_exposure_attempted": True},
+        {"post_guard_raw_response_exposure_attempted": True},
+        {"post_guard_request_body_exposure_attempted": True},
+        {"post_guard_response_body_exposure_attempted": True},
+        {"post_guard_endpoint_actual_value_exposure_attempted": True},
+        {"post_guard_account_id_exposure_attempted": True},
+        {"post_guard_order_id_exposure_attempted": True},
+        {"post_guard_real_id_exposure_attempted": True},
+        {"post_guard_broker_api_response_exposure_attempted": True},
+        {"post_guard_confirmation_phrase_exposure_attempted": True},
+        {"post_guard_preflight_detail_exposure_attempted": True},
+        {"post_guard_ledger_state_exposure_attempted": True},
+    ],
+)
+def test_post_guard_controlled_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD
+    assert result.post_guard_controlled_ready is False
+    assert result.post_guard_credential_value_exposure_attempted is False
+    assert result.post_guard_signature_value_exposure_attempted is False
+    assert result.post_guard_headers_value_exposure_attempted is False
+    assert result.post_guard_raw_request_exposure_attempted is False
+    assert result.post_guard_raw_response_exposure_attempted is False
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"post_guard_api_call_allowed": True},
+        {"post_guard_api_call_attempted": True},
+        {"post_guard_http_client_present": True},
+    ],
+)
+def test_post_guard_controlled_api_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD
+    assert result.post_guard_controlled_ready is False
+    assert result.post_guard_api_call_allowed is False
+    assert result.post_guard_api_call_attempted is False
+    assert result.post_guard_http_client_present is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"post_guard_retry_attempted": True},
+        {"post_guard_second_post_attempted": True},
+        {"post_guard_multiple_post_attempts_attempted": True},
+    ],
+)
+def test_post_guard_controlled_retry_or_extra_post_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD
+    assert result.post_guard_controlled_ready is False
+    assert result.post_guard_retry_attempted is False
+    assert result.post_guard_second_post_attempted is False
+    assert result.post_guard_multiple_post_attempts_attempted is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"post_guard_one_post_max_enforced": False},
+        {"post_guard_no_retry_enforced": False},
+        {"post_guard_timeout_fail_closed_enforced": False},
+        {"post_guard_second_post_attempt_blocked": False},
+        {"post_guard_multiple_post_attempts_blocked": False},
+        {"post_guard_retry_after_failure_blocked": False},
+        {"post_guard_retry_after_timeout_blocked": False},
+        {"post_guard_retry_after_unknown_blocked": False},
+        {"post_guard_fresh_preflight_required": False},
+        {"post_guard_final_confirmation_required": False},
+        {"post_guard_sanitized_result_required": False},
+        {"post_guard_preflight_must_be_current": False},
+        {"post_guard_confirmation_must_be_new_for_this_step": False},
+        {"post_guard_step4_approval_phrase_reuse_blocked": False},
+        {"post_guard_ledger_state_reuse_blocked": False},
+    ],
+)
+def test_post_guard_controlled_final_gate_blockers_required(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_POST_GUARD
+    assert result.post_guard_controlled_ready is False
+    assert result.post_guard_one_post_max_enforced is (
+        overrides.get("post_guard_one_post_max_enforced") is not False
+    )
     assert result.post_allowed_this_step is False
     assert result.post_executed is False
 
@@ -2206,6 +2396,21 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "transport_real_transport_attempted: false" in rendered
     assert "one_post_max_required: true" in rendered
     assert "no_retry_required: true" in rendered
+    assert "post_guard_controlled_ready: true" in rendered
+    assert "post_guard_controlled_mode: POST_GUARD_CONTROLLED_IMPLEMENTATION_ONLY" in rendered
+    assert "safe_post_guard_label: CONTROLLED_POST_GUARD_BOUNDARY" in rendered
+    assert "safe_post_guard_status: POST_GUARD_READY_NO_POST" in rendered
+    assert "post_guard_raw_request_exposure_attempted: false" in rendered
+    assert "post_guard_raw_response_exposure_attempted: false" in rendered
+    assert "post_guard_api_call_allowed: false" in rendered
+    assert "post_guard_http_client_present: false" in rendered
+    assert "post_guard_retry_attempted: false" in rendered
+    assert "post_guard_one_post_max_enforced: true" in rendered
+    assert "post_guard_no_retry_enforced: true" in rendered
+    assert "post_guard_timeout_fail_closed_enforced: true" in rendered
+    assert "post_guard_fresh_preflight_required: true" in rendered
+    assert "post_guard_final_confirmation_required: true" in rendered
+    assert "post_guard_sanitized_result_required: true" in rendered
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered
