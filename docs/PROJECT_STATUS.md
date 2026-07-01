@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-TRANSPORT-C transport controlled implementation完了 / safe label-status-boolean only / no API call / no POST / no live_order_once** —
+  TRANSPORT-GATE CASE 1の判断後、controlled signing/headers resultを前提に、transport readinessを
+  safe label / safe status / safe booleanだけへ閉じるcontrolled implementationを追加した。TRANSPORT-Cでは
+  `backend/app/live_verification/live_order_real_transport_controlled.py` を追加し、
+  `TRANSPORT_CONTROLLED_IMPLEMENTATION_ONLY`、固定safe transport label、
+  `TRANSPORT_READY_NO_API_NO_POST`、transport controlled ready boolean、safe blocked reasons、one POST max /
+  no retry / fresh preflight / final confirmation / sanitized result required booleansだけを扱う。このStepの
+  transportはAPI/POST用の実transportではない。credential値、signature値、headers値、raw request、raw response、
+  request body、response body、endpoint actual value、order endpoint actual value、real ID、account ID、order ID、
+  broker/API responseはresult / renderer / asdict / docsに含めない。transport readyでもPOST、API、
+  order endpoint、`live_order_once`、actual checker execution、actual result receipt、actual receipt handoff、
+  fresh preflight、final confirmation、実資金Step 6G再試行には進めない。Step 6G-IWにも
+  `transport_controlled_ready` gateを最小連携し、missing / unknown / failed / unavailable / timeout /
+  unsafe exposure / credential or signature or headers or raw request or raw response exposure / API / POST /
+  order endpoint / `live_order_once` をfail-closedで検査する。詳細は [STEP6G_TRANSPORT_CONTROLLED.md](STEP6G_TRANSPORT_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-TRANSPORT-V transport controlled implementation boundary review /
+  no API call / no POST / no code change**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-SIGN-C signing and headers controlled implementation完了 / safe label-status-boolean only / no signature value exposure / no headers value exposure / no API / no POST** —
   SIGN-GATE CASE 1の判断後、controlled credential injection resultを前提に、signing / headers readinessを
   safe label / safe status / safe booleanだけへ閉じるcontrolled implementationを追加した。SIGN-Cでは

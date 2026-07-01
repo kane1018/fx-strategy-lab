@@ -193,6 +193,13 @@ from app.live_verification.live_order_real_step6g_runtime_bridge import (
     LiveOrderRealStep6GRuntimeBridgeStatus,
     run_live_order_real_step6g_fake_runtime_bridge,
 )
+from app.live_verification.live_order_real_transport_controlled import (
+    SAFE_TRANSPORT_LABEL,
+    LiveOrderRealTransportControlledInput,
+    LiveOrderRealTransportControlledResult,
+    LiveOrderRealTransportControlledStatus,
+    build_live_order_real_transport_controlled,
+)
 from app.live_verification.precheck import SUPPORTED_SYMBOL
 
 INTERNAL_WIRING_RECOMMENDED_NEXT_STEP = (
@@ -231,6 +238,9 @@ class LiveOrderRealStep6GInternalWiringStatus(str, Enum):
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_SIGNING_CONTRACT"
+    )
+    BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED = (
+        "BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED"
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT"
@@ -420,6 +430,36 @@ class LiveOrderRealStep6GInternalWiringInput:
     signing_headers_real_transport_attempted: bool = False
     signing_headers_api_call_allowed: bool = False
     signing_headers_api_call_attempted: bool = False
+    transport_controlled_ready: bool = True
+    transport_controlled_mode: str = "TRANSPORT_CONTROLLED_IMPLEMENTATION_ONLY"
+    transport_controlled_declared: bool = True
+    safe_transport_label: str = SAFE_TRANSPORT_LABEL
+    transport_unknown: bool = False
+    transport_failed: bool = False
+    transport_unavailable: bool = False
+    transport_timeout: bool = False
+    transport_unsafe_exposure: bool = False
+    transport_credential_value_exposure_attempted: bool = False
+    transport_signature_value_exposure_attempted: bool = False
+    transport_headers_value_exposure_attempted: bool = False
+    transport_raw_request_exposure_attempted: bool = False
+    transport_raw_response_exposure_attempted: bool = False
+    transport_request_body_exposure_attempted: bool = False
+    transport_response_body_exposure_attempted: bool = False
+    transport_endpoint_actual_value_exposure_attempted: bool = False
+    transport_account_id_exposure_attempted: bool = False
+    transport_order_id_exposure_attempted: bool = False
+    transport_real_id_exposure_attempted: bool = False
+    transport_broker_api_response_exposure_attempted: bool = False
+    transport_api_call_allowed: bool = False
+    transport_api_call_attempted: bool = False
+    transport_http_client_present: bool = False
+    transport_real_transport_attempted: bool = False
+    one_post_max_required: bool = True
+    no_retry_required: bool = True
+    transport_fresh_preflight_required: bool = True
+    transport_final_confirmation_required: bool = True
+    sanitized_result_required: bool = True
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -678,6 +718,11 @@ class LiveOrderRealStep6GInternalWiringInput:
         )
         _require_non_empty("safe_signing_label", self.safe_signing_label)
         _require_non_empty("safe_headers_label", self.safe_headers_label)
+        _require_non_empty(
+            "transport_controlled_mode",
+            self.transport_controlled_mode,
+        )
+        _require_non_empty("safe_transport_label", self.safe_transport_label)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -868,6 +913,34 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "signing_headers_real_transport_attempted",
                 "signing_headers_api_call_allowed",
                 "signing_headers_api_call_attempted",
+                "transport_controlled_ready",
+                "transport_controlled_declared",
+                "transport_unknown",
+                "transport_failed",
+                "transport_unavailable",
+                "transport_timeout",
+                "transport_unsafe_exposure",
+                "transport_credential_value_exposure_attempted",
+                "transport_signature_value_exposure_attempted",
+                "transport_headers_value_exposure_attempted",
+                "transport_raw_request_exposure_attempted",
+                "transport_raw_response_exposure_attempted",
+                "transport_request_body_exposure_attempted",
+                "transport_response_body_exposure_attempted",
+                "transport_endpoint_actual_value_exposure_attempted",
+                "transport_account_id_exposure_attempted",
+                "transport_order_id_exposure_attempted",
+                "transport_real_id_exposure_attempted",
+                "transport_broker_api_response_exposure_attempted",
+                "transport_api_call_allowed",
+                "transport_api_call_attempted",
+                "transport_http_client_present",
+                "transport_real_transport_attempted",
+                "one_post_max_required",
+                "no_retry_required",
+                "transport_fresh_preflight_required",
+                "transport_final_confirmation_required",
+                "sanitized_result_required",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -1098,6 +1171,7 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
         LiveOrderRealCredentialInjectionControlledResult
     )
     signing_headers_controlled_result: LiveOrderRealSigningHeadersControlledResult
+    transport_controlled_result: LiveOrderRealTransportControlledResult
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
         LiveOrderRealCredentialPresenceCheckerContractResult
@@ -1268,6 +1342,37 @@ class LiveOrderRealStep6GInternalWiringResult:
     signing_headers_real_transport_attempted: bool
     signing_headers_api_call_allowed: bool
     signing_headers_api_call_attempted: bool
+    transport_controlled_ready: bool
+    transport_controlled_mode: str
+    transport_controlled_declared: bool
+    safe_transport_label: str
+    safe_transport_status: str
+    transport_unknown: bool
+    transport_failed: bool
+    transport_unavailable: bool
+    transport_timeout: bool
+    transport_unsafe_exposure: bool
+    transport_credential_value_exposure_attempted: bool
+    transport_signature_value_exposure_attempted: bool
+    transport_headers_value_exposure_attempted: bool
+    transport_raw_request_exposure_attempted: bool
+    transport_raw_response_exposure_attempted: bool
+    transport_request_body_exposure_attempted: bool
+    transport_response_body_exposure_attempted: bool
+    transport_endpoint_actual_value_exposure_attempted: bool
+    transport_account_id_exposure_attempted: bool
+    transport_order_id_exposure_attempted: bool
+    transport_real_id_exposure_attempted: bool
+    transport_broker_api_response_exposure_attempted: bool
+    transport_api_call_allowed: bool
+    transport_api_call_attempted: bool
+    transport_http_client_present: bool
+    transport_real_transport_attempted: bool
+    one_post_max_required: bool
+    no_retry_required: bool
+    transport_fresh_preflight_required: bool
+    transport_final_confirmation_required: bool
+    sanitized_result_required: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -1498,6 +1603,12 @@ class LiveOrderRealStep6GInternalWiringResult:
         _require_non_empty("safe_headers_label", self.safe_headers_label)
         _require_non_empty("safe_signing_status", self.safe_signing_status)
         _require_non_empty("safe_headers_status", self.safe_headers_status)
+        _require_non_empty(
+            "transport_controlled_mode",
+            self.transport_controlled_mode,
+        )
+        _require_non_empty("safe_transport_label", self.safe_transport_label)
+        _require_non_empty("safe_transport_status", self.safe_transport_status)
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -1659,6 +1770,34 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "signing_headers_real_transport_attempted",
                 "signing_headers_api_call_allowed",
                 "signing_headers_api_call_attempted",
+                "transport_controlled_ready",
+                "transport_controlled_declared",
+                "transport_unknown",
+                "transport_failed",
+                "transport_unavailable",
+                "transport_timeout",
+                "transport_unsafe_exposure",
+                "transport_credential_value_exposure_attempted",
+                "transport_signature_value_exposure_attempted",
+                "transport_headers_value_exposure_attempted",
+                "transport_raw_request_exposure_attempted",
+                "transport_raw_response_exposure_attempted",
+                "transport_request_body_exposure_attempted",
+                "transport_response_body_exposure_attempted",
+                "transport_endpoint_actual_value_exposure_attempted",
+                "transport_account_id_exposure_attempted",
+                "transport_order_id_exposure_attempted",
+                "transport_real_id_exposure_attempted",
+                "transport_broker_api_response_exposure_attempted",
+                "transport_api_call_allowed",
+                "transport_api_call_attempted",
+                "transport_http_client_present",
+                "transport_real_transport_attempted",
+                "one_post_max_required",
+                "no_retry_required",
+                "transport_fresh_preflight_required",
+                "transport_final_confirmation_required",
+                "sanitized_result_required",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -2090,6 +2229,33 @@ class LiveOrderRealStep6GInternalWiringResult:
             raise LiveVerificationValidationError("internal wiring must not sign")
         if self.header_values_present:
             raise LiveVerificationValidationError("internal wiring must not hold header values")
+        if (
+            self.transport_unsafe_exposure
+            or self.transport_credential_value_exposure_attempted
+            or self.transport_signature_value_exposure_attempted
+            or self.transport_headers_value_exposure_attempted
+            or self.transport_raw_request_exposure_attempted
+            or self.transport_raw_response_exposure_attempted
+            or self.transport_request_body_exposure_attempted
+            or self.transport_response_body_exposure_attempted
+            or self.transport_endpoint_actual_value_exposure_attempted
+            or self.transport_account_id_exposure_attempted
+            or self.transport_order_id_exposure_attempted
+            or self.transport_real_id_exposure_attempted
+            or self.transport_broker_api_response_exposure_attempted
+        ):
+            raise LiveVerificationValidationError(
+                "internal wiring must not expose transport values",
+            )
+        if (
+            self.transport_api_call_allowed
+            or self.transport_api_call_attempted
+            or self.transport_http_client_present
+            or self.transport_real_transport_attempted
+        ):
+            raise LiveVerificationValidationError(
+                "internal wiring must not execute controlled transport",
+            )
         if (
             self.dummy_signature_value_present
             or self.dummy_signature_value_displayed
@@ -2715,6 +2881,102 @@ def build_valid_step6g_internal_wiring_snapshot(
             ),
             injection_result=credential_injection_controlled_result,
         )
+    )
+    transport_controlled_result = build_live_order_real_transport_controlled(
+        input_snapshot=LiveOrderRealTransportControlledInput(
+            transport_mode=wiring_input.transport_controlled_mode,
+            transport_declared=wiring_input.transport_controlled_declared,
+            transport_requested=wiring_input.transport_controlled_ready,
+            signing_headers_prerequisite_checked=True,
+            signing_headers_controlled_ready=(
+                signing_headers_controlled_result.signing_headers_controlled_ready
+            ),
+            signing_controlled_ready=(
+                signing_headers_controlled_result.signing_controlled_ready
+            ),
+            headers_controlled_ready=(
+                signing_headers_controlled_result.headers_controlled_ready
+            ),
+            signing_headers_prerequisite_satisfied=(
+                signing_headers_controlled_result.signing_headers_controlled_ready
+            ),
+            safe_signing_label=signing_headers_controlled_result.safe_signing_label,
+            safe_headers_label=signing_headers_controlled_result.safe_headers_label,
+            safe_signing_status=signing_headers_controlled_result.safe_signing_status,
+            safe_headers_status=signing_headers_controlled_result.safe_headers_status,
+            safe_transport_label=wiring_input.safe_transport_label,
+            transport_unknown=wiring_input.transport_unknown,
+            transport_failed=wiring_input.transport_failed,
+            transport_unavailable=wiring_input.transport_unavailable,
+            transport_timeout=wiring_input.transport_timeout,
+            unsafe_exposure_attempted=wiring_input.transport_unsafe_exposure,
+            credential_value_exposure_attempted=(
+                wiring_input.transport_credential_value_exposure_attempted
+            ),
+            signature_value_exposure_attempted=(
+                wiring_input.transport_signature_value_exposure_attempted
+            ),
+            headers_value_exposure_attempted=(
+                wiring_input.transport_headers_value_exposure_attempted
+            ),
+            raw_request_exposure_attempted=(
+                wiring_input.transport_raw_request_exposure_attempted
+            ),
+            raw_response_exposure_attempted=(
+                wiring_input.transport_raw_response_exposure_attempted
+            ),
+            request_body_exposure_attempted=(
+                wiring_input.transport_request_body_exposure_attempted
+            ),
+            response_body_exposure_attempted=(
+                wiring_input.transport_response_body_exposure_attempted
+            ),
+            endpoint_actual_value_exposure_attempted=(
+                wiring_input.transport_endpoint_actual_value_exposure_attempted
+            ),
+            account_id_exposure_attempted=(
+                wiring_input.transport_account_id_exposure_attempted
+            ),
+            order_id_exposure_attempted=(
+                wiring_input.transport_order_id_exposure_attempted
+            ),
+            real_id_exposure_attempted=(
+                wiring_input.transport_real_id_exposure_attempted
+            ),
+            broker_api_response_exposure_attempted=(
+                wiring_input.transport_broker_api_response_exposure_attempted
+            ),
+            api_call_allowed=wiring_input.transport_api_call_allowed,
+            api_call_attempted=wiring_input.transport_api_call_attempted,
+            http_client_present=wiring_input.transport_http_client_present,
+            real_transport_attempted=wiring_input.transport_real_transport_attempted,
+            http_post_executed=wiring_input.http_post_executed,
+            order_endpoint_called=wiring_input.order_endpoint_called,
+            live_order_once_called=wiring_input.live_order_once_called,
+            post_allowed_this_step=wiring_input.post_allowed_this_step,
+            post_executed=wiring_input.post_executed,
+            actual_checker_execution_performed=(
+                wiring_input.actual_checker_execution_performed
+            ),
+            actual_result_receipt_received=(
+                wiring_input.actual_result_receipt_received
+            ),
+            actual_receipt_handoff_executed=(
+                wiring_input.actual_receipt_handoff_executed
+            ),
+            fresh_preflight_executed=wiring_input.fresh_preflight_executed,
+            final_confirmation_received=wiring_input.final_confirmation_received,
+            one_post_max_required=wiring_input.one_post_max_required,
+            no_retry_required=wiring_input.no_retry_required,
+            fresh_preflight_required=(
+                wiring_input.transport_fresh_preflight_required
+            ),
+            final_confirmation_required=(
+                wiring_input.transport_final_confirmation_required
+            ),
+            sanitized_result_required=wiring_input.sanitized_result_required,
+        ),
+        signing_headers_result=signing_headers_controlled_result,
     )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
         input_snapshot=LiveOrderRealCredentialPresenceAdapterInput(
@@ -4212,6 +4474,7 @@ def build_valid_step6g_internal_wiring_snapshot(
             credential_injection_controlled_result
         ),
         signing_headers_controlled_result=signing_headers_controlled_result,
+        transport_controlled_result=transport_controlled_result,
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -4270,6 +4533,7 @@ def build_live_order_real_step6g_internal_wiring(
     signing_headers_controlled_result = (
         wiring_snapshot.signing_headers_controlled_result
     )
+    transport_controlled_result = wiring_snapshot.transport_controlled_result
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -4325,6 +4589,7 @@ def build_live_order_real_step6g_internal_wiring(
     signing_headers_controlled_reasons = _signing_headers_controlled_reasons(
         wiring_snapshot,
     )
+    transport_controlled_reasons = _transport_controlled_reasons(wiring_snapshot)
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
         wiring_snapshot,
     )
@@ -4445,6 +4710,9 @@ def build_live_order_real_step6g_internal_wiring(
             operator_result_handoff_receipt_reasons,
             operator_result_handoff_non_execution_boundary_reasons,
         )
+    elif transport_controlled_reasons:
+        status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED
+        primary_reasons = transport_controlled_reasons
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
         primary_reasons = _merge_reasons(private_transport_reasons, http_interface_reasons)
@@ -4477,6 +4745,7 @@ def build_live_order_real_step6g_internal_wiring(
         credential_presence_controlled_reasons,
         credential_injection_controlled_reasons,
         signing_headers_controlled_reasons,
+        transport_controlled_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -4552,6 +4821,8 @@ def build_live_order_real_step6g_internal_wiring(
             ),
             safe_signing_label=signing_headers_controlled_result.safe_signing_label,
             safe_headers_label=signing_headers_controlled_result.safe_headers_label,
+            transport_controlled_mode=transport_controlled_result.transport_mode,
+            safe_transport_label=transport_controlled_result.safe_transport_label,
         ),
     )
     return LiveOrderRealStep6GInternalWiringResult(
@@ -4771,6 +5042,41 @@ def build_live_order_real_step6g_internal_wiring(
         signing_headers_real_transport_attempted=False,
         signing_headers_api_call_allowed=False,
         signing_headers_api_call_attempted=False,
+        transport_controlled_ready=not transport_controlled_reasons,
+        transport_controlled_mode=transport_controlled_result.transport_mode,
+        transport_controlled_declared=wiring_input.transport_controlled_declared,
+        safe_transport_label=transport_controlled_result.safe_transport_label,
+        safe_transport_status=transport_controlled_result.safe_transport_status,
+        transport_unknown=transport_controlled_result.transport_unknown,
+        transport_failed=transport_controlled_result.transport_failed,
+        transport_unavailable=transport_controlled_result.transport_unavailable,
+        transport_timeout=transport_controlled_result.transport_timeout,
+        transport_unsafe_exposure=False,
+        transport_credential_value_exposure_attempted=False,
+        transport_signature_value_exposure_attempted=False,
+        transport_headers_value_exposure_attempted=False,
+        transport_raw_request_exposure_attempted=False,
+        transport_raw_response_exposure_attempted=False,
+        transport_request_body_exposure_attempted=False,
+        transport_response_body_exposure_attempted=False,
+        transport_endpoint_actual_value_exposure_attempted=False,
+        transport_account_id_exposure_attempted=False,
+        transport_order_id_exposure_attempted=False,
+        transport_real_id_exposure_attempted=False,
+        transport_broker_api_response_exposure_attempted=False,
+        transport_api_call_allowed=False,
+        transport_api_call_attempted=False,
+        transport_http_client_present=False,
+        transport_real_transport_attempted=False,
+        one_post_max_required=transport_controlled_result.one_post_max_required,
+        no_retry_required=transport_controlled_result.no_retry_required,
+        transport_fresh_preflight_required=(
+            transport_controlled_result.fresh_preflight_required
+        ),
+        transport_final_confirmation_required=(
+            transport_controlled_result.final_confirmation_required
+        ),
+        sanitized_result_required=transport_controlled_result.sanitized_result_required,
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
         presence_adapter_mode=wiring_input.presence_adapter_mode,
         operator_provided_presence_result=wiring_input.operator_provided_presence_result,
@@ -5451,6 +5757,67 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- signing_headers_api_call_attempted: "
             f"{_bool_text(result.signing_headers_api_call_attempted)}"
+        ),
+        (
+            "- transport_controlled_ready: "
+            f"{_bool_text(result.transport_controlled_ready)}"
+        ),
+        f"- transport_controlled_mode: {result.transport_controlled_mode}",
+        f"- safe_transport_label: {result.safe_transport_label}",
+        f"- safe_transport_status: {result.safe_transport_status}",
+        f"- transport_unknown: {_bool_text(result.transport_unknown)}",
+        f"- transport_failed: {_bool_text(result.transport_failed)}",
+        f"- transport_unavailable: {_bool_text(result.transport_unavailable)}",
+        f"- transport_timeout: {_bool_text(result.transport_timeout)}",
+        (
+            "- transport_credential_value_exposure_attempted: "
+            f"{_bool_text(result.transport_credential_value_exposure_attempted)}"
+        ),
+        (
+            "- transport_signature_value_exposure_attempted: "
+            f"{_bool_text(result.transport_signature_value_exposure_attempted)}"
+        ),
+        (
+            "- transport_headers_value_exposure_attempted: "
+            f"{_bool_text(result.transport_headers_value_exposure_attempted)}"
+        ),
+        (
+            "- transport_raw_request_exposure_attempted: "
+            f"{_bool_text(result.transport_raw_request_exposure_attempted)}"
+        ),
+        (
+            "- transport_raw_response_exposure_attempted: "
+            f"{_bool_text(result.transport_raw_response_exposure_attempted)}"
+        ),
+        (
+            "- transport_api_call_allowed: "
+            f"{_bool_text(result.transport_api_call_allowed)}"
+        ),
+        (
+            "- transport_api_call_attempted: "
+            f"{_bool_text(result.transport_api_call_attempted)}"
+        ),
+        (
+            "- transport_http_client_present: "
+            f"{_bool_text(result.transport_http_client_present)}"
+        ),
+        (
+            "- transport_real_transport_attempted: "
+            f"{_bool_text(result.transport_real_transport_attempted)}"
+        ),
+        f"- one_post_max_required: {_bool_text(result.one_post_max_required)}",
+        f"- no_retry_required: {_bool_text(result.no_retry_required)}",
+        (
+            "- transport_fresh_preflight_required: "
+            f"{_bool_text(result.transport_fresh_preflight_required)}"
+        ),
+        (
+            "- transport_final_confirmation_required: "
+            f"{_bool_text(result.transport_final_confirmation_required)}"
+        ),
+        (
+            "- sanitized_result_required: "
+            f"{_bool_text(result.sanitized_result_required)}"
         ),
         (
             "- credential_presence_adapter_ready: "
@@ -6897,6 +7264,100 @@ def _signing_headers_controlled_reasons(
     return tuple(reasons)
 
 
+def _transport_controlled_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealTransportControlledStatus.TRANSPORT_READY_NO_API_NO_POST
+    )
+    result = snapshot.transport_controlled_result
+    if not snapshot.input_snapshot.transport_controlled_ready:
+        reasons.append("transport_controlled_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(f"transport_controlled_status_{result.status.value}")
+    if not result.transport_controlled_ready:
+        reasons.append("transport_controlled_not_ready")
+    if not result.transport_declared:
+        reasons.append("transport_controlled_not_declared")
+    if not result.transport_requested:
+        reasons.append("transport_controlled_not_requested")
+    if not result.signing_headers_prerequisite_checked:
+        reasons.append("transport_signing_headers_not_checked")
+    if not result.signing_headers_prerequisite_satisfied:
+        reasons.append("transport_signing_headers_not_satisfied")
+    if not result.signing_headers_controlled_ready:
+        reasons.append("transport_signing_headers_controlled_not_ready")
+    if not result.signing_controlled_ready:
+        reasons.append("transport_signing_not_ready")
+    if not result.headers_controlled_ready:
+        reasons.append("transport_headers_not_ready")
+    if result.safe_signing_label != SAFE_SIGNING_LABEL:
+        reasons.append("transport_safe_signing_label_invalid")
+    if result.safe_headers_label != SAFE_HEADERS_LABEL:
+        reasons.append("transport_safe_headers_label_invalid")
+    if result.safe_transport_label != SAFE_TRANSPORT_LABEL:
+        reasons.append("transport_safe_label_invalid")
+    if result.transport_unknown:
+        reasons.append("transport_unknown")
+    if result.transport_failed:
+        reasons.append("transport_failed")
+    if result.transport_unavailable:
+        reasons.append("transport_unavailable")
+    if result.transport_timeout:
+        reasons.append("transport_timeout")
+    if (
+        result.unsafe_exposure_attempted
+        or result.credential_value_exposure_attempted
+        or result.signature_value_exposure_attempted
+        or result.headers_value_exposure_attempted
+        or result.raw_request_exposure_attempted
+        or result.raw_response_exposure_attempted
+        or result.request_body_exposure_attempted
+        or result.response_body_exposure_attempted
+        or result.endpoint_actual_value_exposure_attempted
+        or result.account_id_exposure_attempted
+        or result.order_id_exposure_attempted
+        or result.real_id_exposure_attempted
+        or result.broker_api_response_exposure_attempted
+    ):
+        reasons.append("transport_controlled_unsafe_exposure")
+    if (
+        result.api_call_allowed
+        or result.api_call_attempted
+        or result.http_client_present
+        or result.real_transport_attempted
+    ):
+        reasons.append("transport_controlled_api_or_transport")
+    if result.http_post_executed or result.post_allowed_this_step or result.post_executed:
+        reasons.append("transport_controlled_post")
+    if result.order_endpoint_called:
+        reasons.append("transport_controlled_order_endpoint")
+    if result.live_order_once_called:
+        reasons.append("transport_controlled_live_order_once")
+    if result.actual_checker_execution_performed:
+        reasons.append("transport_controlled_actual_checker_execution")
+    if result.actual_result_receipt_received:
+        reasons.append("transport_controlled_actual_result_receipt")
+    if result.actual_receipt_handoff_executed:
+        reasons.append("transport_controlled_actual_receipt_handoff")
+    if result.fresh_preflight_executed:
+        reasons.append("transport_controlled_fresh_preflight")
+    if result.final_confirmation_received:
+        reasons.append("transport_controlled_final_confirmation")
+    if not result.one_post_max_required:
+        reasons.append("transport_one_post_max_not_required")
+    if not result.no_retry_required:
+        reasons.append("transport_no_retry_not_required")
+    if not result.fresh_preflight_required:
+        reasons.append("transport_fresh_preflight_not_required")
+    if not result.final_confirmation_required:
+        reasons.append("transport_final_confirmation_not_required")
+    if not result.sanitized_result_required:
+        reasons.append("transport_sanitized_result_not_required")
+    return tuple(reasons)
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -8188,6 +8649,11 @@ def _build_check_results(
             "signing headers controlled",
             not _signing_headers_controlled_reasons(snapshot),
             "controlled signing headers labels ready without values API or POST",
+        ),
+        (
+            "transport controlled",
+            not _transport_controlled_reasons(snapshot),
+            "controlled transport label ready without API POST or live_order_once",
         ),
         (
             "credential presence adapter",

@@ -171,6 +171,37 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.signing_headers_real_transport_attempted is False
     assert result.signing_headers_api_call_allowed is False
     assert result.signing_headers_api_call_attempted is False
+    assert result.transport_controlled_ready is True
+    assert result.transport_controlled_mode == "TRANSPORT_CONTROLLED_IMPLEMENTATION_ONLY"
+    assert result.transport_controlled_declared is True
+    assert result.safe_transport_label == "CONTROLLED_TRANSPORT_BOUNDARY"
+    assert result.safe_transport_status == "TRANSPORT_READY_NO_API_NO_POST"
+    assert result.transport_unknown is False
+    assert result.transport_failed is False
+    assert result.transport_unavailable is False
+    assert result.transport_timeout is False
+    assert result.transport_unsafe_exposure is False
+    assert result.transport_credential_value_exposure_attempted is False
+    assert result.transport_signature_value_exposure_attempted is False
+    assert result.transport_headers_value_exposure_attempted is False
+    assert result.transport_raw_request_exposure_attempted is False
+    assert result.transport_raw_response_exposure_attempted is False
+    assert result.transport_request_body_exposure_attempted is False
+    assert result.transport_response_body_exposure_attempted is False
+    assert result.transport_endpoint_actual_value_exposure_attempted is False
+    assert result.transport_account_id_exposure_attempted is False
+    assert result.transport_order_id_exposure_attempted is False
+    assert result.transport_real_id_exposure_attempted is False
+    assert result.transport_broker_api_response_exposure_attempted is False
+    assert result.transport_api_call_allowed is False
+    assert result.transport_api_call_attempted is False
+    assert result.transport_http_client_present is False
+    assert result.transport_real_transport_attempted is False
+    assert result.one_post_max_required is True
+    assert result.no_retry_required is True
+    assert result.transport_fresh_preflight_required is True
+    assert result.transport_final_confirmation_required is True
+    assert result.sanitized_result_required is True
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -958,6 +989,97 @@ def test_signing_headers_controlled_api_transport_blocks_internal_wiring(
     assert result.post_allowed_this_step is False
     assert result.post_executed is False
     assert result.live_order_once_called is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"transport_controlled_declared": False},
+        {"transport_unknown": True},
+        {"transport_failed": True},
+        {"transport_unavailable": True},
+        {"transport_timeout": True},
+    ],
+)
+def test_transport_controlled_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED
+    assert result.transport_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"transport_unsafe_exposure": True},
+        {"transport_credential_value_exposure_attempted": True},
+        {"transport_signature_value_exposure_attempted": True},
+        {"transport_headers_value_exposure_attempted": True},
+        {"transport_raw_request_exposure_attempted": True},
+        {"transport_raw_response_exposure_attempted": True},
+        {"transport_request_body_exposure_attempted": True},
+        {"transport_response_body_exposure_attempted": True},
+        {"transport_endpoint_actual_value_exposure_attempted": True},
+        {"transport_account_id_exposure_attempted": True},
+        {"transport_order_id_exposure_attempted": True},
+        {"transport_real_id_exposure_attempted": True},
+        {"transport_broker_api_response_exposure_attempted": True},
+    ],
+)
+def test_transport_controlled_exposure_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED
+    assert result.transport_controlled_ready is False
+    assert result.internal_wiring_ready is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"transport_api_call_allowed": True},
+        {"transport_api_call_attempted": True},
+        {"transport_http_client_present": True},
+        {"transport_real_transport_attempted": True},
+    ],
+)
+def test_transport_controlled_api_transport_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED
+    assert result.transport_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"one_post_max_required": False},
+        {"no_retry_required": False},
+        {"transport_fresh_preflight_required": False},
+        {"transport_final_confirmation_required": False},
+        {"sanitized_result_required": False},
+    ],
+)
+def test_transport_controlled_future_post_blockers_required(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert result.status is Status.BLOCKED_STEP6G_INTERNAL_WIRING_TRANSPORT_CONTROLLED
+    assert result.transport_controlled_ready is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
 
 
 @pytest.mark.parametrize(
@@ -2073,6 +2195,17 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "signing_headers_headers_metadata_exposure_attempted: false" in rendered
     assert "signing_headers_real_transport_allowed: false" in rendered
     assert "signing_headers_api_call_allowed: false" in rendered
+    assert "transport_controlled_ready: true" in rendered
+    assert "transport_controlled_mode: TRANSPORT_CONTROLLED_IMPLEMENTATION_ONLY" in rendered
+    assert "safe_transport_label: CONTROLLED_TRANSPORT_BOUNDARY" in rendered
+    assert "safe_transport_status: TRANSPORT_READY_NO_API_NO_POST" in rendered
+    assert "transport_raw_request_exposure_attempted: false" in rendered
+    assert "transport_raw_response_exposure_attempted: false" in rendered
+    assert "transport_api_call_allowed: false" in rendered
+    assert "transport_http_client_present: false" in rendered
+    assert "transport_real_transport_attempted: false" in rendered
+    assert "one_post_max_required: true" in rendered
+    assert "no_retry_required: true" in rendered
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered
