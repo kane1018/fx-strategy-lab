@@ -82,24 +82,30 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
-- **Step 6G-PC-OX-R-FINAL-CONFIRMATION-GATE safe final confirmation gate implementation完了 / gate implemented / no actual final confirmation acquired / no HTTP POST** —
+- **Step 6G-PC-OX-R-ONE-SHOT-POST-READY-GATE implementation / final ready gate before real one-shot POST / no HTTP POST** —
   FRESH-PREFLIGHT-CHECK-RETRY-3 CASE 1 PASS（fresh preflight executed exactly once / PASS / current=true / new=true /
-  reused=false / stale=false / safe summary only）後、final confirmationをnew/current-turn/one-time/non-reusedとして
-  safe summaryだけに写像する独立gateが未整備だったため、
-  `backend/app/live_verification/live_order_real_final_confirmation_gate_controlled.py` と
-  `backend/app/tests/test_live_verification_live_order_real_final_confirmation_gate_controlled.py` を追加し、
-  `docs/STEP6G_FINAL_CONFIRMATION_GATE_CONTROLLED.md` を追加した。defaultは
-  `FINAL_CONFIRMATION_GATE_READY_FOR_REQUEST_NO_POST` で、confirmation phrase actual valueを引数に受け取らず、
-  保存・表示・ログ出力もしない。safe booleanとしてcurrent-turn explicit user reply、
-  confirmation current/new/one-time/non-reuseが揃った場合だけ
-  `FINAL_CONFIRMATION_GATE_CONFIRMED_NO_POST` になるが、`post_allowed_this_step=false`、
-  `http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false`、
-  `ledger_updated=false`、`actual_receipt_handoff_executed=false` を維持する。previous-turn confirmation reuse、
-  Step 4 approval phrase reuse、このプロンプトやfresh preflight PASS報告の流用、confirmation actual value exposure、
-  POST/order endpoint/`live_order_once`、ledger、actual receipt、raw/ID/value exposureはfail-closed。
-  今回のStepではgate実装のみで、actual final confirmationは取得していない。次の推奨Stepは
-  **Step 6G-PC-OX-R-FINAL-CONFIRMATION-GATE-RETRY final confirmation acquisition / no POST / no order endpoint /
-  no live_order_once**。実資金Step 6G再試行はまだ不可。
+  reused=false / stale=false / safe summary only）と FINAL-CONFIRMATION-GATE-RETRY CASE 1 PASS（final confirmation
+  received=true / current-turn=true / new=true / one-time=true / reused=false / actual value stored=false / reported=false /
+  logged=false）を前提に、実POST直前の最終ready判定をsafe summaryだけへ閉じる独立gateを追加した。
+  `backend/app/live_verification/live_order_real_one_shot_post_ready_gate_controlled.py` と
+  `backend/app/tests/test_live_verification_live_order_real_one_shot_post_ready_gate_controlled.py`、
+  `docs/STEP6G_ONE_SHOT_POST_READY_GATE_CONTROLLED.md` を追加した。defaultは
+  `ONE_SHOT_POST_READY_GATE_PASSED_NO_POST` で、`ready_gate_passed=true`、
+  `one_shot_post_execution_step_may_be_planned=true` を返せるが、
+  `actual_post_permitted_now=false`、`post_allowed_this_step=false`、`http_post_executed=false`、
+  `order_endpoint_called=false`、`live_order_once_called=false`、`ledger_updated=false`、
+  `attempt_counter_persisted=false`、`actual_receipt_handoff_executed=false` を固定する。
+  missing fresh preflight PASS、missing current-turn/new/one-time final confirmation、confirmation reuse、
+  post guard/final readiness/final exec stack/sanitized result missing、retry allowed、timeout fail-closed missing、
+  POST/order endpoint/`live_order_once`、ledger/attempt counter、actual receipt/handoff、raw/ID/value exposureは
+  fail-closed。ready gate PASSはこのStepでのPOST許可ではなく、次の実POST専用Stepを計画できることだけを意味する。
+  次の推奨Stepは **Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE dedicated real POST step /
+  requires new explicit POST-specific confirmation first**。実資金Step 6G再試行はまだ不可。
+- **Step 6G-PC-OX-R-FINAL-CONFIRMATION-GATE-RETRY final confirmation acquisition完了 / no HTTP POST** —
+  safe final confirmation gateを使い、current-turn / new / one-time / non-reused final confirmationをsafe boolean/statusのみで
+  成立確認した。confirmation actual valueは保存・表示・報告・ログ出力していない。`post_allowed_this_step=false`、
+  `http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false`、`ledger_updated=false`、
+  `attempt_counter_persisted=false`、`actual_receipt_handoff_executed=false` を維持した。
 - **Step 6G-PC-OX-R-FRESH-PREFLIGHT-EXECUTION-RUNTIME-E actual safe fresh preflight execution mode implementation完了 / execute mode implemented / no actual fresh preflight run / no HTTP POST / no final confirmation** —
   FRESH-PREFLIGHT-CHECK-RETRY-2 CASE 3の原因（CLIがadapter summary onlyで、fresh preflightをnew/current/non-reusedとして実行するsafe execution modeが未整備）を解消するため、
   `backend/app/live_verification/live_order_real_fresh_preflight_execution_controlled.py` と
