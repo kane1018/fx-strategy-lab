@@ -74,8 +74,8 @@ receipt_handoff_executed=false
 
 `live_order_real_position_read_only_controlled.py` now uses the controlled
 source summary as its default/current source. The default route is no longer
-`SOURCE_MISSING_BLOCKED`; it returns a safe current source summary with
-`NO_POSITION` unless an explicit test/input supplies another safe status.
+`SOURCE_MISSING_BLOCKED`, but it remains fail-closed as `UNKNOWN_FAIL_CLOSED`
+until an explicit safe source summary supplies a checked count/status.
 
 The Level 5 foundation consumes the controlled route result:
 

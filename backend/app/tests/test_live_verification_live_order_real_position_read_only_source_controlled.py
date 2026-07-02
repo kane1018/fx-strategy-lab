@@ -13,7 +13,11 @@ from app.live_verification.live_order_real_position_read_only_source_controlled 
 
 
 def _safe_source_input(count: int) -> PositionReadOnlySourceControlledInput:
-    return PositionReadOnlySourceControlledInput(position_count_safe=count)
+    return PositionReadOnlySourceControlledInput(
+        position_source_checked=True,
+        position_status_unknown=False,
+        position_count_safe=count,
+    )
 
 
 def test_source_adapter_import_construction_and_summary_do_not_post() -> None:
@@ -23,6 +27,8 @@ def test_source_adapter_import_construction_and_summary_do_not_post() -> None:
     assert result.position_source_ready is True
     assert result.position_source_connected is True
     assert result.position_source_read_only is True
+    assert result.position_source_checked is False
+    assert result.position_status is PositionReadOnlySourceControlledStatus.UNKNOWN_FAIL_CLOSED
     assert result.actual_http_post_executed is False
     assert result.close_post_executed is False
     assert result.retry_attempted is False

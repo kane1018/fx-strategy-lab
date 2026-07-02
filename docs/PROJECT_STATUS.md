@@ -2339,10 +2339,11 @@ backend/app/live_verification/live_order_real_position_read_only_source_controll
 ```
 
 The default/current position route now uses the controlled source summary and
-does not remain blocked only because the source is missing. The connected fields
-are safe labels, booleans, and counts only. Unknown status, source missing,
-multiple positions, or any raw/ID/value exposure attempt still fails closed and
-blocks entry and close planning.
+does not remain blocked only because the source is missing. Without an explicit
+checked source summary, it remains `UNKNOWN_FAIL_CLOSED` and blocks entry and
+close planning. The connected fields are safe labels, booleans, and counts only.
+Unknown status, source missing, multiple positions, or any raw/ID/value
+exposure attempt still fails closed and blocks entry and close planning.
 
 The existing real read-only candidates were identified as
 `backend/scripts/check_private_readonly_connection.py` and

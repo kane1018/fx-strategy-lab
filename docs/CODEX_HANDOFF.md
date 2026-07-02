@@ -2087,6 +2087,8 @@ position route to a controlled sanitized source summary. The current/default
 route no longer remains `SOURCE_MISSING_BLOCKED`; it can consume safe
 `position_count_safe` and `position_status` from
 `live_order_real_position_read_only_source_controlled.py`.
+Without an explicit checked source summary, the default remains
+`UNKNOWN_FAIL_CLOSED` and blocks entry and close planning.
 
 Existing real read-only candidates remain
 `backend/scripts/check_private_readonly_connection.py` and

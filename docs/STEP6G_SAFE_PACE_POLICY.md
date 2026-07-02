@@ -172,7 +172,9 @@ position_count_safe=safe integer only
 The source adapter does not import the Private API client, HTTP client, env
 reader, broker code, order endpoint, ledger writer, receipt handoff, or
 `live_order_once`. It is a safe count/status connection only, not a real runtime
-Private API GET execution.
+Private API GET execution. Without an explicit checked source summary, the
+default current route remains `UNKNOWN_FAIL_CLOSED` and blocks entry and close
+planning.
 
 Recommended next paced step:
 

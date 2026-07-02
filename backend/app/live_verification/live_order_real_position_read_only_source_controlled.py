@@ -38,8 +38,8 @@ class PositionReadOnlySourceControlledInput:
     position_source_ready: bool = True
     position_source_connected: bool = True
     position_source_read_only: bool = True
-    position_source_checked: bool = True
-    position_status_unknown: bool = False
+    position_source_checked: bool = False
+    position_status_unknown: bool = True
     position_count_safe: int = 0
     max_open_positions: int = 1
     raw_response_exposure_attempted: bool = False

@@ -86,20 +86,25 @@ def test_unknown_and_source_missing_fail_closed() -> None:
     assert "position_source_missing" in missing.blocked_reasons
 
 
-def test_default_current_route_uses_connected_source_summary() -> None:
+def test_default_current_route_uses_connected_unknown_source_fail_closed() -> None:
     result = build_position_read_only_controlled()
 
-    assert result.position_status is PositionReadOnlyControlledStatus.NO_POSITION
-    assert result.position_status_checked is True
+    assert result.position_status is PositionReadOnlyControlledStatus.UNKNOWN_FAIL_CLOSED
+    assert result.position_status_checked is False
     assert result.position_count_safe == 0
-    assert result.new_entry_allowed is True
+    assert result.new_entry_allowed is False
     assert result.close_planning_allowed is False
     assert "position_source_missing" not in result.blocked_reasons
+    assert "position_unknown_fail_closed" in result.blocked_reasons
 
 
 def test_current_route_accepts_safe_connected_source_result() -> None:
     source = build_position_read_only_source_controlled(
-        PositionReadOnlySourceControlledInput(position_count_safe=1),
+        PositionReadOnlySourceControlledInput(
+            position_source_checked=True,
+            position_status_unknown=False,
+            position_count_safe=1,
+        ),
     )
 
     result = build_position_read_only_controlled(source_result=source)

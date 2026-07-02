@@ -421,15 +421,15 @@ def test_foundation_connects_position_route_unknown_to_entry_block() -> None:
     assert "entry_requires_no_position" in result.cycle_transition.blocked_reasons
 
 
-def test_foundation_uses_default_connected_position_source_for_no_position() -> None:
+def test_foundation_uses_default_connected_position_source_as_unknown_fail_closed() -> None:
     position_route = build_position_read_only_controlled()
     result = build_level5_fast_mvp_foundation(position_controlled_result=position_route)
 
-    assert result.position_status.position_status is PositionReadOnlyStatus.NO_POSITION
-    assert result.position_status.new_entry_allowed is True
+    assert result.position_status.position_status is PositionReadOnlyStatus.UNKNOWN
+    assert result.position_status.new_entry_allowed is False
     assert result.position_status.close_allowed is False
     assert result.close_route.close_route_ready is False
-    assert "no_position" in result.close_route.blocked_reasons
+    assert "position_unknown" in result.close_route.blocked_reasons
 
 
 def test_foundation_connects_one_position_to_close_planning_only() -> None:

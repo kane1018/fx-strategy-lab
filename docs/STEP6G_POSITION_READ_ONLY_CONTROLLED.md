@@ -61,8 +61,10 @@ summaries and keeps the default route `SOURCE_MISSING_BLOCKED`.
 The follow-up source-connection step added
 `backend/app/live_verification/live_order_real_position_read_only_source_controlled.py`.
 The route now defaults to that controlled sanitized source summary instead of
-remaining `SOURCE_MISSING_BLOCKED`. It still does not import the Private API
-client, HTTP client, env reader, broker code, or scripts directly.
+remaining `SOURCE_MISSING_BLOCKED`. Without an explicit checked source summary,
+the default status is `UNKNOWN_FAIL_CLOSED`, so entry and close planning remain
+blocked. It still does not import the Private API client, HTTP client, env
+reader, broker code, or scripts directly.
 
 The source summary may supply only safe count/status without returning raw
 position objects, broker/API responses, position IDs, account IDs, order IDs,
