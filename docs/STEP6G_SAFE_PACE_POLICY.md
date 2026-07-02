@@ -114,14 +114,15 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-RUNTIME-C, the recommended next
-Step is a retry of the dedicated real POST execution gate using the controlled
-route. The route-ready state is still not POST permission by itself:
+After Step 6G-PC-OX-R-ONE-SHOT-POST-REAL-TRANSPORT-BINDING-C, the recommended
+next Step is a retry of the dedicated real POST execution gate using the
+controlled route and controlled real transport binding. Route-ready and
+binding-ready states are still not POST permission by themselves:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY:
-dedicated real POST gate retry / requires sanitized preview and new
-POST-specific confirmation first
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-2:
+dedicated real POST gate retry / requires sanitized preview, controlled
+binding, and new POST-specific confirmation first
 ```
 
 That Step must not start with POST. It must first show the sanitized executable

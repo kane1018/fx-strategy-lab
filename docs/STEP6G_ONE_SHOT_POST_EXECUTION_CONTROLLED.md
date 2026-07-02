@@ -122,10 +122,13 @@ counters, receive actual receipts, or perform actual receipt handoff.
 
 ## Transport Boundary
 
-The route accepts a transport callable. This implementation does not bind a real
-transport and does not call actual HTTP. Tests use fake transport only.
+The route accepts a transport callable. Step
+6G-PC-OX-R-ONE-SHOT-POST-REAL-TRANSPORT-BINDING-C adds a controlled real
+transport binding contract that can be injected into this route by a later
+dedicated execution gate. The binding default/import/summary/construct paths do
+not POST.
 
-A later `ONE-SHOT-POST-EXECUTION-GATE-RETRY` may pass an approved real transport
+A later `ONE-SHOT-POST-EXECUTION-GATE-RETRY-2` may pass the controlled binding
 only after a new POST-specific explicit confirmation and only if every gate is
 still clean.
 
@@ -180,7 +183,7 @@ This implementation step did not:
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-2
 ```
 
 That step must first show the sanitized preview, then obtain a new

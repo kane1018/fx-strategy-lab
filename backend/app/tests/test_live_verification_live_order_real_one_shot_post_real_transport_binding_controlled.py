@@ -1,0 +1,390 @@
+from __future__ import annotations
+
+from dataclasses import asdict, replace
+
+import pytest
+
+from app.live_verification.live_order_real_one_shot_post_execution_controlled import (
+    LiveOrderRealOneShotPostExecutionControlledStatus,
+    LiveOrderRealOneShotPostTransportInput,
+    LiveOrderRealOneShotPostTransportResult,
+    LiveOrderRealOneShotPostTransportResultCategory,
+    LiveOrderRealPostSpecificConfirmationInput,
+    execute_live_order_real_one_shot_post_execution_controlled,
+    validate_live_order_real_post_specific_confirmation,
+)
+from app.live_verification.live_order_real_one_shot_post_real_transport_binding_controlled import (
+    SAFE_REAL_TRANSPORT_BINDING_LABEL,
+    LiveOrderRealOneShotPostRealTransportBindingControlledInput,
+    LiveOrderRealOneShotPostRealTransportBindingControlledStatus,
+    build_live_order_real_one_shot_post_real_transport_binding_controlled,
+    construct_live_order_real_one_shot_post_real_transport_binding_controlled,
+    render_live_order_real_one_shot_post_real_transport_binding_markdown,
+)
+
+BindingStatus = LiveOrderRealOneShotPostRealTransportBindingControlledStatus
+ExecutionStatus = LiveOrderRealOneShotPostExecutionControlledStatus
+TransportCategory = LiveOrderRealOneShotPostTransportResultCategory
+
+CREDENTIAL_VALUE_SENTINEL = "CREDENTIAL_VALUE_SHOULD_NOT_SURFACE"
+SIGNATURE_VALUE_SENTINEL = "SIGNATURE_VALUE_SHOULD_NOT_SURFACE"
+HEADERS_VALUE_SENTINEL = "HEADERS_VALUE_SHOULD_NOT_SURFACE"
+RAW_REQUEST_SENTINEL = "RAW_REQUEST_SHOULD_NOT_SURFACE"
+RAW_RESPONSE_SENTINEL = "RAW_RESPONSE_SHOULD_NOT_SURFACE"
+BROKER_RESPONSE_SENTINEL = "BROKER_RESPONSE_SHOULD_NOT_SURFACE"
+API_RESPONSE_SENTINEL = "API_RESPONSE_SHOULD_NOT_SURFACE"
+ACCOUNT_ID_SENTINEL = "ACCOUNT_ID_SHOULD_NOT_SURFACE"
+ORDER_ID_SENTINEL = "ORDER_ID_SHOULD_NOT_SURFACE"
+TRANSACTION_ID_SENTINEL = "TRANSACTION_ID_SHOULD_NOT_SURFACE"
+REAL_ID_SENTINEL = "REAL_ID_SHOULD_NOT_SURFACE"
+CONFIRMATION_SENTINEL = "CONFIRMATION_PHRASE_SHOULD_NOT_SURFACE"
+LEDGER_SENTINEL = "LEDGER_STATE_SHOULD_NOT_SURFACE"
+
+
+def _confirmed():
+    return validate_live_order_real_post_specific_confirmation(
+        LiveOrderRealPostSpecificConfirmationInput(
+            post_specific_confirmation_received=True,
+            post_specific_confirmation_current_turn=True,
+            post_specific_confirmation_new=True,
+            post_specific_confirmation_one_time=True,
+        ),
+    )
+
+
+def _transport_result(
+    category: TransportCategory = TransportCategory.TRANSPORT_ACCEPTED_SANITIZED,
+    **overrides: object,
+) -> LiveOrderRealOneShotPostTransportResult:
+    return LiveOrderRealOneShotPostTransportResult(
+        result_category=category,
+        **overrides,
+    )
+
+
+def _available_input() -> LiveOrderRealOneShotPostRealTransportBindingControlledInput:
+    return LiveOrderRealOneShotPostRealTransportBindingControlledInput(
+        approved_primitive_supplied=True,
+    )
+
+
+def test_binding_summary_is_safe_only_and_does_not_post() -> None:
+    summary = build_live_order_real_one_shot_post_real_transport_binding_controlled(
+        _available_input(),
+    )
+    rendered = render_live_order_real_one_shot_post_real_transport_binding_markdown(
+        summary,
+    )
+    payload = repr(asdict(summary))
+
+    assert summary.status is BindingStatus.REAL_TRANSPORT_BINDING_READY_NO_POST
+    assert summary.real_transport_binding_available is True
+    assert summary.real_transport_binding_label == SAFE_REAL_TRANSPORT_BINDING_LABEL
+    assert summary.binding_default_no_execution is True
+    assert summary.binding_import_executes_post is False
+    assert summary.binding_construct_executes_post is False
+    assert summary.binding_summary_executes_post is False
+    assert summary.controlled_executor_required is True
+    assert summary.post_specific_confirmation_required is True
+    assert summary.credential_presence_checked is False
+    assert summary.one_post_max is True
+    assert summary.retry_allowed is False
+    assert summary.timeout_fail_closed is True
+    assert summary.ledger_update_this_step is False
+    assert summary.receipt_handoff_this_step is False
+    assert summary.actual_http_post_executed is False
+    assert summary.post_execution_count == 0
+    assert summary.retry_attempted is False
+    assert summary.second_post_attempted is False
+    assert summary.raw_request_exposed is False
+    assert summary.real_id_exposed is False
+    for forbidden in _FORBIDDEN_SENTINELS:
+        assert forbidden not in rendered
+        assert forbidden not in payload
+
+
+def test_binding_blocks_missing_approved_primitive() -> None:
+    summary = build_live_order_real_one_shot_post_real_transport_binding_controlled()
+
+    assert summary.real_transport_binding_available is False
+    assert summary.status is (
+        BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_MISSING_APPROVED_PRIMITIVE
+    )
+    assert "approved_primitive_missing" in summary.blocked_reasons
+    assert summary.actual_http_post_executed is False
+    assert summary.post_execution_count == 0
+
+
+def test_binding_import_summary_and_construction_do_not_call_primitive() -> None:
+    calls: list[LiveOrderRealOneShotPostTransportInput] = []
+
+    def fake_primitive(input_snapshot: LiveOrderRealOneShotPostTransportInput):
+        calls.append(input_snapshot)
+        return _transport_result()
+
+    summary = build_live_order_real_one_shot_post_real_transport_binding_controlled(
+        _available_input(),
+    )
+    binding = construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+        primitive=fake_primitive,
+    )
+    rendered = render_live_order_real_one_shot_post_real_transport_binding_markdown(
+        summary,
+    )
+
+    assert calls == []
+    assert summary.real_transport_binding_available is True
+    assert binding.summary.real_transport_binding_available is True
+    assert "actual_http_post_executed: false" in rendered
+    assert summary.post_execution_count == 0
+    assert binding.summary.post_execution_count == 0
+
+
+@pytest.mark.parametrize(
+    ("override", "expected_status", "reason"),
+    [
+        (
+            {"primitive_retry_enabled": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_RETRY_ENABLED,
+            "primitive_retry_enabled",
+        ),
+        (
+            {"retry_allowed": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_RETRY_ENABLED,
+            "retry_allowed",
+        ),
+        (
+            {"primitive_timeout_fail_closed": False},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_TIMEOUT_NOT_FAIL_CLOSED,
+            "primitive_timeout_fail_closed_missing",
+        ),
+        (
+            {"primitive_ledger_coupled": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_LEDGER_COUPLED,
+            "primitive_ledger_coupled",
+        ),
+        (
+            {"primitive_receipt_coupled": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_RECEIPT_COUPLED,
+            "primitive_receipt_coupled",
+        ),
+        (
+            {"primitive_raw_exposure": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_RAW_EXPOSURE,
+            "primitive_raw_exposure",
+        ),
+        (
+            {"primitive_id_exposure": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_ID_EXPOSURE,
+            "primitive_id_exposure",
+        ),
+        (
+            {"primitive_value_exposure": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_VALUE_EXPOSURE,
+            "primitive_value_exposure",
+        ),
+        (
+            {"direct_live_order_once": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_DIRECT_LIVE_ORDER_ONCE,
+            "direct_live_order_once",
+        ),
+        (
+            {"direct_order_endpoint": True},
+            BindingStatus.REAL_TRANSPORT_BINDING_BLOCKED_ORDER_ENDPOINT_DIRECT,
+            "direct_order_endpoint",
+        ),
+    ],
+)
+def test_binding_blocks_unsafe_contracts(
+    override: dict[str, object],
+    expected_status: BindingStatus,
+    reason: str,
+) -> None:
+    summary = build_live_order_real_one_shot_post_real_transport_binding_controlled(
+        replace(_available_input(), **override),
+    )
+
+    assert summary.real_transport_binding_available is False
+    assert summary.status is expected_status
+    assert reason in summary.blocked_reasons
+    assert summary.actual_http_post_executed is False
+    assert summary.ledger_updated is False
+    assert summary.actual_receipt_handoff_executed is False
+
+
+def test_blocked_binding_transport_does_not_call_primitive() -> None:
+    calls: list[LiveOrderRealOneShotPostTransportInput] = []
+
+    def fake_primitive(input_snapshot: LiveOrderRealOneShotPostTransportInput):
+        calls.append(input_snapshot)
+        return _transport_result()
+
+    binding = construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+        primitive=fake_primitive,
+        input_snapshot=replace(_available_input(), primitive_retry_enabled=True),
+    )
+    result = execute_live_order_real_one_shot_post_execution_controlled(
+        transport=binding.controlled_transport,
+        confirmation=_confirmed(),
+    )
+
+    assert calls == []
+    assert binding.summary.real_transport_binding_available is False
+    assert result.post_execution_count == 1
+    assert result.status is ExecutionStatus.ONE_SHOT_POST_EXECUTION_BLOCKED_FAILED_FAIL_CLOSED
+    assert result.retry_attempted is False
+    assert result.second_post_attempted is False
+    assert result.ledger_updated is False
+    assert result.actual_receipt_handoff_executed is False
+
+
+def test_controlled_executor_can_use_fake_binding_exactly_once() -> None:
+    calls: list[LiveOrderRealOneShotPostTransportInput] = []
+
+    def fake_primitive(input_snapshot: LiveOrderRealOneShotPostTransportInput):
+        calls.append(input_snapshot)
+        return _transport_result(fake_transport_used=True)
+
+    binding = construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+        primitive=fake_primitive,
+    )
+    result = execute_live_order_real_one_shot_post_execution_controlled(
+        transport=binding.controlled_transport,
+        confirmation=_confirmed(),
+    )
+
+    assert len(calls) == 1
+    assert binding.summary.real_transport_binding_available is True
+    assert result.status is (
+        ExecutionStatus.ONE_SHOT_POST_EXECUTION_TRANSPORT_COMPLETED_SAFE_SUMMARY
+    )
+    assert result.post_execution_count == 1
+    assert result.retry_attempted is False
+    assert result.second_post_attempted is False
+    assert result.http_post_executed is False
+    assert result.ledger_updated is False
+    assert result.actual_receipt_handoff_executed is False
+
+
+@pytest.mark.parametrize(
+    ("category", "expected_status"),
+    [
+        (
+            TransportCategory.TRANSPORT_FAILED_FAIL_CLOSED,
+            ExecutionStatus.ONE_SHOT_POST_EXECUTION_BLOCKED_FAILED_FAIL_CLOSED,
+        ),
+        (
+            TransportCategory.TRANSPORT_UNKNOWN_FAIL_CLOSED,
+            ExecutionStatus.ONE_SHOT_POST_EXECUTION_BLOCKED_UNKNOWN_FAIL_CLOSED,
+        ),
+        (
+            TransportCategory.TRANSPORT_UNAVAILABLE_FAIL_CLOSED,
+            ExecutionStatus.ONE_SHOT_POST_EXECUTION_BLOCKED_UNAVAILABLE_FAIL_CLOSED,
+        ),
+    ],
+)
+def test_fake_binding_failure_unknown_unavailable_maps_to_safe_result(
+    category: TransportCategory,
+    expected_status: ExecutionStatus,
+) -> None:
+    calls: list[LiveOrderRealOneShotPostTransportInput] = []
+
+    def fake_primitive(input_snapshot: LiveOrderRealOneShotPostTransportInput):
+        calls.append(input_snapshot)
+        return _transport_result(category)
+
+    binding = construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+        primitive=fake_primitive,
+    )
+    result = execute_live_order_real_one_shot_post_execution_controlled(
+        transport=binding.controlled_transport,
+        confirmation=_confirmed(),
+    )
+
+    assert len(calls) == 1
+    assert result.status is expected_status
+    assert result.post_execution_count == 1
+    assert result.retry_attempted is False
+    assert result.second_post_attempted is False
+    assert result.raw_request_exposed is False
+    assert result.real_id_exposed is False
+
+
+def test_fake_binding_timeout_maps_to_fail_closed() -> None:
+    calls: list[LiveOrderRealOneShotPostTransportInput] = []
+
+    def fake_primitive(input_snapshot: LiveOrderRealOneShotPostTransportInput):
+        calls.append(input_snapshot)
+        raise TimeoutError
+
+    binding = construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+        primitive=fake_primitive,
+    )
+    result = execute_live_order_real_one_shot_post_execution_controlled(
+        transport=binding.controlled_transport,
+        confirmation=_confirmed(),
+    )
+
+    assert len(calls) == 1
+    assert result.status is ExecutionStatus.ONE_SHOT_POST_EXECUTION_BLOCKED_TIMEOUT_FAIL_CLOSED
+    assert result.post_execution_count == 1
+    assert result.retry_attempted is False
+    assert result.second_post_attempted is False
+
+
+def test_fake_binding_unsafe_result_is_sanitized_without_raw_id_or_value() -> None:
+    calls: list[LiveOrderRealOneShotPostTransportInput] = []
+
+    def fake_primitive(input_snapshot: LiveOrderRealOneShotPostTransportInput):
+        calls.append(input_snapshot)
+        return _transport_result(
+            raw_response_exposed=True,
+            broker_api_response_exposed=True,
+            credential_value_exposed=True,
+            signature_value_exposed=True,
+            headers_value_exposed=True,
+            order_id_exposed=True,
+            ledger_updated=True,
+            actual_receipt_handoff_executed=True,
+        )
+
+    binding = construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+        primitive=fake_primitive,
+    )
+    result = execute_live_order_real_one_shot_post_execution_controlled(
+        transport=binding.controlled_transport,
+        confirmation=_confirmed(),
+    )
+    payload = repr(asdict(result))
+
+    assert len(calls) == 1
+    assert result.status is ExecutionStatus.ONE_SHOT_POST_EXECUTION_BLOCKED_FAILED_FAIL_CLOSED
+    assert result.raw_response_exposed is False
+    assert result.broker_api_response_exposed is False
+    assert result.credential_value_exposed is False
+    assert result.signature_value_exposed is False
+    assert result.headers_value_exposed is False
+    assert result.order_id_exposed is False
+    assert result.ledger_updated is False
+    assert result.actual_receipt_handoff_executed is False
+    assert result.retry_attempted is False
+    assert result.second_post_attempted is False
+    for forbidden in _FORBIDDEN_SENTINELS:
+        assert forbidden not in payload
+
+
+_FORBIDDEN_SENTINELS = (
+    CREDENTIAL_VALUE_SENTINEL,
+    SIGNATURE_VALUE_SENTINEL,
+    HEADERS_VALUE_SENTINEL,
+    RAW_REQUEST_SENTINEL,
+    RAW_RESPONSE_SENTINEL,
+    BROKER_RESPONSE_SENTINEL,
+    API_RESPONSE_SENTINEL,
+    ACCOUNT_ID_SENTINEL,
+    ORDER_ID_SENTINEL,
+    TRANSACTION_ID_SENTINEL,
+    REAL_ID_SENTINEL,
+    CONFIRMATION_SENTINEL,
+    LEDGER_SENTINEL,
+)
