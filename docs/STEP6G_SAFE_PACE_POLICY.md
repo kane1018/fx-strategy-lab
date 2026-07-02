@@ -129,16 +129,17 @@ attempt_counter_persisted=false
 actual_receipt_handoff_executed=false
 ```
 
-The current direction is:
+After the Level 5 fast-track MVP foundation sprint, the current direction is:
 
 ```text
-Step 6G-PC-OX-R-SAFE-SANITIZED-LEDGER-RECEIPT-EXECUTION-GATE
+Step 6G-PC-OX-R-POSITION-READ-ONLY-ROUTE-WIRING-C
 ```
 
-That later Step may only consider a safe ledger-like record or review-only
-receipt summary using sanitized accepted-result facts. It must not perform
-another POST, retry, repost, second POST, raw response lookup, broker/API
-response lookup, ID lookup, credential/signature/header inspection, or real
-broker receipt handoff. If a real broker receipt, account/order/transaction ID,
-or raw response is required, Codex must stop and route the work to a manual
-broker UI check or a closeout gate.
+That later Step may only wire a position read-only source if it can return safe
+booleans/status/counts without exposing raw position IDs, account IDs, order
+IDs, transaction IDs, raw responses, broker/API response values, credentials,
+signatures, or headers. The Level 5 foundation has a contract for signal,
+cycle state, position status, close-route readiness, and 100-unit fixed config,
+but it is not execution permission. It must not perform another POST, close
+POST, retry, repost, second POST, ledger update, attempt counter persistence,
+or actual receipt handoff.

@@ -82,6 +82,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-LEVEL5-FAST-TRACK-MVP-FOUNDATION-C 完了 / no actual POST / no close POST** —
+  Level 5最小MVPへ近づくためのsafe foundationを追加した。
+  `backend/app/live_verification/live_order_real_step6g_level5_fast_mvp_controlled.py` は、safe sanitized
+  ledger-like record、review-only receipt summary、position read-only status、close route foundation、cycle state
+  machine、signal MVP、fast-track configを1 moduleに閉じる。`backend/app/tests/test_live_verification_live_order_real_step6g_level5_fast_mvp_controlled.py`
+  は24 testsで、sanitized accepted record、receipt review-only、position unknown/no/one/multiple、close route no-POST、
+  cycle HALTED/position-check/second-entry prevention、signal ENTRY/EXIT/HOLD/BLOCKED、100 units、max position 1、
+  no retry/repost/second POST、raw/ID/value非露出を確認する。このStepではactual HTTP POST、close POST、order endpoint、
+  `live_order_once`、real broker/private API write、ledger update、attempt counter persistence、actual receipt handoff、
+  raw request/response、broker/API response、real/account/order/transaction ID、credential/signature/headers値の取得・表示・保存は
+  行っていない。runbook: [STEP6G_LEVEL5_FAST_MVP_CONTROLLED.md](STEP6G_LEVEL5_FAST_MVP_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-POSITION-READ-ONLY-ROUTE-WIRING-C**。
 - **Step 6G-PC-OX-R-LEDGER-RECEIPT-PLANNING-AND-SAFE-HANDOFF-SPRINT-C 完了 / no POST / no retry / no ledger execution / no receipt handoff** —
   POST RESULT RECONCILIATION GATE CASE 1を受けて、直前実行Stepのsafe summaryだけを入力にledger/receipt planning gateを実施した。
   直前のone-shot POSTは `post_execution_count=1`、`retry_attempted=false`、`second_post_attempted=false`、
