@@ -114,18 +114,20 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-ONE-SHOT-POST-READY-GATE, the recommended next Step is a
-dedicated real POST execution gate. The ready gate PASS is still not POST
-permission in the current step:
+After Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-RUNTIME-C, the recommended next
+Step is a retry of the dedicated real POST execution gate using the controlled
+route. The route-ready state is still not POST permission by itself:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE:
-dedicated real POST step / requires new POST-specific confirmation first
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY:
+dedicated real POST gate retry / requires sanitized preview and new
+POST-specific confirmation first
 ```
 
-That Step must not start with POST. It must first obtain a new explicit
-POST-specific confirmation and must still keep HTTP POST separated from
-retry/repost, ledger update, actual result receipt, and actual receipt handoff.
+That Step must not start with POST. It must first show the sanitized executable
+order preview, obtain a new explicit POST-specific confirmation, and must still
+keep HTTP POST separated from retry/repost, ledger update, actual result
+receipt, and actual receipt handoff.
 Until that separate step satisfies its own gates, Codex must still avoid env
 value exposure, credential value exposure, signature value exposure, headers
 value exposure, raw request/response exposure, broker/API response exposure,

@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-RUNTIME-C safe one-shot POST execution route implementation完了 / no actual HTTP POST** —
+  ONE-SHOT-POST-EXECUTION-GATE CASE 2（safe one-shot POST execution route と executable sanitized order previewが未確認）を受けて、
+  `backend/app/live_verification/live_order_real_one_shot_post_execution_controlled.py`、
+  `backend/app/tests/test_live_verification_live_order_real_one_shot_post_execution_controlled.py`、
+  `docs/STEP6G_ONE_SHOT_POST_EXECUTION_CONTROLLED.md` を追加した。新規routeはsanitized executable order preview、
+  POST-specific confirmation safe validator、transport注入型one-shot controlled executorを提供する。新規moduleは
+  `live_order_once`、broker/private API、HTTP client、env reader、ledger writer、receipt handoffをimport/callしない。
+  testsではfake transportのみを使い、transport call count=1、no retry、no second POST、timeout/unknown/unavailable/failure
+  fail-closed、ledger/receipt未実行、raw/ID/value非露出を確認する。このStepではactual HTTP POST、order endpoint、
+  `live_order_once`、POST-specific confirmation取得、ledger update、attempt counter persistence、actual receipt handoff、
+  retry/repost、fresh preflight再実行、final confirmation再取得には進んでいない。次の推奨Stepは
+  **Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY**。次Stepでも最初からPOSTせず、safe preview提示後に
+  このCodexセッション内の新しいPOST-specific confirmationを取得してから、条件が揃う場合だけ最大1回のHTTP POSTを検討する。
+  ledger/receipt/retry/repostは引き続き分離必須。
 - **Step 6G-PC-OX-R-ONE-SHOT-POST-READY-GATE implementation / final ready gate before real one-shot POST / no HTTP POST** —
   FRESH-PREFLIGHT-CHECK-RETRY-3 CASE 1 PASS（fresh preflight executed exactly once / PASS / current=true / new=true /
   reused=false / stale=false / safe summary only）と FINAL-CONFIRMATION-GATE-RETRY CASE 1 PASS（final confirmation
