@@ -5697,6 +5697,7 @@ def test_real_api_preflight_safe_route_consolidation_has_no_api_order_dependenci
     "filename",
     [
         "live_order_real_fresh_preflight_execution_controlled.py",
+        "live_order_real_final_confirmation_gate_controlled.py",
         "run_fresh_preflight_execution_controlled.py",
     ],
 )

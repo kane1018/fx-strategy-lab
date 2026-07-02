@@ -82,6 +82,24 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-FINAL-CONFIRMATION-GATE safe final confirmation gate implementation完了 / gate implemented / no actual final confirmation acquired / no HTTP POST** —
+  FRESH-PREFLIGHT-CHECK-RETRY-3 CASE 1 PASS（fresh preflight executed exactly once / PASS / current=true / new=true /
+  reused=false / stale=false / safe summary only）後、final confirmationをnew/current-turn/one-time/non-reusedとして
+  safe summaryだけに写像する独立gateが未整備だったため、
+  `backend/app/live_verification/live_order_real_final_confirmation_gate_controlled.py` と
+  `backend/app/tests/test_live_verification_live_order_real_final_confirmation_gate_controlled.py` を追加し、
+  `docs/STEP6G_FINAL_CONFIRMATION_GATE_CONTROLLED.md` を追加した。defaultは
+  `FINAL_CONFIRMATION_GATE_READY_FOR_REQUEST_NO_POST` で、confirmation phrase actual valueを引数に受け取らず、
+  保存・表示・ログ出力もしない。safe booleanとしてcurrent-turn explicit user reply、
+  confirmation current/new/one-time/non-reuseが揃った場合だけ
+  `FINAL_CONFIRMATION_GATE_CONFIRMED_NO_POST` になるが、`post_allowed_this_step=false`、
+  `http_post_executed=false`、`order_endpoint_called=false`、`live_order_once_called=false`、
+  `ledger_updated=false`、`actual_receipt_handoff_executed=false` を維持する。previous-turn confirmation reuse、
+  Step 4 approval phrase reuse、このプロンプトやfresh preflight PASS報告の流用、confirmation actual value exposure、
+  POST/order endpoint/`live_order_once`、ledger、actual receipt、raw/ID/value exposureはfail-closed。
+  今回のStepではgate実装のみで、actual final confirmationは取得していない。次の推奨Stepは
+  **Step 6G-PC-OX-R-FINAL-CONFIRMATION-GATE-RETRY final confirmation acquisition / no POST / no order endpoint /
+  no live_order_once**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-FRESH-PREFLIGHT-EXECUTION-RUNTIME-E actual safe fresh preflight execution mode implementation完了 / execute mode implemented / no actual fresh preflight run / no HTTP POST / no final confirmation** —
   FRESH-PREFLIGHT-CHECK-RETRY-2 CASE 3の原因（CLIがadapter summary onlyで、fresh preflightをnew/current/non-reusedとして実行するsafe execution modeが未整備）を解消するため、
   `backend/app/live_verification/live_order_real_fresh_preflight_execution_controlled.py` と
