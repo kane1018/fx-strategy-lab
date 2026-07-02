@@ -14,6 +14,10 @@ from dataclasses import dataclass
 from enum import Enum
 
 from app.live_verification.errors import LiveVerificationValidationError
+from app.live_verification.live_order_real_position_read_only_controlled import (
+    PositionReadOnlyControlledResult,
+    PositionReadOnlyControlledStatus,
+)
 from app.live_verification.precheck import SUPPORTED_SYMBOL, SUPPORTED_UNITS
 
 LEVEL5_FAST_MVP_LABEL = "STEP6G_LEVEL5_FAST_MVP_FOUNDATION_CONTROLLED"
@@ -716,6 +720,7 @@ def build_level5_fast_mvp_foundation(
     ledger_input: SafeLedgerLikeRecordInput | None = None,
     receipt_input: ReviewOnlyReceiptSummaryInput | None = None,
     position_input: PositionReadOnlyStatusInput | None = None,
+    position_controlled_result: PositionReadOnlyControlledResult | None = None,
     close_input: CloseRouteFoundationInput | None = None,
     signal_input: Level5SignalMvpInput | None = None,
     cycle_input: Level5CycleTransitionInput | None = None,
@@ -723,13 +728,22 @@ def build_level5_fast_mvp_foundation(
     config = build_level5_fast_track_config(config_input)
     ledger = build_safe_ledger_like_record(ledger_input)
     receipt = build_review_only_receipt_summary(receipt_input)
-    position = build_position_read_only_status(position_input)
+    connected_position_input = position_input or _position_input_from_controlled_route(
+        position_controlled_result,
+    )
+    position = build_position_read_only_status(connected_position_input)
     close = build_close_route_foundation(
         close_input
         or CloseRouteFoundationInput(position_status=position.position_status),
     )
-    signal = evaluate_level5_signal_mvp(signal_input)
-    cycle = transition_level5_cycle_state(cycle_input)
+    signal = evaluate_level5_signal_mvp(
+        signal_input
+        or Level5SignalMvpInput(position_status=position.position_status),
+    )
+    cycle = transition_level5_cycle_state(
+        cycle_input
+        or Level5CycleTransitionInput(position_status=position.position_status),
+    )
     blocked = _foundation_blocked_reasons(config, ledger, receipt, position, signal)
     return Level5FastMvpFoundationResult(
         status=Level5FastMvpStatus.READY if not blocked else Level5FastMvpStatus.BLOCKED,
@@ -1026,6 +1040,44 @@ def _position_check_next_state(
     if position_status is PositionReadOnlyStatus.NO_POSITION:
         return Level5CycleState.HALTED, ("position_missing_after_entry",)
     return Level5CycleState.HALTED, ("position_blocked",)
+
+
+def _position_input_from_controlled_route(
+    result: PositionReadOnlyControlledResult | None,
+) -> PositionReadOnlyStatusInput | None:
+    if result is None:
+        return None
+    if result.position_status is PositionReadOnlyControlledStatus.NO_POSITION:
+        return PositionReadOnlyStatusInput(
+            position_status_checked=result.position_status_checked,
+            open_position_count=0,
+            position_status_unknown=False,
+            position_source_available=True,
+            max_open_positions=result.max_open_positions,
+        )
+    if result.position_status is PositionReadOnlyControlledStatus.ONE_POSITION_OPEN:
+        return PositionReadOnlyStatusInput(
+            position_status_checked=result.position_status_checked,
+            open_position_count=1,
+            position_status_unknown=False,
+            position_source_available=True,
+            max_open_positions=result.max_open_positions,
+        )
+    if result.position_status is PositionReadOnlyControlledStatus.MULTIPLE_POSITIONS_BLOCKED:
+        return PositionReadOnlyStatusInput(
+            position_status_checked=True,
+            open_position_count=max(2, result.position_count_safe),
+            position_status_unknown=False,
+            position_source_available=True,
+            max_open_positions=result.max_open_positions,
+        )
+    return PositionReadOnlyStatusInput(
+        position_status_checked=False,
+        open_position_count=result.position_count_safe,
+        position_status_unknown=True,
+        position_source_available=False,
+        max_open_positions=result.max_open_positions,
+    )
 
 
 def _cycle_result(

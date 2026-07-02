@@ -143,3 +143,17 @@ cycle state, position status, close-route readiness, and 100-unit fixed config,
 but it is not execution permission. It must not perform another POST, close
 POST, retry, repost, second POST, ledger update, attempt counter persistence,
 or actual receipt handoff.
+
+After `Step 6G-PC-OX-R-POSITION-READ-ONLY-ROUTE-WIRING-C`, the route contract is
+implemented as safe status/count only and connected to the Level 5 foundation.
+The real source remains missing by default and must fail closed as
+`SOURCE_MISSING_BLOCKED`. The next paced step is:
+
+```text
+Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C
+```
+
+That source-connection step must still stop before actual POST, close POST,
+retry/repost, ledger update, receipt handoff, raw position objects, broker/API
+responses, position/account/order/transaction IDs, actual price/PnL values,
+credential values, signature values, header values, or `.env` access.

@@ -82,6 +82,16 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-POSITION-READ-ONLY-ROUTE-WIRING-C 完了 / no actual POST / no close POST / source missing fail-closed** —
+  Level 5 fast-track MVP foundationのposition contractを、standalone controlled routeへ分離して接続した。
+  `backend/app/live_verification/live_order_real_position_read_only_controlled.py` はsafe status/countのみを扱い、
+  `NO_POSITION`でentry planningのみ許可、`ONE_POSITION_OPEN`でclose planningのみ許可、multiple/unknown/source missing/
+  raw exposure/ID exposure/value exposure/credential exposureでfail-closedにする。Level 5 moduleはこのroute resultを
+  position status、signal、cycle、close foundationへ接続できる。実sourceはまだ未接続で、defaultは
+  `SOURCE_MISSING_BLOCKED`。actual HTTP POST、close POST、retry/repost、second POST、ledger update、receipt handoff、
+  raw request/response、broker/API response、account/order/transaction/position ID、credential/signature/header値の取得・表示・保存は
+  行っていない。runbook: [STEP6G_POSITION_READ_ONLY_CONTROLLED.md](STEP6G_POSITION_READ_ONLY_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C**。
 - **Step 6G-PC-OX-R-LEVEL5-FAST-TRACK-MVP-FOUNDATION-C 完了 / no actual POST / no close POST** —
   Level 5最小MVPへ近づくためのsafe foundationを追加した。
   `backend/app/live_verification/live_order_real_step6g_level5_fast_mvp_controlled.py` は、safe sanitized

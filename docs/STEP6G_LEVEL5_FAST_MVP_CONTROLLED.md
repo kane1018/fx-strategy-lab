@@ -102,6 +102,20 @@ Rules:
 
 No real position source is wired in this sprint.
 
+Follow-up route wiring:
+
+- `backend/app/live_verification/live_order_real_position_read_only_controlled.py`
+  now provides a standalone safe position read-only route.
+- The Level 5 foundation can consume that route result and map it into the
+  existing position, signal, cycle, and close-route contracts.
+- `NO_POSITION` allows entry planning only.
+- `ONE_POSITION_OPEN` allows close planning only.
+- multiple positions, unknown, source missing, raw exposure, ID exposure, value
+  exposure, or credential exposure block entry and close planning.
+- The real position source is still not connected by default; source missing
+  remains fail-closed.
+- Actual close POST remains prohibited.
+
 ## Close Route Foundation
 
 The close route foundation is a no-POST readiness contract:
@@ -182,10 +196,10 @@ config, no retry/repost/second POST, and raw/ID/value non-exposure.
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-POSITION-READ-ONLY-ROUTE-WIRING-C
+Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C
 ```
 
 That step may only connect a position read-only source if the source can return
 safe status/count fields without raw/ID/value, credential, signature, header, or
-broker/API response exposure. If safe position wiring is not possible, stop and
-keep close execution blocked.
+broker/API response exposure. If safe position source wiring is not possible,
+stop and keep close execution blocked.

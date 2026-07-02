@@ -1,0 +1,108 @@
+# Step 6G Position Read-Only Controlled
+
+This document records `Step 6G-PC-OX-R-POSITION-READ-ONLY-ROUTE-WIRING-C`.
+
+## Purpose
+
+This step adds a controlled position read-only route for the Level 5 fast-track
+MVP. The route handles safe position status/count only:
+
+- `NO_POSITION`
+- `ONE_POSITION_OPEN`
+- `MULTIPLE_POSITIONS_BLOCKED`
+- `UNKNOWN_FAIL_CLOSED`
+- `SOURCE_MISSING_BLOCKED`
+- `RAW_EXPOSURE_BLOCKED`
+- `ID_EXPOSURE_BLOCKED`
+- `VALUE_EXPOSURE_BLOCKED`
+- `CREDENTIAL_UNAVAILABLE_BLOCKED`
+
+It does not execute actual HTTP POST, close POST, retry, repost, second POST,
+ledger update, attempt counter persistence, or receipt handoff.
+
+## Implemented Module
+
+```text
+backend/app/live_verification/live_order_real_position_read_only_controlled.py
+```
+
+The route imports no broker, Private API client, HTTP client, env reader, order
+endpoint, ledger writer, receipt handoff, or `live_order_once` dependency.
+
+## Safe Output
+
+The route returns only safe labels, booleans, and counts:
+
+- `position_status_checked`
+- `position_status`
+- `position_count_safe`
+- `has_open_position`
+- `has_exactly_one_position`
+- `has_multiple_positions`
+- `new_entry_allowed`
+- `close_planning_allowed`
+- `close_execution_allowed_now=false`
+- `max_open_positions=1`
+- raw/ID/value/credential/signature/header/broker response exposure flags fixed false
+
+`NO_POSITION` allows new entry planning and blocks close planning.
+`ONE_POSITION_OPEN` blocks new entry planning and allows close planning only.
+`MULTIPLE_POSITIONS_BLOCKED`, unknown, source missing, or exposure attempts
+block both entry and close planning.
+
+## Source Wiring Decision
+
+Existing read-only candidates exist in the repository, including the sanitized
+preflight contract and Private read-only helper code. This step does not connect
+the real source because doing so would cross into credential/Private API/client
+boundary work. Instead, it implements the contract with fake/safe source
+summaries and keeps the default route `SOURCE_MISSING_BLOCKED`.
+
+The next source-connection step may connect a real read-only source only if it
+can supply safe count/status without returning raw position objects, broker/API
+responses, position IDs, account IDs, order IDs, transaction IDs, prices, PnL,
+credential values, signature values, or header values.
+
+## Level 5 Connection
+
+`backend/app/live_verification/live_order_real_step6g_level5_fast_mvp_controlled.py`
+can consume the controlled route result and map it into the existing Level 5
+position, signal, cycle, and close-route contracts.
+
+Rules:
+
+- position unknown blocks entry and close and can halt the cycle
+- no position blocks close planning
+- one position enables close planning only
+- multiple positions blocks close planning
+- second entry remains blocked when one position is already open
+- close execution is still not implemented or permitted
+
+## Verification
+
+Primary tests:
+
+```text
+python3 -m pytest -q app/tests/test_live_verification_live_order_real_position_read_only_controlled.py
+python3 -m pytest -q app/tests/test_live_verification_live_order_real_step6g_level5_fast_mvp_controlled.py
+python3 -m pytest -q app/tests/test_live_verification_no_order_imports.py
+```
+
+## Next Step
+
+If the contract-only route is sufficient and a real source is still missing:
+
+```text
+Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C
+```
+
+If a safe source is later connected and still returns one position exactly:
+
+```text
+Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C
+```
+
+Both next steps must still prohibit actual POST, close POST, retry/repost,
+ledger update, receipt handoff, raw responses, broker/API responses, IDs,
+credential values, signature values, header values, and `.env` access unless a
+separate explicitly approved Step allows a narrower action.

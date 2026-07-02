@@ -3,6 +3,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from app.live_verification.live_order_real_position_read_only_controlled import (
+    PositionReadOnlyControlledInput,
+    build_position_read_only_controlled,
+)
 from app.live_verification.live_order_real_step6g_level5_fast_mvp_controlled import (
     CloseRouteFoundationInput,
     CloseRouteFoundationStatus,
@@ -391,6 +395,86 @@ def test_foundation_summary_never_executes_post_or_ledger_receipt() -> None:
     assert result.credential_signature_headers_exposure is False
     assert "actual_http_post_executed: false" in rendered
     assert "close_post_executed: false" in rendered
+
+
+def test_foundation_connects_position_route_unknown_to_entry_block() -> None:
+    position_route = build_position_read_only_controlled()
+    result = build_level5_fast_mvp_foundation(
+        position_controlled_result=position_route,
+        cycle_input=Level5CycleTransitionInput(
+            current_state=Level5CycleState.IDLE,
+            entry_signal=True,
+        ),
+    )
+
+    assert result.position_status.position_status is PositionReadOnlyStatus.UNKNOWN
+    assert result.position_status.new_entry_allowed is False
+    assert result.close_route.close_route_ready is False
+    assert result.signal.signal_type is Level5SignalType.BLOCKED
+    assert result.cycle_transition.next_state is Level5CycleState.HALTED
+    assert "entry_requires_no_position" in result.cycle_transition.blocked_reasons
+
+
+def test_foundation_connects_one_position_to_close_planning_only() -> None:
+    position_route = build_position_read_only_controlled(
+        PositionReadOnlyControlledInput(
+            position_source_available=True,
+            position_status_checked=True,
+            position_status_unknown=False,
+            position_count_safe=1,
+        ),
+    )
+    result = build_level5_fast_mvp_foundation(position_controlled_result=position_route)
+
+    assert result.position_status.position_status is PositionReadOnlyStatus.ONE_POSITION_OPEN
+    assert result.position_status.new_entry_allowed is False
+    assert result.position_status.close_allowed is True
+    assert result.close_route.close_route_ready is True
+    assert result.close_route.close_post_executed is False
+    assert result.actual_http_post_executed is False
+    assert result.close_post_executed is False
+
+
+def test_cycle_blocks_second_entry_when_position_route_has_one_position() -> None:
+    position_route = build_position_read_only_controlled(
+        PositionReadOnlyControlledInput(
+            position_source_available=True,
+            position_status_checked=True,
+            position_status_unknown=False,
+            position_count_safe=1,
+        ),
+    )
+    result = build_level5_fast_mvp_foundation(
+        position_controlled_result=position_route,
+        cycle_input=Level5CycleTransitionInput(
+            current_state=Level5CycleState.POSITION_OPEN_SAFE,
+            entry_signal=True,
+            position_status=PositionReadOnlyStatus.ONE_POSITION_OPEN,
+        ),
+    )
+
+    assert result.cycle_transition.next_state is Level5CycleState.HALTED
+    assert result.cycle_transition.retry_allowed is False
+    assert result.cycle_transition.second_post_allowed is False
+    assert "second_entry_blocked" in result.cycle_transition.blocked_reasons
+
+
+def test_foundation_connects_multiple_position_route_to_close_block() -> None:
+    position_route = build_position_read_only_controlled(
+        PositionReadOnlyControlledInput(
+            position_source_available=True,
+            position_status_checked=True,
+            position_status_unknown=False,
+            position_count_safe=2,
+        ),
+    )
+    result = build_level5_fast_mvp_foundation(position_controlled_result=position_route)
+
+    assert result.position_status.position_status is PositionReadOnlyStatus.BLOCKED
+    assert result.position_status.new_entry_allowed is False
+    assert result.position_status.close_allowed is False
+    assert result.close_route.close_route_ready is False
+    assert "position_blocked_or_multiple" in result.close_route.blocked_reasons
 
 
 def test_new_module_import_construct_and_summary_have_no_execution_dependencies() -> None:
