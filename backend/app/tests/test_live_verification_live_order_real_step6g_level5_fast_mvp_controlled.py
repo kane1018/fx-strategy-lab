@@ -429,6 +429,8 @@ def test_foundation_uses_default_connected_position_source_as_unknown_fail_close
     assert result.position_status.new_entry_allowed is False
     assert result.position_status.close_allowed is False
     assert result.close_route.close_route_ready is False
+    assert result.close_order_route.close_planning_allowed is False
+    assert result.close_order_route.close_execution_allowed_now is False
     assert "position_unknown" in result.close_route.blocked_reasons
 
 
@@ -447,6 +449,9 @@ def test_foundation_connects_one_position_to_close_planning_only() -> None:
     assert result.position_status.new_entry_allowed is False
     assert result.position_status.close_allowed is True
     assert result.close_route.close_route_ready is True
+    assert result.close_order_route.close_planning_allowed is True
+    assert result.close_order_route.close_execution_allowed_now is False
+    assert result.close_order_route.close_post_executed is False
     assert result.close_route.close_post_executed is False
     assert result.actual_http_post_executed is False
     assert result.close_post_executed is False
@@ -491,7 +496,66 @@ def test_foundation_connects_multiple_position_route_to_close_block() -> None:
     assert result.position_status.new_entry_allowed is False
     assert result.position_status.close_allowed is False
     assert result.close_route.close_route_ready is False
+    assert result.close_order_route.close_planning_allowed is False
     assert "position_blocked_or_multiple" in result.close_route.blocked_reasons
+
+
+def test_level5_exit_signal_one_position_reaches_close_ready_without_post() -> None:
+    result = build_level5_fast_mvp_foundation(
+        position_input=PositionReadOnlyStatusInput(
+            position_status_checked=True,
+            position_status_unknown=False,
+            position_source_available=True,
+            open_position_count=1,
+        ),
+        cycle_input=Level5CycleTransitionInput(
+            current_state=Level5CycleState.EXIT_SIGNAL,
+            position_status=PositionReadOnlyStatus.ONE_POSITION_OPEN,
+        ),
+    )
+
+    assert result.cycle_transition.next_state is Level5CycleState.CLOSE_READY
+    assert result.close_order_route.close_planning_allowed is True
+    assert result.close_order_route.close_execution_allowed_now is False
+    assert result.close_order_route.close_post_executed is False
+    assert result.close_post_executed is False
+
+
+def test_level5_exit_signal_blocks_unknown_no_position_and_multiple() -> None:
+    unknown = transition_level5_cycle_state(
+        Level5CycleTransitionInput(
+            current_state=Level5CycleState.EXIT_SIGNAL,
+            position_status=PositionReadOnlyStatus.UNKNOWN,
+        ),
+    )
+    no_position = transition_level5_cycle_state(
+        Level5CycleTransitionInput(
+            current_state=Level5CycleState.EXIT_SIGNAL,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+        ),
+    )
+    multiple = transition_level5_cycle_state(
+        Level5CycleTransitionInput(
+            current_state=Level5CycleState.EXIT_SIGNAL,
+            position_status=PositionReadOnlyStatus.BLOCKED,
+        ),
+    )
+
+    for result in (unknown, no_position, multiple):
+        assert result.next_state is Level5CycleState.HALTED
+        assert result.halted is True
+        assert "close_ready_requires_one_position" in result.blocked_reasons
+
+
+def test_level5_close_ready_does_not_reach_close_sent_without_execution_gate() -> None:
+    result = transition_level5_cycle_state(
+        Level5CycleTransitionInput(current_state=Level5CycleState.CLOSE_READY),
+    )
+
+    assert result.next_state is Level5CycleState.CLOSE_READY
+    assert result.next_state is not Level5CycleState.CLOSE_SENT
+    assert result.retry_allowed is False
+    assert result.second_post_allowed is False
 
 
 def test_new_module_import_construct_and_summary_have_no_execution_dependencies() -> None:

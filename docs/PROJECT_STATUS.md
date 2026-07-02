@@ -2354,3 +2354,29 @@ This step does not execute actual HTTP POST, close POST, retry/repost, second
 POST, ledger update, receipt handoff, real runtime Private API GET, or any
 raw response/ID/value exposure. Details:
 [STEP6G_POSITION_READ_ONLY_SOURCE_CONTROLLED.md](STEP6G_POSITION_READ_ONLY_SOURCE_CONTROLLED.md).
+
+## Step 6G Close Order Route Controlled
+
+Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C adds a planning-only close
+order route:
+
+```text
+backend/app/live_verification/live_order_real_close_order_route_controlled.py
+```
+
+Close planning is allowed only when the safe position route reports
+`ONE_POSITION_OPEN`, `position_status_checked=true`, and
+`position_count_safe=1`. Default `UNKNOWN_FAIL_CLOSED`, no position, multiple
+positions, source missing, and exposure-blocked statuses all block close
+planning.
+
+The sealed close instruction is safe-label only: `USD_JPY`, fixed `100`,
+`MARKET`, and `OPPOSITE_OF_SAFE_POSITION_SIDE`. It does not include position
+ID, account ID, order ID, transaction ID, client order ID actual value, raw
+position object, raw request/response, broker/API response, credential value,
+signature value, or header value.
+
+This step does not execute actual close POST, entry POST, retry/repost, second
+POST, ledger update, receipt handoff, runtime Private API writes, or raw/ID/value
+exposure. Details:
+[STEP6G_CLOSE_ORDER_ROUTE_CONTROLLED.md](STEP6G_CLOSE_ORDER_ROUTE_CONTROLLED.md).

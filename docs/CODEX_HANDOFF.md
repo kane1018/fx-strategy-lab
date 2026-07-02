@@ -2109,3 +2109,31 @@ Recommended next step:
 ```text
 Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C
 ```
+
+## Step 6G Close Order Route Controlled Follow-up
+
+Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C adds the planning-only close
+route foundation in
+`backend/app/live_verification/live_order_real_close_order_route_controlled.py`.
+
+Close planning is allowed only for a safe `ONE_POSITION_OPEN` result with
+`position_status_checked=true` and `position_count_safe=1`. Default
+`UNKNOWN_FAIL_CLOSED`, no position, multiple positions, source missing, and
+raw/ID/value/credential exposure blocked statuses all block close planning.
+
+The sealed close instruction is safe-label only: `USD_JPY`, fixed `100`,
+`MARKET`, and `OPPOSITE_OF_SAFE_POSITION_SIDE`. It does not contain position
+ID, order ID, transaction ID, account ID, client order ID actual value, raw
+position, raw request/response, broker/API response, credential value,
+signature value, or header value.
+
+This is not close execution permission. `close_execution_allowed_now=false`,
+`close_post_executed=false`, `close_post_count=0`, `close_retry_allowed=false`,
+`close_repost_allowed=false`, `close_second_post_allowed=false`,
+`ledger_updated=false`, and `receipt_handoff_executed=false`.
+
+Recommended next step:
+
+```text
+Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C
+```

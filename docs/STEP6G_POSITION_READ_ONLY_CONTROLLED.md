@@ -104,7 +104,13 @@ If a safe source returns one position exactly:
 Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C
 ```
 
-Both next steps must still prohibit actual POST, close POST, retry/repost,
-ledger update, receipt handoff, raw responses, broker/API responses, IDs,
-credential values, signature values, header values, and `.env` access unless a
-separate explicitly approved Step allows a narrower action.
+That follow-up has now added a close planning route. It consumes this position
+route result and allows close planning only when the status is
+`ONE_POSITION_OPEN`, checked, and `position_count_safe=1`. Default
+`UNKNOWN_FAIL_CLOSED`, `NO_POSITION`, multiple/source-missing states, and
+exposure-blocked states still block close planning.
+
+Actual POST, close POST, retry/repost, ledger update, receipt handoff, raw
+responses, broker/API responses, IDs, credential values, signature values,
+header values, and `.env` access remain prohibited unless a separate explicitly
+approved Step allows a narrower action.

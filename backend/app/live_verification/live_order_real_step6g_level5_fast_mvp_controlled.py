@@ -14,6 +14,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 from app.live_verification.errors import LiveVerificationValidationError
+from app.live_verification.live_order_real_close_order_route_controlled import (
+    CloseOrderRouteControlledInput,
+    CloseOrderRouteControlledResult,
+    build_close_order_route_controlled,
+)
 from app.live_verification.live_order_real_position_read_only_controlled import (
     PositionReadOnlyControlledResult,
     PositionReadOnlyControlledStatus,
@@ -457,6 +462,7 @@ class Level5FastMvpFoundationResult:
     receipt_summary: ReviewOnlyReceiptSummaryResult
     position_status: PositionReadOnlyStatusResult
     close_route: CloseRouteFoundationResult
+    close_order_route: CloseOrderRouteControlledResult
     signal: Level5SignalMvpResult
     cycle_transition: Level5CycleTransitionResult
     actual_http_post_executed: bool
@@ -722,6 +728,7 @@ def build_level5_fast_mvp_foundation(
     position_input: PositionReadOnlyStatusInput | None = None,
     position_controlled_result: PositionReadOnlyControlledResult | None = None,
     close_input: CloseRouteFoundationInput | None = None,
+    close_order_route_input: CloseOrderRouteControlledInput | None = None,
     signal_input: Level5SignalMvpInput | None = None,
     cycle_input: Level5CycleTransitionInput | None = None,
 ) -> Level5FastMvpFoundationResult:
@@ -735,6 +742,13 @@ def build_level5_fast_mvp_foundation(
     close = build_close_route_foundation(
         close_input
         or CloseRouteFoundationInput(position_status=position.position_status),
+    )
+    close_order_route = build_close_order_route_controlled(
+        close_order_route_input
+        or _close_order_route_input_from_position(
+            position,
+            position_controlled_result,
+        ),
     )
     signal = evaluate_level5_signal_mvp(
         signal_input
@@ -754,6 +768,7 @@ def build_level5_fast_mvp_foundation(
         receipt_summary=receipt,
         position_status=position,
         close_route=close,
+        close_order_route=close_order_route,
         signal=signal,
         cycle_transition=cycle,
         actual_http_post_executed=False,
@@ -811,6 +826,14 @@ def render_level5_fast_mvp_foundation_markdown(
         f"- new_entry_allowed: {_bool_text(result.position_status.new_entry_allowed)}",
         f"- close_allowed: {_bool_text(result.position_status.close_allowed)}",
         f"- close_route_ready: {_bool_text(result.close_route.close_route_ready)}",
+        (
+            "- close_planning_allowed: "
+            f"{_bool_text(result.close_order_route.close_planning_allowed)}"
+        ),
+        (
+            "- close_execution_allowed_now: "
+            f"{_bool_text(result.close_order_route.close_execution_allowed_now)}"
+        ),
         f"- signal_type: {result.signal.signal_type.value}",
         f"- cycle_next_state: {result.cycle_transition.next_state.value}",
         "",
@@ -1077,6 +1100,61 @@ def _position_input_from_controlled_route(
         position_status_unknown=True,
         position_source_available=False,
         max_open_positions=result.max_open_positions,
+    )
+
+
+def _close_order_route_input_from_position(
+    position: PositionReadOnlyStatusResult,
+    controlled_result: PositionReadOnlyControlledResult | None,
+) -> CloseOrderRouteControlledInput:
+    if controlled_result is not None:
+        return CloseOrderRouteControlledInput(
+            position_status=controlled_result.position_status,
+            position_status_checked=controlled_result.position_status_checked,
+            position_count_safe=controlled_result.position_count_safe,
+            max_open_positions=controlled_result.max_open_positions,
+            raw_position_exposure_attempted=controlled_result.raw_position_exposed,
+            broker_api_response_exposure_attempted=(
+                controlled_result.broker_api_response_exposed
+            ),
+            position_id_exposure_attempted=controlled_result.position_id_exposed,
+            account_id_exposure_attempted=controlled_result.account_id_exposed,
+            order_id_exposure_attempted=controlled_result.order_id_exposed,
+            transaction_id_exposure_attempted=(
+                controlled_result.transaction_id_exposed
+            ),
+            credential_value_exposure_attempted=(
+                controlled_result.credential_value_exposed
+            ),
+            signature_value_exposure_attempted=(
+                controlled_result.signature_value_exposed
+            ),
+            headers_value_exposure_attempted=controlled_result.headers_value_exposed,
+            actual_http_post_attempted=controlled_result.actual_http_post_executed,
+            close_post_attempted=controlled_result.close_post_executed,
+            retry_or_repost_attempted=controlled_result.retry_attempted,
+            ledger_update_attempted=controlled_result.ledger_updated,
+            receipt_handoff_attempted=controlled_result.receipt_handoff_executed,
+        )
+    if position.position_status is PositionReadOnlyStatus.NO_POSITION:
+        controlled_status = PositionReadOnlyControlledStatus.NO_POSITION
+    elif position.position_status is PositionReadOnlyStatus.ONE_POSITION_OPEN:
+        controlled_status = PositionReadOnlyControlledStatus.ONE_POSITION_OPEN
+    elif position.position_status is PositionReadOnlyStatus.BLOCKED:
+        controlled_status = PositionReadOnlyControlledStatus.MULTIPLE_POSITIONS_BLOCKED
+    else:
+        controlled_status = PositionReadOnlyControlledStatus.UNKNOWN_FAIL_CLOSED
+    return CloseOrderRouteControlledInput(
+        position_status=controlled_status,
+        position_status_checked=position.position_status_checked,
+        position_count_safe=position.open_position_count_safe,
+        max_open_positions=position.max_open_positions,
+        raw_position_exposure_attempted=position.raw_position_id_exposed,
+        position_id_exposure_attempted=position.raw_position_id_exposed,
+        account_id_exposure_attempted=position.account_id_exposed,
+        order_id_exposure_attempted=position.order_id_exposed,
+        transaction_id_exposure_attempted=position.transaction_id_exposed,
+        position_value_exposure_attempted=position.position_value_exposed,
     )
 
 

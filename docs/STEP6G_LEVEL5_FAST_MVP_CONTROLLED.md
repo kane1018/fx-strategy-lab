@@ -216,3 +216,14 @@ That step may only implement close route planning/foundation behavior. Actual
 close POST, actual entry POST, retry/repost, second POST, ledger update, receipt
 handoff, raw/ID/value exposure, credential/signature/header exposure, and `.env`
 access remain forbidden.
+
+The close route implementation follow-up added a planning-only controlled close
+route. Level 5 now carries `close_order_route` alongside the existing close
+foundation. It allows close planning only for `ONE_POSITION_OPEN` with exactly
+one safe counted position, fixed 100 units, and a safe `MARKET` instruction
+label. Default `UNKNOWN_FAIL_CLOSED`, no position, multiple positions, source
+missing, and exposure-blocked statuses all block close planning.
+
+Actual close POST is still prohibited. `CLOSE_READY` is a planning state only
+and requires a separate close execution gate before any later close execution
+can be considered.

@@ -186,3 +186,28 @@ That close-route step must still prohibit actual entry POST, actual close POST,
 retry/repost, second POST, ledger update, receipt handoff, raw responses,
 broker/API responses, IDs, credential values, signature values, header values,
 and `.env` access.
+
+After `Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C`, the close route is
+implemented as planning-only:
+
+```text
+close_planning_allowed=true only with ONE_POSITION_OPEN and position_count_safe=1
+close_execution_allowed_now=false
+close_post_executed=false
+close_post_count=0
+close_retry_allowed=false
+close_repost_allowed=false
+close_second_post_allowed=false
+```
+
+The sealed close instruction is safe-label only: `USD_JPY`, `100`, `MARKET`,
+and `OPPOSITE_OF_SAFE_POSITION_SIDE`. It does not contain position IDs, order
+IDs, transaction IDs, account IDs, client order ID actual values, raw position
+objects, raw request/response, broker/API responses, credential values,
+signature values, or header values.
+
+Recommended next paced step:
+
+```text
+Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C
+```

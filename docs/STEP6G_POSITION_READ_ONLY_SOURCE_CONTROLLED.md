@@ -116,3 +116,11 @@ That step may implement close route planning and sealed handle design only. It
 must still prohibit actual close POST, actual entry POST, retry/repost, second
 POST, ledger update, receipt handoff, raw responses, broker/API responses, IDs,
 credential values, signature values, header values, and `.env` access.
+
+The close route follow-up is now implemented as planning-only. The next bounded
+step should confirm a current runtime safe position read as status/count before
+any later close execution gate can be considered:
+
+```text
+Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C
+```
