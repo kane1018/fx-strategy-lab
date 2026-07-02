@@ -114,25 +114,31 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-REAL-POST-DELEGATE-RUNNER-MATERIALIZATION-C, the
-recommended next Step is the dedicated one-shot POST execution gate retry. The
-sealed request/body/result mapper, sealed credential/signing provider,
-ledger-free source factory, real delegate connection, materialized real
-delegate runner, and current/default approved primitive actual source route are
-still not POST permission by themselves:
+After Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-9 and the
+post-result reconciliation gate, the one-shot POST result is available only as a
+safe summary:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-9:
-sanitized preview -> time/market/user-monitoring check -> new POST-specific confirmation -> at most one POST
+post_execution_count=1
+retry_attempted=false
+second_post_attempted=false
+sanitized_result_category=RESULT_ACCEPTED_SANITIZED
+safe_reconciliation_status=RECONCILIATION_READY_NO_RECEIPT_HANDOFF
+ledger_updated=false
+attempt_counter_persisted=false
+actual_receipt_handoff_executed=false
 ```
 
-That Step must not start with POST. It must first confirm repository state and
-all prerequisites, show the sanitized executable order preview, confirm the
-trading window, maintenance status, user monitoring availability, and absence
-of important event risk, then obtain a new POST-specific confirmation in the
-current Codex session. Unknown time or market state must stop as CASE 2. It
-must keep credential values, signature values, headers values, raw
-request/response values, broker/API responses, IDs, ledger updates, attempt
-counter persistence, actual receipt handoff, retry, and repost out of scope
-unless a later dedicated step explicitly authorizes one of those separated
-actions.
+The current direction is:
+
+```text
+Step 6G-PC-OX-R-SAFE-SANITIZED-LEDGER-RECEIPT-EXECUTION-GATE
+```
+
+That later Step may only consider a safe ledger-like record or review-only
+receipt summary using sanitized accepted-result facts. It must not perform
+another POST, retry, repost, second POST, raw response lookup, broker/API
+response lookup, ID lookup, credential/signature/header inspection, or real
+broker receipt handoff. If a real broker receipt, account/order/transaction ID,
+or raw response is required, Codex must stop and route the work to a manual
+broker UI check or a closeout gate.

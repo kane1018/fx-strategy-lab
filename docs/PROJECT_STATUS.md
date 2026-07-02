@@ -82,6 +82,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-LEDGER-RECEIPT-PLANNING-AND-SAFE-HANDOFF-SPRINT-C 完了 / no POST / no retry / no ledger execution / no receipt handoff** —
+  POST RESULT RECONCILIATION GATE CASE 1を受けて、直前実行Stepのsafe summaryだけを入力にledger/receipt planning gateを実施した。
+  直前のone-shot POSTは `post_execution_count=1`、`retry_attempted=false`、`second_post_attempted=false`、
+  `sanitized_result_category=RESULT_ACCEPTED_SANITIZED`、
+  `safe_reconciliation_status=RECONCILIATION_READY_NO_RECEIPT_HANDOFF` として扱う。
+  このplanning Stepではactual HTTP POST、retry/repost、second POST、ledger update、attempt counter persistence、
+  actual receipt handoff、raw request/response、broker/API response、real/account/order/transaction ID、
+  credential/signature/headers値の取得・表示・保存は行っていない。safe summaryだけのledger相当記録計画と
+  review-only receipt summary計画は可能。実broker receiptやID付きreceiptが必要ならCodexでは取得せず、
+  manual broker UI checkへ切り離す。追加docs:
+  [STEP6G_POST_RESULT_RECONCILIATION_GATE.md](STEP6G_POST_RESULT_RECONCILIATION_GATE.md)、
+  [STEP6G_LEDGER_RECEIPT_PLANNING_GATE.md](STEP6G_LEDGER_RECEIPT_PLANNING_GATE.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-SAFE-SANITIZED-LEDGER-RECEIPT-EXECUTION-GATE**。
 - **Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C ledger-free POST-only source factory完了 / no actual HTTP POST** —
   SEALED-CREDENTIAL-SIGNING-PROVIDER-C CASE 1（sealed credential/signing/headers provider foundation実装済み）を受けて、
   `backend/app/live_verification/live_order_real_one_shot_post_ledger_free_source_factory_controlled.py`、

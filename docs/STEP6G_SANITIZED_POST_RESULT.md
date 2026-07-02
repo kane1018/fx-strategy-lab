@@ -145,6 +145,29 @@ The contract fails closed for:
 reviewed, non-raw, non-ID-bearing mapping. This step does not receive or parse
 any actual result.
 
+## Post-Execution Accepted Summary
+
+The later one-shot POST execution gate and reconciliation gate supplied the
+accepted result only as a safe summary:
+
+- `post_execution_count=1`
+- `retry_attempted=false`
+- `second_post_attempted=false`
+- `sanitized_result_category=RESULT_ACCEPTED_SANITIZED`
+- `safe_reconciliation_status=RECONCILIATION_READY_NO_RECEIPT_HANDOFF`
+- `ledger_updated=false`
+- `attempt_counter_persisted=false`
+- `actual_receipt_handoff_executed=false`
+- `raw/ID/value exposure=false`
+
+This accepted summary does not contain raw request data, raw response data,
+broker/API response data, account/order/transaction IDs, credential values,
+signature values, header values, or confirmation text.
+
+Ledger/receipt handling remains a separate safe gate. A safe ledger-like record
+or review-only receipt summary may use the sanitized facts above, but a real
+broker receipt or ID-backed receipt must not be fetched or handled by Codex.
+
 ## Internal Wiring
 
 Step 6G internal wiring includes `sanitized_post_result_ready` after
@@ -203,10 +226,10 @@ no `live_order_once`.
 
 Recommended next step:
 
-`Step 6G-PC-OX-R-RESULT-V: sanitized POST result / reconciliation contract boundary review / no API call / no POST / no code change`
+`Step 6G-PC-OX-R-SAFE-SANITIZED-LEDGER-RECEIPT-EXECUTION-GATE`
 
-The next step is review-only. It must not call APIs, execute POST, call order
-endpoints, call `live_order_once`, display raw requests or raw responses,
-display broker/API responses, display IDs, run fresh preflight, run final
-confirmation, update ledgers, hand off actual receipts, or retry Step 6G real
-funds.
+The next step may only consider sanitized accepted-result facts for a safe
+ledger-like record or review-only receipt summary. It must not call APIs,
+execute POST, call order endpoints, call `live_order_once`, display raw
+requests or raw responses, display broker/API responses, display IDs, run fresh
+preflight, run final confirmation, retry/repost, or hand off actual receipts.

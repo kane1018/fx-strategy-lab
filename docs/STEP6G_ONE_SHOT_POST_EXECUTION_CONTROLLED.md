@@ -187,22 +187,38 @@ This implementation step did not:
 
 ## Next Step
 
-Current staged execution next step:
+Post-execution status update:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-8
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-9 executed at most one POST
 ```
 
-That execution gate must not start with POST. It must first show the sanitized
-preview, then obtain a new POST-specific explicit confirmation in the current
-Codex session. Only after that may it consider one HTTP POST through the safe
-route, approved actual source boundary, approved primitive source boundary,
-approved primitive boundary, and controlled binding.
+The result is now carried forward only as safe summary fields:
 
-The next step must still keep these boundaries separate:
+- `post_execution_count=1`
+- `second_post_attempted=false`
+- `retry_attempted=false`
+- `sanitized_result_category=RESULT_ACCEPTED_SANITIZED`
+- `safe_reconciliation_status=RECONCILIATION_READY_NO_RECEIPT_HANDOFF`
+- `ledger_updated=false`
+- `attempt_counter_persisted=false`
+- `actual_receipt_handoff_executed=false`
+- `raw/ID/value exposure=false`
+
+Current staged next step:
+
+```text
+Step 6G-PC-OX-R-SAFE-SANITIZED-LEDGER-RECEIPT-EXECUTION-GATE
+```
+
+That next step must still keep these boundaries separate:
 
 - HTTP POST and retry/repost
 - HTTP POST and ledger update
 - HTTP POST and attempt counter persistence
 - HTTP POST and actual result receipt
 - actual receipt handoff and any future order action
+
+It must not execute another POST, retry, repost, second POST, or fetch raw
+responses, broker/API responses, IDs, credential values, signature values, or
+header values.
