@@ -94,8 +94,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   credential/signature/headers値、raw request/response、broker/API response、ID、client order id actual value、
   ledger stateを出さないこと、fake/monkeypatch delegateだけでexactly-once、no retry、no second POST、
   no ledger/receipt、accepted/rejected/failed/timeout/unknown/unavailable mappingを確認する。
-  `approved_primitive_actual_source_available` はcurrent/default routeでtrue。次の推奨Stepは
-  **Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7**。次Stepでもactual HTTP POSTはsanitized preview提示後の
+  `approved_primitive_actual_source_available` はcurrent/default routeでtrue。後続の
+  REAL-POST-DELEGATE-CONNECTION-Cでdelegate suppliedを接続済み。現推奨Stepは
+  **Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-8**。次Stepでもactual HTTP POSTはsanitized preview提示後の
   新しいPOST-specific confirmationが成立するまで禁止で、ledger/receipt/retry/repostは引き続き分離必須。
 - **Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C sealed credential/signing/headers provider foundation完了 / no actual HTTP POST** —
   SEALED-REQUEST-BODY-RESULT-MAPPER-C CASE 1（sealed request/body/result mapper foundation実装済み）を受けて、
@@ -2251,3 +2252,22 @@ it does not execute POST and does not display or save raw request/response,
 headers, signatures, credentials, or real IDs. Step 6F remains blocked until a
 fresh Step 6E-R2 sanitized preflight exists. Details:
 [STEP6E_SC_SAFE_READONLY_PREFLIGHT_ROUTE_CONSOLIDATION.md](STEP6E_SC_SAFE_READONLY_PREFLIGHT_ROUTE_CONSOLIDATION.md).
+
+## Step 6G Real Delegate Connection
+
+Step 6G-PC-OX-R-REAL-POST-DELEGATE-CONNECTION-C adds the final pre-execution
+delegate connection boundary after the sealed request/body/result mapper,
+sealed credential/signing provider, and ledger-free source factory foundations.
+
+The current/default approved primitive actual source route is delegate-backed,
+`real_post_delegate_ready=true`, `real_post_delegate_supplied_to_factory=true`,
+`source_callable_unavailable_due_missing_delegate=false`, and
+`approved_primitive_actual_source_available=true`.
+
+This is not live execution permission. The step does not execute HTTP POST, does
+not request POST-specific confirmation, does not retry/repost, does not update
+ledger state, does not persist attempt counters, does not hand off receipts, and
+does not expose raw request/response, broker/API response, credential,
+signature, header, account/order/transaction ID, or client order ID values.
+Details:
+[STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md](STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md).

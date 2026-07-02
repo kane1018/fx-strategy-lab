@@ -5917,6 +5917,66 @@ def test_fresh_preflight_execution_adapter_has_no_api_order_dependencies(
             assert _call_name(node) not in blocked_call_names
 
 
+def test_real_delegate_allows_only_post_function_reference_no_call() -> None:
+    path = PACKAGE_ROOT / "live_order_real_one_shot_post_real_delegate_controlled.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    blocked_modules = {
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+        "execute_one_shot_live_order",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+    }
+    blocked_call_names = {
+        "execute_one_shot_live_order",
+        "post_live_order_with_httpx",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+        "read_text",
+        "write_text",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    allowed_function_reference_module = "app.live_verification.live_order_once"
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module == allowed_function_reference_module:
+                assert {alias.name for alias in node.names} == {"post_live_order_with_httpx"}
+            else:
+                assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+        if isinstance(node, ast.Call):
+            assert _call_name(node) not in blocked_call_names
+
+
 def test_live_order_once_allows_only_explicit_one_shot_http_boundary() -> None:
     path = PACKAGE_ROOT / "live_order_once.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))

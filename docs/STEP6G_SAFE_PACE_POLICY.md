@@ -114,14 +114,14 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C, the recommended
-next Step is the dedicated one-shot POST execution gate retry. The sealed
+After Step 6G-PC-OX-R-REAL-POST-DELEGATE-CONNECTION-C, the recommended next
+Step is the dedicated one-shot POST execution gate retry. The sealed
 request/body/result mapper, sealed credential/signing provider, ledger-free
-source factory, and current/default approved primitive actual source route are
-still not POST permission by themselves:
+source factory, real delegate connection, and current/default approved
+primitive actual source route are still not POST permission by themselves:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7:
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-8:
 sanitized preview -> new POST-specific confirmation -> at most one POST
 ```
 

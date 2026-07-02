@@ -85,8 +85,10 @@ The callable:
 - maps timeout, unknown, unavailable, and failed outcomes fail-closed
 - sanitizes any unsafe fake/monkeypatch outcome before it can propagate
 
-The default constructed callable is fail-closed and does not perform real
-transport. Tests use fake/monkeypatch delegates only to verify exactly-once
+The default constructed callable is fail-closed when no delegate is supplied.
+`Step 6G-PC-OX-R-REAL-POST-DELEGATE-CONNECTION-C` adds the controlled delegate
+connection and records whether the source callable is missing a delegate without
+executing POST. Tests use fake/monkeypatch delegates only to verify exactly-once
 connection and safe mapping.
 
 ## Current/Default Route
@@ -99,8 +101,8 @@ build_current_live_order_real_one_shot_post_approved_primitive_actual_source_con
 construct_current_live_order_real_one_shot_post_approved_primitive_actual_source_controlled()
 ```
 
-These helpers lazily connect the ledger-free factory path to the approved
-primitive actual source boundary without executing POST.
+These helpers lazily connect the delegate-backed ledger-free factory path to the
+approved primitive actual source boundary without executing POST.
 
 ## What This Step Did Not Do
 
@@ -126,7 +128,7 @@ This implementation step did not:
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-8
 ```
 
 That later step must still start by confirming repository state and

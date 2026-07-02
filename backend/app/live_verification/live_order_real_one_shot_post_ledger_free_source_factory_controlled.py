@@ -128,6 +128,8 @@ class LiveOrderRealOneShotPostLedgerFreeSourceFactoryControlledInput:
     factory_requires_safe_result_mapper: bool = True
     factory_requires_post_specific_confirmation: bool = True
     factory_produces_controlled_source_callable: bool = True
+    source_delegate_supplied: bool = False
+    source_callable_unavailable_due_missing_delegate: bool = True
     sealed_request_model_ready: bool = True
     sealed_body_builder_ready: bool = True
     safe_result_mapper_ready: bool = True
@@ -187,6 +189,8 @@ class LiveOrderRealOneShotPostLedgerFreeSourceFactoryControlledResult:
     factory_requires_safe_result_mapper: bool
     factory_requires_post_specific_confirmation: bool
     factory_produces_controlled_source_callable: bool
+    source_delegate_supplied: bool
+    source_callable_unavailable_due_missing_delegate: bool
     sealed_request_model_ready: bool
     sealed_body_builder_ready: bool
     safe_result_mapper_ready: bool
@@ -323,6 +327,10 @@ def build_live_order_real_one_shot_post_ledger_free_source_factory_controlled(
         factory_produces_controlled_source_callable=(
             snapshot.factory_produces_controlled_source_callable and ready
         ),
+        source_delegate_supplied=snapshot.source_delegate_supplied and ready,
+        source_callable_unavailable_due_missing_delegate=(
+            snapshot.source_callable_unavailable_due_missing_delegate and ready
+        ),
         sealed_request_model_ready=snapshot.sealed_request_model_ready and ready,
         sealed_body_builder_ready=snapshot.sealed_body_builder_ready and ready,
         safe_result_mapper_ready=snapshot.safe_result_mapper_ready and ready,
@@ -401,6 +409,13 @@ def construct_live_order_real_one_shot_post_ledger_free_source_factory_controlle
     ) = None,
 ) -> LiveOrderRealOneShotPostLedgerFreeSourceFactory:
     """Construct the factory and approved actual-source boundary without POST."""
+    if source_delegate is not None:
+        input_snapshot = replace(
+            input_snapshot
+            or LiveOrderRealOneShotPostLedgerFreeSourceFactoryControlledInput(),
+            source_delegate_supplied=True,
+            source_callable_unavailable_due_missing_delegate=False,
+        )
     summary = build_live_order_real_one_shot_post_ledger_free_source_factory_controlled(
         input_snapshot=input_snapshot,
         sealed_request_result=sealed_request_result,
@@ -544,6 +559,11 @@ def render_live_order_real_one_shot_post_ledger_free_source_factory_markdown(
         (
             "- factory_produces_controlled_source_callable: "
             f"{_bool_text(result.factory_produces_controlled_source_callable)}"
+        ),
+        f"- source_delegate_supplied: {_bool_text(result.source_delegate_supplied)}",
+        (
+            "- source_callable_unavailable_due_missing_delegate: "
+            f"{_bool_text(result.source_callable_unavailable_due_missing_delegate)}"
         ),
         (
             "- approved_primitive_actual_source_available: "
@@ -1240,6 +1260,8 @@ _LEDGER_FREE_SOURCE_FACTORY_INPUT_BOOL_FIELDS = (
     "factory_requires_safe_result_mapper",
     "factory_requires_post_specific_confirmation",
     "factory_produces_controlled_source_callable",
+    "source_delegate_supplied",
+    "source_callable_unavailable_due_missing_delegate",
     "sealed_request_model_ready",
     "sealed_body_builder_ready",
     "safe_result_mapper_ready",
@@ -1285,6 +1307,8 @@ _LEDGER_FREE_SOURCE_FACTORY_RESULT_BOOL_FIELDS = (
     "factory_requires_safe_result_mapper",
     "factory_requires_post_specific_confirmation",
     "factory_produces_controlled_source_callable",
+    "source_delegate_supplied",
+    "source_callable_unavailable_due_missing_delegate",
     "sealed_request_model_ready",
     "sealed_body_builder_ready",
     "safe_result_mapper_ready",

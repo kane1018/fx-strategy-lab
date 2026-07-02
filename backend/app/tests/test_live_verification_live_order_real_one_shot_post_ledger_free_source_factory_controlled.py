@@ -161,6 +161,8 @@ def test_factory_summary_is_safe_only_and_connects_current_route() -> None:
     assert result.factory_requires_safe_result_mapper is True
     assert result.factory_requires_post_specific_confirmation is True
     assert result.factory_produces_controlled_source_callable is True
+    assert result.source_delegate_supplied is False
+    assert result.source_callable_unavailable_due_missing_delegate is True
     assert result.approved_primitive_actual_source_available is True
     assert result.actual_http_post_executed is False
     assert result.post_execution_count == 0
@@ -461,6 +463,8 @@ def test_factory_construction_and_default_source_do_not_post() -> None:
 
     assert factory.summary.ledger_free_post_only_source_factory_ready is True
     assert factory.summary.approved_primitive_actual_source_available is True
+    assert factory.summary.source_delegate_supplied is False
+    assert factory.summary.source_callable_unavailable_due_missing_delegate is True
     assert factory.approved_primitive_actual_source.summary.approved_primitive_actual_source_available is True  # noqa: E501
     assert default_result.result_category is (
         TransportCategory.TRANSPORT_UNAVAILABLE_FAIL_CLOSED
@@ -487,6 +491,8 @@ def test_controlled_source_callable_with_fake_transport_is_called_exactly_once()
     assert len(calls) == 1
     assert factory.summary.ledger_free_post_only_source_factory_ready is True
     assert factory.summary.approved_primitive_actual_source_available is True
+    assert factory.summary.source_delegate_supplied is True
+    assert factory.summary.source_callable_unavailable_due_missing_delegate is False
     assert source_boundary.summary.approved_primitive_source_available is True
     assert approved.summary.approved_primitive_available is True
     assert binding.summary.real_transport_binding_available is True

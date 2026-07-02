@@ -131,12 +131,13 @@ gate. The actual source, source, approved primitive, and binding
 default/import/summary/construct paths do not POST.
 
 The current/default approved primitive actual source route is now supplied by
-`Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C`, after the sealed
-request/body/result mapper and sealed credential/signing provider foundations.
-That factory connection is still not execution permission. A later dedicated
-execution gate may pass the controlled binding only after a new POST-specific
-explicit confirmation and only if every gate is still clean. Previous
-POST-specific confirmation text is not reusable.
+the delegate-backed ledger-free source factory, after the sealed
+request/body/result mapper, sealed credential/signing provider foundation, and
+`Step 6G-PC-OX-R-REAL-POST-DELEGATE-CONNECTION-C`. That delegate connection is
+still not execution permission. A later dedicated execution gate may pass the
+controlled binding only after a new POST-specific explicit confirmation and
+only if every gate is still clean. Previous POST-specific confirmation text is
+not reusable.
 
 ## Result Mapping
 
@@ -189,7 +190,7 @@ This implementation step did not:
 Current staged execution next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-8
 ```
 
 That execution gate must not start with POST. It must first show the sanitized

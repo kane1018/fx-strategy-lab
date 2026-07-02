@@ -374,12 +374,12 @@ def build_current_live_order_real_one_shot_post_approved_primitive_actual_source
 
 def construct_current_live_order_real_one_shot_post_approved_primitive_actual_source_controlled(
 ) -> LiveOrderRealOneShotPostApprovedPrimitiveActualSource:
-    """Connect the ledger-free factory current/default source without POST."""
-    from app.live_verification.live_order_real_one_shot_post_ledger_free_source_factory_controlled import (  # noqa: E501
-        construct_live_order_real_one_shot_post_ledger_free_approved_actual_source_controlled,
+    """Connect the delegate-backed current/default source without POST."""
+    from app.live_verification.live_order_real_one_shot_post_real_delegate_controlled import (  # noqa: E501
+        construct_live_order_real_one_shot_post_real_delegate_approved_actual_source_controlled,
     )
 
-    return construct_live_order_real_one_shot_post_ledger_free_approved_actual_source_controlled()
+    return construct_live_order_real_one_shot_post_real_delegate_approved_actual_source_controlled()
 
 
 def render_live_order_real_one_shot_post_approved_primitive_actual_source_markdown(

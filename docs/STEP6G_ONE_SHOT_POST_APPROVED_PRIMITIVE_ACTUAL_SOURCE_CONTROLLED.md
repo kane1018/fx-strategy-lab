@@ -162,7 +162,7 @@ This implementation step did not:
 Current staged refactor direction:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-8
 ```
 
 The sealed request/body/result mapper foundation is implemented separately in
@@ -170,12 +170,15 @@ The sealed request/body/result mapper foundation is implemented separately in
 credential/signing/header provider foundation is implemented separately in
 `docs/STEP6G_ONE_SHOT_POST_SEALED_CREDENTIAL_SIGNING_CONTROLLED.md`. The
 ledger-free POST-only source factory is implemented separately in
-`docs/STEP6G_ONE_SHOT_POST_LEDGER_FREE_SOURCE_FACTORY_CONTROLLED.md` and makes
-the current/default approved primitive actual source route available without
-POST. The next Step may retry the dedicated execution gate, but it must still
-not start with POST, reuse any previous POST-specific confirmation, expose
-credential/signature/header values, expose raw request/response values, expose
-IDs, update ledger state, hand off receipts, retry, or repost.
+`docs/STEP6G_ONE_SHOT_POST_LEDGER_FREE_SOURCE_FACTORY_CONTROLLED.md`. The real
+delegate connection is implemented separately in
+`docs/STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md`, and the
+current/default approved primitive actual source route is now delegate-backed
+without executing POST. The next Step may retry the dedicated execution gate,
+but it must still not start with POST, reuse any previous POST-specific
+confirmation, expose credential/signature/header values, expose raw
+request/response values, expose IDs, update ledger state, hand off receipts,
+retry, or repost.
 
 A later dedicated POST execution gate must still first confirm repository state
 and prerequisites, show the sanitized executable order preview, then obtain a
