@@ -7,9 +7,10 @@ It is not POST execution and does not request POST-specific confirmation.
 
 `backend/app/live_verification/live_order_real_one_shot_post_real_delegate_controlled.py`
 adds a controlled delegate contract for the existing
-`post_live_order_with_httpx` primitive. The primitive is used only as a function
-reference boundary. Import, construction, summary rendering, delegate supply,
-factory construction, and source callable construction do not call it.
+`post_live_order_with_httpx` primitive. The primitive is kept behind a lazy
+runner boundary. Import, construction, summary rendering, runner
+materialization, delegate supply, factory construction, and source callable
+construction do not call it.
 
 The delegate connection records only safe booleans, statuses, labels, and
 categories:
@@ -23,6 +24,14 @@ categories:
 - `delegate_requires_post_specific_confirmation=true`
 - `delegate_supplied_to_factory=true`
 - `source_callable_unavailable_due_missing_delegate=false`
+- `real_post_delegate_runner_materialized=true`
+- `real_post_delegate_runner_supplied=true`
+- `delegate_runner_missing=false`
+- `source_callable_unavailable_due_missing_runner=false`
+- `runner_default_no_execution=true`
+- `runner_materialization_executes_post=false`
+- `runner_supply_executes_post=false`
+- `runner_requires_post_specific_confirmation=true`
 - `actual_post_allowed=false`
 
 ## Factory Connection
@@ -34,8 +43,10 @@ to the controlled source callable:
 - `source_callable_unavailable_due_missing_delegate`
 
 The current/default approved primitive actual source route uses the
-delegate-backed factory construction. This removes the previous missing delegate
-blocker without executing POST.
+delegate-backed factory construction. The runner is materialized in the
+current/default route, but it is still only reachable through the existing
+execution controller after a later POST-specific confirmation. This removes the
+previous missing delegate and missing runner blockers without executing POST.
 
 ## Safety Guarantees
 
@@ -57,6 +68,14 @@ Fake/monkeypatch tests verify the delegate can be invoked exactly once through
 the controlled executor path, maps safe accepted/rejected/fail-closed categories
 through the existing safe result mapper, and does not retry or perform a second
 POST.
+
+Additional fake/monkeypatch tests verify:
+
+- runner materialization does not call `post_live_order_with_httpx`
+- POST-specific confirmation missing keeps the runner uncalled
+- a fake authorized execution calls the fake post reference exactly once
+- timeout, failed, unknown, unavailable, accepted, and rejected outcomes remain
+  safe summaries
 
 ## What This Step Did Not Do
 
@@ -82,7 +101,7 @@ This implementation step did not:
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-8
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-9
 ```
 
 That later step must first confirm repository state and prerequisites, show the
@@ -90,3 +109,11 @@ sanitized executable order preview, and obtain a new POST-specific explicit
 confirmation in the current Codex session before any one-shot POST can be
 considered. Ledger update, attempt counter persistence, actual receipt handoff,
 retry, and repost remain separate and forbidden.
+
+Before any POST in that later step, the operator-facing gate must also confirm:
+
+- current time is inside the intended trading window
+- broker maintenance window is not active
+- the user can monitor the screen during and immediately after the action
+- no important scheduled event or major market event is imminent or just passed
+- if time or market state is unknown, stop as CASE 2 without POST

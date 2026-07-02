@@ -31,7 +31,7 @@ SAFE_REAL_POST_DELEGATE_LABEL = "CONTROLLED_REAL_POST_DELEGATE_REFERENCE"
 SAFE_REAL_POST_DELEGATE_SOURCE_LABEL = "CONTROLLED_REAL_POST_DELEGATE_SOURCE"
 UNSUPPORTED_REAL_POST_DELEGATE_LABEL = "UNSUPPORTED_REDACTED"
 REAL_POST_DELEGATE_RECOMMENDED_NEXT_STEP = (
-    "one_shot_post_execution_gate_retry_8_requires_new_post_specific_confirmation"
+    "one_shot_post_execution_gate_retry_9_requires_time_market_and_new_post_confirmation"
 )
 REAL_POST_DELEGATE_BLOCKED_NEXT_STEP = "fix_real_post_delegate_connection_no_post"
 
@@ -66,6 +66,29 @@ RealPostDelegate = Callable[
     LiveOrderRealOneShotPostTransportResult,
 ]
 PostFunctionReference = Callable[..., object]
+CredentialLookup = Callable[[str], str | None]
+TimestampFactory = Callable[[], str]
+ClientOrderIdFactory = Callable[[], str]
+
+
+class _SealedRealPostRunnerMaterial:
+    __slots__ = ("body_serialization", "endpoint_url", "sensitive_headers")
+
+    def __init__(
+        self,
+        *,
+        endpoint_url: str,
+        body_serialization: str,
+        sensitive_headers: object,
+    ) -> None:
+        self.endpoint_url = endpoint_url
+        self.body_serialization = body_serialization
+        self.sensitive_headers = sensitive_headers
+
+    def __repr__(self) -> str:
+        return "_SealedRealPostRunnerMaterial(<redacted>)"
+
+    __str__ = __repr__
 
 
 @dataclass(frozen=True)
@@ -87,6 +110,17 @@ class LiveOrderRealOneShotPostRealDelegateControlledInput:
     delegate_supplied_to_factory: bool = True
     factory_produces_controlled_source_callable: bool = True
     source_callable_unavailable_due_missing_delegate: bool = False
+    real_post_delegate_runner_materialized: bool = True
+    real_post_delegate_runner_supplied: bool = True
+    delegate_runner_missing: bool = False
+    source_callable_unavailable_due_missing_runner: bool = False
+    runner_default_no_execution: bool = True
+    runner_import_executes_post: bool = False
+    runner_construct_executes_post: bool = False
+    runner_summary_executes_post: bool = False
+    runner_materialization_executes_post: bool = False
+    runner_supply_executes_post: bool = False
+    runner_requires_post_specific_confirmation: bool = True
     actual_post_allowed: bool = False
     retry_allowed: bool = False
     ledger_update_allowed: bool = False
@@ -140,6 +174,17 @@ class LiveOrderRealOneShotPostRealDelegateControlledResult:
     factory_produces_controlled_source_callable: bool
     approved_primitive_actual_source_available: bool
     source_callable_unavailable_due_missing_delegate: bool
+    real_post_delegate_runner_materialized: bool
+    real_post_delegate_runner_supplied: bool
+    delegate_runner_missing: bool
+    source_callable_unavailable_due_missing_runner: bool
+    runner_default_no_execution: bool
+    runner_import_executes_post: bool
+    runner_construct_executes_post: bool
+    runner_summary_executes_post: bool
+    runner_materialization_executes_post: bool
+    runner_supply_executes_post: bool
+    runner_requires_post_specific_confirmation: bool
     actual_post_allowed: bool
     retry_allowed: bool
     ledger_update_allowed: bool
@@ -252,6 +297,27 @@ def build_live_order_real_one_shot_post_real_delegate_controlled(
         source_callable_unavailable_due_missing_delegate=(
             snapshot.source_callable_unavailable_due_missing_delegate and ready
         ),
+        real_post_delegate_runner_materialized=(
+            snapshot.real_post_delegate_runner_materialized and ready
+        ),
+        real_post_delegate_runner_supplied=(
+            snapshot.real_post_delegate_runner_supplied and ready
+        ),
+        delegate_runner_missing=snapshot.delegate_runner_missing and ready,
+        source_callable_unavailable_due_missing_runner=(
+            snapshot.source_callable_unavailable_due_missing_runner and ready
+        ),
+        runner_default_no_execution=snapshot.runner_default_no_execution,
+        runner_import_executes_post=snapshot.runner_import_executes_post,
+        runner_construct_executes_post=snapshot.runner_construct_executes_post,
+        runner_summary_executes_post=snapshot.runner_summary_executes_post,
+        runner_materialization_executes_post=(
+            snapshot.runner_materialization_executes_post
+        ),
+        runner_supply_executes_post=snapshot.runner_supply_executes_post,
+        runner_requires_post_specific_confirmation=(
+            snapshot.runner_requires_post_specific_confirmation
+        ),
         actual_post_allowed=False,
         retry_allowed=False,
         ledger_update_allowed=False,
@@ -287,10 +353,19 @@ def build_live_order_real_one_shot_post_real_delegate_controlled(
 def construct_live_order_real_one_shot_post_real_delegate_controlled(
     *,
     source_delegate: RealPostDelegate | None = None,
+    post_function_reference: PostFunctionReference | None = None,
+    credential_lookup: CredentialLookup | None = None,
+    timestamp_factory: TimestampFactory | None = None,
+    client_order_id_factory: ClientOrderIdFactory | None = None,
     input_snapshot: LiveOrderRealOneShotPostRealDelegateControlledInput | None = None,
 ) -> LiveOrderRealOneShotPostRealDelegateConnection:
     """Construct the delegate-backed factory path without executing POST."""
-    delegate = source_delegate or make_live_order_real_one_shot_post_real_delegate()
+    delegate = source_delegate or make_live_order_real_one_shot_post_real_delegate(
+        post_function_reference=post_function_reference,
+        credential_lookup=credential_lookup,
+        timestamp_factory=timestamp_factory,
+        client_order_id_factory=client_order_id_factory,
+    )
     factory = construct_live_order_real_one_shot_post_ledger_free_source_factory_controlled(
         source_delegate=delegate,
     )
@@ -317,22 +392,23 @@ def make_live_order_real_one_shot_post_real_delegate(
     *,
     delegate_runner: RealPostDelegate | None = None,
     post_function_reference: PostFunctionReference | None = None,
+    credential_lookup: CredentialLookup | None = None,
+    timestamp_factory: TimestampFactory | None = None,
+    client_order_id_factory: ClientOrderIdFactory | None = None,
 ) -> RealPostDelegate:
-    """Create a controlled delegate reference; default path does not POST."""
-    post_reference_available = post_function_reference is not None
+    """Create a controlled delegate runner; construction never executes POST."""
+    runner = delegate_runner or _make_materialized_real_post_delegate_runner(
+        post_function_reference=post_function_reference,
+        credential_lookup=credential_lookup,
+        timestamp_factory=timestamp_factory,
+        client_order_id_factory=client_order_id_factory,
+    )
 
     def controlled_delegate(
         input_snapshot: LiveOrderRealOneShotPostTransportInput,
     ) -> LiveOrderRealOneShotPostTransportResult:
-        if delegate_runner is None:
-            _ = input_snapshot
-            _ = post_reference_available
-            return _safe_transport_result(
-                TransportCategory.TRANSPORT_UNAVAILABLE_FAIL_CLOSED,
-                unavailable=True,
-            )
         try:
-            delegate_result = delegate_runner(input_snapshot)
+            delegate_result = runner(input_snapshot)
         except TimeoutError:
             return _safe_transport_result(
                 TransportCategory.TRANSPORT_TIMEOUT_FAIL_CLOSED,
@@ -364,6 +440,178 @@ def make_live_order_real_one_shot_post_real_delegate(
         )
 
     return controlled_delegate
+
+
+def _make_materialized_real_post_delegate_runner(
+    *,
+    post_function_reference: PostFunctionReference | None = None,
+    credential_lookup: CredentialLookup | None = None,
+    timestamp_factory: TimestampFactory | None = None,
+    client_order_id_factory: ClientOrderIdFactory | None = None,
+) -> RealPostDelegate:
+    """Materialize the future real runner without invoking it during setup."""
+
+    def materialized_runner(
+        input_snapshot: LiveOrderRealOneShotPostTransportInput,
+    ) -> LiveOrderRealOneShotPostTransportResult:
+        try:
+            material = _build_sealed_real_post_runner_material(
+                input_snapshot,
+                credential_lookup=credential_lookup or _default_credential_lookup,
+                timestamp_factory=timestamp_factory or _default_timestamp_factory,
+                client_order_id_factory=(
+                    client_order_id_factory or _default_client_order_id_factory
+                ),
+            )
+        except Exception:
+            return _safe_transport_result(
+                TransportCategory.TRANSPORT_UNAVAILABLE_FAIL_CLOSED,
+                fake_transport_used=False,
+                unavailable=True,
+            )
+
+        post_reference = post_function_reference or resolve_post_live_order_with_httpx_reference()
+        try:
+            response = post_reference(
+                material.endpoint_url,
+                material.body_serialization,
+                material.sensitive_headers,
+            )
+        except TimeoutError:
+            return _safe_transport_result(
+                TransportCategory.TRANSPORT_TIMEOUT_FAIL_CLOSED,
+                fake_transport_used=False,
+                http_post_executed=True,
+                timeout=True,
+            )
+        except Exception:
+            return _safe_transport_result(
+                TransportCategory.TRANSPORT_UNKNOWN_FAIL_CLOSED,
+                fake_transport_used=False,
+                http_post_executed=True,
+                unknown=True,
+            )
+        return _safe_result_from_live_transport_response(response)
+
+    return materialized_runner
+
+
+def _build_sealed_real_post_runner_material(
+    input_snapshot: LiveOrderRealOneShotPostTransportInput,
+    *,
+    credential_lookup: CredentialLookup,
+    timestamp_factory: TimestampFactory,
+    client_order_id_factory: ClientOrderIdFactory,
+) -> _SealedRealPostRunnerMaterial:
+    from app.live_verification.live_order_once import (
+        LIVE_ORDER_ENDPOINT_URL,
+        LIVE_ORDER_EXECUTION_TYPE,
+        LIVE_ORDER_SIZE,
+        _build_sensitive_headers,
+        build_live_order_outbound_body,
+        serialize_live_order_body_for_signing,
+    )
+    from app.live_verification.live_order_real_credential_presence_controlled import (
+        _CONTROLLED_LABEL_TO_ENV_NAME,
+        DEFAULT_REQUIRED_CREDENTIAL_LABELS,
+    )
+
+    if input_snapshot.order_type != LIVE_ORDER_EXECUTION_TYPE:
+        raise LiveVerificationValidationError("order type is not supported")
+    if str(input_snapshot.size) != LIVE_ORDER_SIZE:
+        raise LiveVerificationValidationError("order size is not supported")
+    api_key = _lookup_required_credential(
+        DEFAULT_REQUIRED_CREDENTIAL_LABELS[0],
+        credential_lookup=credential_lookup,
+        label_to_env_name=_CONTROLLED_LABEL_TO_ENV_NAME,
+    )
+    api_secret = _lookup_required_credential(
+        DEFAULT_REQUIRED_CREDENTIAL_LABELS[1],
+        credential_lookup=credential_lookup,
+        label_to_env_name=_CONTROLLED_LABEL_TO_ENV_NAME,
+    )
+    timestamp = timestamp_factory()
+    client_order_id = client_order_id_factory()
+    body = build_live_order_outbound_body(
+        side=input_snapshot.side,
+        client_order_id=client_order_id,
+    )
+    body_serialization = serialize_live_order_body_for_signing(body)
+    sensitive_headers = _build_sensitive_headers(
+        api_key=api_key,
+        api_secret=api_secret,
+        timestamp=timestamp,
+        body_serialization=body_serialization,
+    )
+    return _SealedRealPostRunnerMaterial(
+        endpoint_url=LIVE_ORDER_ENDPOINT_URL,
+        body_serialization=body_serialization,
+        sensitive_headers=sensitive_headers,
+    )
+
+
+def _lookup_required_credential(
+    safe_label: str,
+    *,
+    credential_lookup: CredentialLookup,
+    label_to_env_name: dict[str, str],
+) -> str:
+    env_name = label_to_env_name.get(safe_label)
+    if not env_name:
+        raise LiveVerificationValidationError("credential label is unsupported")
+    value = credential_lookup(env_name)
+    if not isinstance(value, str) or not value:
+        raise LiveVerificationValidationError("credential is unavailable")
+    return value
+
+
+def _default_credential_lookup(env_name: str) -> str | None:
+    import os
+
+    return os.environ.get(env_name)
+
+
+def _default_timestamp_factory() -> str:
+    from datetime import UTC, datetime
+
+    return str(int(datetime.now(tz=UTC).timestamp() * 1000))
+
+
+def _default_client_order_id_factory() -> str:
+    import secrets
+
+    return f"S6G{secrets.token_hex(8).upper()}"
+
+
+def _safe_result_from_live_transport_response(
+    response: object,
+) -> LiveOrderRealOneShotPostTransportResult:
+    transport_result = getattr(response, "transport_result", "result_unknown")
+    if transport_result == "success":
+        return _safe_transport_result(
+            TransportCategory.TRANSPORT_ACCEPTED_SANITIZED,
+            fake_transport_used=False,
+            http_post_executed=True,
+        )
+    if transport_result == "api_rejected":
+        return _safe_transport_result(
+            TransportCategory.TRANSPORT_REJECTED_SANITIZED,
+            fake_transport_used=False,
+            http_post_executed=True,
+        )
+    if transport_result == "transport_error":
+        return _safe_transport_result(
+            TransportCategory.TRANSPORT_FAILED_FAIL_CLOSED,
+            fake_transport_used=False,
+            http_post_executed=True,
+            failed=True,
+        )
+    return _safe_transport_result(
+        TransportCategory.TRANSPORT_UNKNOWN_FAIL_CLOSED,
+        fake_transport_used=False,
+        http_post_executed=True,
+        unknown=True,
+    )
 
 
 def resolve_post_live_order_with_httpx_reference() -> PostFunctionReference:
@@ -414,6 +662,19 @@ def render_live_order_real_one_shot_post_real_delegate_markdown(
             "- source_callable_unavailable_due_missing_delegate: "
             f"{_bool_text(result.source_callable_unavailable_due_missing_delegate)}"
         ),
+        (
+            "- real_post_delegate_runner_materialized: "
+            f"{_bool_text(result.real_post_delegate_runner_materialized)}"
+        ),
+        (
+            "- real_post_delegate_runner_supplied: "
+            f"{_bool_text(result.real_post_delegate_runner_supplied)}"
+        ),
+        f"- delegate_runner_missing: {_bool_text(result.delegate_runner_missing)}",
+        (
+            "- source_callable_unavailable_due_missing_runner: "
+            f"{_bool_text(result.source_callable_unavailable_due_missing_runner)}"
+        ),
         "",
         "## Delegate Guard",
         f"- delegate_default_no_execution: {_bool_text(result.delegate_default_no_execution)}",
@@ -436,6 +697,19 @@ def render_live_order_real_one_shot_post_real_delegate_markdown(
         (
             "- delegate_requires_post_specific_confirmation: "
             f"{_bool_text(result.delegate_requires_post_specific_confirmation)}"
+        ),
+        f"- runner_default_no_execution: {_bool_text(result.runner_default_no_execution)}",
+        (
+            "- runner_materialization_executes_post: "
+            f"{_bool_text(result.runner_materialization_executes_post)}"
+        ),
+        (
+            "- runner_supply_executes_post: "
+            f"{_bool_text(result.runner_supply_executes_post)}"
+        ),
+        (
+            "- runner_requires_post_specific_confirmation: "
+            f"{_bool_text(result.runner_requires_post_specific_confirmation)}"
         ),
         f"- actual_post_allowed: {_bool_text(result.actual_post_allowed)}",
         "",
@@ -587,11 +861,19 @@ def _contract_reasons(
         "delegate_requires_post_specific_confirmation",
         "delegate_supplied_to_factory",
         "factory_produces_controlled_source_callable",
+        "real_post_delegate_runner_materialized",
+        "real_post_delegate_runner_supplied",
+        "runner_default_no_execution",
+        "runner_requires_post_specific_confirmation",
     ):
         if not getattr(snapshot, field_name):
             reasons.append(f"{field_name}_missing")
     if snapshot.source_callable_unavailable_due_missing_delegate:
         reasons.append("source_callable_unavailable_due_missing_delegate")
+    if snapshot.delegate_runner_missing:
+        reasons.append("delegate_runner_missing")
+    if snapshot.source_callable_unavailable_due_missing_runner:
+        reasons.append("source_callable_unavailable_due_missing_runner")
     if snapshot.delegate_import_executes_post:
         reasons.append("delegate_import_executes_post")
     if snapshot.delegate_construct_executes_post:
@@ -600,6 +882,16 @@ def _contract_reasons(
         reasons.append("delegate_summary_executes_post")
     if snapshot.delegate_supply_executes_post:
         reasons.append("delegate_supply_executes_post")
+    if snapshot.runner_import_executes_post:
+        reasons.append("runner_import_executes_post")
+    if snapshot.runner_construct_executes_post:
+        reasons.append("runner_construct_executes_post")
+    if snapshot.runner_summary_executes_post:
+        reasons.append("runner_summary_executes_post")
+    if snapshot.runner_materialization_executes_post:
+        reasons.append("runner_materialization_executes_post")
+    if snapshot.runner_supply_executes_post:
+        reasons.append("runner_supply_executes_post")
     if snapshot.actual_post_allowed:
         reasons.append("actual_post_allowed")
     if snapshot.retry_allowed:
@@ -744,8 +1036,19 @@ _REAL_POST_DELEGATE_INPUT_BOOL_FIELDS = (
     "post_live_order_with_httpx_reference_available",
     "delegate_supplied_to_factory",
     "factory_produces_controlled_source_callable",
-    "source_callable_unavailable_due_missing_delegate",
-    "actual_post_allowed",
+        "source_callable_unavailable_due_missing_delegate",
+        "real_post_delegate_runner_materialized",
+        "real_post_delegate_runner_supplied",
+        "delegate_runner_missing",
+        "source_callable_unavailable_due_missing_runner",
+        "runner_default_no_execution",
+        "runner_import_executes_post",
+        "runner_construct_executes_post",
+        "runner_summary_executes_post",
+        "runner_materialization_executes_post",
+        "runner_supply_executes_post",
+        "runner_requires_post_specific_confirmation",
+        "actual_post_allowed",
     "retry_allowed",
     "ledger_update_allowed",
     "receipt_handoff_allowed",
@@ -783,6 +1086,17 @@ _REAL_POST_DELEGATE_RESULT_BOOL_FIELDS = (
     "factory_produces_controlled_source_callable",
     "approved_primitive_actual_source_available",
     "source_callable_unavailable_due_missing_delegate",
+    "real_post_delegate_runner_materialized",
+    "real_post_delegate_runner_supplied",
+    "delegate_runner_missing",
+    "source_callable_unavailable_due_missing_runner",
+    "runner_default_no_execution",
+    "runner_import_executes_post",
+    "runner_construct_executes_post",
+    "runner_summary_executes_post",
+    "runner_materialization_executes_post",
+    "runner_supply_executes_post",
+    "runner_requires_post_specific_confirmation",
     "actual_post_allowed",
     "retry_allowed",
     "ledger_update_allowed",

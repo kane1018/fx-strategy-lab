@@ -2271,3 +2271,25 @@ does not expose raw request/response, broker/API response, credential,
 signature, header, account/order/transaction ID, or client order ID values.
 Details:
 [STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md](STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md).
+
+## Step 6G Real Delegate Runner Materialization
+
+Step 6G-PC-OX-R-REAL-POST-DELEGATE-RUNNER-MATERIALIZATION-C materializes the
+current/default real POST delegate runner without executing POST. The delegate
+route reports `real_post_delegate_runner_materialized=true`,
+`real_post_delegate_runner_supplied=true`, `delegate_runner_missing=false`, and
+`source_callable_unavailable_due_missing_runner=false` while keeping
+`actual_post_allowed=false`, `actual_http_post_executed=false`,
+`post_execution_count=0`, `retry_attempted=false`,
+`second_post_attempted=false`, `ledger_updated=false`, and
+`actual_receipt_handoff_executed=false`.
+
+The runner remains separated from approval phrase validation, ledger update,
+attempt counter persistence, receipt handoff, retry/repost, and raw/ID/value
+exposure. It is reachable only through the controlled execution route after a
+later new POST-specific confirmation. The next execution gate retry must also
+check trading window, maintenance status, user monitoring availability, and
+important event risk before any POST can be considered.
+
+Details:
+[STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md](STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md).

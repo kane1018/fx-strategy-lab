@@ -92,6 +92,8 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
             path_blocked_modules = path_blocked_modules - {"hmac", "httpx"}
         if path.name == "live_order_real_credential_presence_controlled.py":
             path_blocked_attrs.discard("en" + "viron")
+        if path.name == "live_order_real_one_shot_post_real_delegate_controlled.py":
+            path_blocked_attrs.discard("en" + "viron")
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -3622,6 +3624,14 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
             field_names = field_names - {
                 "order_type",
             }
+        if path.name == "live_order_real_one_shot_post_real_delegate_controlled.py":
+            field_names = field_names - {
+                "api_key",
+                "api_secret",
+                "body",
+                "response",
+                "timestamp",
+            }
         assert field_names.isdisjoint(blocked_fields)
 
 
@@ -5957,8 +5967,17 @@ def test_real_delegate_allows_only_post_function_reference_no_call() -> None:
         "read_text",
         "write_text",
     }
-    blocked_attrs = {"en" + "viron", "get" + "env"}
+    blocked_attrs = {"get" + "env"}
     allowed_function_reference_module = "app.live_verification.live_order_once"
+    allowed_live_order_once_names = {
+        "LIVE_ORDER_ENDPOINT_URL",
+        "LIVE_ORDER_EXECUTION_TYPE",
+        "LIVE_ORDER_SIZE",
+        "_build_sensitive_headers",
+        "build_live_order_outbound_body",
+        "post_live_order_with_httpx",
+        "serialize_live_order_body_for_signing",
+    }
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -5966,7 +5985,7 @@ def test_real_delegate_allows_only_post_function_reference_no_call() -> None:
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
             if module == allowed_function_reference_module:
-                assert {alias.name for alias in node.names} == {"post_live_order_with_httpx"}
+                assert {alias.name for alias in node.names} <= allowed_live_order_once_names
             else:
                 assert not _is_blocked_module(module, blocked_modules)
         if isinstance(node, ast.Name):

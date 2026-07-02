@@ -114,21 +114,25 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-REAL-POST-DELEGATE-CONNECTION-C, the recommended next
-Step is the dedicated one-shot POST execution gate retry. The sealed
-request/body/result mapper, sealed credential/signing provider, ledger-free
-source factory, real delegate connection, and current/default approved
-primitive actual source route are still not POST permission by themselves:
+After Step 6G-PC-OX-R-REAL-POST-DELEGATE-RUNNER-MATERIALIZATION-C, the
+recommended next Step is the dedicated one-shot POST execution gate retry. The
+sealed request/body/result mapper, sealed credential/signing provider,
+ledger-free source factory, real delegate connection, materialized real
+delegate runner, and current/default approved primitive actual source route are
+still not POST permission by themselves:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-8:
-sanitized preview -> new POST-specific confirmation -> at most one POST
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-9:
+sanitized preview -> time/market/user-monitoring check -> new POST-specific confirmation -> at most one POST
 ```
 
 That Step must not start with POST. It must first confirm repository state and
-all prerequisites, show the sanitized executable order preview, then obtain a
-new POST-specific confirmation in the current Codex session. It must keep
-credential values, signature values, headers values, raw request/response
-values, broker/API responses, IDs, ledger updates, attempt counter persistence,
-actual receipt handoff, retry, and repost out of scope unless a later dedicated
-step explicitly authorizes one of those separated actions.
+all prerequisites, show the sanitized executable order preview, confirm the
+trading window, maintenance status, user monitoring availability, and absence
+of important event risk, then obtain a new POST-specific confirmation in the
+current Codex session. Unknown time or market state must stop as CASE 2. It
+must keep credential values, signature values, headers values, raw
+request/response values, broker/API responses, IDs, ledger updates, attempt
+counter persistence, actual receipt handoff, retry, and repost out of scope
+unless a later dedicated step explicitly authorizes one of those separated
+actions.

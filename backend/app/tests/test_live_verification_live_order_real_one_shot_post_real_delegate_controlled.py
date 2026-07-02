@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 
 import pytest
 
@@ -102,6 +102,13 @@ def _transport_result(
     )
 
 
+@dataclass(frozen=True)
+class _FakeLiveOrderTransportResponse:
+    transport_result: str = "success"
+    api_status_success: str = "true"
+    response_data_present: str = "true"
+
+
 def _confirmed():
     return validate_live_order_real_post_specific_confirmation(
         LiveOrderRealPostSpecificConfirmationInput(
@@ -129,6 +136,17 @@ def test_real_delegate_summary_is_safe_and_supplies_factory_without_post() -> No
     assert result.delegate_supply_executes_post is False
     assert result.delegate_supplied_to_factory is True
     assert result.source_callable_unavailable_due_missing_delegate is False
+    assert result.real_post_delegate_runner_materialized is True
+    assert result.real_post_delegate_runner_supplied is True
+    assert result.delegate_runner_missing is False
+    assert result.source_callable_unavailable_due_missing_runner is False
+    assert result.runner_default_no_execution is True
+    assert result.runner_import_executes_post is False
+    assert result.runner_construct_executes_post is False
+    assert result.runner_summary_executes_post is False
+    assert result.runner_materialization_executes_post is False
+    assert result.runner_supply_executes_post is False
+    assert result.runner_requires_post_specific_confirmation is True
     assert result.approved_primitive_actual_source_available is True
     assert result.actual_post_allowed is False
     assert result.actual_http_post_executed is False
@@ -143,34 +161,129 @@ def test_real_delegate_summary_is_safe_and_supplies_factory_without_post() -> No
         is False
     )
     assert "actual_http_post_executed: false" in rendered
+    assert "real_post_delegate_runner_materialized: true" in rendered
+    assert "source_callable_unavailable_due_missing_runner: false" in rendered
     _assert_no_sentinel_exposure(rendered, _safe_payload(result), repr(result))
 
 
-def test_real_delegate_default_reference_does_not_call_post_function() -> None:
+def test_real_delegate_materialization_does_not_call_post_function_before_execution() -> (
+    None
+):
     calls: list[object] = []
 
     def fail_if_called(*args: object, **kwargs: object) -> object:
         calls.append((args, kwargs))
         raise AssertionError("post function reference must not be called")
 
-    delegate = make_live_order_real_one_shot_post_real_delegate(
+    connection = construct_live_order_real_one_shot_post_real_delegate_controlled(
         post_function_reference=fail_if_called,
     )
-    result = delegate(_transport_input())
 
     assert calls == []
-    assert result.result_category is TransportCategory.TRANSPORT_UNAVAILABLE_FAIL_CLOSED
-    assert result.unavailable is True
-    assert result.http_post_executed is False
-    assert result.retry_attempted is False
-    assert result.second_post_attempted is False
-    assert result.ledger_updated is False
-    assert result.actual_receipt_handoff_executed is False
-    assert result.raw_request_exposed is False
-    assert result.raw_response_exposed is False
-    assert result.credential_value_exposed is False
-    assert result.signature_value_exposed is False
-    assert result.headers_value_exposed is False
+    assert connection.summary.real_post_delegate_runner_materialized is True
+    assert connection.summary.real_post_delegate_runner_supplied is True
+    assert connection.summary.delegate_runner_missing is False
+    assert connection.summary.source_callable_unavailable_due_missing_runner is False
+    assert connection.summary.actual_post_allowed is False
+    assert connection.summary.actual_http_post_executed is False
+    assert connection.summary.post_execution_count == 0
+
+
+def test_execution_without_confirmation_does_not_call_materialized_runner() -> None:
+    calls: list[object] = []
+
+    def fail_if_called(*args: object, **kwargs: object) -> object:
+        calls.append((args, kwargs))
+        raise AssertionError("post function reference must not be called")
+
+    connection = construct_live_order_real_one_shot_post_real_delegate_controlled(
+        post_function_reference=fail_if_called,
+        credential_lookup=lambda _name: CREDENTIAL_VALUE_SENTINEL,
+        timestamp_factory=lambda: "1700000000000",
+        client_order_id_factory=lambda: "S6GTESTCLIENT01",
+    )
+    source_boundary = (
+        construct_live_order_real_one_shot_post_approved_primitive_source_controlled(
+            source=connection.approved_primitive_actual_source.approved_primitive_actual_source,
+        )
+    )
+    approved = construct_live_order_real_one_shot_post_approved_primitive_controlled(
+        primitive=source_boundary.approved_primitive_source,
+    )
+    binding = construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+        primitive=approved.controlled_primitive,
+    )
+    execution = execute_live_order_real_one_shot_post_execution_controlled(
+        transport=binding.controlled_transport,
+    )
+
+    assert calls == []
+    assert execution.status is (
+        ExecutionStatus.ONE_SHOT_POST_EXECUTION_BLOCKED_MISSING_POST_SPECIFIC_CONFIRMATION
+    )
+    assert execution.post_execution_count == 0
+    assert execution.http_post_executed is False
+    assert execution.retry_attempted is False
+    assert execution.second_post_attempted is False
+    assert execution.ledger_updated is False
+    assert execution.actual_receipt_handoff_executed is False
+    assert execution.raw_request_exposed is False
+    assert execution.raw_response_exposed is False
+    assert execution.credential_value_exposed is False
+    assert execution.signature_value_exposed is False
+    assert execution.headers_value_exposed is False
+
+
+def test_materialized_runner_uses_fake_post_reference_once_after_confirmation() -> None:
+    calls: list[str] = []
+
+    def fake_post_reference(*args: object, **kwargs: object) -> object:
+        assert args
+        assert not kwargs
+        calls.append("called")
+        return _FakeLiveOrderTransportResponse()
+
+    connection = construct_live_order_real_one_shot_post_real_delegate_controlled(
+        post_function_reference=fake_post_reference,
+        credential_lookup=lambda _name: CREDENTIAL_VALUE_SENTINEL,
+        timestamp_factory=lambda: "1700000000000",
+        client_order_id_factory=lambda: "S6GTESTCLIENT01",
+    )
+    source_boundary = (
+        construct_live_order_real_one_shot_post_approved_primitive_source_controlled(
+            source=connection.approved_primitive_actual_source.approved_primitive_actual_source,
+        )
+    )
+    approved = construct_live_order_real_one_shot_post_approved_primitive_controlled(
+        primitive=source_boundary.approved_primitive_source,
+    )
+    binding = construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+        primitive=approved.controlled_primitive,
+    )
+    execution = execute_live_order_real_one_shot_post_execution_controlled(
+        transport=binding.controlled_transport,
+        confirmation=_confirmed(),
+    )
+
+    assert calls == ["called"]
+    assert connection.summary.real_post_delegate_runner_materialized is True
+    assert connection.summary.real_post_delegate_runner_supplied is True
+    assert connection.summary.delegate_runner_missing is False
+    assert connection.summary.source_callable_unavailable_due_missing_runner is False
+    assert execution.status is (
+        ExecutionStatus.ONE_SHOT_POST_EXECUTION_TRANSPORT_COMPLETED_SAFE_SUMMARY
+    )
+    assert execution.post_execution_count == 1
+    assert execution.retry_attempted is False
+    assert execution.second_post_attempted is False
+    assert execution.ledger_updated is False
+    assert execution.actual_receipt_handoff_executed is False
+    assert execution.raw_request_exposed is False
+    assert execution.raw_response_exposed is False
+    assert execution.credential_value_exposed is False
+    assert execution.signature_value_exposed is False
+    assert execution.headers_value_exposed is False
+    assert execution.real_id_exposed is False
 
 
 @pytest.mark.parametrize(
@@ -185,6 +298,36 @@ def test_real_delegate_default_reference_does_not_call_post_function() -> None:
             {"source_callable_unavailable_due_missing_delegate": True},
             DelegateStatus.REAL_POST_DELEGATE_BLOCKED_CONTRACT,
             "source_callable_unavailable_due_missing_delegate",
+        ),
+        (
+            {"real_post_delegate_runner_materialized": False},
+            DelegateStatus.REAL_POST_DELEGATE_BLOCKED_CONTRACT,
+            "real_post_delegate_runner_materialized_missing",
+        ),
+        (
+            {"real_post_delegate_runner_supplied": False},
+            DelegateStatus.REAL_POST_DELEGATE_BLOCKED_CONTRACT,
+            "real_post_delegate_runner_supplied_missing",
+        ),
+        (
+            {"delegate_runner_missing": True},
+            DelegateStatus.REAL_POST_DELEGATE_BLOCKED_CONTRACT,
+            "delegate_runner_missing",
+        ),
+        (
+            {"source_callable_unavailable_due_missing_runner": True},
+            DelegateStatus.REAL_POST_DELEGATE_BLOCKED_CONTRACT,
+            "source_callable_unavailable_due_missing_runner",
+        ),
+        (
+            {"runner_materialization_executes_post": True},
+            DelegateStatus.REAL_POST_DELEGATE_BLOCKED_CONTRACT,
+            "runner_materialization_executes_post",
+        ),
+        (
+            {"runner_supply_executes_post": True},
+            DelegateStatus.REAL_POST_DELEGATE_BLOCKED_CONTRACT,
+            "runner_supply_executes_post",
         ),
         (
             {"actual_http_post_executed": True},

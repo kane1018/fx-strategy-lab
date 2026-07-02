@@ -2030,3 +2030,29 @@ That later step must still show the sanitized preview and obtain a new
 POST-specific explicit confirmation in the current Codex session before any
 HTTP POST can be considered. Retry/repost, ledger update, attempt counter
 persistence, and actual receipt handoff remain forbidden.
+
+## Step 6G Real Delegate Runner Materialization Follow-up
+
+Step 6G-PC-OX-R-REAL-POST-DELEGATE-RUNNER-MATERIALIZATION-C materializes the
+current/default real delegate runner behind the same no-execution boundary.
+The route now reports `real_post_delegate_runner_materialized=true`,
+`real_post_delegate_runner_supplied=true`, `delegate_runner_missing=false`, and
+`source_callable_unavailable_due_missing_runner=false`.
+
+This is still not POST permission. Import, construction, summary rendering,
+runner materialization, delegate supply, factory construction, and source
+callable construction do not call the post primitive. The runner is only
+reachable through the existing execution controller after a later
+POST-specific confirmation, and `actual_post_allowed=false` remains the
+pre-confirmation state.
+
+Recommended next step:
+
+```text
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-9
+```
+
+That later step must confirm repository state, prerequisites, time/trading
+window, maintenance status, user monitoring availability, and absence of
+important event risk before requesting a new POST-specific confirmation.
+Unknown time or market state remains a CASE 2 stop.
