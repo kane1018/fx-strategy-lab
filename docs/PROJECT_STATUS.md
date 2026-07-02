@@ -82,6 +82,22 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-FRESH-PREFLIGHT-EXECUTION-RUNTIME-D safe fresh preflight execution adapter / CLI implementation完了 / adapter summary only / no fresh preflight execution / no HTTP POST / no final confirmation** —
+  FRESH-PREFLIGHT-CHECK-RETRY CASE 3の原因（consolidated runtimeを使うcomplete safe execution command / adapter / CLI未整備）を解消するため、
+  `backend/app/live_verification/live_order_real_fresh_preflight_execution_controlled.py` と
+  `backend/app/live_verification/run_fresh_preflight_execution_controlled.py` を追加した。CLIは
+  `cd backend && python3 -m app.live_verification.run_fresh_preflight_execution_controlled --adapter-summary-only`。
+  adapterはconsolidated fresh preflight runtime resultに接続し、safe label / safe status / safe boolean /
+  safe count / blocked reason labelsだけを出力する。`fresh_preflight_execution_command_available` と
+  `fresh_preflight_execution_allowed_next_step` は、次Stepでsafe adapterを使う準備ができたことだけを意味し、
+  fresh preflight実行済み、POST許可、final confirmation済み、ledger更新済み、actual receipt handoff済み、
+  実資金Step 6G再試行可を意味しない。IWにも `fresh_preflight_execution_adapter_ready` gateを最小連携し、
+  missing runtime / missing mapping / unsafe renderer / unknown / failed / timeout / unavailable / stale / reused /
+  retry allowed / POST/order endpoint/`live_order_once` / final confirmation / ledger / actual receipt / raw/ID/value
+  exposureをfail-closedにする。詳細は
+  [STEP6G_FRESH_PREFLIGHT_EXECUTION_CONTROLLED.md](STEP6G_FRESH_PREFLIGHT_EXECUTION_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-FRESH-PREFLIGHT-CHECK-RETRY-2 fresh preflight execution with safe adapter /
+  no POST / no final confirmation execution**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-FRESH-PREFLIGHT-RUNTIME-C consolidated safe fresh preflight runtime implementation完了 / runtime route implementation only / no fresh preflight execution / no HTTP POST / no final confirmation** —
   FRESH-PREFLIGHT-CHECK CASE 3の原因（complete safe fresh preflight runtime route未整備）を解消するため、
   public market / private read-only / local-static checks、final exec stack readiness、POST guard、no-order guardを

@@ -398,6 +398,39 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.preflight_runtime_attempt_counter_persisted is False
     assert result.preflight_runtime_actual_result_receipt_received is False
     assert result.preflight_runtime_actual_receipt_handoff_executed is False
+    assert result.fresh_preflight_execution_adapter_ready is True
+    assert (
+        result.fresh_preflight_execution_mode
+        == "FRESH_PREFLIGHT_EXECUTION_CONTROLLED_ADAPTER_ONLY"
+    )
+    assert result.safe_preflight_execution_label == (
+        "CONTROLLED_FRESH_PREFLIGHT_EXECUTION_ADAPTER"
+    )
+    assert result.safe_preflight_execution_status == (
+        "FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION"
+    )
+    assert result.fresh_preflight_execution_command_available is True
+    assert result.fresh_preflight_execution_allowed_next_step is True
+    assert result.fresh_preflight_execution_performed is False
+    assert result.fresh_preflight_new_marker_required is True
+    assert result.fresh_preflight_current_marker_required is True
+    assert result.fresh_preflight_non_reuse_required is True
+    assert result.fresh_preflight_adapter_at_most_once is True
+    assert result.fresh_preflight_retry_allowed is False
+    assert result.fresh_preflight_unknown_retry_allowed is False
+    assert result.fresh_preflight_timeout_retry_allowed is False
+    assert result.fresh_preflight_failed_retry_allowed is False
+    assert result.fresh_preflight_execution_public_market_check_available is True
+    assert result.fresh_preflight_execution_private_read_only_check_available is True
+    assert result.fresh_preflight_execution_local_static_check_available is True
+    assert result.fresh_preflight_execution_post_executed is False
+    assert result.fresh_preflight_execution_http_post_executed is False
+    assert result.fresh_preflight_execution_order_endpoint_called is False
+    assert result.fresh_preflight_execution_live_order_once_called is False
+    assert result.fresh_preflight_execution_final_confirmation_received is False
+    assert result.fresh_preflight_execution_ledger_updated is False
+    assert result.fresh_preflight_execution_attempt_counter_persisted is False
+    assert result.fresh_preflight_execution_actual_receipt_handoff_executed is False
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -1753,6 +1786,79 @@ def test_fresh_preflight_runtime_not_ready_blocks_internal_wiring(
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"fresh_preflight_execution_adapter_ready": False},
+        {"fresh_preflight_execution_safe_renderer_ready": False},
+        {"fresh_preflight_execution_public_market_mapping_available": False},
+        {"fresh_preflight_execution_private_read_only_mapping_available": False},
+        {"fresh_preflight_execution_local_static_mapping_available": False},
+        {"fresh_preflight_new_marker_required": False},
+        {"fresh_preflight_current_marker_required": False},
+        {"fresh_preflight_non_reuse_required": False},
+        {"fresh_preflight_adapter_at_most_once": False},
+        {"fresh_preflight_retry_allowed": True},
+        {"fresh_preflight_unknown_retry_allowed": True},
+        {"fresh_preflight_timeout_retry_allowed": True},
+        {"fresh_preflight_failed_retry_allowed": True},
+        {"fresh_preflight_execution_unknown": True},
+        {"fresh_preflight_execution_failed": True},
+        {"fresh_preflight_execution_unavailable": True},
+        {"fresh_preflight_execution_timeout": True},
+        {"fresh_preflight_execution_stale": True},
+        {"fresh_preflight_execution_reused": True},
+        {"fresh_preflight_execution_performed": True},
+        {"fresh_preflight_execution_api_call_executed": True},
+        {"fresh_preflight_execution_public_api_call_executed": True},
+        {"fresh_preflight_execution_private_api_call_executed": True},
+        {"fresh_preflight_execution_post_allowed_this_step": True},
+        {"fresh_preflight_execution_post_executed": True},
+        {"fresh_preflight_execution_http_post_executed": True},
+        {"fresh_preflight_execution_order_endpoint_called": True},
+        {"fresh_preflight_execution_live_order_once_called": True},
+        {"fresh_preflight_execution_final_confirmation_received": True},
+        {"fresh_preflight_execution_ledger_updated": True},
+        {"fresh_preflight_execution_attempt_counter_persisted": True},
+        {"fresh_preflight_execution_actual_result_receipt_received": True},
+        {"fresh_preflight_execution_actual_receipt_handoff_executed": True},
+        {"fresh_preflight_execution_raw_request_exposure_attempted": True},
+        {"fresh_preflight_execution_raw_response_exposure_attempted": True},
+        {"fresh_preflight_execution_broker_response_exposure_attempted": True},
+        {"fresh_preflight_execution_api_response_exposure_attempted": True},
+        {"fresh_preflight_execution_credential_value_exposure_attempted": True},
+        {"fresh_preflight_execution_signature_value_exposure_attempted": True},
+        {"fresh_preflight_execution_headers_value_exposure_attempted": True},
+        {"fresh_preflight_execution_real_id_exposure_attempted": True},
+        {"fresh_preflight_execution_confirmation_phrase_exposure_attempted": True},
+        {"fresh_preflight_execution_ledger_state_exposure_attempted": True},
+    ],
+)
+def test_fresh_preflight_execution_adapter_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert (
+        result.status
+        is Status
+        .BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_EXECUTION_ADAPTER
+    )
+    assert result.fresh_preflight_execution_adapter_ready is False
+    assert result.fresh_preflight_execution_performed is False
+    assert result.fresh_preflight_execution_post_executed is False
+    assert result.fresh_preflight_execution_http_post_executed is False
+    assert result.fresh_preflight_execution_order_endpoint_called is False
+    assert result.fresh_preflight_execution_live_order_once_called is False
+    assert result.fresh_preflight_execution_final_confirmation_received is False
+    assert result.fresh_preflight_execution_ledger_updated is False
+    assert result.fresh_preflight_execution_attempt_counter_persisted is False
+    assert result.fresh_preflight_execution_actual_receipt_handoff_executed is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
         {"operator_provided_presence_result": False},
         {"operator_presence_result_is_boolean_only": False},
         {"operator_presence_result_fresh": False},
@@ -2989,6 +3095,48 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "preflight_runtime_final_confirmation_received: false" in rendered
     assert "preflight_runtime_ledger_updated: false" in rendered
     assert "preflight_runtime_actual_receipt_handoff_executed: false" in rendered
+    assert "fresh_preflight_execution_adapter_ready: true" in rendered
+    assert (
+        "fresh_preflight_execution_mode: "
+        "FRESH_PREFLIGHT_EXECUTION_CONTROLLED_ADAPTER_ONLY"
+    ) in rendered
+    assert (
+        "safe_preflight_execution_label: "
+        "CONTROLLED_FRESH_PREFLIGHT_EXECUTION_ADAPTER"
+    ) in rendered
+    assert (
+        "safe_preflight_execution_status: "
+        "FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION"
+    ) in rendered
+    assert "fresh_preflight_execution_command_available: true" in rendered
+    assert "fresh_preflight_execution_allowed_next_step: true" in rendered
+    assert "fresh_preflight_execution_performed: false" in rendered
+    assert "fresh_preflight_new_marker_required: true" in rendered
+    assert "fresh_preflight_current_marker_required: true" in rendered
+    assert "fresh_preflight_non_reuse_required: true" in rendered
+    assert "fresh_preflight_adapter_at_most_once: true" in rendered
+    assert "fresh_preflight_retry_allowed: false" in rendered
+    assert (
+        "fresh_preflight_execution_public_market_check_available: true"
+        in rendered
+    )
+    assert (
+        "fresh_preflight_execution_private_read_only_check_available: true"
+        in rendered
+    )
+    assert "fresh_preflight_execution_local_static_check_available: true" in rendered
+    assert "fresh_preflight_execution_post_executed: false" in rendered
+    assert "fresh_preflight_execution_order_endpoint_called: false" in rendered
+    assert "fresh_preflight_execution_live_order_once_called: false" in rendered
+    assert (
+        "fresh_preflight_execution_final_confirmation_received: false"
+        in rendered
+    )
+    assert "fresh_preflight_execution_ledger_updated: false" in rendered
+    assert (
+        "fresh_preflight_execution_actual_receipt_handoff_executed: false"
+        in rendered
+    )
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered

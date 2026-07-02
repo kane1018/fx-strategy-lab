@@ -4,6 +4,8 @@ import ast
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "live_verification"
 
 
@@ -5675,6 +5677,73 @@ def test_real_api_preflight_safe_route_consolidation_has_no_api_order_dependenci
     }
     blocked_attrs = {"en" + "viron", "get" + "env"}
     path = PACKAGE_ROOT / "live_order_real_api_preflight_safe_route_consolidation.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            assert all(not _is_blocked_module(alias.name, blocked_modules) for alias in node.names)
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            assert not _is_blocked_module(module, blocked_modules)
+        if isinstance(node, ast.Name):
+            assert node.id not in blocked_names
+        if isinstance(node, ast.Attribute):
+            assert node.attr not in blocked_attrs
+        if isinstance(node, ast.Call):
+            assert _call_name(node) not in blocked_call_names
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "live_order_real_fresh_preflight_execution_controlled.py",
+        "run_fresh_preflight_execution_controlled.py",
+    ],
+)
+def test_fresh_preflight_execution_adapter_has_no_api_order_dependencies(
+    filename: str,
+) -> None:
+    blocked_modules = {
+        "requests",
+        "httpx",
+        "aiohttp",
+        "urllib",
+        "urllib3",
+        "http.client",
+        "socket",
+        "subprocess",
+        "dotenv",
+        "app." + "brokers",
+        "app." + "private_api",
+        "app.live_verification.live_order_once",
+    }
+    blocked_names = {
+        "Order" + "Request",
+        "get" + "env",
+        "ENABLE_" + "LIVE_TRADING",
+        "GMO_FX_API_" + "KEY",
+        "GMO_FX_API_" + "SECRET",
+        "post_live_order_with_httpx",
+        "execute_one_shot_live_order",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+    }
+    blocked_call_names = {
+        "execute_one_shot_live_order",
+        "post_live_order_with_httpx",
+        "prepare_one_shot_live_order",
+        "load_live_order_attempt_ledger",
+        "build_step4_approval_gate",
+        "evaluate_step4_approval",
+        "pbcopy",
+        "read_text",
+        "write_text",
+    }
+    blocked_attrs = {"en" + "viron", "get" + "env"}
+    path = PACKAGE_ROOT / filename
     tree = ast.parse(path.read_text(encoding="utf-8"))
 
     for node in ast.walk(tree):

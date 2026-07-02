@@ -103,6 +103,13 @@ from app.live_verification.live_order_real_final_readiness_controlled import (
     LiveOrderRealFinalReadinessControlledStatus,
     build_live_order_real_final_readiness_controlled,
 )
+from app.live_verification.live_order_real_fresh_preflight_execution_controlled import (
+    SAFE_PREFLIGHT_EXECUTION_LABEL,
+    LiveOrderRealFreshPreflightExecutionControlledInput,
+    LiveOrderRealFreshPreflightExecutionControlledResult,
+    LiveOrderRealFreshPreflightExecutionControlledStatus,
+    build_live_order_real_fresh_preflight_execution_controlled,
+)
 from app.live_verification.live_order_real_fresh_preflight_runtime_controlled import (
     SAFE_LOCAL_STATIC_CHECK_LABEL,
     SAFE_PREFLIGHT_RUNTIME_LABEL,
@@ -297,6 +304,9 @@ class LiveOrderRealStep6GInternalWiringStatus(str, Enum):
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_RUNTIME = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_RUNTIME"
+    )
+    BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_EXECUTION_ADAPTER = (
+        "BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_EXECUTION_ADAPTER"
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT"
@@ -780,6 +790,53 @@ class LiveOrderRealStep6GInternalWiringInput:
     preflight_runtime_real_id_exposure_attempted: bool = False
     preflight_runtime_confirmation_phrase_exposure_attempted: bool = False
     preflight_runtime_ledger_state_exposure_attempted: bool = False
+    fresh_preflight_execution_adapter_ready: bool = True
+    fresh_preflight_execution_mode: str = (
+        "FRESH_PREFLIGHT_EXECUTION_CONTROLLED_ADAPTER_ONLY"
+    )
+    safe_preflight_execution_label: str = SAFE_PREFLIGHT_EXECUTION_LABEL
+    fresh_preflight_execution_safe_renderer_ready: bool = True
+    fresh_preflight_execution_public_market_mapping_available: bool = True
+    fresh_preflight_execution_private_read_only_mapping_available: bool = True
+    fresh_preflight_execution_local_static_mapping_available: bool = True
+    fresh_preflight_new_marker_required: bool = True
+    fresh_preflight_current_marker_required: bool = True
+    fresh_preflight_non_reuse_required: bool = True
+    fresh_preflight_adapter_at_most_once: bool = True
+    fresh_preflight_retry_allowed: bool = False
+    fresh_preflight_unknown_retry_allowed: bool = False
+    fresh_preflight_timeout_retry_allowed: bool = False
+    fresh_preflight_failed_retry_allowed: bool = False
+    fresh_preflight_execution_unknown: bool = False
+    fresh_preflight_execution_failed: bool = False
+    fresh_preflight_execution_unavailable: bool = False
+    fresh_preflight_execution_timeout: bool = False
+    fresh_preflight_execution_stale: bool = False
+    fresh_preflight_execution_reused: bool = False
+    fresh_preflight_execution_performed: bool = False
+    fresh_preflight_execution_api_call_executed: bool = False
+    fresh_preflight_execution_public_api_call_executed: bool = False
+    fresh_preflight_execution_private_api_call_executed: bool = False
+    fresh_preflight_execution_post_allowed_this_step: bool = False
+    fresh_preflight_execution_post_executed: bool = False
+    fresh_preflight_execution_http_post_executed: bool = False
+    fresh_preflight_execution_order_endpoint_called: bool = False
+    fresh_preflight_execution_live_order_once_called: bool = False
+    fresh_preflight_execution_final_confirmation_received: bool = False
+    fresh_preflight_execution_ledger_updated: bool = False
+    fresh_preflight_execution_attempt_counter_persisted: bool = False
+    fresh_preflight_execution_actual_result_receipt_received: bool = False
+    fresh_preflight_execution_actual_receipt_handoff_executed: bool = False
+    fresh_preflight_execution_raw_request_exposure_attempted: bool = False
+    fresh_preflight_execution_raw_response_exposure_attempted: bool = False
+    fresh_preflight_execution_broker_response_exposure_attempted: bool = False
+    fresh_preflight_execution_api_response_exposure_attempted: bool = False
+    fresh_preflight_execution_credential_value_exposure_attempted: bool = False
+    fresh_preflight_execution_signature_value_exposure_attempted: bool = False
+    fresh_preflight_execution_headers_value_exposure_attempted: bool = False
+    fresh_preflight_execution_real_id_exposure_attempted: bool = False
+    fresh_preflight_execution_confirmation_phrase_exposure_attempted: bool = False
+    fresh_preflight_execution_ledger_state_exposure_attempted: bool = False
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -1086,6 +1143,14 @@ class LiveOrderRealStep6GInternalWiringInput:
         _require_non_empty(
             "safe_local_static_check_label",
             self.safe_local_static_check_label,
+        )
+        _require_non_empty(
+            "fresh_preflight_execution_mode",
+            self.fresh_preflight_execution_mode,
+        )
+        _require_non_empty(
+            "safe_preflight_execution_label",
+            self.safe_preflight_execution_label,
         )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
@@ -1562,6 +1627,49 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "preflight_runtime_real_id_exposure_attempted",
                 "preflight_runtime_confirmation_phrase_exposure_attempted",
                 "preflight_runtime_ledger_state_exposure_attempted",
+                "fresh_preflight_execution_adapter_ready",
+                "fresh_preflight_execution_safe_renderer_ready",
+                "fresh_preflight_execution_public_market_mapping_available",
+                "fresh_preflight_execution_private_read_only_mapping_available",
+                "fresh_preflight_execution_local_static_mapping_available",
+                "fresh_preflight_new_marker_required",
+                "fresh_preflight_current_marker_required",
+                "fresh_preflight_non_reuse_required",
+                "fresh_preflight_adapter_at_most_once",
+                "fresh_preflight_retry_allowed",
+                "fresh_preflight_unknown_retry_allowed",
+                "fresh_preflight_timeout_retry_allowed",
+                "fresh_preflight_failed_retry_allowed",
+                "fresh_preflight_execution_unknown",
+                "fresh_preflight_execution_failed",
+                "fresh_preflight_execution_unavailable",
+                "fresh_preflight_execution_timeout",
+                "fresh_preflight_execution_stale",
+                "fresh_preflight_execution_reused",
+                "fresh_preflight_execution_performed",
+                "fresh_preflight_execution_api_call_executed",
+                "fresh_preflight_execution_public_api_call_executed",
+                "fresh_preflight_execution_private_api_call_executed",
+                "fresh_preflight_execution_post_allowed_this_step",
+                "fresh_preflight_execution_post_executed",
+                "fresh_preflight_execution_http_post_executed",
+                "fresh_preflight_execution_order_endpoint_called",
+                "fresh_preflight_execution_live_order_once_called",
+                "fresh_preflight_execution_final_confirmation_received",
+                "fresh_preflight_execution_ledger_updated",
+                "fresh_preflight_execution_attempt_counter_persisted",
+                "fresh_preflight_execution_actual_result_receipt_received",
+                "fresh_preflight_execution_actual_receipt_handoff_executed",
+                "fresh_preflight_execution_raw_request_exposure_attempted",
+                "fresh_preflight_execution_raw_response_exposure_attempted",
+                "fresh_preflight_execution_broker_response_exposure_attempted",
+                "fresh_preflight_execution_api_response_exposure_attempted",
+                "fresh_preflight_execution_credential_value_exposure_attempted",
+                "fresh_preflight_execution_signature_value_exposure_attempted",
+                "fresh_preflight_execution_headers_value_exposure_attempted",
+                "fresh_preflight_execution_real_id_exposure_attempted",
+                "fresh_preflight_execution_confirmation_phrase_exposure_attempted",
+                "fresh_preflight_execution_ledger_state_exposure_attempted",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -1799,6 +1907,9 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     final_exec_stack_controlled_result: LiveOrderRealFinalExecStackControlledResult
     fresh_preflight_runtime_controlled_result: (
         LiveOrderRealFreshPreflightRuntimeControlledResult
+    )
+    fresh_preflight_execution_controlled_result: (
+        LiveOrderRealFreshPreflightExecutionControlledResult
     )
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
@@ -2209,6 +2320,32 @@ class LiveOrderRealStep6GInternalWiringResult:
     preflight_runtime_attempt_counter_persisted: bool
     preflight_runtime_actual_result_receipt_received: bool
     preflight_runtime_actual_receipt_handoff_executed: bool
+    fresh_preflight_execution_adapter_ready: bool
+    fresh_preflight_execution_mode: str
+    safe_preflight_execution_label: str
+    safe_preflight_execution_status: str
+    fresh_preflight_execution_command_available: bool
+    fresh_preflight_execution_allowed_next_step: bool
+    fresh_preflight_execution_performed: bool
+    fresh_preflight_new_marker_required: bool
+    fresh_preflight_current_marker_required: bool
+    fresh_preflight_non_reuse_required: bool
+    fresh_preflight_adapter_at_most_once: bool
+    fresh_preflight_retry_allowed: bool
+    fresh_preflight_unknown_retry_allowed: bool
+    fresh_preflight_timeout_retry_allowed: bool
+    fresh_preflight_failed_retry_allowed: bool
+    fresh_preflight_execution_public_market_check_available: bool
+    fresh_preflight_execution_private_read_only_check_available: bool
+    fresh_preflight_execution_local_static_check_available: bool
+    fresh_preflight_execution_post_executed: bool
+    fresh_preflight_execution_http_post_executed: bool
+    fresh_preflight_execution_order_endpoint_called: bool
+    fresh_preflight_execution_live_order_once_called: bool
+    fresh_preflight_execution_final_confirmation_received: bool
+    fresh_preflight_execution_ledger_updated: bool
+    fresh_preflight_execution_attempt_counter_persisted: bool
+    fresh_preflight_execution_actual_receipt_handoff_executed: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -2527,6 +2664,18 @@ class LiveOrderRealStep6GInternalWiringResult:
         _require_non_empty(
             "safe_local_static_check_label",
             self.safe_local_static_check_label,
+        )
+        _require_non_empty(
+            "fresh_preflight_execution_mode",
+            self.fresh_preflight_execution_mode,
+        )
+        _require_non_empty(
+            "safe_preflight_execution_label",
+            self.safe_preflight_execution_label,
+        )
+        _require_non_empty(
+            "safe_preflight_execution_status",
+            self.safe_preflight_execution_status,
         )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
@@ -2908,6 +3057,29 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "preflight_runtime_attempt_counter_persisted",
                 "preflight_runtime_actual_result_receipt_received",
                 "preflight_runtime_actual_receipt_handoff_executed",
+                "fresh_preflight_execution_adapter_ready",
+                "fresh_preflight_execution_command_available",
+                "fresh_preflight_execution_allowed_next_step",
+                "fresh_preflight_execution_performed",
+                "fresh_preflight_new_marker_required",
+                "fresh_preflight_current_marker_required",
+                "fresh_preflight_non_reuse_required",
+                "fresh_preflight_adapter_at_most_once",
+                "fresh_preflight_retry_allowed",
+                "fresh_preflight_unknown_retry_allowed",
+                "fresh_preflight_timeout_retry_allowed",
+                "fresh_preflight_failed_retry_allowed",
+                "fresh_preflight_execution_public_market_check_available",
+                "fresh_preflight_execution_private_read_only_check_available",
+                "fresh_preflight_execution_local_static_check_available",
+                "fresh_preflight_execution_post_executed",
+                "fresh_preflight_execution_http_post_executed",
+                "fresh_preflight_execution_order_endpoint_called",
+                "fresh_preflight_execution_live_order_once_called",
+                "fresh_preflight_execution_final_confirmation_received",
+                "fresh_preflight_execution_ledger_updated",
+                "fresh_preflight_execution_attempt_counter_persisted",
+                "fresh_preflight_execution_actual_receipt_handoff_executed",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -5012,6 +5184,170 @@ def build_valid_step6g_internal_wiring_snapshot(
             post_guard_result=post_guard_controlled_result,
         )
     )
+    fresh_preflight_execution_controlled_result = (
+        build_live_order_real_fresh_preflight_execution_controlled(
+            input_snapshot=LiveOrderRealFreshPreflightExecutionControlledInput(
+                fresh_preflight_execution_mode=(
+                    wiring_input.fresh_preflight_execution_mode
+                ),
+                fresh_preflight_execution_adapter_declared=True,
+                fresh_preflight_execution_adapter_requested=(
+                    wiring_input.fresh_preflight_execution_adapter_ready
+                ),
+                safe_preflight_execution_label=(
+                    wiring_input.safe_preflight_execution_label
+                ),
+                safe_output_renderer_ready=(
+                    wiring_input.fresh_preflight_execution_safe_renderer_ready
+                ),
+                public_market_execution_mapping_available=(
+                    wiring_input
+                    .fresh_preflight_execution_public_market_mapping_available
+                ),
+                private_read_only_execution_mapping_available=(
+                    wiring_input
+                    .fresh_preflight_execution_private_read_only_mapping_available
+                ),
+                local_static_execution_mapping_available=(
+                    wiring_input
+                    .fresh_preflight_execution_local_static_mapping_available
+                ),
+                fresh_preflight_new_marker_required=(
+                    wiring_input.fresh_preflight_new_marker_required
+                ),
+                fresh_preflight_current_marker_required=(
+                    wiring_input.fresh_preflight_current_marker_required
+                ),
+                fresh_preflight_non_reuse_required=(
+                    wiring_input.fresh_preflight_non_reuse_required
+                ),
+                fresh_preflight_adapter_at_most_once=(
+                    wiring_input.fresh_preflight_adapter_at_most_once
+                ),
+                fresh_preflight_retry_allowed=(
+                    wiring_input.fresh_preflight_retry_allowed
+                ),
+                fresh_preflight_unknown_retry_allowed=(
+                    wiring_input.fresh_preflight_unknown_retry_allowed
+                ),
+                fresh_preflight_timeout_retry_allowed=(
+                    wiring_input.fresh_preflight_timeout_retry_allowed
+                ),
+                fresh_preflight_failed_retry_allowed=(
+                    wiring_input.fresh_preflight_failed_retry_allowed
+                ),
+                fresh_preflight_execution_unknown=(
+                    wiring_input.fresh_preflight_execution_unknown
+                ),
+                fresh_preflight_execution_failed=(
+                    wiring_input.fresh_preflight_execution_failed
+                ),
+                fresh_preflight_execution_unavailable=(
+                    wiring_input.fresh_preflight_execution_unavailable
+                ),
+                fresh_preflight_execution_timeout=(
+                    wiring_input.fresh_preflight_execution_timeout
+                ),
+                fresh_preflight_execution_stale=(
+                    wiring_input.fresh_preflight_execution_stale
+                ),
+                fresh_preflight_execution_reused=(
+                    wiring_input.fresh_preflight_execution_reused
+                ),
+                fresh_preflight_execution_performed=(
+                    wiring_input.fresh_preflight_execution_performed
+                ),
+                api_call_executed=(
+                    wiring_input.fresh_preflight_execution_api_call_executed
+                ),
+                public_api_call_executed=(
+                    wiring_input
+                    .fresh_preflight_execution_public_api_call_executed
+                ),
+                private_api_call_executed=(
+                    wiring_input
+                    .fresh_preflight_execution_private_api_call_executed
+                ),
+                post_allowed_this_step=(
+                    wiring_input
+                    .fresh_preflight_execution_post_allowed_this_step
+                ),
+                post_executed=(
+                    wiring_input.fresh_preflight_execution_post_executed
+                ),
+                http_post_executed=(
+                    wiring_input.fresh_preflight_execution_http_post_executed
+                ),
+                order_endpoint_called=(
+                    wiring_input
+                    .fresh_preflight_execution_order_endpoint_called
+                ),
+                live_order_once_called=(
+                    wiring_input
+                    .fresh_preflight_execution_live_order_once_called
+                ),
+                final_confirmation_received=(
+                    wiring_input
+                    .fresh_preflight_execution_final_confirmation_received
+                ),
+                ledger_updated=(
+                    wiring_input.fresh_preflight_execution_ledger_updated
+                ),
+                attempt_counter_persisted=(
+                    wiring_input
+                    .fresh_preflight_execution_attempt_counter_persisted
+                ),
+                actual_result_receipt_received=(
+                    wiring_input
+                    .fresh_preflight_execution_actual_result_receipt_received
+                ),
+                actual_receipt_handoff_executed=(
+                    wiring_input
+                    .fresh_preflight_execution_actual_receipt_handoff_executed
+                ),
+                raw_request_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_raw_request_exposure_attempted
+                ),
+                raw_response_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_raw_response_exposure_attempted
+                ),
+                broker_response_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_broker_response_exposure_attempted
+                ),
+                api_response_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_api_response_exposure_attempted
+                ),
+                credential_value_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_credential_value_exposure_attempted
+                ),
+                signature_value_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_signature_value_exposure_attempted
+                ),
+                headers_value_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_headers_value_exposure_attempted
+                ),
+                real_id_exposure_attempted=(
+                    wiring_input.fresh_preflight_execution_real_id_exposure_attempted
+                ),
+                confirmation_phrase_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_confirmation_phrase_exposure_attempted
+                ),
+                ledger_state_exposure_attempted=(
+                    wiring_input
+                    .fresh_preflight_execution_ledger_state_exposure_attempted
+                ),
+            ),
+            runtime_result=fresh_preflight_runtime_controlled_result,
+        )
+    )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
         input_snapshot=LiveOrderRealCredentialPresenceAdapterInput(
             adapter_mode=wiring_input.presence_adapter_mode,
@@ -6516,6 +6852,9 @@ def build_valid_step6g_internal_wiring_snapshot(
         fresh_preflight_runtime_controlled_result=(
             fresh_preflight_runtime_controlled_result
         ),
+        fresh_preflight_execution_controlled_result=(
+            fresh_preflight_execution_controlled_result
+        ),
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -6586,6 +6925,9 @@ def build_live_order_real_step6g_internal_wiring(
     fresh_preflight_runtime_controlled_result = (
         wiring_snapshot.fresh_preflight_runtime_controlled_result
     )
+    fresh_preflight_execution_controlled_result = (
+        wiring_snapshot.fresh_preflight_execution_controlled_result
+    )
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -6652,6 +6994,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     fresh_preflight_runtime_controlled_reasons = (
         _fresh_preflight_runtime_controlled_reasons(wiring_snapshot)
+    )
+    fresh_preflight_execution_controlled_reasons = (
+        _fresh_preflight_execution_controlled_reasons(wiring_snapshot)
     )
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
         wiring_snapshot,
@@ -6803,6 +7148,12 @@ def build_live_order_real_step6g_internal_wiring(
             .BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_RUNTIME
         )
         primary_reasons = fresh_preflight_runtime_controlled_reasons
+    elif fresh_preflight_execution_controlled_reasons:
+        status = (
+            InternalWiringStatus
+            .BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_EXECUTION_ADAPTER
+        )
+        primary_reasons = fresh_preflight_execution_controlled_reasons
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
         primary_reasons = _merge_reasons(private_transport_reasons, http_interface_reasons)
@@ -6841,6 +7192,7 @@ def build_live_order_real_step6g_internal_wiring(
         final_readiness_controlled_reasons,
         final_exec_stack_controlled_reasons,
         fresh_preflight_runtime_controlled_reasons,
+        fresh_preflight_execution_controlled_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -7675,6 +8027,103 @@ def build_live_order_real_step6g_internal_wiring(
         ),
         preflight_runtime_actual_receipt_handoff_executed=(
             fresh_preflight_runtime_controlled_result
+            .actual_receipt_handoff_executed
+        ),
+        fresh_preflight_execution_adapter_ready=(
+            not fresh_preflight_execution_controlled_reasons
+        ),
+        fresh_preflight_execution_mode=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_execution_mode
+        ),
+        safe_preflight_execution_label=(
+            fresh_preflight_execution_controlled_result
+            .safe_preflight_execution_label
+        ),
+        safe_preflight_execution_status=(
+            fresh_preflight_execution_controlled_result
+            .safe_preflight_execution_status
+        ),
+        fresh_preflight_execution_command_available=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_execution_command_available
+        ),
+        fresh_preflight_execution_allowed_next_step=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_execution_allowed_next_step
+        ),
+        fresh_preflight_execution_performed=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_execution_performed
+        ),
+        fresh_preflight_new_marker_required=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_new_marker_required
+        ),
+        fresh_preflight_current_marker_required=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_current_marker_required
+        ),
+        fresh_preflight_non_reuse_required=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_non_reuse_required
+        ),
+        fresh_preflight_adapter_at_most_once=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_adapter_at_most_once
+        ),
+        fresh_preflight_retry_allowed=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_retry_allowed
+        ),
+        fresh_preflight_unknown_retry_allowed=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_unknown_retry_allowed
+        ),
+        fresh_preflight_timeout_retry_allowed=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_timeout_retry_allowed
+        ),
+        fresh_preflight_failed_retry_allowed=(
+            fresh_preflight_execution_controlled_result
+            .fresh_preflight_failed_retry_allowed
+        ),
+        fresh_preflight_execution_public_market_check_available=(
+            fresh_preflight_execution_controlled_result
+            .public_market_check_available
+        ),
+        fresh_preflight_execution_private_read_only_check_available=(
+            fresh_preflight_execution_controlled_result
+            .private_read_only_check_available
+        ),
+        fresh_preflight_execution_local_static_check_available=(
+            fresh_preflight_execution_controlled_result
+            .local_static_check_available
+        ),
+        fresh_preflight_execution_post_executed=(
+            fresh_preflight_execution_controlled_result.post_executed
+        ),
+        fresh_preflight_execution_http_post_executed=(
+            fresh_preflight_execution_controlled_result.http_post_executed
+        ),
+        fresh_preflight_execution_order_endpoint_called=(
+            fresh_preflight_execution_controlled_result.order_endpoint_called
+        ),
+        fresh_preflight_execution_live_order_once_called=(
+            fresh_preflight_execution_controlled_result.live_order_once_called
+        ),
+        fresh_preflight_execution_final_confirmation_received=(
+            fresh_preflight_execution_controlled_result
+            .final_confirmation_received
+        ),
+        fresh_preflight_execution_ledger_updated=(
+            fresh_preflight_execution_controlled_result.ledger_updated
+        ),
+        fresh_preflight_execution_attempt_counter_persisted=(
+            fresh_preflight_execution_controlled_result.attempt_counter_persisted
+        ),
+        fresh_preflight_execution_actual_receipt_handoff_executed=(
+            fresh_preflight_execution_controlled_result
             .actual_receipt_handoff_executed
         ),
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
@@ -8858,6 +9307,87 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- preflight_runtime_actual_receipt_handoff_executed: "
             f"{_bool_text(result.preflight_runtime_actual_receipt_handoff_executed)}"
+        ),
+        (
+            "- fresh_preflight_execution_adapter_ready: "
+            f"{_bool_text(result.fresh_preflight_execution_adapter_ready)}"
+        ),
+        f"- fresh_preflight_execution_mode: {result.fresh_preflight_execution_mode}",
+        (
+            "- safe_preflight_execution_label: "
+            f"{result.safe_preflight_execution_label}"
+        ),
+        (
+            "- safe_preflight_execution_status: "
+            f"{result.safe_preflight_execution_status}"
+        ),
+        (
+            "- fresh_preflight_execution_command_available: "
+            f"{_bool_text(result.fresh_preflight_execution_command_available)}"
+        ),
+        (
+            "- fresh_preflight_execution_allowed_next_step: "
+            f"{_bool_text(result.fresh_preflight_execution_allowed_next_step)}"
+        ),
+        (
+            "- fresh_preflight_execution_performed: "
+            f"{_bool_text(result.fresh_preflight_execution_performed)}"
+        ),
+        (
+            "- fresh_preflight_new_marker_required: "
+            f"{_bool_text(result.fresh_preflight_new_marker_required)}"
+        ),
+        (
+            "- fresh_preflight_current_marker_required: "
+            f"{_bool_text(result.fresh_preflight_current_marker_required)}"
+        ),
+        (
+            "- fresh_preflight_non_reuse_required: "
+            f"{_bool_text(result.fresh_preflight_non_reuse_required)}"
+        ),
+        (
+            "- fresh_preflight_adapter_at_most_once: "
+            f"{_bool_text(result.fresh_preflight_adapter_at_most_once)}"
+        ),
+        (
+            "- fresh_preflight_retry_allowed: "
+            f"{_bool_text(result.fresh_preflight_retry_allowed)}"
+        ),
+        (
+            "- fresh_preflight_execution_public_market_check_available: "
+            f"{_bool_text(result.fresh_preflight_execution_public_market_check_available)}"
+        ),
+        (
+            "- fresh_preflight_execution_private_read_only_check_available: "
+            f"{_bool_text(result.fresh_preflight_execution_private_read_only_check_available)}"
+        ),
+        (
+            "- fresh_preflight_execution_local_static_check_available: "
+            f"{_bool_text(result.fresh_preflight_execution_local_static_check_available)}"
+        ),
+        (
+            "- fresh_preflight_execution_post_executed: "
+            f"{_bool_text(result.fresh_preflight_execution_post_executed)}"
+        ),
+        (
+            "- fresh_preflight_execution_order_endpoint_called: "
+            f"{_bool_text(result.fresh_preflight_execution_order_endpoint_called)}"
+        ),
+        (
+            "- fresh_preflight_execution_live_order_once_called: "
+            f"{_bool_text(result.fresh_preflight_execution_live_order_once_called)}"
+        ),
+        (
+            "- fresh_preflight_execution_final_confirmation_received: "
+            f"{_bool_text(result.fresh_preflight_execution_final_confirmation_received)}"
+        ),
+        (
+            "- fresh_preflight_execution_ledger_updated: "
+            f"{_bool_text(result.fresh_preflight_execution_ledger_updated)}"
+        ),
+        (
+            "- fresh_preflight_execution_actual_receipt_handoff_executed: "
+            f"{_bool_text(result.fresh_preflight_execution_actual_receipt_handoff_executed)}"
         ),
         (
             "- credential_presence_adapter_ready: "
@@ -11150,6 +11680,95 @@ def _fresh_preflight_runtime_controlled_reasons(
     return tuple(dict.fromkeys(reasons))
 
 
+def _fresh_preflight_execution_controlled_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealFreshPreflightExecutionControlledStatus
+        .FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION
+    )
+    result = snapshot.fresh_preflight_execution_controlled_result
+    if not snapshot.input_snapshot.fresh_preflight_execution_adapter_ready:
+        reasons.append("fresh_preflight_execution_adapter_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(f"fresh_preflight_execution_status_{result.status.value}")
+    if not result.fresh_preflight_execution_command_available:
+        reasons.append("fresh_preflight_execution_command_not_available")
+    if not result.fresh_preflight_execution_allowed_next_step:
+        reasons.append("fresh_preflight_execution_next_step_not_allowed")
+    if result.safe_preflight_execution_label != SAFE_PREFLIGHT_EXECUTION_LABEL:
+        reasons.append("fresh_preflight_execution_safe_label_invalid")
+    if result.safe_preflight_execution_status != expected.value:
+        reasons.append("fresh_preflight_execution_safe_status_not_ready")
+    if not result.fresh_preflight_runtime_ready:
+        reasons.append("fresh_preflight_execution_runtime_not_ready")
+    if not result.public_market_check_available:
+        reasons.append("fresh_preflight_execution_public_market_missing")
+    if not result.private_read_only_check_available:
+        reasons.append("fresh_preflight_execution_private_read_only_missing")
+    if not result.local_static_check_available:
+        reasons.append("fresh_preflight_execution_local_static_missing")
+    if not result.fresh_preflight_new_marker_required:
+        reasons.append("fresh_preflight_execution_new_marker_not_required")
+    if not result.fresh_preflight_current_marker_required:
+        reasons.append("fresh_preflight_execution_current_marker_not_required")
+    if not result.fresh_preflight_non_reuse_required:
+        reasons.append("fresh_preflight_execution_non_reuse_not_required")
+    if not result.fresh_preflight_adapter_at_most_once:
+        reasons.append("fresh_preflight_execution_at_most_once_not_enforced")
+    if (
+        result.fresh_preflight_retry_allowed
+        or result.fresh_preflight_unknown_retry_allowed
+        or result.fresh_preflight_timeout_retry_allowed
+        or result.fresh_preflight_failed_retry_allowed
+    ):
+        reasons.append("fresh_preflight_execution_retry_allowed")
+    if (
+        result.fresh_preflight_execution_performed
+        or result.api_call_allowed
+        or result.api_call_executed
+        or result.public_api_call_executed
+        or result.private_api_call_executed
+        or result.post_allowed_this_step
+        or result.post_executed
+        or result.http_post_executed
+        or result.order_endpoint_called
+        or result.live_order_once_called
+    ):
+        reasons.append("fresh_preflight_execution_or_post_attempted")
+    if result.final_confirmation_received:
+        reasons.append("fresh_preflight_execution_final_confirmation_received")
+    if (
+        result.ledger_update_allowed
+        or result.ledger_updated
+        or result.attempt_counter_persistence_allowed
+        or result.attempt_counter_persisted
+    ):
+        reasons.append("fresh_preflight_execution_ledger_or_attempt_counter")
+    if (
+        result.actual_result_receipt_received
+        or result.actual_receipt_handoff_executed
+        or result.actual_receipt_handoff_allowed
+    ):
+        reasons.append("fresh_preflight_execution_actual_receipt_or_handoff")
+    if (
+        result.raw_request_stored
+        or result.raw_response_stored
+        or result.broker_response_exposed
+        or result.api_response_exposed
+        or result.real_id_exposed
+        or result.ledger_state_actual_value_exposed
+    ):
+        reasons.append("fresh_preflight_execution_raw_id_or_value_exposed")
+    if not result.safe_to_render:
+        reasons.append("fresh_preflight_execution_render_not_safe")
+    if not result.safe_to_serialize:
+        reasons.append("fresh_preflight_execution_serialize_not_safe")
+    reasons.extend(result.blocked_reasons)
+    return tuple(dict.fromkeys(reasons))
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -12474,6 +13093,12 @@ def _build_check_results(
             not _fresh_preflight_runtime_controlled_reasons(snapshot),
             "fresh preflight runtime route ready without preflight execution "
             "POST final ledger or receipt execution",
+        ),
+        (
+            "fresh preflight execution adapter controlled",
+            not _fresh_preflight_execution_controlled_reasons(snapshot),
+            "fresh preflight execution adapter ready without executing fresh "
+            "preflight POST final ledger or receipt handoff",
         ),
         (
             "credential presence adapter",
