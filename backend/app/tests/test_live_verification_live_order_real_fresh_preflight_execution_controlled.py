@@ -6,9 +6,11 @@ import pytest
 
 from app.live_verification.live_order_real_fresh_preflight_execution_controlled import (
     SAFE_PREFLIGHT_EXECUTION_LABEL,
+    FreshPreflightExecutionControlledMode,
     LiveOrderRealFreshPreflightExecutionControlledInput,
     LiveOrderRealFreshPreflightExecutionControlledStatus,
     build_live_order_real_fresh_preflight_execution_controlled,
+    execute_live_order_real_fresh_preflight_once_controlled,
     render_live_order_real_fresh_preflight_execution_controlled_markdown,
 )
 from app.live_verification.live_order_real_fresh_preflight_runtime_controlled import (
@@ -57,6 +59,16 @@ def test_default_execution_adapter_ready_no_execution_no_post() -> None:
     assert result.fresh_preflight_execution_allowed_next_step is True
     assert result.safe_preflight_execution_label == SAFE_PREFLIGHT_EXECUTION_LABEL
     assert result.fresh_preflight_execution_performed is False
+    assert result.fresh_preflight_execute_mode_available is True
+    assert result.fresh_preflight_execute_mode_not_run_this_step is True
+    assert result.fresh_preflight_passed is False
+    assert result.fresh_preflight_current is False
+    assert result.fresh_preflight_new is False
+    assert result.fresh_preflight_reused is False
+    assert result.fresh_preflight_stale is False
+    assert result.fresh_preflight_unknown is False
+    assert result.fresh_preflight_timeout is False
+    assert result.fresh_preflight_unavailable is False
     assert result.fresh_preflight_new_marker_required is True
     assert result.fresh_preflight_current_marker_required is True
     assert result.fresh_preflight_non_reuse_required is True
@@ -82,6 +94,127 @@ def test_default_execution_adapter_ready_no_execution_no_post() -> None:
     assert result.actual_result_receipt_received is False
     assert result.actual_receipt_handoff_executed is False
     assert result.blocked_reasons == ()
+
+
+def test_execute_once_mode_uses_safe_runtime_provider_once_only() -> None:
+    calls = 0
+
+    def runtime_provider():
+        nonlocal calls
+        calls += 1
+        return _runtime()
+
+    result = execute_live_order_real_fresh_preflight_once_controlled(
+        runtime_result_provider=runtime_provider,
+    )
+
+    assert calls == 1
+    assert result.status is Status.FRESH_PREFLIGHT_EXECUTION_PASSED_SAFE_SUMMARY
+    assert (
+        result.fresh_preflight_execution_mode
+        == (
+            FreshPreflightExecutionControlledMode
+            .FRESH_PREFLIGHT_EXECUTION_CONTROLLED_SAFE_EXECUTE_ONCE
+            .value
+        )
+    )
+    assert result.fresh_preflight_execute_mode_available is True
+    assert result.fresh_preflight_execute_mode_not_run_this_step is False
+    assert result.fresh_preflight_execution_performed is True
+    assert result.fresh_preflight_passed is True
+    assert result.fresh_preflight_current is True
+    assert result.fresh_preflight_new is True
+    assert result.fresh_preflight_reused is False
+    assert result.fresh_preflight_stale is False
+    assert result.fresh_preflight_unknown is False
+    assert result.fresh_preflight_timeout is False
+    assert result.fresh_preflight_unavailable is False
+    assert result.public_market_check_available is True
+    assert result.private_read_only_check_available is True
+    assert result.local_static_check_available is True
+    assert result.post_executed is False
+    assert result.http_post_executed is False
+    assert result.order_endpoint_called is False
+    assert result.live_order_once_called is False
+    assert result.final_confirmation_received is False
+    assert result.ledger_updated is False
+    assert result.attempt_counter_persisted is False
+    assert result.actual_receipt_handoff_executed is False
+    assert result.blocked_reasons == ()
+
+
+def test_execute_once_timeout_fails_closed_without_retry() -> None:
+    def runtime_provider():
+        raise TimeoutError
+
+    result = execute_live_order_real_fresh_preflight_once_controlled(
+        runtime_result_provider=runtime_provider,
+    )
+
+    assert result.status is Status.FRESH_PREFLIGHT_EXECUTION_BLOCKED_TIMEOUT
+    assert result.fresh_preflight_execution_performed is True
+    assert result.fresh_preflight_passed is False
+    assert result.fresh_preflight_current is False
+    assert result.fresh_preflight_timeout is True
+    assert result.fresh_preflight_retry_allowed is False
+    assert result.fresh_preflight_timeout_retry_allowed is False
+    assert result.post_executed is False
+    assert result.final_confirmation_received is False
+
+
+def test_execute_once_unavailable_fails_closed_without_raw_exception() -> None:
+    def runtime_provider():
+        raise RuntimeError(API_RESPONSE_SENTINEL)
+
+    result = execute_live_order_real_fresh_preflight_once_controlled(
+        runtime_result_provider=runtime_provider,
+    )
+    rendered = render_live_order_real_fresh_preflight_execution_controlled_markdown(
+        result,
+    )
+
+    assert result.status is Status.FRESH_PREFLIGHT_EXECUTION_BLOCKED_UNAVAILABLE
+    assert result.fresh_preflight_unavailable is True
+    assert result.fresh_preflight_passed is False
+    assert API_RESPONSE_SENTINEL not in rendered
+    assert result.post_executed is False
+
+
+@pytest.mark.parametrize(
+    ("overrides", "expected_status"),
+    [
+        (
+            {"fresh_preflight_execution_stale": True},
+            Status.FRESH_PREFLIGHT_EXECUTION_BLOCKED_STALE,
+        ),
+        (
+            {"fresh_preflight_execution_reused": True},
+            Status.FRESH_PREFLIGHT_EXECUTION_BLOCKED_REUSED,
+        ),
+    ],
+)
+def test_execute_once_stale_or_reused_fails_closed_before_provider(
+    overrides: dict[str, object],
+    expected_status: Status,
+) -> None:
+    calls = 0
+
+    def runtime_provider():
+        nonlocal calls
+        calls += 1
+        return _runtime()
+
+    result = execute_live_order_real_fresh_preflight_once_controlled(
+        input_snapshot=_input(**overrides),
+        runtime_result_provider=runtime_provider,
+    )
+
+    assert calls == 0
+    assert result.status is expected_status
+    assert result.fresh_preflight_passed is False
+    assert result.fresh_preflight_execution_performed is True
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
 
 
 @pytest.mark.parametrize(

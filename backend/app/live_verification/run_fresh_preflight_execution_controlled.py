@@ -1,7 +1,8 @@
 """CLI for the Step 6G controlled fresh preflight execution adapter.
 
-The CLI renders only the adapter safe summary. It does not execute fresh
-preflight, HTTP POST, order endpoints, live_order_once, final confirmation,
+Default and adapter-summary modes render only the adapter safe summary. The
+explicit execute-once mode calls the safe runtime provider once and still does
+not execute HTTP POST, order endpoints, live_order_once, final confirmation,
 ledger updates, attempt persistence, actual result receipt, or receipt handoff.
 """
 
@@ -12,6 +13,7 @@ import sys
 from app.live_verification.live_order_real_fresh_preflight_execution_controlled import (
     LiveOrderRealFreshPreflightExecutionControlledInput,
     build_live_order_real_fresh_preflight_execution_controlled,
+    execute_live_order_real_fresh_preflight_once_controlled,
     render_live_order_real_fresh_preflight_execution_controlled_markdown,
 )
 from app.live_verification.live_order_real_fresh_preflight_runtime_controlled import (
@@ -22,7 +24,7 @@ from app.live_verification.live_order_real_fresh_preflight_runtime_controlled im
 SAFE_USAGE = (
     "usage: python3 -m app.live_verification."
     "run_fresh_preflight_execution_controlled [--adapter-summary-only | "
-    "--simulate-runtime-not-ready]"
+    "--execute-once --safe-summary-only | --simulate-runtime-not-ready]"
 )
 
 
@@ -32,6 +34,10 @@ def main(argv: list[str] | None = None) -> int:
         result = build_live_order_real_fresh_preflight_execution_controlled()
         print(render_live_order_real_fresh_preflight_execution_controlled_markdown(result))
         return 0 if result.fresh_preflight_execution_allowed_next_step else 2
+    if args == ["--execute-once", "--safe-summary-only"]:
+        result = execute_live_order_real_fresh_preflight_once_controlled()
+        print(render_live_order_real_fresh_preflight_execution_controlled_markdown(result))
+        return 0 if result.fresh_preflight_passed else 2
     if args == ["--simulate-runtime-not-ready"]:
         runtime_result = build_live_order_real_fresh_preflight_runtime_controlled(
             input_snapshot=LiveOrderRealFreshPreflightRuntimeControlledInput(

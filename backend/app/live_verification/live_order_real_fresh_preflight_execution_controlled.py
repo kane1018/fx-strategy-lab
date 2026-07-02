@@ -1,14 +1,16 @@
 """Step 6G controlled fresh preflight execution adapter.
 
-This module declares the safe adapter/CLI boundary for a later fresh preflight
-execution step. It does not execute fresh preflight, HTTP POST, order
+This module declares the safe adapter/CLI boundary and the explicit safe
+execute-once mode for a later fresh preflight execution step. The default
+adapter summary path still does not execute fresh preflight, HTTP POST, order
 endpoints, live_order_once, final confirmation, ledger updates, attempt
 persistence, actual result receipt, or receipt handoff.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from enum import Enum
 
 from app.live_verification.errors import LiveVerificationValidationError
@@ -23,7 +25,7 @@ from app.live_verification.live_order_real_fresh_preflight_runtime_controlled im
 )
 
 FRESH_PREFLIGHT_EXECUTION_RECOMMENDED_NEXT_STEP = (
-    "fresh_preflight_check_retry_2_with_safe_adapter_no_post_no_final_confirmation"
+    "fresh_preflight_check_retry_3_with_safe_execute_mode_no_post_no_final_confirmation"
 )
 SAFE_PREFLIGHT_EXECUTION_LABEL = "CONTROLLED_FRESH_PREFLIGHT_EXECUTION_ADAPTER"
 UNSUPPORTED_PREFLIGHT_EXECUTION_LABEL = "UNSUPPORTED_REDACTED"
@@ -35,6 +37,9 @@ class LiveOrderRealFreshPreflightExecutionControlledStatus(str, Enum):
     )
     FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION = (
         "FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION"
+    )
+    FRESH_PREFLIGHT_EXECUTION_PASSED_SAFE_SUMMARY = (
+        "FRESH_PREFLIGHT_EXECUTION_PASSED_SAFE_SUMMARY"
     )
     FRESH_PREFLIGHT_EXECUTION_BLOCKED_MISSING_RUNTIME = (
         "FRESH_PREFLIGHT_EXECUTION_BLOCKED_MISSING_RUNTIME"
@@ -102,6 +107,9 @@ class LiveOrderRealFreshPreflightExecutionControlledMode(str, Enum):
     FRESH_PREFLIGHT_EXECUTION_CONTROLLED_ADAPTER_ONLY = (
         "FRESH_PREFLIGHT_EXECUTION_CONTROLLED_ADAPTER_ONLY"
     )
+    FRESH_PREFLIGHT_EXECUTION_CONTROLLED_SAFE_EXECUTE_ONCE = (
+        "FRESH_PREFLIGHT_EXECUTION_CONTROLLED_SAFE_EXECUTE_ONCE"
+    )
 
 
 FreshPreflightExecutionControlledStatus = (
@@ -121,6 +129,9 @@ class LiveOrderRealFreshPreflightExecutionControlledInput:
     )
     fresh_preflight_execution_adapter_declared: bool = True
     fresh_preflight_execution_adapter_requested: bool = True
+    fresh_preflight_execution_requested: bool = False
+    fresh_preflight_execute_mode_available: bool = True
+    fresh_preflight_execute_mode_not_run_this_step: bool = True
     safe_preflight_execution_label: str = SAFE_PREFLIGHT_EXECUTION_LABEL
     safe_output_renderer_ready: bool = True
     public_market_execution_mapping_available: bool = True
@@ -227,6 +238,16 @@ class LiveOrderRealFreshPreflightExecutionControlledResult:
     safe_preflight_runtime_status: str
     fresh_preflight_runtime_ready: bool
     fresh_preflight_execution_performed: bool
+    fresh_preflight_execute_mode_available: bool
+    fresh_preflight_execute_mode_not_run_this_step: bool
+    fresh_preflight_passed: bool
+    fresh_preflight_current: bool
+    fresh_preflight_new: bool
+    fresh_preflight_reused: bool
+    fresh_preflight_stale: bool
+    fresh_preflight_unknown: bool
+    fresh_preflight_timeout: bool
+    fresh_preflight_unavailable: bool
     fresh_preflight_new_marker_required: bool
     fresh_preflight_current_marker_required: bool
     fresh_preflight_non_reuse_required: bool
@@ -337,28 +358,33 @@ def build_live_order_real_fresh_preflight_execution_controlled(
     input_snapshot: LiveOrderRealFreshPreflightExecutionControlledInput | None = None,
     runtime_result: LiveOrderRealFreshPreflightRuntimeControlledResult | None = None,
 ) -> LiveOrderRealFreshPreflightExecutionControlledResult:
-    """Build the safe execution adapter command contract without executing it."""
+    """Build the safe execution adapter command contract."""
     snapshot = input_snapshot or LiveOrderRealFreshPreflightExecutionControlledInput()
     safe_runtime_result = (
         runtime_result
         or build_live_order_real_fresh_preflight_runtime_controlled()
     )
     status, primary_reasons = _status_from_input(snapshot, safe_runtime_result)
-    ready = (
+    ready = status in (
+        (
+            FreshPreflightExecutionControlledStatus
+            .FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION
+        ),
+        (
+            FreshPreflightExecutionControlledStatus
+            .FRESH_PREFLIGHT_EXECUTION_PASSED_SAFE_SUMMARY
+        ),
+    )
+    passed = (
         status
         is (
             FreshPreflightExecutionControlledStatus
-            .FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION
+            .FRESH_PREFLIGHT_EXECUTION_PASSED_SAFE_SUMMARY
         )
     )
     safe_mode = (
         snapshot.fresh_preflight_execution_mode
-        if snapshot.fresh_preflight_execution_mode
-        == (
-            FreshPreflightExecutionControlledMode
-            .FRESH_PREFLIGHT_EXECUTION_CONTROLLED_ADAPTER_ONLY
-            .value
-        )
+        if _supported_mode(snapshot)
         else UNSUPPORTED_PREFLIGHT_EXECUTION_LABEL
     )
     safe_label = (
@@ -382,7 +408,25 @@ def build_live_order_real_fresh_preflight_execution_controlled(
         safe_preflight_runtime_label=safe_runtime_result.safe_preflight_runtime_label,
         safe_preflight_runtime_status=safe_runtime_result.safe_preflight_runtime_status,
         fresh_preflight_runtime_ready=safe_runtime_result.fresh_preflight_runtime_ready,
-        fresh_preflight_execution_performed=False,
+        fresh_preflight_execution_performed=_execution_performed(snapshot, status),
+        fresh_preflight_execute_mode_available=_execute_mode_available(snapshot),
+        fresh_preflight_execute_mode_not_run_this_step=(
+            snapshot.fresh_preflight_execute_mode_not_run_this_step
+        ),
+        fresh_preflight_passed=passed,
+        fresh_preflight_current=_fresh_preflight_current(snapshot, passed),
+        fresh_preflight_new=_fresh_preflight_new(snapshot, passed),
+        fresh_preflight_reused=snapshot.fresh_preflight_execution_reused,
+        fresh_preflight_stale=snapshot.fresh_preflight_execution_stale,
+        fresh_preflight_unknown=snapshot.fresh_preflight_execution_unknown,
+        fresh_preflight_timeout=snapshot.fresh_preflight_execution_timeout,
+        fresh_preflight_unavailable=(
+            snapshot.fresh_preflight_execution_unavailable
+            or (
+                snapshot.fresh_preflight_execution_requested
+                and not _runtime_ready(safe_runtime_result)
+            )
+        ),
         fresh_preflight_new_marker_required=(
             snapshot.fresh_preflight_new_marker_required
         ),
@@ -451,6 +495,61 @@ def build_live_order_real_fresh_preflight_execution_controlled(
     )
 
 
+FreshPreflightRuntimeResultProvider = Callable[
+    [],
+    LiveOrderRealFreshPreflightRuntimeControlledResult,
+]
+
+
+def execute_live_order_real_fresh_preflight_once_controlled(
+    *,
+    input_snapshot: LiveOrderRealFreshPreflightExecutionControlledInput | None = None,
+    runtime_result_provider: FreshPreflightRuntimeResultProvider | None = None,
+) -> LiveOrderRealFreshPreflightExecutionControlledResult:
+    """Execute the safe runtime provider once and render only safe summary data."""
+    base_snapshot = input_snapshot or LiveOrderRealFreshPreflightExecutionControlledInput()
+    snapshot = replace(
+        base_snapshot,
+        fresh_preflight_execution_mode=(
+            FreshPreflightExecutionControlledMode
+            .FRESH_PREFLIGHT_EXECUTION_CONTROLLED_SAFE_EXECUTE_ONCE
+            .value
+        ),
+        fresh_preflight_execution_requested=True,
+        fresh_preflight_execute_mode_not_run_this_step=False,
+    )
+    if _pre_execution_input_blocked(snapshot):
+        return build_live_order_real_fresh_preflight_execution_controlled(
+            input_snapshot=snapshot,
+            runtime_result=build_live_order_real_fresh_preflight_runtime_controlled(),
+        )
+
+    provider = runtime_result_provider or build_live_order_real_fresh_preflight_runtime_controlled
+    try:
+        runtime_result = provider()
+    except TimeoutError:
+        return build_live_order_real_fresh_preflight_execution_controlled(
+            input_snapshot=replace(
+                snapshot,
+                fresh_preflight_execution_timeout=True,
+            ),
+            runtime_result=build_live_order_real_fresh_preflight_runtime_controlled(),
+        )
+    except Exception:
+        return build_live_order_real_fresh_preflight_execution_controlled(
+            input_snapshot=replace(
+                snapshot,
+                fresh_preflight_execution_unavailable=True,
+            ),
+            runtime_result=build_live_order_real_fresh_preflight_runtime_controlled(),
+        )
+
+    return build_live_order_real_fresh_preflight_execution_controlled(
+        input_snapshot=snapshot,
+        runtime_result=runtime_result,
+    )
+
+
 def render_live_order_real_fresh_preflight_execution_controlled_markdown(
     result: LiveOrderRealFreshPreflightExecutionControlledResult,
 ) -> str:
@@ -459,7 +558,11 @@ def render_live_order_real_fresh_preflight_execution_controlled_markdown(
         "# Step 6G Fresh Preflight Execution Controlled Adapter",
         "",
         "This is a controlled execution adapter/CLI contract.",
-        "It does not execute fresh preflight in this step.",
+        (
+            "Fresh preflight safe execute mode has run once."
+            if result.fresh_preflight_execution_performed
+            else "Fresh preflight safe execute mode has not run in this summary."
+        ),
         "It contains only safe labels, statuses, booleans, counts, and blocked",
         "reason labels.",
         "It does not execute HTTP POST.",
@@ -484,6 +587,14 @@ def render_live_order_real_fresh_preflight_execution_controlled_markdown(
             "- fresh_preflight_execution_allowed_next_step: "
             f"{_bool_text(result.fresh_preflight_execution_allowed_next_step)}"
         ),
+        (
+            "- fresh_preflight_execute_mode_available: "
+            f"{_bool_text(result.fresh_preflight_execute_mode_available)}"
+        ),
+        (
+            "- fresh_preflight_execute_mode_not_run_this_step: "
+            f"{_bool_text(result.fresh_preflight_execute_mode_not_run_this_step)}"
+        ),
         f"- fresh_preflight_execution_mode: {result.fresh_preflight_execution_mode}",
         f"- safe_preflight_execution_label: {result.safe_preflight_execution_label}",
         f"- safe_preflight_execution_status: {result.safe_preflight_execution_status}",
@@ -494,6 +605,17 @@ def render_live_order_real_fresh_preflight_execution_controlled_markdown(
         (
             "- fresh_preflight_execution_performed: "
             f"{_bool_text(result.fresh_preflight_execution_performed)}"
+        ),
+        f"- fresh_preflight_passed: {_bool_text(result.fresh_preflight_passed)}",
+        f"- fresh_preflight_current: {_bool_text(result.fresh_preflight_current)}",
+        f"- fresh_preflight_new: {_bool_text(result.fresh_preflight_new)}",
+        f"- fresh_preflight_reused: {_bool_text(result.fresh_preflight_reused)}",
+        f"- fresh_preflight_stale: {_bool_text(result.fresh_preflight_stale)}",
+        f"- fresh_preflight_unknown: {_bool_text(result.fresh_preflight_unknown)}",
+        f"- fresh_preflight_timeout: {_bool_text(result.fresh_preflight_timeout)}",
+        (
+            "- fresh_preflight_unavailable: "
+            f"{_bool_text(result.fresh_preflight_unavailable)}"
         ),
         (
             "- fresh_preflight_new_marker_required: "
@@ -711,6 +833,12 @@ def _status_from_input(
             .FRESH_PREFLIGHT_EXECUTION_BLOCKED_VALUE_EXPOSURE,
             ("value_exposure_attempted",),
         )
+    if snapshot.fresh_preflight_execution_requested:
+        return (
+            FreshPreflightExecutionControlledStatus
+            .FRESH_PREFLIGHT_EXECUTION_PASSED_SAFE_SUMMARY,
+            (),
+        )
     return (
         FreshPreflightExecutionControlledStatus
         .FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION,
@@ -724,13 +852,39 @@ def _adapter_contract_missing(
     return not (
         snapshot.fresh_preflight_execution_adapter_declared
         and snapshot.fresh_preflight_execution_adapter_requested
+        and snapshot.fresh_preflight_execute_mode_available
         and snapshot.safe_preflight_execution_label == SAFE_PREFLIGHT_EXECUTION_LABEL
-        and snapshot.fresh_preflight_execution_mode
-        == (
+        and _supported_mode(snapshot)
+    )
+
+
+def _supported_mode(
+    snapshot: LiveOrderRealFreshPreflightExecutionControlledInput,
+) -> bool:
+    return snapshot.fresh_preflight_execution_mode in {
+        (
             FreshPreflightExecutionControlledMode
             .FRESH_PREFLIGHT_EXECUTION_CONTROLLED_ADAPTER_ONLY
             .value
-        )
+        ),
+        (
+            FreshPreflightExecutionControlledMode
+            .FRESH_PREFLIGHT_EXECUTION_CONTROLLED_SAFE_EXECUTE_ONCE
+            .value
+        ),
+    }
+
+
+def _execute_mode_available(
+    snapshot: LiveOrderRealFreshPreflightExecutionControlledInput,
+) -> bool:
+    return (
+        snapshot.fresh_preflight_execute_mode_available
+        and snapshot.fresh_preflight_execution_adapter_declared
+        and snapshot.fresh_preflight_execution_adapter_requested
+        and snapshot.safe_preflight_execution_label == SAFE_PREFLIGHT_EXECUTION_LABEL
+        and snapshot.safe_output_renderer_ready
+        and _supported_mode(snapshot)
     )
 
 
@@ -900,6 +1054,8 @@ def _blocked_reasons(
     reasons: list[str] = list(primary_reasons)
     if _adapter_contract_missing(snapshot):
         reasons.append("fresh_preflight_execution_adapter_contract_missing")
+    if not snapshot.fresh_preflight_execute_mode_available:
+        reasons.append("fresh_preflight_execute_mode_not_available")
     if not _runtime_ready(runtime_result):
         reasons.append("fresh_preflight_runtime_missing_or_not_ready")
     if not _public_market_available(snapshot, runtime_result):
@@ -970,6 +1126,57 @@ def _retry_allowed(
     )
 
 
+def _pre_execution_input_blocked(
+    snapshot: LiveOrderRealFreshPreflightExecutionControlledInput,
+) -> bool:
+    safe_runtime = build_live_order_real_fresh_preflight_runtime_controlled()
+    status, _ = _status_from_input(snapshot, safe_runtime)
+    return status not in {
+        (
+            FreshPreflightExecutionControlledStatus
+            .FRESH_PREFLIGHT_EXECUTION_PASSED_SAFE_SUMMARY
+        ),
+        (
+            FreshPreflightExecutionControlledStatus
+            .FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION
+        ),
+    }
+
+
+def _execution_performed(
+    snapshot: LiveOrderRealFreshPreflightExecutionControlledInput,
+    status: LiveOrderRealFreshPreflightExecutionControlledStatus,
+) -> bool:
+    return (
+        snapshot.fresh_preflight_execution_requested
+        and status
+        is not (
+            FreshPreflightExecutionControlledStatus
+            .FRESH_PREFLIGHT_EXECUTION_ADAPTER_NOT_READY
+        )
+    )
+
+
+def _fresh_preflight_current(
+    snapshot: LiveOrderRealFreshPreflightExecutionControlledInput,
+    passed: bool,
+) -> bool:
+    return (
+        passed
+        and not snapshot.fresh_preflight_execution_stale
+        and not snapshot.fresh_preflight_execution_unknown
+        and not snapshot.fresh_preflight_execution_timeout
+        and not snapshot.fresh_preflight_execution_unavailable
+    )
+
+
+def _fresh_preflight_new(
+    snapshot: LiveOrderRealFreshPreflightExecutionControlledInput,
+    passed: bool,
+) -> bool:
+    return passed and not snapshot.fresh_preflight_execution_reused
+
+
 def _build_check_results(
     *,
     snapshot: LiveOrderRealFreshPreflightExecutionControlledInput,
@@ -978,16 +1185,32 @@ def _build_check_results(
     ready: bool,
     safe_label: str,
 ) -> tuple[LiveOrderRealFreshPreflightExecutionControlledCheckResult, ...]:
+    expected_status = (
+        (
+            FreshPreflightExecutionControlledStatus
+            .FRESH_PREFLIGHT_EXECUTION_PASSED_SAFE_SUMMARY
+            .value
+        )
+        if snapshot.fresh_preflight_execution_requested
+        else (
+            FreshPreflightExecutionControlledStatus
+            .FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION
+            .value
+        )
+    )
+    performed = _execution_performed(snapshot, status)
     return (
         LiveOrderRealFreshPreflightExecutionControlledCheckResult(
             name="fresh_preflight_execution_adapter_ready",
             passed=ready,
             sanitized_value=status.value,
-            expected=(
-                FreshPreflightExecutionControlledStatus
-                .FRESH_PREFLIGHT_EXECUTION_ADAPTER_READY_NO_EXECUTION
-                .value
-            ),
+            expected=expected_status,
+        ),
+        LiveOrderRealFreshPreflightExecutionControlledCheckResult(
+            name="fresh_preflight_execute_mode_available",
+            passed=_execute_mode_available(snapshot),
+            sanitized_value=_bool_text(_execute_mode_available(snapshot)),
+            expected="true",
         ),
         LiveOrderRealFreshPreflightExecutionControlledCheckResult(
             name="safe_preflight_execution_label",
@@ -1022,10 +1245,29 @@ def _build_check_results(
             expected="true",
         ),
         LiveOrderRealFreshPreflightExecutionControlledCheckResult(
-            name="fresh_preflight_not_executed",
-            passed=not snapshot.fresh_preflight_execution_performed,
-            sanitized_value=_bool_text(not snapshot.fresh_preflight_execution_performed),
-            expected="true",
+            name="fresh_preflight_execution_performed_expected_state",
+            passed=performed is snapshot.fresh_preflight_execution_requested,
+            sanitized_value=_bool_text(performed),
+            expected=_bool_text(snapshot.fresh_preflight_execution_requested),
+        ),
+        LiveOrderRealFreshPreflightExecutionControlledCheckResult(
+            name="fresh_preflight_new_current_non_reused",
+            passed=(
+                (
+                    _fresh_preflight_current(snapshot, status.value == expected_status)
+                    and _fresh_preflight_new(snapshot, status.value == expected_status)
+                    and not snapshot.fresh_preflight_execution_reused
+                )
+                if snapshot.fresh_preflight_execution_requested
+                else (
+                    snapshot.fresh_preflight_new_marker_required
+                    and snapshot.fresh_preflight_current_marker_required
+                    and snapshot.fresh_preflight_non_reuse_required
+                    and not snapshot.fresh_preflight_execution_reused
+                )
+            ),
+            sanitized_value="safe_marker_only",
+            expected="new_current_non_reused",
         ),
         LiveOrderRealFreshPreflightExecutionControlledCheckResult(
             name="adapter_at_most_once_no_retry",
@@ -1049,8 +1291,18 @@ def _build_check_results(
 def _validate_result_safety(
     result: LiveOrderRealFreshPreflightExecutionControlledResult,
 ) -> None:
-    if result.fresh_preflight_execution_performed:
-        raise LiveVerificationValidationError("fresh preflight execution must not run")
+    if (
+        result.fresh_preflight_execution_performed
+        and result.fresh_preflight_execution_mode
+        != (
+            FreshPreflightExecutionControlledMode
+            .FRESH_PREFLIGHT_EXECUTION_CONTROLLED_SAFE_EXECUTE_ONCE
+            .value
+        )
+    ):
+        raise LiveVerificationValidationError(
+            "fresh preflight execution requires safe execute-once mode",
+        )
     if (
         result.api_call_allowed
         or result.api_call_executed
@@ -1112,6 +1364,9 @@ def _bool_text(value: bool) -> str:
 _FRESH_PREFLIGHT_EXECUTION_INPUT_BOOL_FIELDS = (
     "fresh_preflight_execution_adapter_declared",
     "fresh_preflight_execution_adapter_requested",
+    "fresh_preflight_execution_requested",
+    "fresh_preflight_execute_mode_available",
+    "fresh_preflight_execute_mode_not_run_this_step",
     "safe_output_renderer_ready",
     "public_market_execution_mapping_available",
     "private_read_only_execution_mapping_available",
@@ -1184,6 +1439,16 @@ _FRESH_PREFLIGHT_EXECUTION_RESULT_BOOL_FIELDS = (
     "fresh_preflight_execution_allowed_next_step",
     "fresh_preflight_runtime_ready",
     "fresh_preflight_execution_performed",
+    "fresh_preflight_execute_mode_available",
+    "fresh_preflight_execute_mode_not_run_this_step",
+    "fresh_preflight_passed",
+    "fresh_preflight_current",
+    "fresh_preflight_new",
+    "fresh_preflight_reused",
+    "fresh_preflight_stale",
+    "fresh_preflight_unknown",
+    "fresh_preflight_timeout",
+    "fresh_preflight_unavailable",
     "fresh_preflight_new_marker_required",
     "fresh_preflight_current_marker_required",
     "fresh_preflight_non_reuse_required",
