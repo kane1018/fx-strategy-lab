@@ -63,3 +63,10 @@ Recommended next step:
 ```text
 Step 6G-PC-OX-R-LEVEL5-SIGNAL-ENTRY-CYCLE-GATE-C
 ```
+
+That follow-up is now implemented as a planning-only signal/entry cycle gate.
+It uses injected safe labels, not raw market data or actual market values.
+`NO_POSITION + ENTRY_BUY/ENTRY_SELL` can reach `ENTRY_READY`, while actual entry
+POST, close POST, retry/repost, second POST, ledger update, receipt handoff,
+raw/ID/value exposure, credential/signature/header exposure, and `.env` access
+remain prohibited.

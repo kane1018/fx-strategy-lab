@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-LEVEL5-SIGNAL-ENTRY-CYCLE-GATE-C 完了 / planning-only / no actual entry POST / no close POST** —
+  runtime safe readの `NO_POSITION` / safe count `0` 前提を受けて、Level 5 signal MVPをsafe label inputへ拡張し、
+  entry planning gateとcycle `ENTRY_READY` を接続した。
+  `backend/app/live_verification/live_order_real_step6g_level5_fast_mvp_controlled.py` は、
+  `UPTREND/DOWNTREND/FLAT/UNKNOWN`、`NORMAL/WIDE/UNKNOWN` spread、`OK/BLOCKED/UNKNOWN` market、
+  `NORMAL/HIGH/UNKNOWN` volatility のsafe labelsだけを扱う。`NO_POSITION + UPTREND + NORMAL + OK` は
+  `ENTRY_BUY`、`NO_POSITION + DOWNTREND + NORMAL + OK` は `ENTRY_SELL`、`FLAT` は `HOLD`、unknown/wide/blockedや
+  建玉あり/unknown/multipleはfail-closed。entry planningは `USD_JPY`、100 units、`MARKET`、safe side labelのみで、
+  `entry_execution_allowed_now=false`、retry/repost=false、second POST=false、raw/ID/value exposure=falseを維持する。
+  `IDLE + NO_POSITION + ENTRY` は planning-only の `ENTRY_READY` までで、`ENTRY_SENT` には進まない。
+  actual entry POST、close POST、order endpoint、`live_order_once`、broker/private write、ledger/receipt、raw market data、
+  actual market value、broker/API response、account/order/transaction/position ID、credential/signature/header値、`.env` は扱っていない。
+  runbook: [STEP6G_LEVEL5_SIGNAL_ENTRY_CYCLE_GATE.md](STEP6G_LEVEL5_SIGNAL_ENTRY_CYCLE_GATE.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-ENTRY-ORDER-EXECUTION-GATE-C**。
 - **Step 6G-PC-OX-R-POSITION-READ-ONLY-ROUTE-WIRING-C 完了 / no actual POST / no close POST / source missing fail-closed** —
   Level 5 fast-track MVP foundationのposition contractを、standalone controlled routeへ分離して接続した。
   `backend/app/live_verification/live_order_real_position_read_only_controlled.py` はsafe status/countのみを扱い、

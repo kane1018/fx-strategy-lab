@@ -12,17 +12,22 @@ from app.live_verification.live_order_real_step6g_level5_fast_mvp_controlled imp
     CloseRouteFoundationStatus,
     Level5CycleState,
     Level5CycleTransitionInput,
+    Level5EntryPlanningGateInput,
     Level5ExitReasonLabel,
     Level5FastTrackConfigInput,
     Level5SignalMvpInput,
     Level5SignalSource,
     Level5SignalType,
+    Level5SpreadLabel,
+    Level5TimeMarketLabel,
     Level5TrendLabel,
+    Level5VolatilityLabel,
     PositionReadOnlyStatus,
     PositionReadOnlyStatusInput,
     ReviewOnlyReceiptSummaryInput,
     SafeLedgerLikeRecordInput,
     build_close_route_foundation,
+    build_level5_entry_planning_gate,
     build_level5_fast_mvp_foundation,
     build_level5_fast_track_config,
     build_position_read_only_status,
@@ -219,7 +224,7 @@ def test_cycle_state_machine_entry_to_position_check_path() -> None:
         Level5CycleTransitionInput(current_state=Level5CycleState.ENTRY_ACCEPTED_SANITIZED),
     )
 
-    assert entry.next_state is Level5CycleState.ENTRY_SIGNAL
+    assert entry.next_state is Level5CycleState.ENTRY_READY
     assert sent.next_state is Level5CycleState.ENTRY_SENT
     assert accepted.next_state is Level5CycleState.ENTRY_ACCEPTED_SANITIZED
     assert pending.next_state is Level5CycleState.POSITION_CHECK_PENDING
@@ -290,10 +295,14 @@ def test_cycle_state_machine_exit_to_close_and_closed_safe() -> None:
 def test_signal_mvp_emits_hold_by_default() -> None:
     result = evaluate_level5_signal_mvp()
 
+    assert result.signal_checked is True
     assert result.signal_type is Level5SignalType.HOLD
     assert result.signal_source is Level5SignalSource.RULE_MVP
     assert result.actual_market_raw_value_exposed is False
+    assert result.actual_market_value_exposed is False
+    assert result.raw_market_data_exposed is False
     assert result.signal_direct_post_attempted is False
+    assert result.signal_directly_executes_post is False
 
 
 def test_signal_mvp_emits_entry_only_when_no_position() -> None:
@@ -311,7 +320,160 @@ def test_signal_mvp_emits_entry_only_when_no_position() -> None:
     )
 
     assert result.signal_type is Level5SignalType.ENTRY_BUY
-    assert blocked.signal_type is Level5SignalType.HOLD
+    assert blocked.signal_type is Level5SignalType.BLOCKED
+    assert "entry_requires_no_position" in blocked.blocked_reasons
+
+
+def test_signal_entry_gate_buy_planning_ready_from_safe_snapshot() -> None:
+    signal = evaluate_level5_signal_mvp(
+        Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.UPTREND,
+            spread_label=Level5SpreadLabel.NORMAL,
+            time_market_label=Level5TimeMarketLabel.OK,
+            volatility_label=Level5VolatilityLabel.NORMAL,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+            signal_source=Level5SignalSource.SAFE_SNAPSHOT,
+        ),
+    )
+    planning = build_level5_entry_planning_gate(
+        Level5EntryPlanningGateInput(
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+            signal_checked=signal.signal_checked,
+            signal_type=signal.signal_type,
+        ),
+    )
+
+    assert signal.signal_type is Level5SignalType.ENTRY_BUY
+    assert signal.signal_confidence_label.name == "LOW"
+    assert signal.signal_reason_label == "rule_mvp_uptrend_normal_ok"
+    assert signal.actual_market_value_exposed is False
+    assert signal.raw_market_data_exposed is False
+    assert signal.signal_directly_executes_post is False
+    assert planning.entry_planning_gate_ready is True
+    assert planning.entry_planning_allowed is True
+    assert planning.entry_execution_allowed_now is False
+    assert planning.entry_execution_step_may_be_planned is True
+    assert planning.entry_units_fixed == 100
+    assert planning.entry_symbol_safe_label == "USD_JPY"
+    assert planning.entry_order_type_safe_label == "MARKET"
+    assert planning.entry_side_safe_label == "BUY"
+    assert planning.entry_retry_allowed is False
+    assert planning.entry_second_post_allowed is False
+    assert planning.entry_raw_exposure is False
+    assert planning.entry_id_exposure is False
+    assert planning.actual_http_post_executed is False
+    assert planning.close_post_executed is False
+
+
+def test_signal_entry_gate_sell_planning_ready_from_safe_snapshot() -> None:
+    signal = evaluate_level5_signal_mvp(
+        Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.DOWNTREND,
+            spread_label=Level5SpreadLabel.NORMAL,
+            time_market_label=Level5TimeMarketLabel.OK,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+            signal_source=Level5SignalSource.SAFE_SNAPSHOT,
+        ),
+    )
+    planning = build_level5_entry_planning_gate(
+        Level5EntryPlanningGateInput(
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+            signal_checked=signal.signal_checked,
+            signal_type=signal.signal_type,
+        ),
+    )
+
+    assert signal.signal_type is Level5SignalType.ENTRY_SELL
+    assert signal.signal_reason_label == "rule_mvp_downtrend_normal_ok"
+    assert planning.entry_planning_allowed is True
+    assert planning.entry_side_safe_label == "SELL"
+    assert planning.entry_execution_allowed_now is False
+
+
+def test_signal_entry_gate_hold_and_market_blocks_do_not_plan_entry() -> None:
+    hold_signal = evaluate_level5_signal_mvp(
+        Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.FLAT,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+        ),
+    )
+    wide_signal = evaluate_level5_signal_mvp(
+        Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.UPTREND,
+            spread_label=Level5SpreadLabel.WIDE,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+        ),
+    )
+    unknown_market_signal = evaluate_level5_signal_mvp(
+        Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.UNKNOWN,
+            time_market_label=Level5TimeMarketLabel.UNKNOWN,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+        ),
+    )
+    hold_planning = build_level5_entry_planning_gate(
+        Level5EntryPlanningGateInput(
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+            signal_checked=hold_signal.signal_checked,
+            signal_type=hold_signal.signal_type,
+        ),
+    )
+
+    assert hold_signal.signal_type is Level5SignalType.HOLD
+    assert hold_planning.entry_planning_allowed is False
+    assert "entry_signal_required" in hold_planning.blocked_reasons
+    assert wide_signal.signal_type is Level5SignalType.BLOCKED
+    assert "spread_not_normal" in wide_signal.blocked_reasons
+    assert unknown_market_signal.signal_type is Level5SignalType.BLOCKED
+    assert "trend_unknown" in unknown_market_signal.blocked_reasons
+    assert "time_market_not_ok" in unknown_market_signal.blocked_reasons
+
+
+def test_entry_planning_blocks_non_no_position_and_exposure_attempts() -> None:
+    one_position = build_level5_entry_planning_gate(
+        Level5EntryPlanningGateInput(
+            position_status=PositionReadOnlyStatus.ONE_POSITION_OPEN,
+            signal_checked=True,
+            signal_type=Level5SignalType.ENTRY_BUY,
+        ),
+    )
+    unknown_position = build_level5_entry_planning_gate(
+        Level5EntryPlanningGateInput(
+            position_status=PositionReadOnlyStatus.UNKNOWN,
+            signal_checked=True,
+            signal_type=Level5SignalType.ENTRY_BUY,
+        ),
+    )
+    multiple_position = build_level5_entry_planning_gate(
+        Level5EntryPlanningGateInput(
+            position_status=PositionReadOnlyStatus.BLOCKED,
+            signal_checked=True,
+            signal_type=Level5SignalType.ENTRY_BUY,
+        ),
+    )
+    unsafe = build_level5_entry_planning_gate(
+        Level5EntryPlanningGateInput(
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+            signal_checked=True,
+            signal_type=Level5SignalType.ENTRY_BUY,
+            raw_exposure_attempted=True,
+            id_exposure_attempted=True,
+            credential_signature_headers_exposure_attempted=True,
+            retry_or_repost_attempted=True,
+            second_post_attempted=True,
+        ),
+    )
+
+    for result in (one_position, unknown_position, multiple_position):
+        assert result.entry_planning_allowed is False
+        assert "entry_requires_no_position" in result.blocked_reasons
+    assert unsafe.entry_planning_allowed is False
+    assert unsafe.entry_execution_allowed_now is False
+    assert "raw_exposure_attempted" in unsafe.blocked_reasons
+    assert "id_exposure_attempted" in unsafe.blocked_reasons
+    assert "credential_signature_headers_exposure_attempted" in unsafe.blocked_reasons
+    assert unsafe.entry_retry_allowed is False
+    assert unsafe.entry_second_post_allowed is False
 
 
 def test_signal_mvp_emits_exit_only_when_position_open() -> None:
@@ -554,6 +716,104 @@ def test_level5_close_ready_does_not_reach_close_sent_without_execution_gate() -
 
     assert result.next_state is Level5CycleState.CLOSE_READY
     assert result.next_state is not Level5CycleState.CLOSE_SENT
+    assert result.retry_allowed is False
+    assert result.second_post_allowed is False
+
+
+def test_level5_signal_entry_cycle_reaches_entry_ready_without_post() -> None:
+    result = build_level5_fast_mvp_foundation(
+        position_input=PositionReadOnlyStatusInput(
+            position_status_checked=True,
+            position_status_unknown=False,
+            position_source_available=True,
+            open_position_count=0,
+        ),
+        signal_input=Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.UPTREND,
+            spread_label=Level5SpreadLabel.NORMAL,
+            time_market_label=Level5TimeMarketLabel.OK,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+            signal_source=Level5SignalSource.SAFE_SNAPSHOT,
+        ),
+    )
+
+    assert result.position_status.position_status is PositionReadOnlyStatus.NO_POSITION
+    assert result.signal.signal_type is Level5SignalType.ENTRY_BUY
+    assert result.entry_planning.entry_planning_gate_ready is True
+    assert result.entry_planning.entry_planning_allowed is True
+    assert result.entry_planning.entry_execution_allowed_now is False
+    assert result.entry_planning.entry_execution_step_may_be_planned is True
+    assert result.entry_planning.entry_side_safe_label == "BUY"
+    assert result.cycle_transition.next_state is Level5CycleState.ENTRY_READY
+    assert result.cycle_transition.next_state is not Level5CycleState.ENTRY_SENT
+    assert result.actual_http_post_executed is False
+    assert result.close_post_executed is False
+    assert result.retry_attempted is False
+    assert result.second_post_attempted is False
+
+
+def test_level5_signal_entry_cycle_blocks_hold_unknown_open_and_multiple() -> None:
+    hold = build_level5_fast_mvp_foundation(
+        position_input=PositionReadOnlyStatusInput(
+            position_status_checked=True,
+            position_status_unknown=False,
+            position_source_available=True,
+            open_position_count=0,
+        ),
+        signal_input=Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.FLAT,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+        ),
+    )
+    unknown = build_level5_fast_mvp_foundation(
+        position_input=PositionReadOnlyStatusInput(),
+        signal_input=Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.UPTREND,
+            position_status=PositionReadOnlyStatus.UNKNOWN,
+        ),
+    )
+    one_position = build_level5_fast_mvp_foundation(
+        position_input=PositionReadOnlyStatusInput(
+            position_status_checked=True,
+            position_status_unknown=False,
+            position_source_available=True,
+            open_position_count=1,
+        ),
+        signal_input=Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.UPTREND,
+            position_status=PositionReadOnlyStatus.ONE_POSITION_OPEN,
+        ),
+    )
+    multiple = build_level5_fast_mvp_foundation(
+        position_input=PositionReadOnlyStatusInput(
+            position_status_checked=True,
+            position_status_unknown=False,
+            position_source_available=True,
+            open_position_count=2,
+        ),
+        signal_input=Level5SignalMvpInput(
+            trend_label=Level5TrendLabel.UPTREND,
+            position_status=PositionReadOnlyStatus.BLOCKED,
+        ),
+    )
+
+    assert hold.signal.signal_type is Level5SignalType.HOLD
+    assert hold.entry_planning.entry_planning_allowed is False
+    assert hold.cycle_transition.next_state is Level5CycleState.IDLE
+    for result in (unknown, one_position, multiple):
+        assert result.entry_planning.entry_planning_allowed is False
+        assert result.cycle_transition.next_state is not Level5CycleState.ENTRY_SENT
+        assert result.actual_http_post_executed is False
+        assert result.close_post_executed is False
+
+
+def test_entry_ready_does_not_reach_entry_sent_without_execution_gate() -> None:
+    result = transition_level5_cycle_state(
+        Level5CycleTransitionInput(current_state=Level5CycleState.ENTRY_READY),
+    )
+
+    assert result.next_state is Level5CycleState.ENTRY_READY
+    assert result.next_state is not Level5CycleState.ENTRY_SENT
     assert result.retry_allowed is False
     assert result.second_post_allowed is False
 

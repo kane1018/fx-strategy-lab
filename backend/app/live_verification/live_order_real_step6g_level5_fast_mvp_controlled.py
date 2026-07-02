@@ -32,6 +32,7 @@ SAFE_POSITION_STATUS_LABEL = "STEP6G_POSITION_READ_ONLY_STATUS_CONTRACT"
 SAFE_CLOSE_ROUTE_LABEL = "STEP6G_CLOSE_ROUTE_FOUNDATION_NO_POST"
 SAFE_CYCLE_STATE_LABEL = "STEP6G_LEVEL5_CYCLE_STATE_MACHINE"
 SAFE_SIGNAL_MVP_LABEL = "STEP6G_LEVEL5_SIGNAL_MVP_CONTRACT"
+SAFE_ENTRY_PLANNING_LABEL = "STEP6G_LEVEL5_ENTRY_PLANNING_GATE_NO_POST"
 SAFE_FAST_TRACK_CONFIG_LABEL = "STEP6G_LEVEL5_FAST_TRACK_SAFE_CONFIG"
 
 RESULT_ACCEPTED_SANITIZED = "RESULT_ACCEPTED_SANITIZED"
@@ -70,6 +71,7 @@ class CloseRouteFoundationStatus(str, Enum):
 class Level5CycleState(str, Enum):
     IDLE = "IDLE"
     ENTRY_SIGNAL = "ENTRY_SIGNAL"
+    ENTRY_READY = "ENTRY_READY"
     ENTRY_SENT = "ENTRY_SENT"
     ENTRY_ACCEPTED_SANITIZED = "ENTRY_ACCEPTED_SANITIZED"
     POSITION_CHECK_PENDING = "POSITION_CHECK_PENDING"
@@ -92,6 +94,7 @@ class Level5SignalType(str, Enum):
 class Level5SignalSource(str, Enum):
     RULE_MVP = "RULE_MVP"
     MANUAL_INJECTED = "MANUAL_INJECTED"
+    SAFE_SNAPSHOT = "SAFE_SNAPSHOT"
     MARKET_ADAPTER_MISSING = "MARKET_ADAPTER_MISSING"
 
 
@@ -105,6 +108,24 @@ class Level5TrendLabel(str, Enum):
     UPTREND = "UPTREND"
     DOWNTREND = "DOWNTREND"
     FLAT = "FLAT"
+    UNKNOWN = "UNKNOWN"
+
+
+class Level5VolatilityLabel(str, Enum):
+    NORMAL = "NORMAL"
+    HIGH = "HIGH"
+    UNKNOWN = "UNKNOWN"
+
+
+class Level5SpreadLabel(str, Enum):
+    NORMAL = "NORMAL"
+    WIDE = "WIDE"
+    UNKNOWN = "UNKNOWN"
+
+
+class Level5TimeMarketLabel(str, Enum):
+    OK = "OK"
+    BLOCKED = "BLOCKED"
     UNKNOWN = "UNKNOWN"
 
 
@@ -361,18 +382,30 @@ class CloseRouteFoundationResult:
 @dataclass(frozen=True)
 class Level5SignalMvpInput:
     trend_label: Level5TrendLabel = Level5TrendLabel.FLAT
+    volatility_label: Level5VolatilityLabel = Level5VolatilityLabel.NORMAL
+    spread_label: Level5SpreadLabel = Level5SpreadLabel.NORMAL
+    time_market_label: Level5TimeMarketLabel = Level5TimeMarketLabel.OK
     position_status: PositionReadOnlyStatus = PositionReadOnlyStatus.NO_POSITION
     exit_reason_label: Level5ExitReasonLabel = Level5ExitReasonLabel.NONE
     signal_source: Level5SignalSource = Level5SignalSource.RULE_MVP
     market_source_available: bool = True
     safe_config_allows_entry: bool = True
     actual_market_raw_value_exposed: bool = False
+    actual_market_value_exposed: bool = False
+    raw_market_data_exposed: bool = False
     signal_direct_post_attempted: bool = False
+    signal_directly_executes_post: bool = False
     retry_or_repost_attempted: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.trend_label, Level5TrendLabel):
             raise LiveVerificationValidationError("trend_label must be enum")
+        if not isinstance(self.volatility_label, Level5VolatilityLabel):
+            raise LiveVerificationValidationError("volatility_label must be enum")
+        if not isinstance(self.spread_label, Level5SpreadLabel):
+            raise LiveVerificationValidationError("spread_label must be enum")
+        if not isinstance(self.time_market_label, Level5TimeMarketLabel):
+            raise LiveVerificationValidationError("time_market_label must be enum")
         if not isinstance(self.position_status, PositionReadOnlyStatus):
             raise LiveVerificationValidationError("position_status must be enum")
         if not isinstance(self.exit_reason_label, Level5ExitReasonLabel):
@@ -384,12 +417,16 @@ class Level5SignalMvpInput:
 
 @dataclass(frozen=True)
 class Level5SignalMvpResult:
+    signal_checked: bool
     signal_type: Level5SignalType
     signal_source: Level5SignalSource
     signal_confidence_label: Level5SignalConfidenceLabel
     signal_reason_label: str
     actual_market_raw_value_exposed: bool
+    actual_market_value_exposed: bool
+    raw_market_data_exposed: bool
     signal_direct_post_attempted: bool
+    signal_directly_executes_post: bool
     retry_or_repost_attempted: bool
     blocked_reasons: tuple[str, ...]
 
@@ -402,6 +439,72 @@ class Level5SignalMvpResult:
             raise LiveVerificationValidationError("confidence label must be enum")
         _require_non_empty("signal_reason_label", self.signal_reason_label)
         _validate_bool_fields(self, _SIGNAL_RESULT_BOOL_FIELDS)
+        _validate_blocked_reasons(self.blocked_reasons)
+
+
+@dataclass(frozen=True)
+class Level5EntryPlanningGateInput:
+    position_status: PositionReadOnlyStatus = PositionReadOnlyStatus.UNKNOWN
+    signal_checked: bool = False
+    signal_type: Level5SignalType = Level5SignalType.HOLD
+    entry_symbol_safe_label: str = SUPPORTED_SYMBOL
+    entry_units_fixed: int = SUPPORTED_UNITS
+    entry_order_type_safe_label: str = "MARKET"
+    signal_directly_executes_post: bool = False
+    actual_http_post_attempted: bool = False
+    close_post_attempted: bool = False
+    retry_or_repost_attempted: bool = False
+    second_post_attempted: bool = False
+    raw_exposure_attempted: bool = False
+    id_exposure_attempted: bool = False
+    credential_signature_headers_exposure_attempted: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.position_status, PositionReadOnlyStatus):
+            raise LiveVerificationValidationError("position_status must be enum")
+        if not isinstance(self.signal_type, Level5SignalType):
+            raise LiveVerificationValidationError("signal_type must be enum")
+        _require_non_empty("entry_symbol_safe_label", self.entry_symbol_safe_label)
+        _require_non_empty("entry_order_type_safe_label", self.entry_order_type_safe_label)
+        _validate_non_negative_int("entry_units_fixed", self.entry_units_fixed)
+        _validate_bool_fields(self, _ENTRY_PLANNING_INPUT_BOOL_FIELDS)
+
+
+@dataclass(frozen=True)
+class Level5EntryPlanningGateResult:
+    entry_planning_gate_ready: bool
+    entry_planning_allowed: bool
+    entry_execution_allowed_now: bool
+    entry_execution_step_may_be_planned: bool
+    entry_requires_new_confirmation: bool
+    entry_requires_time_market_operator_gate: bool
+    entry_execution_requires_position_status_current: bool
+    entry_execution_requires_no_position: bool
+    entry_execution_requires_no_retry: bool
+    entry_execution_requires_no_second_post: bool
+    entry_execution_requires_raw_id_exposure_false: bool
+    entry_units_fixed: int
+    entry_symbol_safe_label: str
+    entry_order_type_safe_label: str
+    entry_side_safe_label: str
+    entry_retry_allowed: bool
+    entry_second_post_allowed: bool
+    entry_raw_exposure: bool
+    entry_id_exposure: bool
+    actual_http_post_executed: bool
+    close_post_executed: bool
+    signal_directly_executes_post: bool
+    credential_signature_headers_exposure: bool
+    safe_entry_planning_label: str
+    blocked_reasons: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        _require_non_empty("entry_symbol_safe_label", self.entry_symbol_safe_label)
+        _require_non_empty("entry_order_type_safe_label", self.entry_order_type_safe_label)
+        _require_non_empty("entry_side_safe_label", self.entry_side_safe_label)
+        _require_non_empty("safe_entry_planning_label", self.safe_entry_planning_label)
+        _validate_non_negative_int("entry_units_fixed", self.entry_units_fixed)
+        _validate_bool_fields(self, _ENTRY_PLANNING_RESULT_BOOL_FIELDS)
         _validate_blocked_reasons(self.blocked_reasons)
 
 
@@ -464,6 +567,7 @@ class Level5FastMvpFoundationResult:
     close_route: CloseRouteFoundationResult
     close_order_route: CloseOrderRouteControlledResult
     signal: Level5SignalMvpResult
+    entry_planning: Level5EntryPlanningGateResult
     cycle_transition: Level5CycleTransitionResult
     actual_http_post_executed: bool
     close_post_executed: bool
@@ -635,6 +739,7 @@ def evaluate_level5_signal_mvp(
     blocked = _signal_blocked_reasons(snapshot)
     if blocked:
         return Level5SignalMvpResult(
+            signal_checked=True,
             signal_type=Level5SignalType.BLOCKED,
             signal_source=(
                 Level5SignalSource.MARKET_ADAPTER_MISSING
@@ -644,7 +749,10 @@ def evaluate_level5_signal_mvp(
             signal_confidence_label=Level5SignalConfidenceLabel.BLOCKED,
             signal_reason_label=blocked[0],
             actual_market_raw_value_exposed=False,
+            actual_market_value_exposed=False,
+            raw_market_data_exposed=False,
             signal_direct_post_attempted=False,
+            signal_directly_executes_post=False,
             retry_or_repost_attempted=False,
             blocked_reasons=blocked,
         )
@@ -655,14 +763,54 @@ def evaluate_level5_signal_mvp(
         else Level5SignalConfidenceLabel.TEST_ONLY
     )
     return Level5SignalMvpResult(
+        signal_checked=True,
         signal_type=signal_type,
         signal_source=snapshot.signal_source,
         signal_confidence_label=confidence,
         signal_reason_label=reason,
         actual_market_raw_value_exposed=False,
+        actual_market_value_exposed=False,
+        raw_market_data_exposed=False,
         signal_direct_post_attempted=False,
+        signal_directly_executes_post=False,
         retry_or_repost_attempted=False,
         blocked_reasons=(),
+    )
+
+
+def build_level5_entry_planning_gate(
+    input_snapshot: Level5EntryPlanningGateInput | None = None,
+) -> Level5EntryPlanningGateResult:
+    snapshot = input_snapshot or Level5EntryPlanningGateInput()
+    reasons = _entry_planning_blocked_reasons(snapshot)
+    side_label = _entry_side_safe_label(snapshot.signal_type)
+    ready = not reasons
+    return Level5EntryPlanningGateResult(
+        entry_planning_gate_ready=ready,
+        entry_planning_allowed=ready,
+        entry_execution_allowed_now=False,
+        entry_execution_step_may_be_planned=ready,
+        entry_requires_new_confirmation=True,
+        entry_requires_time_market_operator_gate=True,
+        entry_execution_requires_position_status_current=True,
+        entry_execution_requires_no_position=True,
+        entry_execution_requires_no_retry=True,
+        entry_execution_requires_no_second_post=True,
+        entry_execution_requires_raw_id_exposure_false=True,
+        entry_units_fixed=SUPPORTED_UNITS,
+        entry_symbol_safe_label=SUPPORTED_SYMBOL,
+        entry_order_type_safe_label="MARKET",
+        entry_side_safe_label=side_label,
+        entry_retry_allowed=False,
+        entry_second_post_allowed=False,
+        entry_raw_exposure=False,
+        entry_id_exposure=False,
+        actual_http_post_executed=False,
+        close_post_executed=False,
+        signal_directly_executes_post=False,
+        credential_signature_headers_exposure=False,
+        safe_entry_planning_label=SAFE_ENTRY_PLANNING_LABEL,
+        blocked_reasons=reasons,
     )
 
 
@@ -685,10 +833,13 @@ def transition_level5_cycle_state(
                 next_state = Level5CycleState.HALTED
                 reasons = ("entry_requires_no_position",)
             elif snapshot.daily_limits_ok:
-                next_state = Level5CycleState.ENTRY_SIGNAL
+                next_state = Level5CycleState.ENTRY_READY
             else:
                 next_state = Level5CycleState.HALTED
                 reasons = ("daily_limits_not_ok",)
+    elif snapshot.current_state is Level5CycleState.ENTRY_READY:
+        if snapshot.entry_execution_gate_passed:
+            next_state = Level5CycleState.ENTRY_SENT
     elif snapshot.current_state is Level5CycleState.ENTRY_SIGNAL:
         if snapshot.entry_execution_gate_passed:
             next_state = Level5CycleState.ENTRY_SENT
@@ -754,9 +905,26 @@ def build_level5_fast_mvp_foundation(
         signal_input
         or Level5SignalMvpInput(position_status=position.position_status),
     )
+    entry_planning = build_level5_entry_planning_gate(
+        Level5EntryPlanningGateInput(
+            position_status=position.position_status,
+            signal_checked=signal.signal_checked,
+            signal_type=signal.signal_type,
+            signal_directly_executes_post=signal.signal_directly_executes_post,
+            retry_or_repost_attempted=signal.retry_or_repost_attempted,
+            raw_exposure_attempted=(
+                signal.actual_market_raw_value_exposed
+                or signal.actual_market_value_exposed
+                or signal.raw_market_data_exposed
+            ),
+        ),
+    )
     cycle = transition_level5_cycle_state(
         cycle_input
-        or Level5CycleTransitionInput(position_status=position.position_status),
+        or Level5CycleTransitionInput(
+            position_status=position.position_status,
+            entry_signal=entry_planning.entry_planning_allowed,
+        ),
     )
     blocked = _foundation_blocked_reasons(config, ledger, receipt, position, signal)
     return Level5FastMvpFoundationResult(
@@ -770,6 +938,7 @@ def build_level5_fast_mvp_foundation(
         close_route=close,
         close_order_route=close_order_route,
         signal=signal,
+        entry_planning=entry_planning,
         cycle_transition=cycle,
         actual_http_post_executed=False,
         close_post_executed=False,
@@ -835,6 +1004,14 @@ def render_level5_fast_mvp_foundation_markdown(
             f"{_bool_text(result.close_order_route.close_execution_allowed_now)}"
         ),
         f"- signal_type: {result.signal.signal_type.value}",
+        (
+            "- entry_planning_allowed: "
+            f"{_bool_text(result.entry_planning.entry_planning_allowed)}"
+        ),
+        (
+            "- entry_execution_allowed_now: "
+            f"{_bool_text(result.entry_planning.entry_execution_allowed_now)}"
+        ),
         f"- cycle_next_state: {result.cycle_transition.next_state.value}",
         "",
         "## Safety",
@@ -995,6 +1172,11 @@ def _signal_blocked_reasons(snapshot: Level5SignalMvpInput) -> tuple[str, ...]:
     reasons: list[str] = []
     if not snapshot.market_source_available:
         reasons.append("market_adapter_missing")
+    if snapshot.position_status is not PositionReadOnlyStatus.NO_POSITION and (
+        snapshot.trend_label
+        in {Level5TrendLabel.UPTREND, Level5TrendLabel.DOWNTREND}
+    ):
+        reasons.append("entry_requires_no_position")
     if snapshot.position_status in {PositionReadOnlyStatus.UNKNOWN, PositionReadOnlyStatus.BLOCKED}:
         reasons.append("position_status_not_safe")
     if (
@@ -1004,8 +1186,22 @@ def _signal_blocked_reasons(snapshot: Level5SignalMvpInput) -> tuple[str, ...]:
         reasons.append("safe_config_blocks_entry")
     if snapshot.actual_market_raw_value_exposed:
         reasons.append("actual_market_raw_value_exposed")
+    if snapshot.actual_market_value_exposed:
+        reasons.append("actual_market_value_exposed")
+    if snapshot.raw_market_data_exposed:
+        reasons.append("raw_market_data_exposed")
+    if snapshot.spread_label is not Level5SpreadLabel.NORMAL:
+        reasons.append("spread_not_normal")
+    if snapshot.time_market_label is not Level5TimeMarketLabel.OK:
+        reasons.append("time_market_not_ok")
+    if snapshot.volatility_label is not Level5VolatilityLabel.NORMAL:
+        reasons.append("volatility_not_normal")
+    if snapshot.trend_label is Level5TrendLabel.UNKNOWN:
+        reasons.append("trend_unknown")
     if snapshot.signal_direct_post_attempted:
         reasons.append("signal_direct_post_attempted")
+    if snapshot.signal_directly_executes_post:
+        reasons.append("signal_directly_executes_post")
     if snapshot.retry_or_repost_attempted:
         reasons.append("retry_or_repost_attempted")
     return tuple(reasons)
@@ -1026,10 +1222,54 @@ def _signal_type_and_reason(
         return Level5SignalType.EXIT, f"exit_{snapshot.exit_reason_label.value.lower()}"
     if snapshot.position_status is PositionReadOnlyStatus.NO_POSITION:
         if snapshot.trend_label is Level5TrendLabel.UPTREND:
-            return Level5SignalType.ENTRY_BUY, "rule_mvp_uptrend_no_position"
+            return Level5SignalType.ENTRY_BUY, "rule_mvp_uptrend_normal_ok"
         if snapshot.trend_label is Level5TrendLabel.DOWNTREND:
-            return Level5SignalType.ENTRY_SELL, "rule_mvp_downtrend_no_position"
+            return Level5SignalType.ENTRY_SELL, "rule_mvp_downtrend_normal_ok"
+        if snapshot.trend_label is Level5TrendLabel.FLAT:
+            return Level5SignalType.HOLD, "rule_mvp_flat_hold"
     return Level5SignalType.HOLD, "rule_mvp_hold"
+
+
+def _entry_planning_blocked_reasons(
+    snapshot: Level5EntryPlanningGateInput,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    if not snapshot.signal_checked:
+        reasons.append("signal_missing")
+    if snapshot.position_status is not PositionReadOnlyStatus.NO_POSITION:
+        reasons.append("entry_requires_no_position")
+    if snapshot.signal_type not in {
+        Level5SignalType.ENTRY_BUY,
+        Level5SignalType.ENTRY_SELL,
+    }:
+        reasons.append("entry_signal_required")
+    if snapshot.entry_symbol_safe_label != SUPPORTED_SYMBOL:
+        reasons.append("entry_symbol_must_be_usd_jpy")
+    if snapshot.entry_units_fixed != SUPPORTED_UNITS:
+        reasons.append("entry_units_must_be_100")
+    if snapshot.entry_order_type_safe_label != "MARKET":
+        reasons.append("entry_order_type_must_be_market")
+    for flag_name in (
+        "signal_directly_executes_post",
+        "actual_http_post_attempted",
+        "close_post_attempted",
+        "retry_or_repost_attempted",
+        "second_post_attempted",
+        "raw_exposure_attempted",
+        "id_exposure_attempted",
+        "credential_signature_headers_exposure_attempted",
+    ):
+        if getattr(snapshot, flag_name):
+            reasons.append(flag_name)
+    return tuple(reasons)
+
+
+def _entry_side_safe_label(signal_type: Level5SignalType) -> str:
+    if signal_type is Level5SignalType.ENTRY_BUY:
+        return "BUY"
+    if signal_type is Level5SignalType.ENTRY_SELL:
+        return "SELL"
+    return "NOT_APPLICABLE"
 
 
 def _cycle_fail_reasons(snapshot: Level5CycleTransitionInput) -> tuple[str, ...]:
@@ -1359,14 +1599,55 @@ _SIGNAL_INPUT_BOOL_FIELDS = (
     "market_source_available",
     "safe_config_allows_entry",
     "actual_market_raw_value_exposed",
+    "actual_market_value_exposed",
+    "raw_market_data_exposed",
     "signal_direct_post_attempted",
+    "signal_directly_executes_post",
     "retry_or_repost_attempted",
 )
 
 _SIGNAL_RESULT_BOOL_FIELDS = (
+    "signal_checked",
     "actual_market_raw_value_exposed",
+    "actual_market_value_exposed",
+    "raw_market_data_exposed",
     "signal_direct_post_attempted",
+    "signal_directly_executes_post",
     "retry_or_repost_attempted",
+)
+
+_ENTRY_PLANNING_INPUT_BOOL_FIELDS = (
+    "signal_checked",
+    "signal_directly_executes_post",
+    "actual_http_post_attempted",
+    "close_post_attempted",
+    "retry_or_repost_attempted",
+    "second_post_attempted",
+    "raw_exposure_attempted",
+    "id_exposure_attempted",
+    "credential_signature_headers_exposure_attempted",
+)
+
+_ENTRY_PLANNING_RESULT_BOOL_FIELDS = (
+    "entry_planning_gate_ready",
+    "entry_planning_allowed",
+    "entry_execution_allowed_now",
+    "entry_execution_step_may_be_planned",
+    "entry_requires_new_confirmation",
+    "entry_requires_time_market_operator_gate",
+    "entry_execution_requires_position_status_current",
+    "entry_execution_requires_no_position",
+    "entry_execution_requires_no_retry",
+    "entry_execution_requires_no_second_post",
+    "entry_execution_requires_raw_id_exposure_false",
+    "entry_retry_allowed",
+    "entry_second_post_allowed",
+    "entry_raw_exposure",
+    "entry_id_exposure",
+    "actual_http_post_executed",
+    "close_post_executed",
+    "signal_directly_executes_post",
+    "credential_signature_headers_exposure",
 )
 
 _CYCLE_INPUT_BOOL_FIELDS = (

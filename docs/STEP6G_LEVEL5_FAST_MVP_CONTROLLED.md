@@ -138,6 +138,7 @@ States:
 ```text
 IDLE
 ENTRY_SIGNAL
+ENTRY_READY
 ENTRY_SENT
 ENTRY_ACCEPTED_SANITIZED
 POSITION_CHECK_PENDING
@@ -151,7 +152,8 @@ HALTED
 
 Safety rules:
 
-- entry requires no position and daily limits OK
+- entry planning requires no position, a checked entry signal, and daily limits OK
+- `ENTRY_READY` is planning-only and does not execute POST
 - sanitized accepted entry must be followed by position check
 - unknown/missing/blocked position after entry halts
 - second entry attempt halts
@@ -172,12 +174,32 @@ Signal types:
 
 Rule MVP:
 
-- `UPTREND` + no position -> `ENTRY_BUY`
-- `DOWNTREND` + no position -> `ENTRY_SELL`
+- `UPTREND` + no position + normal spread + OK market -> `ENTRY_BUY`
+- `DOWNTREND` + no position + normal spread + OK market -> `ENTRY_SELL`
+- `FLAT` + no position -> `HOLD`
+- unknown trend, wide/unknown spread, blocked/unknown market, high/unknown
+  volatility, or entry signal with an existing/unknown/blocked position -> `BLOCKED`
 - one open position + `TAKE_PROFIT` / `STOP_LOSS` / `MAX_HOLD_TIME` -> `EXIT`
 - otherwise `HOLD`
 
-Signals never execute POST directly and never expose actual market raw values.
+Signals never execute POST directly and never expose raw market data or actual
+market values.
+
+## Entry Planning Gate
+
+The signal entry gate follow-up added planning-only entry readiness:
+
+- `NO_POSITION + ENTRY_BUY/ENTRY_SELL -> entry_planning_allowed=true`
+- `NO_POSITION + HOLD -> entry_planning_allowed=false`
+- unknown/open/multiple position -> entry planning blocked
+- `entry_execution_allowed_now=false`
+- `entry_execution_step_may_be_planned=true` only for a safe entry signal
+- fixed safe labels: `USD_JPY`, `100`, `MARKET`, and `BUY`/`SELL`
+- retry/repost and second POST remain false
+- raw/ID/value and credential/signature/header exposure remain false
+
+`IDLE + NO_POSITION + ENTRY_BUY/ENTRY_SELL` now reaches `ENTRY_READY`, not
+`ENTRY_SENT`. Actual entry POST still requires a separate entry execution gate.
 
 ## Verification
 

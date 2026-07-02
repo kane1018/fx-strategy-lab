@@ -130,3 +130,8 @@ close_execution_allowed_now=false
 
 Therefore the close execution gate is not the next step from this runtime
 state. The next bounded step is the Level 5 signal/entry cycle gate.
+
+The Level 5 signal/entry cycle gate follow-up is planning-only. With the
+runtime `NO_POSITION` premise and an injected safe `ENTRY_BUY` or `ENTRY_SELL`
+snapshot, the cycle can reach `ENTRY_READY`. It does not execute entry POST,
+does not execute close POST, and does not change the close execution boundary.

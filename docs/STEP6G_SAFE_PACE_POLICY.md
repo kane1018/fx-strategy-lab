@@ -223,8 +223,28 @@ close_planning_allowed=false
 close_execution_allowed_now=false
 ```
 
-This does not permit immediate entry execution. It only permits planning the
-next Level 5 signal/entry cycle gate. Actual entry POST, close POST,
-retry/repost, second POST, ledger update, receipt handoff, raw responses,
-broker/API responses, IDs, credential values, signature values, header values,
-and `.env` access remain prohibited.
+The bounded next step was the Level 5 signal/entry cycle gate. That gate is now
+implemented as planning-only:
+
+```text
+NO_POSITION + safe injected ENTRY_BUY/ENTRY_SELL label -> ENTRY_READY
+entry_execution_allowed_now=false
+entry_execution_step_may_be_planned=true
+actual_entry_post=false
+close_post=false
+retry/repost=false
+second_post=false
+raw/ID/value exposure=false
+```
+
+Recommended next paced step:
+
+```text
+Step 6G-PC-OX-R-ENTRY-ORDER-EXECUTION-GATE-C
+```
+
+That entry execution gate must require a fresh separate confirmation and still
+stop before any unapproved actual entry POST, close POST, retry/repost, second
+POST, ledger update, receipt handoff, raw market data, actual market value,
+raw/broker/API response, account/order/transaction/position ID,
+credential/signature/header value, or `.env` access.
