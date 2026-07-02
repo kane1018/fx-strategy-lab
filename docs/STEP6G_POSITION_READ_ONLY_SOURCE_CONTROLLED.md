@@ -124,3 +124,14 @@ any later close execution gate can be considered:
 ```text
 Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C
 ```
+
+That runtime safe read check completed with safe status/count only:
+
+```text
+position_source_checked=true
+position_status=NO_POSITION
+position_count_safe=0
+```
+
+No raw position object, broker/API response, IDs, credential values, signature
+values, header values, or `.env` file access were displayed, saved, or returned.

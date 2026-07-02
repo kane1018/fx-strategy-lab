@@ -211,3 +211,20 @@ Recommended next paced step:
 ```text
 Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C
 ```
+
+After `Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C`, the runtime
+position read-only check returned safe status/count only:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+new_entry_allowed=true
+close_planning_allowed=false
+close_execution_allowed_now=false
+```
+
+This does not permit immediate entry execution. It only permits planning the
+next Level 5 signal/entry cycle gate. Actual entry POST, close POST,
+retry/repost, second POST, ledger update, receipt handoff, raw responses,
+broker/API responses, IDs, credential values, signature values, header values,
+and `.env` access remain prohibited.

@@ -114,3 +114,15 @@ Actual POST, close POST, retry/repost, ledger update, receipt handoff, raw
 responses, broker/API responses, IDs, credential values, signature values,
 header values, and `.env` access remain prohibited unless a separate explicitly
 approved Step allows a narrower action.
+
+The runtime safe read check follow-up confirmed current status/count as:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+position_status_checked=true
+```
+
+The result allows only later entry-cycle planning. Close planning and close
+execution remain blocked until a future runtime read reports exactly one open
+position.

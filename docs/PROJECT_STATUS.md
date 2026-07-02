@@ -2380,3 +2380,32 @@ This step does not execute actual close POST, entry POST, retry/repost, second
 POST, ledger update, receipt handoff, runtime Private API writes, or raw/ID/value
 exposure. Details:
 [STEP6G_CLOSE_ORDER_ROUTE_CONTROLLED.md](STEP6G_CLOSE_ORDER_ROUTE_CONTROLLED.md).
+
+## Step 6G Position Runtime Safe Read Check
+
+Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C completed the runtime
+position read-only check as safe status/count only:
+
+```text
+credential_presence_checked=true
+credential_presence_available=true
+runtime_read_executed=true
+position_source_checked=true
+position_status_checked=true
+position_status=NO_POSITION
+position_count_safe=0
+new_entry_allowed=true
+close_planning_allowed=false
+close_execution_allowed_now=false
+```
+
+`backend/app/live_verification/live_order_real_position_runtime_safe_read_controlled.py`
+was added as the safe mapper for runtime count/status results. It has no broker,
+Private API, HTTP, env, order endpoint, ledger, receipt, or `live_order_once`
+dependency.
+
+The result means close execution gate is blocked and the next bounded step is
+the Level 5 signal/entry cycle gate. Actual entry POST, actual close POST,
+retry/repost, second POST, ledger update, receipt handoff, raw responses,
+broker/API responses, IDs, credential values, signature values, header values,
+and `.env` access remain prohibited.

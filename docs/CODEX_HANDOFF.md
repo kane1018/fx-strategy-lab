@@ -2137,3 +2137,38 @@ Recommended next step:
 ```text
 Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C
 ```
+
+## Step 6G Position Runtime Safe Read Check Follow-up
+
+Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C completed a runtime
+read-only position check through safe status/count only:
+
+```text
+credential_presence_checked=true
+credential_presence_available=true
+runtime_read_executed=true
+position_source_checked=true
+position_status_checked=true
+position_status=NO_POSITION
+position_count_safe=0
+has_open_position=false
+new_entry_allowed=true
+close_planning_allowed=false
+close_execution_allowed_now=false
+```
+
+The safe mapper added in
+`backend/app/live_verification/live_order_real_position_runtime_safe_read_controlled.py`
+connects runtime safe count/status into the position route, close route, and
+Level 5 contracts without importing broker, Private API, HTTP, env, order,
+ledger, receipt, or `live_order_once` dependencies.
+
+No raw response, broker/API response, raw position object, position ID, account
+ID, order ID, transaction ID, trade ID, price value, PnL value, credential
+value, signature value, or header value was displayed, saved, or returned.
+
+Recommended next step:
+
+```text
+Step 6G-PC-OX-R-LEVEL5-SIGNAL-ENTRY-CYCLE-GATE-C
+```

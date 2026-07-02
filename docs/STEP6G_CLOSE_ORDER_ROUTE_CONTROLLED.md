@@ -118,3 +118,15 @@ Actual close POST, entry POST, retry/repost, second POST, ledger update,
 receipt handoff, raw responses, broker/API responses, IDs, credential values,
 signature values, header values, and `.env` access remain forbidden unless a
 later separately approved execution gate explicitly scopes them.
+
+The runtime safe read check returned:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+close_planning_allowed=false
+close_execution_allowed_now=false
+```
+
+Therefore the close execution gate is not the next step from this runtime
+state. The next bounded step is the Level 5 signal/entry cycle gate.

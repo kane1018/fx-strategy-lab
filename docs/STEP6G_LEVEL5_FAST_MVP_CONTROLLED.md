@@ -227,3 +227,10 @@ missing, and exposure-blocked statuses all block close planning.
 Actual close POST is still prohibited. `CLOSE_READY` is a planning state only
 and requires a separate close execution gate before any later close execution
 can be considered.
+
+The runtime position safe read check returned `NO_POSITION` with safe count `0`.
+For Level 5 this means entry planning may be considered only in a later
+signal/entry cycle gate, while close planning and close execution remain
+blocked. No actual entry POST, actual close POST, retry/repost, ledger update,
+receipt handoff, raw response, broker/API response, ID, credential, signature,
+or header value exposure is permitted by that runtime result.
