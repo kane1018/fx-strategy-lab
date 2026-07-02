@@ -58,10 +58,16 @@ the real source because doing so would cross into credential/Private API/client
 boundary work. Instead, it implements the contract with fake/safe source
 summaries and keeps the default route `SOURCE_MISSING_BLOCKED`.
 
-The next source-connection step may connect a real read-only source only if it
-can supply safe count/status without returning raw position objects, broker/API
-responses, position IDs, account IDs, order IDs, transaction IDs, prices, PnL,
-credential values, signature values, or header values.
+The follow-up source-connection step added
+`backend/app/live_verification/live_order_real_position_read_only_source_controlled.py`.
+The route now defaults to that controlled sanitized source summary instead of
+remaining `SOURCE_MISSING_BLOCKED`. It still does not import the Private API
+client, HTTP client, env reader, broker code, or scripts directly.
+
+The source summary may supply only safe count/status without returning raw
+position objects, broker/API responses, position IDs, account IDs, order IDs,
+transaction IDs, prices, PnL, credential values, signature values, or header
+values.
 
 ## Level 5 Connection
 
@@ -90,13 +96,7 @@ python3 -m pytest -q app/tests/test_live_verification_no_order_imports.py
 
 ## Next Step
 
-If the contract-only route is sufficient and a real source is still missing:
-
-```text
-Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C
-```
-
-If a safe source is later connected and still returns one position exactly:
+If a safe source returns one position exactly:
 
 ```text
 Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C

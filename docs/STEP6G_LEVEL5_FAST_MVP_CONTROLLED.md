@@ -193,13 +193,26 @@ config, no retry/repost/second POST, and raw/ID/value non-exposure.
 
 ## Next Step
 
+The position read-only source connection follow-up added a controlled sanitized
+source summary and connected the default/current position route to it. Level 5
+now consumes safe source-derived count/status through the controlled route:
+
+- `NO_POSITION` allows entry planning and blocks close planning
+- `ONE_POSITION_OPEN` blocks entry planning and allows close planning only
+- `MULTIPLE_POSITIONS_BLOCKED` blocks entry and close planning
+- `UNKNOWN_FAIL_CLOSED` blocks entry and close planning
+
+The connection does not execute a real runtime Private API GET and does not
+expose raw position objects, broker/API responses, IDs, actual price/PnL values,
+credential values, signature values, or header values.
+
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C
+Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C
 ```
 
-That step may only connect a position read-only source if the source can return
-safe status/count fields without raw/ID/value, credential, signature, header, or
-broker/API response exposure. If safe position source wiring is not possible,
-stop and keep close execution blocked.
+That step may only implement close route planning/foundation behavior. Actual
+close POST, actual entry POST, retry/repost, second POST, ledger update, receipt
+handoff, raw/ID/value exposure, credential/signature/header exposure, and `.env`
+access remain forbidden.

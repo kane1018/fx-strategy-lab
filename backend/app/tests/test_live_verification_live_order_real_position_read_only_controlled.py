@@ -10,6 +10,10 @@ from app.live_verification.live_order_real_position_read_only_controlled import 
     build_position_read_only_controlled,
     render_position_read_only_controlled_markdown,
 )
+from app.live_verification.live_order_real_position_read_only_source_controlled import (
+    PositionReadOnlySourceControlledInput,
+    build_position_read_only_source_controlled,
+)
 
 
 def _safe_source_input(count: int) -> PositionReadOnlyControlledInput:
@@ -69,7 +73,7 @@ def test_unknown_and_source_missing_fail_closed() -> None:
             position_status_unknown=True,
         ),
     )
-    missing = build_position_read_only_controlled()
+    missing = build_position_read_only_controlled(PositionReadOnlyControlledInput())
 
     assert unknown.position_status is PositionReadOnlyControlledStatus.UNKNOWN_FAIL_CLOSED
     assert unknown.new_entry_allowed is False
@@ -80,6 +84,52 @@ def test_unknown_and_source_missing_fail_closed() -> None:
     assert missing.new_entry_allowed is False
     assert missing.close_planning_allowed is False
     assert "position_source_missing" in missing.blocked_reasons
+
+
+def test_default_current_route_uses_connected_source_summary() -> None:
+    result = build_position_read_only_controlled()
+
+    assert result.position_status is PositionReadOnlyControlledStatus.NO_POSITION
+    assert result.position_status_checked is True
+    assert result.position_count_safe == 0
+    assert result.new_entry_allowed is True
+    assert result.close_planning_allowed is False
+    assert "position_source_missing" not in result.blocked_reasons
+
+
+def test_current_route_accepts_safe_connected_source_result() -> None:
+    source = build_position_read_only_source_controlled(
+        PositionReadOnlySourceControlledInput(position_count_safe=1),
+    )
+
+    result = build_position_read_only_controlled(source_result=source)
+
+    assert result.position_status is PositionReadOnlyControlledStatus.ONE_POSITION_OPEN
+    assert result.position_count_safe == 1
+    assert result.new_entry_allowed is False
+    assert result.close_planning_allowed is True
+
+
+def test_current_route_maps_source_unknown_and_exposure_fail_closed() -> None:
+    unknown_source = build_position_read_only_source_controlled(
+        PositionReadOnlySourceControlledInput(
+            position_source_checked=False,
+            position_status_unknown=True,
+        ),
+    )
+    raw_source = build_position_read_only_source_controlled(
+        PositionReadOnlySourceControlledInput(raw_response_exposure_attempted=True),
+    )
+
+    unknown = build_position_read_only_controlled(source_result=unknown_source)
+    raw = build_position_read_only_controlled(source_result=raw_source)
+
+    assert unknown.position_status is PositionReadOnlyControlledStatus.UNKNOWN_FAIL_CLOSED
+    assert unknown.new_entry_allowed is False
+    assert unknown.close_planning_allowed is False
+    assert raw.position_status is PositionReadOnlyControlledStatus.RAW_EXPOSURE_BLOCKED
+    assert raw.raw_position_exposed is False
+    assert raw.broker_api_response_exposed is False
 
 
 def test_raw_id_value_and_credential_exposure_attempts_block_without_exposing() -> None:

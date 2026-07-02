@@ -157,3 +157,30 @@ That source-connection step must still stop before actual POST, close POST,
 retry/repost, ledger update, receipt handoff, raw position objects, broker/API
 responses, position/account/order/transaction IDs, actual price/PnL values,
 credential values, signature values, header values, or `.env` access.
+
+After `Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C`, the default
+position route is connected to a controlled sanitized source summary:
+
+```text
+position_source_connected=true
+position_source_read_only=true
+position_source_checked=true
+position_status=NO_POSITION / ONE_POSITION_OPEN / MULTIPLE_POSITIONS_BLOCKED / UNKNOWN_FAIL_CLOSED
+position_count_safe=safe integer only
+```
+
+The source adapter does not import the Private API client, HTTP client, env
+reader, broker code, order endpoint, ledger writer, receipt handoff, or
+`live_order_once`. It is a safe count/status connection only, not a real runtime
+Private API GET execution.
+
+Recommended next paced step:
+
+```text
+Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C
+```
+
+That close-route step must still prohibit actual entry POST, actual close POST,
+retry/repost, second POST, ledger update, receipt handoff, raw responses,
+broker/API responses, IDs, credential values, signature values, header values,
+and `.env` access.

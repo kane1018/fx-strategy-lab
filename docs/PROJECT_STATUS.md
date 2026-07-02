@@ -2328,3 +2328,28 @@ important event risk before any POST can be considered.
 
 Details:
 [STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md](STEP6G_ONE_SHOT_POST_REAL_DELEGATE_CONTROLLED.md).
+
+## Step 6G Position Read-Only Source Connection
+
+Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C adds a controlled
+sanitized source adapter for Level 5 position status/count:
+
+```text
+backend/app/live_verification/live_order_real_position_read_only_source_controlled.py
+```
+
+The default/current position route now uses the controlled source summary and
+does not remain blocked only because the source is missing. The connected fields
+are safe labels, booleans, and counts only. Unknown status, source missing,
+multiple positions, or any raw/ID/value exposure attempt still fails closed and
+blocks entry and close planning.
+
+The existing real read-only candidates were identified as
+`backend/scripts/check_private_readonly_connection.py` and
+`backend/app/private_api/readonly_client.py`. They are not imported into the
+Level 5 route because they handle credential/signing/HTTP/schema boundaries.
+
+This step does not execute actual HTTP POST, close POST, retry/repost, second
+POST, ledger update, receipt handoff, real runtime Private API GET, or any
+raw response/ID/value exposure. Details:
+[STEP6G_POSITION_READ_ONLY_SOURCE_CONTROLLED.md](STEP6G_POSITION_READ_ONLY_SOURCE_CONTROLLED.md).

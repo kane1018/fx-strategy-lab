@@ -2079,3 +2079,31 @@ That later step must confirm repository state, prerequisites, time/trading
 window, maintenance status, user monitoring availability, and absence of
 important event risk before requesting a new POST-specific confirmation.
 Unknown time or market state remains a CASE 2 stop.
+
+## Step 6G Position Read-Only Source Connection Follow-up
+
+Step 6G-PC-OX-R-POSITION-READ-ONLY-SOURCE-CONNECTION-C connects the Level 5
+position route to a controlled sanitized source summary. The current/default
+route no longer remains `SOURCE_MISSING_BLOCKED`; it can consume safe
+`position_count_safe` and `position_status` from
+`live_order_real_position_read_only_source_controlled.py`.
+
+Existing real read-only candidates remain
+`backend/scripts/check_private_readonly_connection.py` and
+`backend/app/private_api/readonly_client.py`, but the Level 5 route does not
+import them directly because they sit at the credential/signing/HTTP/schema
+boundary. The connected source summary is status/count only and keeps
+raw position objects, broker/API responses, position/account/order/transaction
+IDs, actual price/PnL values, credential values, signature values, and header
+values out of route output.
+
+This is still not POST permission and not close execution permission:
+`actual_http_post_executed=false`, `close_post_executed=false`,
+`retry_attempted=false`, `second_post_attempted=false`,
+`ledger_updated=false`, and `receipt_handoff_executed=false`.
+
+Recommended next step:
+
+```text
+Step 6G-PC-OX-R-CLOSE-ORDER-ROUTE-IMPLEMENTATION-C
+```

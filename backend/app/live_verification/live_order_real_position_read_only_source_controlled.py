@@ -1,8 +1,8 @@
-"""Step 6G position read-only controlled route.
+"""Step 6G controlled position read-only source adapter.
 
-This module maps an already-sanitized position source summary to safe
-status/count fields only. It does not import broker/private API clients, HTTP
-clients, env readers, order endpoints, live_order_once, ledger writers, or
+This module accepts an already-sanitized position source summary and maps it to
+safe status/count fields only. It does not import broker/private API clients,
+HTTP clients, env readers, order endpoints, live_order_once, ledger writers, or
 receipt handoff code.
 """
 
@@ -12,19 +12,16 @@ from dataclasses import dataclass
 from enum import Enum
 
 from app.live_verification.errors import LiveVerificationValidationError
-from app.live_verification.live_order_real_position_read_only_source_controlled import (
-    PositionReadOnlySourceControlledResult,
-    PositionReadOnlySourceControlledStatus,
-    build_position_read_only_source_controlled,
-)
 
-SAFE_POSITION_READ_ONLY_ROUTE_LABEL = "STEP6G_POSITION_READ_ONLY_CONTROLLED_ROUTE"
-POSITION_READ_ONLY_RECOMMENDED_NEXT_STEP = (
-    "step6g_position_read_only_source_connection_no_post"
+SAFE_POSITION_READ_ONLY_SOURCE_LABEL = (
+    "STEP6G_POSITION_READ_ONLY_SOURCE_CONTROLLED"
+)
+POSITION_READ_ONLY_SOURCE_RECOMMENDED_NEXT_STEP = (
+    "step6g_close_order_route_implementation_no_post"
 )
 
 
-class PositionReadOnlyControlledStatus(str, Enum):
+class PositionReadOnlySourceControlledStatus(str, Enum):
     NO_POSITION = "NO_POSITION"
     ONE_POSITION_OPEN = "ONE_POSITION_OPEN"
     MULTIPLE_POSITIONS_BLOCKED = "MULTIPLE_POSITIONS_BLOCKED"
@@ -37,13 +34,17 @@ class PositionReadOnlyControlledStatus(str, Enum):
 
 
 @dataclass(frozen=True)
-class PositionReadOnlyControlledInput:
-    position_source_available: bool = False
-    position_status_checked: bool = False
-    position_status_unknown: bool = True
+class PositionReadOnlySourceControlledInput:
+    position_source_ready: bool = True
+    position_source_connected: bool = True
+    position_source_read_only: bool = True
+    position_source_checked: bool = True
+    position_status_unknown: bool = False
     position_count_safe: int = 0
     max_open_positions: int = 1
+    raw_response_exposure_attempted: bool = False
     raw_position_exposure_attempted: bool = False
+    broker_api_response_exposure_attempted: bool = False
     position_id_exposure_attempted: bool = False
     account_id_exposure_attempted: bool = False
     order_id_exposure_attempted: bool = False
@@ -55,7 +56,6 @@ class PositionReadOnlyControlledInput:
     credential_value_exposure_attempted: bool = False
     signature_value_exposure_attempted: bool = False
     headers_value_exposure_attempted: bool = False
-    broker_api_response_exposure_attempted: bool = False
     actual_http_post_attempted: bool = False
     close_post_attempted: bool = False
     retry_or_repost_attempted: bool = False
@@ -65,15 +65,17 @@ class PositionReadOnlyControlledInput:
     def __post_init__(self) -> None:
         _validate_non_negative_int("position_count_safe", self.position_count_safe)
         _validate_non_negative_int("max_open_positions", self.max_open_positions)
-        _validate_bool_fields(self, _INPUT_BOOL_FIELDS)
+        _validate_bool_fields(self, _SOURCE_INPUT_BOOL_FIELDS)
 
 
 @dataclass(frozen=True)
-class PositionReadOnlyControlledResult:
-    position_read_only_route_ready: bool
-    safe_position_route_label: str
-    position_status_checked: bool
-    position_status: PositionReadOnlyControlledStatus
+class PositionReadOnlySourceControlledResult:
+    position_source_ready: bool
+    position_source_connected: bool
+    position_source_read_only: bool
+    position_source_checked: bool
+    safe_position_source_label: str
+    position_status: PositionReadOnlySourceControlledStatus
     position_count_safe: int
     has_open_position: bool
     has_exactly_one_position: bool
@@ -82,7 +84,9 @@ class PositionReadOnlyControlledResult:
     close_planning_allowed: bool
     close_execution_allowed_now: bool
     max_open_positions: int
+    raw_response_exposed: bool
     raw_position_exposed: bool
+    broker_api_response_exposed: bool
     position_id_exposed: bool
     account_id_exposed: bool
     order_id_exposed: bool
@@ -90,7 +94,8 @@ class PositionReadOnlyControlledResult:
     credential_value_exposed: bool
     signature_value_exposed: bool
     headers_value_exposed: bool
-    broker_api_response_exposed: bool
+    sealed_position_handle_created: bool
+    handle_value_exposed: bool
     actual_http_post_executed: bool
     close_post_executed: bool
     retry_attempted: bool
@@ -101,56 +106,72 @@ class PositionReadOnlyControlledResult:
     blocked_reasons: tuple[str, ...]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.position_status, PositionReadOnlyControlledStatus):
+        if not isinstance(self.position_status, PositionReadOnlySourceControlledStatus):
             raise LiveVerificationValidationError("position_status must be controlled enum")
-        _require_non_empty("safe_position_route_label", self.safe_position_route_label)
+        _require_non_empty("safe_position_source_label", self.safe_position_source_label)
         _require_non_empty("recommended_next_step", self.recommended_next_step)
         _validate_non_negative_int("position_count_safe", self.position_count_safe)
         _validate_non_negative_int("max_open_positions", self.max_open_positions)
-        _validate_bool_fields(self, _RESULT_BOOL_FIELDS)
+        _validate_bool_fields(self, _SOURCE_RESULT_BOOL_FIELDS)
         _validate_blocked_reasons(self.blocked_reasons)
 
 
-def build_position_read_only_controlled(
-    input_snapshot: PositionReadOnlyControlledInput | None = None,
-    *,
-    source_result: PositionReadOnlySourceControlledResult | None = None,
-) -> PositionReadOnlyControlledResult:
-    snapshot = input_snapshot or _input_from_source_result(
-        source_result or build_position_read_only_source_controlled(),
-    )
+def build_position_read_only_source_controlled(
+    input_snapshot: PositionReadOnlySourceControlledInput | None = None,
+) -> PositionReadOnlySourceControlledResult:
+    snapshot = input_snapshot or PositionReadOnlySourceControlledInput()
     status, reasons = _status_and_reasons(snapshot)
-    route_ready = status in {
-        PositionReadOnlyControlledStatus.NO_POSITION,
-        PositionReadOnlyControlledStatus.ONE_POSITION_OPEN,
-    }
-    return PositionReadOnlyControlledResult(
-        position_read_only_route_ready=route_ready,
-        safe_position_route_label=SAFE_POSITION_READ_ONLY_ROUTE_LABEL,
-        position_status_checked=(
-            snapshot.position_status_checked
-            and status
-            not in {
-                PositionReadOnlyControlledStatus.SOURCE_MISSING_BLOCKED,
-                PositionReadOnlyControlledStatus.UNKNOWN_FAIL_CLOSED,
-            }
-        ),
+    clean_source = (
+        snapshot.position_source_ready
+        and snapshot.position_source_connected
+        and snapshot.position_source_read_only
+        and status
+        not in {
+            PositionReadOnlySourceControlledStatus.SOURCE_MISSING_BLOCKED,
+            PositionReadOnlySourceControlledStatus.RAW_EXPOSURE_BLOCKED,
+            PositionReadOnlySourceControlledStatus.ID_EXPOSURE_BLOCKED,
+            PositionReadOnlySourceControlledStatus.VALUE_EXPOSURE_BLOCKED,
+            PositionReadOnlySourceControlledStatus.CREDENTIAL_UNAVAILABLE_BLOCKED,
+        }
+    )
+    safe_checked = (
+        snapshot.position_source_checked
+        and status
+        in {
+            PositionReadOnlySourceControlledStatus.NO_POSITION,
+            PositionReadOnlySourceControlledStatus.ONE_POSITION_OPEN,
+            PositionReadOnlySourceControlledStatus.MULTIPLE_POSITIONS_BLOCKED,
+        }
+    )
+    return PositionReadOnlySourceControlledResult(
+        position_source_ready=clean_source,
+        position_source_connected=snapshot.position_source_connected and clean_source,
+        position_source_read_only=snapshot.position_source_read_only and clean_source,
+        position_source_checked=safe_checked,
+        safe_position_source_label=SAFE_POSITION_READ_ONLY_SOURCE_LABEL,
         position_status=status,
         position_count_safe=snapshot.position_count_safe,
-        has_open_position=snapshot.position_count_safe > 0 and route_ready,
+        has_open_position=snapshot.position_count_safe > 0
+        and status
+        in {
+            PositionReadOnlySourceControlledStatus.ONE_POSITION_OPEN,
+            PositionReadOnlySourceControlledStatus.MULTIPLE_POSITIONS_BLOCKED,
+        },
         has_exactly_one_position=(
-            status is PositionReadOnlyControlledStatus.ONE_POSITION_OPEN
+            status is PositionReadOnlySourceControlledStatus.ONE_POSITION_OPEN
         ),
         has_multiple_positions=(
-            status is PositionReadOnlyControlledStatus.MULTIPLE_POSITIONS_BLOCKED
+            status is PositionReadOnlySourceControlledStatus.MULTIPLE_POSITIONS_BLOCKED
         ),
-        new_entry_allowed=status is PositionReadOnlyControlledStatus.NO_POSITION,
+        new_entry_allowed=status is PositionReadOnlySourceControlledStatus.NO_POSITION,
         close_planning_allowed=(
-            status is PositionReadOnlyControlledStatus.ONE_POSITION_OPEN
+            status is PositionReadOnlySourceControlledStatus.ONE_POSITION_OPEN
         ),
         close_execution_allowed_now=False,
         max_open_positions=1,
+        raw_response_exposed=False,
         raw_position_exposed=False,
+        broker_api_response_exposed=False,
         position_id_exposed=False,
         account_id_exposed=False,
         order_id_exposed=False,
@@ -158,118 +179,37 @@ def build_position_read_only_controlled(
         credential_value_exposed=False,
         signature_value_exposed=False,
         headers_value_exposed=False,
-        broker_api_response_exposed=False,
+        sealed_position_handle_created=False,
+        handle_value_exposed=False,
         actual_http_post_executed=False,
         close_post_executed=False,
         retry_attempted=False,
         second_post_attempted=False,
         ledger_updated=False,
         receipt_handoff_executed=False,
-        recommended_next_step=POSITION_READ_ONLY_RECOMMENDED_NEXT_STEP,
+        recommended_next_step=POSITION_READ_ONLY_SOURCE_RECOMMENDED_NEXT_STEP,
         blocked_reasons=reasons,
     )
 
 
-def _input_from_source_result(
+def render_position_read_only_source_controlled_markdown(
     result: PositionReadOnlySourceControlledResult,
-) -> PositionReadOnlyControlledInput:
-    if result.position_status is PositionReadOnlySourceControlledStatus.NO_POSITION:
-        return PositionReadOnlyControlledInput(
-            position_source_available=True,
-            position_status_checked=result.position_source_checked,
-            position_status_unknown=False,
-            position_count_safe=0,
-            max_open_positions=result.max_open_positions,
-        )
-    if result.position_status is PositionReadOnlySourceControlledStatus.ONE_POSITION_OPEN:
-        return PositionReadOnlyControlledInput(
-            position_source_available=True,
-            position_status_checked=result.position_source_checked,
-            position_status_unknown=False,
-            position_count_safe=1,
-            max_open_positions=result.max_open_positions,
-        )
-    if (
-        result.position_status
-        is PositionReadOnlySourceControlledStatus.MULTIPLE_POSITIONS_BLOCKED
-    ):
-        return PositionReadOnlyControlledInput(
-            position_source_available=True,
-            position_status_checked=True,
-            position_status_unknown=False,
-            position_count_safe=max(2, result.position_count_safe),
-            max_open_positions=result.max_open_positions,
-        )
-    if result.position_status is PositionReadOnlySourceControlledStatus.RAW_EXPOSURE_BLOCKED:
-        return PositionReadOnlyControlledInput(
-            position_source_available=result.position_source_connected,
-            position_status_checked=False,
-            position_status_unknown=True,
-            position_count_safe=result.position_count_safe,
-            raw_position_exposure_attempted=True,
-            broker_api_response_exposure_attempted=True,
-            max_open_positions=result.max_open_positions,
-        )
-    if result.position_status is PositionReadOnlySourceControlledStatus.ID_EXPOSURE_BLOCKED:
-        return PositionReadOnlyControlledInput(
-            position_source_available=result.position_source_connected,
-            position_status_checked=False,
-            position_status_unknown=True,
-            position_count_safe=result.position_count_safe,
-            position_id_exposure_attempted=True,
-            account_id_exposure_attempted=True,
-            order_id_exposure_attempted=True,
-            transaction_id_exposure_attempted=True,
-            max_open_positions=result.max_open_positions,
-        )
-    if result.position_status is PositionReadOnlySourceControlledStatus.VALUE_EXPOSURE_BLOCKED:
-        return PositionReadOnlyControlledInput(
-            position_source_available=result.position_source_connected,
-            position_status_checked=False,
-            position_status_unknown=True,
-            position_count_safe=result.position_count_safe,
-            position_value_exposure_attempted=True,
-            max_open_positions=result.max_open_positions,
-        )
-    if (
-        result.position_status
-        is PositionReadOnlySourceControlledStatus.CREDENTIAL_UNAVAILABLE_BLOCKED
-    ):
-        return PositionReadOnlyControlledInput(
-            position_source_available=result.position_source_connected,
-            position_status_checked=False,
-            position_status_unknown=True,
-            position_count_safe=result.position_count_safe,
-            credential_value_exposure_attempted=True,
-            signature_value_exposure_attempted=True,
-            headers_value_exposure_attempted=True,
-            max_open_positions=result.max_open_positions,
-        )
-    return PositionReadOnlyControlledInput(
-        position_source_available=result.position_source_connected,
-        position_status_checked=False,
-        position_status_unknown=True,
-        position_count_safe=result.position_count_safe,
-        max_open_positions=result.max_open_positions,
-    )
-
-
-def render_position_read_only_controlled_markdown(
-    result: PositionReadOnlyControlledResult,
 ) -> str:
-    """Render safe position status/count only."""
+    """Render safe source status/count only."""
     blocked = ", ".join(result.blocked_reasons) or "none"
     return "\n".join(
         (
-            "# Step 6G Position Read-Only Controlled Route",
+            "# Step 6G Position Read-Only Source Controlled",
             "",
-            "This route renders safe position status/count only.",
+            "This source renders safe position status/count only.",
             "It does not execute actual POST or close POST.",
             "It does not expose raw position data, broker/API responses, IDs,",
             "credential values, signature values, or headers values.",
             "",
-            f"position_read_only_route_ready: {_bool_text(result.position_read_only_route_ready)}",
-            f"position_status_checked: {_bool_text(result.position_status_checked)}",
+            f"position_source_ready: {_bool_text(result.position_source_ready)}",
+            f"position_source_connected: {_bool_text(result.position_source_connected)}",
+            f"position_source_read_only: {_bool_text(result.position_source_read_only)}",
+            f"position_source_checked: {_bool_text(result.position_source_checked)}",
             f"position_status: {result.position_status.value}",
             f"position_count_safe: {result.position_count_safe}",
             f"has_open_position: {_bool_text(result.has_open_position)}",
@@ -281,12 +221,27 @@ def render_position_read_only_controlled_markdown(
                 "close_execution_allowed_now: "
                 f"{_bool_text(result.close_execution_allowed_now)}"
             ),
-            f"max_open_positions: {result.max_open_positions}",
+            f"raw_response_exposed: {_bool_text(result.raw_response_exposed)}",
             f"raw_position_exposed: {_bool_text(result.raw_position_exposed)}",
+            (
+                "broker_api_response_exposed: "
+                f"{_bool_text(result.broker_api_response_exposed)}"
+            ),
             f"position_id_exposed: {_bool_text(result.position_id_exposed)}",
             f"account_id_exposed: {_bool_text(result.account_id_exposed)}",
             f"order_id_exposed: {_bool_text(result.order_id_exposed)}",
             f"transaction_id_exposed: {_bool_text(result.transaction_id_exposed)}",
+            (
+                "credential_value_exposed: "
+                f"{_bool_text(result.credential_value_exposed)}"
+            ),
+            f"signature_value_exposed: {_bool_text(result.signature_value_exposed)}",
+            f"headers_value_exposed: {_bool_text(result.headers_value_exposed)}",
+            (
+                "sealed_position_handle_created: "
+                f"{_bool_text(result.sealed_position_handle_created)}"
+            ),
+            f"handle_value_exposed: {_bool_text(result.handle_value_exposed)}",
             f"actual_http_post_executed: {_bool_text(result.actual_http_post_executed)}",
             f"close_post_executed: {_bool_text(result.close_post_executed)}",
             f"retry_attempted: {_bool_text(result.retry_attempted)}",
@@ -300,43 +255,47 @@ def render_position_read_only_controlled_markdown(
 
 
 def _status_and_reasons(
-    snapshot: PositionReadOnlyControlledInput,
-) -> tuple[PositionReadOnlyControlledStatus, tuple[str, ...]]:
+    snapshot: PositionReadOnlySourceControlledInput,
+) -> tuple[PositionReadOnlySourceControlledStatus, tuple[str, ...]]:
     reasons = _blocked_reasons(snapshot)
     if _credential_exposure_attempted(snapshot):
-        return PositionReadOnlyControlledStatus.CREDENTIAL_UNAVAILABLE_BLOCKED, reasons
+        return PositionReadOnlySourceControlledStatus.CREDENTIAL_UNAVAILABLE_BLOCKED, reasons
     if _raw_exposure_attempted(snapshot):
-        return PositionReadOnlyControlledStatus.RAW_EXPOSURE_BLOCKED, reasons
+        return PositionReadOnlySourceControlledStatus.RAW_EXPOSURE_BLOCKED, reasons
     if _id_exposure_attempted(snapshot):
-        return PositionReadOnlyControlledStatus.ID_EXPOSURE_BLOCKED, reasons
+        return PositionReadOnlySourceControlledStatus.ID_EXPOSURE_BLOCKED, reasons
     if _value_exposure_attempted(snapshot):
-        return PositionReadOnlyControlledStatus.VALUE_EXPOSURE_BLOCKED, reasons
+        return PositionReadOnlySourceControlledStatus.VALUE_EXPOSURE_BLOCKED, reasons
     if reasons:
         if "position_source_missing" in reasons:
-            return PositionReadOnlyControlledStatus.SOURCE_MISSING_BLOCKED, reasons
+            return PositionReadOnlySourceControlledStatus.SOURCE_MISSING_BLOCKED, reasons
         if "multiple_positions_blocked" in reasons:
-            return PositionReadOnlyControlledStatus.MULTIPLE_POSITIONS_BLOCKED, reasons
-        return PositionReadOnlyControlledStatus.UNKNOWN_FAIL_CLOSED, reasons
-    if not snapshot.position_status_checked or snapshot.position_status_unknown:
+            return PositionReadOnlySourceControlledStatus.MULTIPLE_POSITIONS_BLOCKED, reasons
+        return PositionReadOnlySourceControlledStatus.UNKNOWN_FAIL_CLOSED, reasons
+    if not snapshot.position_source_checked or snapshot.position_status_unknown:
         return (
-            PositionReadOnlyControlledStatus.UNKNOWN_FAIL_CLOSED,
+            PositionReadOnlySourceControlledStatus.UNKNOWN_FAIL_CLOSED,
             ("position_unknown_fail_closed",),
         )
     if snapshot.position_count_safe == 0:
-        return PositionReadOnlyControlledStatus.NO_POSITION, ()
+        return PositionReadOnlySourceControlledStatus.NO_POSITION, ()
     if snapshot.position_count_safe == 1:
-        return PositionReadOnlyControlledStatus.ONE_POSITION_OPEN, ()
+        return PositionReadOnlySourceControlledStatus.ONE_POSITION_OPEN, ()
     return (
-        PositionReadOnlyControlledStatus.MULTIPLE_POSITIONS_BLOCKED,
+        PositionReadOnlySourceControlledStatus.MULTIPLE_POSITIONS_BLOCKED,
         ("multiple_positions_blocked",),
     )
 
 
-def _blocked_reasons(snapshot: PositionReadOnlyControlledInput) -> tuple[str, ...]:
+def _blocked_reasons(snapshot: PositionReadOnlySourceControlledInput) -> tuple[str, ...]:
     reasons: list[str] = []
     if snapshot.max_open_positions != 1:
         reasons.append("max_open_positions_must_be_1")
-    if not snapshot.position_source_available:
+    if (
+        not snapshot.position_source_ready
+        or not snapshot.position_source_connected
+        or not snapshot.position_source_read_only
+    ):
         reasons.append("position_source_missing")
     if _raw_exposure_attempted(snapshot):
         reasons.append("raw_exposure_blocked")
@@ -360,14 +319,15 @@ def _blocked_reasons(snapshot: PositionReadOnlyControlledInput) -> tuple[str, ..
     return tuple(reasons)
 
 
-def _raw_exposure_attempted(snapshot: PositionReadOnlyControlledInput) -> bool:
+def _raw_exposure_attempted(snapshot: PositionReadOnlySourceControlledInput) -> bool:
     return (
-        snapshot.raw_position_exposure_attempted
+        snapshot.raw_response_exposure_attempted
+        or snapshot.raw_position_exposure_attempted
         or snapshot.broker_api_response_exposure_attempted
     )
 
 
-def _id_exposure_attempted(snapshot: PositionReadOnlyControlledInput) -> bool:
+def _id_exposure_attempted(snapshot: PositionReadOnlySourceControlledInput) -> bool:
     return (
         snapshot.position_id_exposure_attempted
         or snapshot.account_id_exposure_attempted
@@ -377,7 +337,7 @@ def _id_exposure_attempted(snapshot: PositionReadOnlyControlledInput) -> bool:
     )
 
 
-def _value_exposure_attempted(snapshot: PositionReadOnlyControlledInput) -> bool:
+def _value_exposure_attempted(snapshot: PositionReadOnlySourceControlledInput) -> bool:
     return (
         snapshot.actual_price_value_exposure_attempted
         or snapshot.actual_pnl_value_exposure_attempted
@@ -385,7 +345,9 @@ def _value_exposure_attempted(snapshot: PositionReadOnlyControlledInput) -> bool
     )
 
 
-def _credential_exposure_attempted(snapshot: PositionReadOnlyControlledInput) -> bool:
+def _credential_exposure_attempted(
+    snapshot: PositionReadOnlySourceControlledInput,
+) -> bool:
     return (
         snapshot.credential_value_exposure_attempted
         or snapshot.signature_value_exposure_attempted
@@ -420,11 +382,15 @@ def _bool_text(value: bool) -> str:
     return "true" if value else "false"
 
 
-_INPUT_BOOL_FIELDS = (
-    "position_source_available",
-    "position_status_checked",
+_SOURCE_INPUT_BOOL_FIELDS = (
+    "position_source_ready",
+    "position_source_connected",
+    "position_source_read_only",
+    "position_source_checked",
     "position_status_unknown",
+    "raw_response_exposure_attempted",
     "raw_position_exposure_attempted",
+    "broker_api_response_exposure_attempted",
     "position_id_exposure_attempted",
     "account_id_exposure_attempted",
     "order_id_exposure_attempted",
@@ -436,7 +402,6 @@ _INPUT_BOOL_FIELDS = (
     "credential_value_exposure_attempted",
     "signature_value_exposure_attempted",
     "headers_value_exposure_attempted",
-    "broker_api_response_exposure_attempted",
     "actual_http_post_attempted",
     "close_post_attempted",
     "retry_or_repost_attempted",
@@ -444,16 +409,20 @@ _INPUT_BOOL_FIELDS = (
     "receipt_handoff_attempted",
 )
 
-_RESULT_BOOL_FIELDS = (
-    "position_read_only_route_ready",
-    "position_status_checked",
+_SOURCE_RESULT_BOOL_FIELDS = (
+    "position_source_ready",
+    "position_source_connected",
+    "position_source_read_only",
+    "position_source_checked",
     "has_open_position",
     "has_exactly_one_position",
     "has_multiple_positions",
     "new_entry_allowed",
     "close_planning_allowed",
     "close_execution_allowed_now",
+    "raw_response_exposed",
     "raw_position_exposed",
+    "broker_api_response_exposed",
     "position_id_exposed",
     "account_id_exposed",
     "order_id_exposed",
@@ -461,7 +430,8 @@ _RESULT_BOOL_FIELDS = (
     "credential_value_exposed",
     "signature_value_exposed",
     "headers_value_exposed",
-    "broker_api_response_exposed",
+    "sealed_position_handle_created",
+    "handle_value_exposed",
     "actual_http_post_executed",
     "close_post_executed",
     "retry_attempted",
