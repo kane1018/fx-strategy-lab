@@ -114,30 +114,21 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-ACTUAL-SOURCE-SUPPLY-C,
-the recommended next Step is a retry of the dedicated real POST execution gate
-using the controlled route, approved primitive actual source boundary, approved
-primitive source boundary, approved primitive boundary, and controlled real
-transport binding. Route-ready, actual-source-ready, source-ready,
-approved-primitive-ready, and binding-ready states are still not POST permission
-by themselves:
+After Step 6G-PC-OX-R-SEALED-REQUEST-BODY-RESULT-MAPPER-C, the recommended
+next Step is the sealed credential/signing provider design step. The sealed
+request/body/result mapper foundation is still not POST permission and does not
+make the current/default approved primitive actual source available by itself:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-6:
-dedicated real POST gate retry / requires sanitized preview, controlled
-approved primitive actual source boundary, approved primitive source boundary,
-approved primitive boundary, controlled binding, and new POST-specific
-confirmation first
+Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C:
+sealed credential/signing provider / no actual HTTP POST / no POST-specific
+confirmation / no credential value display
 ```
 
-That Step must not start with POST. It must first show the sanitized executable
-order preview, obtain a new explicit POST-specific confirmation, and must still
-keep HTTP POST separated from retry/repost, ledger update, actual result
-receipt, and actual receipt handoff.
-The POST-specific confirmation from RETRY-4 is not reusable.
-The POST-specific confirmation state from RETRY-5 is also not reusable.
-Until that separate step satisfies its own gates, Codex must still avoid env
-value exposure, credential value exposure, signature value exposure, headers
-value exposure, raw request/response exposure, broker/API response exposure,
-order endpoints, `live_order_once`, ledger updates, attempt counter persistence,
-actual receipt handoff, and live-money Step 6G retry.
+That Step must not start with POST. It must keep credential values, signature
+values, headers values, raw request/response values, broker/API responses, IDs,
+ledger updates, attempt counter persistence, actual receipt handoff, retry,
+repost, final confirmation, fresh preflight, and live-money Step 6G retry out
+of scope. A later dedicated POST execution gate still requires sanitized
+preview and a new POST-specific confirmation before any one-shot POST can be
+considered.

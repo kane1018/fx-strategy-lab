@@ -145,20 +145,24 @@ This implementation step did not:
 
 ## Next Step
 
-Recommended next step:
+Current staged refactor direction:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-6
+Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C
 ```
 
-That step must first confirm the repository state and prerequisite gates, show
-the sanitized executable order preview, then obtain a new POST-specific explicit
-confirmation in the current Codex session. Previous POST-specific confirmation
-text is not reusable. Only after those checks may it consider one HTTP POST
-through the safe route, approved actual source boundary, approved source
-boundary, approved primitive boundary, and controlled binding.
+The sealed request/body/result mapper foundation is implemented separately in
+`docs/STEP6G_ONE_SHOT_POST_SEALED_REQUEST_RESULT_CONTROLLED.md`. The next staged
+refactor may design sealed credential/signing/header handling, but it must not
+execute POST, obtain POST-specific confirmation, expose credential/signature/
+header values, expose raw request/response values, expose IDs, update ledger
+state, hand off receipts, retry, or repost.
 
-The next step must still keep these boundaries separate:
+A later dedicated POST execution gate must still first confirm repository state
+and prerequisites, show the sanitized executable order preview, then obtain a
+new POST-specific explicit confirmation in the current Codex session. Previous
+POST-specific confirmation text is not reusable. That later step must still keep
+these boundaries separate:
 
 - HTTP POST and retry/repost
 - HTTP POST and ledger update

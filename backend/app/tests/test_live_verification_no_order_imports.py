@@ -3618,6 +3618,10 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
             field_names = field_names - {
                 "order_type",
             }
+        if path.name == "live_order_real_one_shot_post_sealed_request_result_controlled.py":
+            field_names = field_names - {
+                "order_type",
+            }
         assert field_names.isdisjoint(blocked_fields)
 
 
@@ -5847,6 +5851,7 @@ def test_real_api_preflight_safe_route_consolidation_has_no_api_order_dependenci
         "live_order_real_one_shot_post_approved_primitive_controlled.py",
         "live_order_real_one_shot_post_approved_primitive_source_controlled.py",
         "live_order_real_one_shot_post_approved_primitive_actual_source_controlled.py",
+        "live_order_real_one_shot_post_sealed_request_result_controlled.py",
         "run_fresh_preflight_execution_controlled.py",
     ],
 )
