@@ -82,6 +82,24 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-ACTUAL-SOURCE-SUPPLY-C approved primitive actual source callable boundary implementation完了 / no actual HTTP POST** —
+  ONE-SHOT-POST-EXECUTION-GATE-RETRY-5 CASE 2（credential presence、safe route、sanitized preview、approved primitive
+  boundary、approved primitive source boundary、controlled binding/executorは確認済み。ただしactual POSTに渡せる
+  approved primitive actual source callable本体が未供給で停止）を受けて、
+  `backend/app/live_verification/live_order_real_one_shot_post_approved_primitive_actual_source_controlled.py`、
+  `backend/app/tests/test_live_verification_live_order_real_one_shot_post_approved_primitive_actual_source_controlled.py`、
+  `docs/STEP6G_ONE_SHOT_POST_APPROVED_PRIMITIVE_ACTUAL_SOURCE_CONTROLLED.md` を追加した。actual source boundaryは
+  availability safe summary、default/import/summary/construct no-execution guard、actual-source-to-approved-source adapter、
+  approved primitive source/approved primitive/controlled binding/executor compatibilityを提供する。新規moduleは
+  `live_order_once`、broker/private API、HTTP client、env reader、ledger writer、receipt handoffをimport/callしない。
+  testsではfake/monkeypatch actual sourceのみを使い、approved primitive source boundary、approved primitive boundary、
+  controlled real transport binding、controlled executorへの接続、one POST max、no retry、timeout fail-closed、
+  ledger/receipt分離、raw/ID/value非露出を確認する。このStepではactual HTTP POST、order endpoint、`live_order_once`、
+  POST-specific confirmation取得、直前POST-specific confirmation再利用、ledger update、attempt counter persistence、
+  actual receipt handoff、retry/repost、fresh preflight再実行、final confirmation再取得には進んでいない。
+  次の推奨Stepは **Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-6**。次Stepでも最初からPOSTせず、safe preview提示後に
+  このCodexセッション内の新しいPOST-specific confirmationを取得してから、条件が揃う場合だけ最大1回のHTTP POSTを検討する。
+  過去のPOST-specific confirmationは再利用不可で、ledger/receipt/retry/repostは引き続き分離必須。
 - **Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C approved primitive source supply boundary implementation完了 / no actual HTTP POST** —
   ONE-SHOT-POST-EXECUTION-GATE-RETRY-4 CASE 2（POST-specific confirmationは取得済みだが再利用不可、credential presence、
   safe route、sanitized preview、approved primitive boundary、controlled binding/executorは確認済み。ただしactual POSTに渡せる

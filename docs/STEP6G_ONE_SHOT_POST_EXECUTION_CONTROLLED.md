@@ -123,15 +123,16 @@ counters, receive actual receipts, or perform actual receipt handoff.
 ## Transport Boundary
 
 The route accepts a transport callable. Step
-6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C adds the approved
-primitive source supply boundary that can feed the approved primitive boundary
-and controlled real transport binding before this route is invoked by a later
-dedicated execution gate. The source, approved primitive, and binding
+6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-ACTUAL-SOURCE-SUPPLY-C adds the
+approved primitive actual source callable boundary that can feed the approved
+primitive source boundary, approved primitive boundary, and controlled real
+transport binding before this route is invoked by a later dedicated execution
+gate. The actual source, source, approved primitive, and binding
 default/import/summary/construct paths do not POST.
 
-A later `ONE-SHOT-POST-EXECUTION-GATE-RETRY-5` may pass the controlled binding
+A later `ONE-SHOT-POST-EXECUTION-GATE-RETRY-6` may pass the controlled binding
 only after a new POST-specific explicit confirmation and only if every gate is
-still clean. The RETRY-4 POST-specific confirmation is not reusable.
+still clean. Previous POST-specific confirmation text is not reusable.
 
 ## Result Mapping
 
@@ -184,13 +185,14 @@ This implementation step did not:
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-5
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-6
 ```
 
 That step must first show the sanitized preview, then obtain a new
 POST-specific explicit confirmation in the current Codex session. Only after
-that may it consider one HTTP POST through the safe route, approved primitive
-source boundary, approved primitive boundary, and controlled binding.
+that may it consider one HTTP POST through the safe route, approved actual
+source boundary, approved primitive source boundary, approved primitive
+boundary, and controlled binding.
 
 The next step must still keep these boundaries separate:
 

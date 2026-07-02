@@ -1,28 +1,25 @@
-# Step 6G One-Shot POST Approved Primitive Source Controlled
+# Step 6G One-Shot POST Approved Primitive Actual Source Controlled
 
-Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C implements the
-approved primitive source supply boundary that can feed the approved primitive
-boundary and controlled real transport binding in a later execution gate.
-The next actual source callable is supplied by the separate approved primitive
-actual source boundary; that boundary still does not POST at import, summary,
-or construction time.
+Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-ACTUAL-SOURCE-SUPPLY-C
+implements the approved primitive actual source callable supply boundary that
+can feed the approved primitive source boundary in a later execution gate.
 
-This step is source-boundary implementation only. It is not actual HTTP POST,
-not an order endpoint call, not `live_order_once` execution, and not a
+This step is actual-source-boundary implementation only. It is not actual HTTP
+POST, not an order endpoint call, not `live_order_once` execution, and not a
 POST-specific confirmation step.
 
 ## Scope
 
 Implemented in:
 
-- `backend/app/live_verification/live_order_real_one_shot_post_approved_primitive_source_controlled.py`
+- `backend/app/live_verification/live_order_real_one_shot_post_approved_primitive_actual_source_controlled.py`
 
 The boundary exposes:
 
-1. approved primitive source availability safe summary
-2. approved primitive source construction guard
-3. source-to-approved-primitive adapter
-4. controlled binding and executor compatibility surface
+1. approved primitive actual source availability safe summary
+2. approved primitive actual source construction guard
+3. actual-source-to-approved-source adapter
+4. approved primitive source, approved primitive, binding, and executor compatibility surface
 5. no-execution default/import/summary/construct path
 
 The implementation does not import or call:
@@ -40,13 +37,14 @@ The implementation does not import or call:
 The availability summary exposes safe labels, booleans, counts, categories, and
 blocked reason labels only:
 
-- `approved_primitive_source_available`
-- `approved_primitive_source_status`
-- `approved_primitive_source_label`
-- `approved_primitive_source_default_no_execution=true`
-- `approved_primitive_source_import_executes_post=false`
-- `approved_primitive_source_construct_executes_post=false`
-- `approved_primitive_source_summary_executes_post=false`
+- `approved_primitive_actual_source_available`
+- `approved_primitive_actual_source_status`
+- `approved_primitive_actual_source_label`
+- `approved_primitive_actual_source_default_no_execution=true`
+- `approved_primitive_actual_source_import_executes_post=false`
+- `approved_primitive_actual_source_construct_executes_post=false`
+- `approved_primitive_actual_source_summary_executes_post=false`
+- `approved_primitive_source_boundary_compatible`
 - `approved_primitive_boundary_compatible`
 - `controlled_binding_compatible`
 - `controlled_executor_required=true`
@@ -64,20 +62,9 @@ blocked reason labels only:
 - `headers_value_exposed=false`
 - `real_id_exposed=false`
 
-## Source Contract
+## Actual Source Contract
 
-The boundary is constructed with a caller-supplied source:
-
-```text
-construct_live_order_real_one_shot_post_approved_primitive_source_controlled(
-  source=...
-)
-```
-
-Construction does not call the source. Importing the module, rendering the
-summary, or constructing the boundary does not POST.
-
-A later execution gate can supply the source from:
+The boundary is constructed with a caller-supplied actual source callable:
 
 ```text
 construct_live_order_real_one_shot_post_approved_primitive_actual_source_controlled(
@@ -85,20 +72,21 @@ construct_live_order_real_one_shot_post_approved_primitive_actual_source_control
 )
 ```
 
-and pass `actual_source_boundary.approved_primitive_actual_source` as this
-boundary's `source`.
+Construction does not call the actual source. Importing the module, rendering
+the summary, or constructing the boundary does not POST.
 
-The constructed `approved_primitive_source` can be passed to:
+The constructed `approved_primitive_actual_source` can be passed to:
 
 ```text
-construct_live_order_real_one_shot_post_approved_primitive_controlled(
-  primitive=source_boundary.approved_primitive_source
+construct_live_order_real_one_shot_post_approved_primitive_source_controlled(
+  source=actual_source_boundary.approved_primitive_actual_source
 )
 ```
 
-The source is acceptable only when the contract says:
+The actual source is acceptable only when the contract says:
 
-- approved primitive source supplied
+- approved primitive actual source supplied
+- approved primitive source boundary compatible
 - approved primitive boundary compatible
 - controlled binding compatible
 - controlled executor required
@@ -112,29 +100,29 @@ The source is acceptable only when the contract says:
 - no credential/signature/header value exposure
 - no real/account/order/transaction ID exposure
 
-If any contract flag is unsafe, the source boundary fails closed and the
+If any contract flag is unsafe, the actual source boundary fails closed and the
 controlled callable returns a sanitized failed outcome without calling the
-source candidate.
+actual source candidate.
 
-## Controlled Binding Compatibility
+## Controlled Chain Compatibility
 
 The intended chain for the next execution gate is:
 
 ```text
-approved source boundary
-  <- approved actual source boundary
+approved actual source boundary
+  -> approved source boundary
   -> approved primitive boundary
   -> controlled real transport binding
   -> controlled one-shot executor
 ```
 
-The approved primitive boundary, binding, and executor still own their own
-guards. Tests verify the chain using fake/monkeypatch sources only.
+Each layer still owns its own guard. Tests verify the chain using
+fake/monkeypatch actual sources only.
 
 Timeout, failure, unknown, and unavailable outcomes fail closed. Unsafe fake
 outcomes are sanitized so raw request/response, broker/API response, IDs,
-credential values, signature values, headers values, ledger updates, and receipt
-handoff flags do not propagate.
+credential values, signature values, headers values, ledger updates, and
+receipt handoff flags do not propagate.
 
 ## What This Step Did Not Do
 
@@ -167,8 +155,8 @@ That step must first confirm the repository state and prerequisite gates, show
 the sanitized executable order preview, then obtain a new POST-specific explicit
 confirmation in the current Codex session. Previous POST-specific confirmation
 text is not reusable. Only after those checks may it consider one HTTP POST
-through the safe route, approved actual source boundary, approved primitive
-source boundary, approved primitive boundary, and controlled binding.
+through the safe route, approved actual source boundary, approved source
+boundary, approved primitive boundary, and controlled binding.
 
 The next step must still keep these boundaries separate:
 

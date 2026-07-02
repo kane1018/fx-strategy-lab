@@ -72,13 +72,20 @@ construct_live_order_real_one_shot_post_real_transport_binding_controlled(
 Construction does not call the primitive. Importing the module, rendering the
 summary, or constructing the binding does not POST.
 
-After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C, the
-caller-supplied primitive should come through the approved primitive source
-boundary and approved primitive boundary:
+After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-ACTUAL-SOURCE-SUPPLY-C,
+the caller-supplied primitive should come through the approved primitive actual
+source boundary, approved primitive source boundary, and approved primitive
+boundary:
+
+```text
+construct_live_order_real_one_shot_post_approved_primitive_actual_source_controlled(
+  actual_source=...
+)
+```
 
 ```text
 construct_live_order_real_one_shot_post_approved_primitive_source_controlled(
-  source=...
+  source=actual_source_boundary.approved_primitive_actual_source
 )
 ```
 
@@ -88,9 +95,10 @@ construct_live_order_real_one_shot_post_approved_primitive_controlled(
 )
 ```
 
-Those boundaries also do not call the supplied source or primitive at import,
-summary, or construction time. They provide the no-execution availability
-summaries and sanitized callable that can be passed into this binding.
+Those boundaries also do not call the supplied actual source, source, or
+primitive at import, summary, or construction time. They provide no-execution
+availability summaries and sanitized callables that can be passed into this
+binding.
 
 The primitive is acceptable only when the contract says:
 
@@ -147,15 +155,15 @@ This implementation step did not:
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-5
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-6
 ```
 
 That step must first confirm the repository state and prerequisite gates, show
 the sanitized executable order preview, then obtain a new POST-specific explicit
-confirmation in the current Codex session. The RETRY-4 POST-specific
-confirmation is not reusable. Only after those checks may it consider one HTTP
-POST through the safe route, approved primitive source boundary, approved
-primitive boundary, and controlled binding.
+confirmation in the current Codex session. Previous POST-specific confirmation
+text is not reusable. Only after those checks may it consider one HTTP POST
+through the safe route, approved actual source boundary, approved primitive
+source boundary, approved primitive boundary, and controlled binding.
 
 The next step must still keep these boundaries separate:
 
