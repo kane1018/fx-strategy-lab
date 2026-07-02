@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-RESOLUTION-C approved primitive boundary implementation完了 / no actual HTTP POST** —
+  ONE-SHOT-POST-EXECUTION-GATE-RETRY-3 CASE 2（credential presence、safe route、sanitized preview、controlled real transport
+  bindingは確認済みだが、current/default bindingが `approved_primitive_missing` で停止）を受けて、
+  `backend/app/live_verification/live_order_real_one_shot_post_approved_primitive_controlled.py`、
+  `backend/app/tests/test_live_verification_live_order_real_one_shot_post_approved_primitive_controlled.py`、
+  `docs/STEP6G_ONE_SHOT_POST_APPROVED_PRIMITIVE_CONTROLLED.md` を追加した。approved primitive boundaryはavailability safe summary、
+  default/import/summary/construct no-execution guard、controlled callable interface、sanitized primitive outcome mappingを提供する。
+  新規moduleは `live_order_once`、broker/private API、HTTP client、env reader、ledger writer、receipt handoffをimport/callしない。
+  testsではfake/monkeypatch primitiveのみを使い、controlled real transport bindingとcontrolled executorへの接続、one POST max、
+  no retry、timeout fail-closed、ledger/receipt分離、raw/ID/value非露出を確認する。このStepではactual HTTP POST、order endpoint、
+  `live_order_once`、POST-specific confirmation取得、ledger update、attempt counter persistence、actual receipt handoff、
+  retry/repost、fresh preflight再実行、final confirmation再取得には進んでいない。次の推奨Stepは
+  **Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-4**。次Stepでも最初からPOSTせず、safe preview提示後に
+  このCodexセッション内の新しいPOST-specific confirmationを取得してから、条件が揃う場合だけ最大1回のHTTP POSTを検討する。
+  ledger/receipt/retry/repostは引き続き分離必須。
 - **Step 6G-PC-OX-R-ONE-SHOT-POST-REAL-TRANSPORT-BINDING-C controlled real transport binding implementation完了 / no actual HTTP POST** —
   ONE-SHOT-POST-EXECUTION-GATE-RETRY CASE 2（safe route と sanitized previewは確認済みだが、actual HTTP POST用の
   承認済みreal transport bindingをrepo内で安全に確認できなかった）を受けて、

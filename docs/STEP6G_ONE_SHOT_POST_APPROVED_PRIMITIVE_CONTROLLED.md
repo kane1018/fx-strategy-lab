@@ -1,24 +1,24 @@
-# Step 6G One-Shot POST Real Transport Binding Controlled
+# Step 6G One-Shot POST Approved Primitive Controlled
 
-Step 6G-PC-OX-R-ONE-SHOT-POST-REAL-TRANSPORT-BINDING-C implements the
-controlled real transport binding contract for the safe one-shot POST execution
-route.
+Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-RESOLUTION-C implements the
+approved primitive boundary that can feed the controlled real transport binding
+in a later execution gate.
 
-This step is binding implementation only. It is not actual HTTP POST, not an
+This step is boundary implementation only. It is not actual HTTP POST, not an
 order endpoint call, and not `live_order_once` execution.
 
 ## Scope
 
 Implemented in:
 
-- `backend/app/live_verification/live_order_real_one_shot_post_real_transport_binding_controlled.py`
+- `backend/app/live_verification/live_order_real_one_shot_post_approved_primitive_controlled.py`
 
-The binding exposes:
+The boundary exposes:
 
-1. binding availability safe summary
-2. construction guard
-3. controlled transport callable wrapper
-4. sanitized transport outcome mapping
+1. approved primitive availability safe summary
+2. approved primitive construction guard
+3. controlled callable interface
+4. sanitized primitive outcome mapping
 5. no-execution default/import/summary/construct path
 
 The implementation does not import or call:
@@ -33,19 +33,18 @@ The implementation does not import or call:
 
 ## Safe Summary
 
-The availability summary exposes safe labels, booleans, counts, and blocked
-reason labels only:
+The availability summary exposes safe labels, booleans, counts, categories, and
+blocked reason labels only:
 
-- `real_transport_binding_available`
-- `real_transport_binding_label`
-- `real_transport_binding_status`
-- `binding_default_no_execution=true`
-- `binding_import_executes_post=false`
-- `binding_construct_executes_post=false`
-- `binding_summary_executes_post=false`
+- `approved_primitive_available`
+- `approved_primitive_status`
+- `approved_primitive_label`
+- `approved_primitive_default_no_execution=true`
+- `approved_primitive_import_executes_post=false`
+- `approved_primitive_construct_executes_post=false`
+- `approved_primitive_summary_executes_post=false`
 - `controlled_executor_required=true`
 - `post_specific_confirmation_required=true`
-- `credential_presence_checked=false`
 - `one_post_max=true`
 - `retry_allowed=false`
 - `timeout_fail_closed=true`
@@ -59,21 +58,9 @@ reason labels only:
 - `headers_value_exposed=false`
 - `real_id_exposed=false`
 
-## Binding Contract
+## Approved Primitive Contract
 
-The binding is constructed with a caller-supplied primitive:
-
-```text
-construct_live_order_real_one_shot_post_real_transport_binding_controlled(
-  primitive=...
-)
-```
-
-Construction does not call the primitive. Importing the module, rendering the
-summary, or constructing the binding does not POST.
-
-After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-RESOLUTION-C, the
-caller-supplied primitive should come through:
+The boundary is constructed with a caller-supplied primitive:
 
 ```text
 construct_live_order_real_one_shot_post_approved_primitive_controlled(
@@ -81,13 +68,12 @@ construct_live_order_real_one_shot_post_approved_primitive_controlled(
 )
 ```
 
-That approved primitive boundary also does not call the supplied primitive at
-import, summary, or construction time. It provides the no-execution availability
-summary and sanitized callable that can be passed into this binding.
+Construction does not call the primitive. Importing the module, rendering the
+summary, or constructing the boundary does not POST.
 
 The primitive is acceptable only when the contract says:
 
-- approved primitive supplied
+- approved primitive source supplied
 - controlled executor required
 - POST-specific confirmation required
 - one POST max
@@ -99,23 +85,26 @@ The primitive is acceptable only when the contract says:
 - no credential/signature/header value exposure
 - no real/account/order/transaction ID exposure
 
-If any contract flag is unsafe, the binding fails closed and the constructed
+If any contract flag is unsafe, the boundary fails closed and the controlled
 callable returns a sanitized failed outcome without calling the primitive.
 
-## Controlled Callable
+## Controlled Binding Compatibility
 
-The callable is intended to be passed to:
+The controlled primitive is intended to be passed to:
 
 ```text
-execute_live_order_real_one_shot_post_execution_controlled(..., transport=...)
+construct_live_order_real_one_shot_post_real_transport_binding_controlled(
+  primitive=approved.controlled_primitive
+)
 ```
 
-The controlled executor still owns the one-call boundary. Tests verify that the
-binding composes with the executor using fake/monkeypatch primitives only.
+The binding and executor still own the one-call boundary. Tests verify this
+connection using fake/monkeypatch primitives only.
 
-The wrapper maps primitive outcomes to safe transport results and sanitizes
-unsafe primitive results. Timeout, failure, unknown, and unavailable outcomes
-fail closed. No retry and no second POST are attempted.
+Timeout, failure, unknown, and unavailable outcomes fail closed. Unsafe fake
+outcomes are sanitized so raw request/response, broker/API response, IDs,
+credential values, signature values, headers values, ledger updates, and receipt
+handoff flags do not propagate.
 
 ## What This Step Did Not Do
 
@@ -146,7 +135,8 @@ Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-4
 That step must first confirm the repository state and prerequisite gates, show
 the sanitized executable order preview, then obtain a new POST-specific explicit
 confirmation in the current Codex session. Only after those checks may it
-consider one HTTP POST through the safe route and controlled binding.
+consider one HTTP POST through the safe route, approved primitive boundary, and
+controlled binding.
 
 The next step must still keep these boundaries separate:
 
