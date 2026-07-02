@@ -103,6 +103,16 @@ from app.live_verification.live_order_real_final_readiness_controlled import (
     LiveOrderRealFinalReadinessControlledStatus,
     build_live_order_real_final_readiness_controlled,
 )
+from app.live_verification.live_order_real_fresh_preflight_runtime_controlled import (
+    SAFE_LOCAL_STATIC_CHECK_LABEL,
+    SAFE_PREFLIGHT_RUNTIME_LABEL,
+    SAFE_PRIVATE_READ_ONLY_CHECK_LABEL,
+    SAFE_PUBLIC_MARKET_CHECK_LABEL,
+    LiveOrderRealFreshPreflightRuntimeControlledInput,
+    LiveOrderRealFreshPreflightRuntimeControlledResult,
+    LiveOrderRealFreshPreflightRuntimeControlledStatus,
+    build_live_order_real_fresh_preflight_runtime_controlled,
+)
 from app.live_verification.live_order_real_http_transport_interface import (
     LiveOrderRealHttpTransportInterfaceInput,
     LiveOrderRealHttpTransportInterfaceResult,
@@ -284,6 +294,9 @@ class LiveOrderRealStep6GInternalWiringStatus(str, Enum):
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_EXEC_STACK = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_EXEC_STACK"
+    )
+    BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_RUNTIME = (
+        "BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_RUNTIME"
     )
     BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT = (
         "BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT"
@@ -716,6 +729,57 @@ class LiveOrderRealStep6GInternalWiringInput:
     final_exec_stack_real_id_exposure_attempted: bool = False
     final_exec_stack_confirmation_phrase_exposure_attempted: bool = False
     final_exec_stack_ledger_state_exposure_attempted: bool = False
+    fresh_preflight_runtime_ready: bool = True
+    fresh_preflight_runtime_mode: str = (
+        "FRESH_PREFLIGHT_RUNTIME_CONTROLLED_IMPLEMENTATION_ONLY"
+    )
+    fresh_preflight_runtime_declared: bool = True
+    safe_preflight_runtime_label: str = SAFE_PREFLIGHT_RUNTIME_LABEL
+    fresh_preflight_runtime_unknown: bool = False
+    fresh_preflight_runtime_failed: bool = False
+    fresh_preflight_runtime_unavailable: bool = False
+    fresh_preflight_runtime_timeout: bool = False
+    fresh_preflight_runtime_stale: bool = False
+    fresh_preflight_runtime_reused: bool = False
+    public_market_check_ready: bool = True
+    private_read_only_check_ready: bool = True
+    local_static_check_ready: bool = True
+    safe_public_market_check_label: str = SAFE_PUBLIC_MARKET_CHECK_LABEL
+    safe_private_read_only_check_label: str = SAFE_PRIVATE_READ_ONLY_CHECK_LABEL
+    safe_local_static_check_label: str = SAFE_LOCAL_STATIC_CHECK_LABEL
+    preflight_safe_account_assets_count: int = 1
+    preflight_safe_open_positions_count: int = 0
+    preflight_safe_active_orders_count: int = 0
+    preflight_git_state_expected_clean: bool = True
+    preflight_head_origin_expected_match: bool = True
+    preflight_no_order_guard_ready: bool = True
+    preflight_post_disabled: bool = True
+    preflight_live_order_once_disabled: bool = True
+    preflight_fresh_final_separation_maintained: bool = True
+    preflight_runtime_fresh_preflight_executed: bool = False
+    preflight_runtime_api_call_executed: bool = False
+    preflight_runtime_public_api_call_executed: bool = False
+    preflight_runtime_private_api_call_executed: bool = False
+    preflight_runtime_post_allowed_this_step: bool = False
+    preflight_runtime_post_executed: bool = False
+    preflight_runtime_http_post_executed: bool = False
+    preflight_runtime_order_endpoint_called: bool = False
+    preflight_runtime_live_order_once_called: bool = False
+    preflight_runtime_final_confirmation_received: bool = False
+    preflight_runtime_ledger_updated: bool = False
+    preflight_runtime_attempt_counter_persisted: bool = False
+    preflight_runtime_actual_result_receipt_received: bool = False
+    preflight_runtime_actual_receipt_handoff_executed: bool = False
+    preflight_runtime_raw_request_exposure_attempted: bool = False
+    preflight_runtime_raw_response_exposure_attempted: bool = False
+    preflight_runtime_broker_response_exposure_attempted: bool = False
+    preflight_runtime_api_response_exposure_attempted: bool = False
+    preflight_runtime_credential_value_exposure_attempted: bool = False
+    preflight_runtime_signature_value_exposure_attempted: bool = False
+    preflight_runtime_headers_value_exposure_attempted: bool = False
+    preflight_runtime_real_id_exposure_attempted: bool = False
+    preflight_runtime_confirmation_phrase_exposure_attempted: bool = False
+    preflight_runtime_ledger_state_exposure_attempted: bool = False
     credential_presence_adapter_ready: bool = True
     presence_adapter_mode: str = "PRESENCE_ADAPTER_SKELETON_ONLY"
     operator_provided_presence_result: bool = True
@@ -1003,6 +1067,26 @@ class LiveOrderRealStep6GInternalWiringInput:
             "safe_dry_run_stack_label",
             self.safe_dry_run_stack_label,
         )
+        _require_non_empty(
+            "fresh_preflight_runtime_mode",
+            self.fresh_preflight_runtime_mode,
+        )
+        _require_non_empty(
+            "safe_preflight_runtime_label",
+            self.safe_preflight_runtime_label,
+        )
+        _require_non_empty(
+            "safe_public_market_check_label",
+            self.safe_public_market_check_label,
+        )
+        _require_non_empty(
+            "safe_private_read_only_check_label",
+            self.safe_private_read_only_check_label,
+        )
+        _require_non_empty(
+            "safe_local_static_check_label",
+            self.safe_local_static_check_label,
+        )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -1047,6 +1131,18 @@ class LiveOrderRealStep6GInternalWiringInput:
         _validate_non_negative_int("size", self.size)
         _validate_non_negative_int("open_positions_count", self.open_positions_count)
         _validate_non_negative_int("active_orders_count", self.active_orders_count)
+        _validate_non_negative_int(
+            "preflight_safe_account_assets_count",
+            self.preflight_safe_account_assets_count,
+        )
+        _validate_non_negative_int(
+            "preflight_safe_open_positions_count",
+            self.preflight_safe_open_positions_count,
+        )
+        _validate_non_negative_int(
+            "preflight_safe_active_orders_count",
+            self.preflight_safe_active_orders_count,
+        )
         _validate_non_negative_int("post_attempt_limit", self.post_attempt_limit)
         _validate_non_negative_int(
             "post_attempt_count_before",
@@ -1425,6 +1521,47 @@ class LiveOrderRealStep6GInternalWiringInput:
                 "final_exec_stack_real_id_exposure_attempted",
                 "final_exec_stack_confirmation_phrase_exposure_attempted",
                 "final_exec_stack_ledger_state_exposure_attempted",
+                "fresh_preflight_runtime_ready",
+                "fresh_preflight_runtime_declared",
+                "fresh_preflight_runtime_unknown",
+                "fresh_preflight_runtime_failed",
+                "fresh_preflight_runtime_unavailable",
+                "fresh_preflight_runtime_timeout",
+                "fresh_preflight_runtime_stale",
+                "fresh_preflight_runtime_reused",
+                "public_market_check_ready",
+                "private_read_only_check_ready",
+                "local_static_check_ready",
+                "preflight_git_state_expected_clean",
+                "preflight_head_origin_expected_match",
+                "preflight_no_order_guard_ready",
+                "preflight_post_disabled",
+                "preflight_live_order_once_disabled",
+                "preflight_fresh_final_separation_maintained",
+                "preflight_runtime_fresh_preflight_executed",
+                "preflight_runtime_api_call_executed",
+                "preflight_runtime_public_api_call_executed",
+                "preflight_runtime_private_api_call_executed",
+                "preflight_runtime_post_allowed_this_step",
+                "preflight_runtime_post_executed",
+                "preflight_runtime_http_post_executed",
+                "preflight_runtime_order_endpoint_called",
+                "preflight_runtime_live_order_once_called",
+                "preflight_runtime_final_confirmation_received",
+                "preflight_runtime_ledger_updated",
+                "preflight_runtime_attempt_counter_persisted",
+                "preflight_runtime_actual_result_receipt_received",
+                "preflight_runtime_actual_receipt_handoff_executed",
+                "preflight_runtime_raw_request_exposure_attempted",
+                "preflight_runtime_raw_response_exposure_attempted",
+                "preflight_runtime_broker_response_exposure_attempted",
+                "preflight_runtime_api_response_exposure_attempted",
+                "preflight_runtime_credential_value_exposure_attempted",
+                "preflight_runtime_signature_value_exposure_attempted",
+                "preflight_runtime_headers_value_exposure_attempted",
+                "preflight_runtime_real_id_exposure_attempted",
+                "preflight_runtime_confirmation_phrase_exposure_attempted",
+                "preflight_runtime_ledger_state_exposure_attempted",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -1660,6 +1797,9 @@ class LiveOrderRealStep6GInternalWiringSnapshot:
     sanitized_post_result_result: LiveOrderRealSanitizedPostResultResult
     final_readiness_controlled_result: LiveOrderRealFinalReadinessControlledResult
     final_exec_stack_controlled_result: LiveOrderRealFinalExecStackControlledResult
+    fresh_preflight_runtime_controlled_result: (
+        LiveOrderRealFreshPreflightRuntimeControlledResult
+    )
     credential_presence_adapter_result: LiveOrderRealCredentialPresenceAdapterResult
     credential_presence_checker_contract_result: (
         LiveOrderRealCredentialPresenceCheckerContractResult
@@ -2035,6 +2175,40 @@ class LiveOrderRealStep6GInternalWiringResult:
     final_exec_stack_actual_receipt_handoff_executed: bool
     final_exec_stack_one_shot_post_allowed: bool
     final_exec_stack_one_shot_post_readiness_blocked: bool
+    fresh_preflight_runtime_ready: bool
+    fresh_preflight_runtime_mode: str
+    safe_preflight_runtime_label: str
+    safe_preflight_runtime_status: str
+    public_market_check_ready: bool
+    private_read_only_check_ready: bool
+    local_static_check_ready: bool
+    preflight_final_exec_stack_ready: bool
+    preflight_post_guard_ready: bool
+    preflight_no_order_guard_ready: bool
+    safe_public_market_check_label: str
+    safe_private_read_only_check_label: str
+    safe_local_static_check_label: str
+    preflight_safe_account_assets_count: int
+    preflight_safe_open_positions_count: int
+    preflight_safe_active_orders_count: int
+    preflight_git_state_expected_clean: bool
+    preflight_head_origin_expected_match: bool
+    preflight_post_disabled: bool
+    preflight_live_order_once_disabled: bool
+    preflight_fresh_final_separation_maintained: bool
+    preflight_runtime_fresh_preflight_executed: bool
+    preflight_runtime_api_call_executed: bool
+    preflight_runtime_public_api_call_executed: bool
+    preflight_runtime_private_api_call_executed: bool
+    preflight_runtime_post_executed: bool
+    preflight_runtime_http_post_executed: bool
+    preflight_runtime_order_endpoint_called: bool
+    preflight_runtime_live_order_once_called: bool
+    preflight_runtime_final_confirmation_received: bool
+    preflight_runtime_ledger_updated: bool
+    preflight_runtime_attempt_counter_persisted: bool
+    preflight_runtime_actual_result_receipt_received: bool
+    preflight_runtime_actual_receipt_handoff_executed: bool
     credential_presence_adapter_ready: bool
     presence_adapter_mode: str
     operator_provided_presence_result: bool
@@ -2330,6 +2504,30 @@ class LiveOrderRealStep6GInternalWiringResult:
             "final_exec_stack_ledger_attempt_preview_label",
             self.final_exec_stack_ledger_attempt_preview_label,
         )
+        _require_non_empty(
+            "fresh_preflight_runtime_mode",
+            self.fresh_preflight_runtime_mode,
+        )
+        _require_non_empty(
+            "safe_preflight_runtime_label",
+            self.safe_preflight_runtime_label,
+        )
+        _require_non_empty(
+            "safe_preflight_runtime_status",
+            self.safe_preflight_runtime_status,
+        )
+        _require_non_empty(
+            "safe_public_market_check_label",
+            self.safe_public_market_check_label,
+        )
+        _require_non_empty(
+            "safe_private_read_only_check_label",
+            self.safe_private_read_only_check_label,
+        )
+        _require_non_empty(
+            "safe_local_static_check_label",
+            self.safe_local_static_check_label,
+        )
         _require_non_empty("presence_adapter_mode", self.presence_adapter_mode)
         _require_non_empty("checker_contract_mode", self.checker_contract_mode)
         _require_non_empty(
@@ -2369,6 +2567,18 @@ class LiveOrderRealStep6GInternalWiringResult:
             self.operator_result_handoff_non_execution_boundary_mode,
         )
         _require_non_empty("operator_result_category", self.operator_result_category)
+        _validate_non_negative_int(
+            "preflight_safe_account_assets_count",
+            self.preflight_safe_account_assets_count,
+        )
+        _validate_non_negative_int(
+            "preflight_safe_open_positions_count",
+            self.preflight_safe_open_positions_count,
+        )
+        _validate_non_negative_int(
+            "preflight_safe_active_orders_count",
+            self.preflight_safe_active_orders_count,
+        )
         _validate_bool_fields(
             self,
             (
@@ -2673,6 +2883,31 @@ class LiveOrderRealStep6GInternalWiringResult:
                 "final_exec_stack_actual_receipt_handoff_executed",
                 "final_exec_stack_one_shot_post_allowed",
                 "final_exec_stack_one_shot_post_readiness_blocked",
+                "fresh_preflight_runtime_ready",
+                "public_market_check_ready",
+                "private_read_only_check_ready",
+                "local_static_check_ready",
+                "preflight_final_exec_stack_ready",
+                "preflight_post_guard_ready",
+                "preflight_no_order_guard_ready",
+                "preflight_git_state_expected_clean",
+                "preflight_head_origin_expected_match",
+                "preflight_post_disabled",
+                "preflight_live_order_once_disabled",
+                "preflight_fresh_final_separation_maintained",
+                "preflight_runtime_fresh_preflight_executed",
+                "preflight_runtime_api_call_executed",
+                "preflight_runtime_public_api_call_executed",
+                "preflight_runtime_private_api_call_executed",
+                "preflight_runtime_post_executed",
+                "preflight_runtime_http_post_executed",
+                "preflight_runtime_order_endpoint_called",
+                "preflight_runtime_live_order_once_called",
+                "preflight_runtime_final_confirmation_received",
+                "preflight_runtime_ledger_updated",
+                "preflight_runtime_attempt_counter_persisted",
+                "preflight_runtime_actual_result_receipt_received",
+                "preflight_runtime_actual_receipt_handoff_executed",
                 "credential_presence_adapter_ready",
                 "operator_provided_presence_result",
                 "operator_presence_result_is_boolean_only",
@@ -4601,6 +4836,182 @@ def build_valid_step6g_internal_wiring_snapshot(
             sanitized_result=sanitized_post_result_result,
         )
     )
+    fresh_preflight_runtime_controlled_result = (
+        build_live_order_real_fresh_preflight_runtime_controlled(
+            input_snapshot=LiveOrderRealFreshPreflightRuntimeControlledInput(
+                fresh_preflight_runtime_mode=(
+                    wiring_input.fresh_preflight_runtime_mode
+                ),
+                fresh_preflight_runtime_declared=(
+                    wiring_input.fresh_preflight_runtime_declared
+                ),
+                fresh_preflight_runtime_requested=(
+                    wiring_input.fresh_preflight_runtime_ready
+                ),
+                safe_preflight_runtime_label=(
+                    wiring_input.safe_preflight_runtime_label
+                ),
+                public_market_check_ready=wiring_input.public_market_check_ready,
+                safe_public_market_check_label=(
+                    wiring_input.safe_public_market_check_label
+                ),
+                private_read_only_check_ready=(
+                    wiring_input.private_read_only_check_ready
+                ),
+                safe_private_read_only_check_label=(
+                    wiring_input.safe_private_read_only_check_label
+                ),
+                safe_account_assets_count=(
+                    wiring_input.preflight_safe_account_assets_count
+                ),
+                safe_open_positions_count=(
+                    wiring_input.preflight_safe_open_positions_count
+                ),
+                safe_active_orders_count=(
+                    wiring_input.preflight_safe_active_orders_count
+                ),
+                local_static_check_ready=wiring_input.local_static_check_ready,
+                git_state_expected_clean=(
+                    wiring_input.preflight_git_state_expected_clean
+                ),
+                head_origin_expected_match=(
+                    wiring_input.preflight_head_origin_expected_match
+                ),
+                no_order_guard_ready=wiring_input.preflight_no_order_guard_ready,
+                post_disabled=wiring_input.preflight_post_disabled,
+                live_order_once_disabled=(
+                    wiring_input.preflight_live_order_once_disabled
+                ),
+                fresh_final_separation_maintained=(
+                    wiring_input.preflight_fresh_final_separation_maintained
+                ),
+                safe_local_static_check_label=(
+                    wiring_input.safe_local_static_check_label
+                ),
+                final_exec_stack_prerequisite_checked=True,
+                final_exec_stack_ready=(
+                    final_exec_stack_controlled_result.dry_run_stack_ready
+                ),
+                final_exec_stack_prerequisite_satisfied=(
+                    final_exec_stack_controlled_result.dry_run_stack_ready
+                ),
+                safe_dry_run_stack_label=(
+                    final_exec_stack_controlled_result.safe_dry_run_stack_label
+                ),
+                safe_dry_run_stack_status=(
+                    final_exec_stack_controlled_result.safe_dry_run_stack_status
+                ),
+                final_exec_stack_one_shot_post_allowed=(
+                    final_exec_stack_controlled_result.one_shot_post_allowed
+                ),
+                post_guard_prerequisite_checked=True,
+                post_guard_ready=post_guard_controlled_result.post_guard_ready,
+                post_guard_prerequisite_satisfied=(
+                    post_guard_controlled_result.post_guard_ready
+                ),
+                safe_post_guard_label=(
+                    post_guard_controlled_result.safe_post_guard_label
+                ),
+                safe_post_guard_status=(
+                    post_guard_controlled_result.safe_post_guard_status
+                ),
+                fresh_preflight_runtime_unknown=(
+                    wiring_input.fresh_preflight_runtime_unknown
+                ),
+                fresh_preflight_runtime_failed=(
+                    wiring_input.fresh_preflight_runtime_failed
+                ),
+                fresh_preflight_runtime_unavailable=(
+                    wiring_input.fresh_preflight_runtime_unavailable
+                ),
+                fresh_preflight_runtime_timeout=(
+                    wiring_input.fresh_preflight_runtime_timeout
+                ),
+                fresh_preflight_runtime_stale=(
+                    wiring_input.fresh_preflight_runtime_stale
+                ),
+                fresh_preflight_runtime_reused=(
+                    wiring_input.fresh_preflight_runtime_reused
+                ),
+                fresh_preflight_executed=(
+                    wiring_input.preflight_runtime_fresh_preflight_executed
+                ),
+                api_call_executed=(
+                    wiring_input.preflight_runtime_api_call_executed
+                ),
+                public_api_call_executed=(
+                    wiring_input.preflight_runtime_public_api_call_executed
+                ),
+                private_api_call_executed=(
+                    wiring_input.preflight_runtime_private_api_call_executed
+                ),
+                post_allowed_this_step=(
+                    wiring_input.preflight_runtime_post_allowed_this_step
+                ),
+                post_executed=wiring_input.preflight_runtime_post_executed,
+                http_post_executed=(
+                    wiring_input.preflight_runtime_http_post_executed
+                ),
+                order_endpoint_called=(
+                    wiring_input.preflight_runtime_order_endpoint_called
+                ),
+                live_order_once_called=(
+                    wiring_input.preflight_runtime_live_order_once_called
+                ),
+                final_confirmation_received=(
+                    wiring_input.preflight_runtime_final_confirmation_received
+                ),
+                ledger_updated=wiring_input.preflight_runtime_ledger_updated,
+                attempt_counter_persisted=(
+                    wiring_input.preflight_runtime_attempt_counter_persisted
+                ),
+                actual_result_receipt_received=(
+                    wiring_input
+                    .preflight_runtime_actual_result_receipt_received
+                ),
+                actual_receipt_handoff_executed=(
+                    wiring_input
+                    .preflight_runtime_actual_receipt_handoff_executed
+                ),
+                raw_request_exposure_attempted=(
+                    wiring_input.preflight_runtime_raw_request_exposure_attempted
+                ),
+                raw_response_exposure_attempted=(
+                    wiring_input.preflight_runtime_raw_response_exposure_attempted
+                ),
+                broker_response_exposure_attempted=(
+                    wiring_input
+                    .preflight_runtime_broker_response_exposure_attempted
+                ),
+                api_response_exposure_attempted=(
+                    wiring_input.preflight_runtime_api_response_exposure_attempted
+                ),
+                credential_value_exposure_attempted=(
+                    wiring_input
+                    .preflight_runtime_credential_value_exposure_attempted
+                ),
+                signature_value_exposure_attempted=(
+                    wiring_input
+                    .preflight_runtime_signature_value_exposure_attempted
+                ),
+                headers_value_exposure_attempted=(
+                    wiring_input.preflight_runtime_headers_value_exposure_attempted
+                ),
+                real_id_exposure_attempted=(
+                    wiring_input.preflight_runtime_real_id_exposure_attempted
+                ),
+                confirmation_phrase_exposure_attempted=(
+                    wiring_input
+                    .preflight_runtime_confirmation_phrase_exposure_attempted
+                ),
+                ledger_state_exposure_attempted=(
+                    wiring_input.preflight_runtime_ledger_state_exposure_attempted
+                ),
+            ),
+            final_exec_stack_result=final_exec_stack_controlled_result,
+            post_guard_result=post_guard_controlled_result,
+        )
+    )
     credential_presence_adapter_result = build_live_order_real_credential_presence_adapter(
         input_snapshot=LiveOrderRealCredentialPresenceAdapterInput(
             adapter_mode=wiring_input.presence_adapter_mode,
@@ -6102,6 +6513,9 @@ def build_valid_step6g_internal_wiring_snapshot(
         sanitized_post_result_result=sanitized_post_result_result,
         final_readiness_controlled_result=final_readiness_controlled_result,
         final_exec_stack_controlled_result=final_exec_stack_controlled_result,
+        fresh_preflight_runtime_controlled_result=(
+            fresh_preflight_runtime_controlled_result
+        ),
         credential_presence_adapter_result=credential_presence_adapter_result,
         credential_presence_checker_contract_result=(
             credential_presence_checker_contract_result
@@ -6169,6 +6583,9 @@ def build_live_order_real_step6g_internal_wiring(
     final_exec_stack_controlled_result = (
         wiring_snapshot.final_exec_stack_controlled_result
     )
+    fresh_preflight_runtime_controlled_result = (
+        wiring_snapshot.fresh_preflight_runtime_controlled_result
+    )
     credential_presence_checker_implementation_result = (
         wiring_snapshot.credential_presence_checker_implementation_result
     )
@@ -6232,6 +6649,9 @@ def build_live_order_real_step6g_internal_wiring(
     )
     final_exec_stack_controlled_reasons = _final_exec_stack_controlled_reasons(
         wiring_snapshot,
+    )
+    fresh_preflight_runtime_controlled_reasons = (
+        _fresh_preflight_runtime_controlled_reasons(wiring_snapshot)
     )
     credential_presence_adapter_reasons = _credential_presence_adapter_reasons(
         wiring_snapshot,
@@ -6377,6 +6797,12 @@ def build_live_order_real_step6g_internal_wiring(
             .BLOCKED_STEP6G_INTERNAL_WIRING_FINAL_EXEC_STACK
         )
         primary_reasons = final_exec_stack_controlled_reasons
+    elif fresh_preflight_runtime_controlled_reasons:
+        status = (
+            InternalWiringStatus
+            .BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_RUNTIME
+        )
+        primary_reasons = fresh_preflight_runtime_controlled_reasons
     elif private_transport_reasons or http_interface_reasons:
         status = InternalWiringStatus.BLOCKED_STEP6G_INTERNAL_WIRING_PRIVATE_TRANSPORT
         primary_reasons = _merge_reasons(private_transport_reasons, http_interface_reasons)
@@ -6414,6 +6840,7 @@ def build_live_order_real_step6g_internal_wiring(
         sanitized_post_result_reasons,
         final_readiness_controlled_reasons,
         final_exec_stack_controlled_reasons,
+        fresh_preflight_runtime_controlled_reasons,
         credential_presence_adapter_reasons,
         credential_presence_checker_contract_reasons,
         operator_checker_workflow_reasons,
@@ -7138,6 +7565,117 @@ def build_live_order_real_step6g_internal_wiring(
         ),
         final_exec_stack_one_shot_post_readiness_blocked=(
             final_exec_stack_controlled_result.one_shot_post_readiness_blocked
+        ),
+        fresh_preflight_runtime_ready=(
+            not fresh_preflight_runtime_controlled_reasons
+        ),
+        fresh_preflight_runtime_mode=(
+            fresh_preflight_runtime_controlled_result
+            .fresh_preflight_runtime_mode
+        ),
+        safe_preflight_runtime_label=(
+            fresh_preflight_runtime_controlled_result
+            .safe_preflight_runtime_label
+        ),
+        safe_preflight_runtime_status=(
+            fresh_preflight_runtime_controlled_result
+            .safe_preflight_runtime_status
+        ),
+        public_market_check_ready=(
+            fresh_preflight_runtime_controlled_result.public_market_check_ready
+        ),
+        private_read_only_check_ready=(
+            fresh_preflight_runtime_controlled_result.private_read_only_check_ready
+        ),
+        local_static_check_ready=(
+            fresh_preflight_runtime_controlled_result.local_static_check_ready
+        ),
+        preflight_final_exec_stack_ready=(
+            fresh_preflight_runtime_controlled_result.final_exec_stack_ready
+        ),
+        preflight_post_guard_ready=(
+            fresh_preflight_runtime_controlled_result.post_guard_ready
+        ),
+        preflight_no_order_guard_ready=(
+            fresh_preflight_runtime_controlled_result.no_order_guard_ready
+        ),
+        safe_public_market_check_label=(
+            fresh_preflight_runtime_controlled_result
+            .safe_public_market_check_label
+        ),
+        safe_private_read_only_check_label=(
+            fresh_preflight_runtime_controlled_result
+            .safe_private_read_only_check_label
+        ),
+        safe_local_static_check_label=(
+            fresh_preflight_runtime_controlled_result
+            .safe_local_static_check_label
+        ),
+        preflight_safe_account_assets_count=(
+            fresh_preflight_runtime_controlled_result.safe_account_assets_count
+        ),
+        preflight_safe_open_positions_count=(
+            fresh_preflight_runtime_controlled_result.safe_open_positions_count
+        ),
+        preflight_safe_active_orders_count=(
+            fresh_preflight_runtime_controlled_result.safe_active_orders_count
+        ),
+        preflight_git_state_expected_clean=(
+            fresh_preflight_runtime_controlled_result.git_state_expected_clean
+        ),
+        preflight_head_origin_expected_match=(
+            fresh_preflight_runtime_controlled_result.head_origin_expected_match
+        ),
+        preflight_post_disabled=(
+            fresh_preflight_runtime_controlled_result.post_disabled
+        ),
+        preflight_live_order_once_disabled=(
+            fresh_preflight_runtime_controlled_result.live_order_once_disabled
+        ),
+        preflight_fresh_final_separation_maintained=(
+            fresh_preflight_runtime_controlled_result
+            .fresh_final_separation_maintained
+        ),
+        preflight_runtime_fresh_preflight_executed=(
+            fresh_preflight_runtime_controlled_result.fresh_preflight_executed
+        ),
+        preflight_runtime_api_call_executed=(
+            fresh_preflight_runtime_controlled_result.api_call_executed
+        ),
+        preflight_runtime_public_api_call_executed=(
+            fresh_preflight_runtime_controlled_result.public_api_call_executed
+        ),
+        preflight_runtime_private_api_call_executed=(
+            fresh_preflight_runtime_controlled_result.private_api_call_executed
+        ),
+        preflight_runtime_post_executed=(
+            fresh_preflight_runtime_controlled_result.post_executed
+        ),
+        preflight_runtime_http_post_executed=(
+            fresh_preflight_runtime_controlled_result.http_post_executed
+        ),
+        preflight_runtime_order_endpoint_called=(
+            fresh_preflight_runtime_controlled_result.order_endpoint_called
+        ),
+        preflight_runtime_live_order_once_called=(
+            fresh_preflight_runtime_controlled_result.live_order_once_called
+        ),
+        preflight_runtime_final_confirmation_received=(
+            fresh_preflight_runtime_controlled_result.final_confirmation_received
+        ),
+        preflight_runtime_ledger_updated=(
+            fresh_preflight_runtime_controlled_result.ledger_updated
+        ),
+        preflight_runtime_attempt_counter_persisted=(
+            fresh_preflight_runtime_controlled_result.attempt_counter_persisted
+        ),
+        preflight_runtime_actual_result_receipt_received=(
+            fresh_preflight_runtime_controlled_result
+            .actual_result_receipt_received
+        ),
+        preflight_runtime_actual_receipt_handoff_executed=(
+            fresh_preflight_runtime_controlled_result
+            .actual_receipt_handoff_executed
         ),
         credential_presence_adapter_ready=not credential_presence_adapter_reasons,
         presence_adapter_mode=wiring_input.presence_adapter_mode,
@@ -8241,6 +8779,85 @@ def render_live_order_real_step6g_internal_wiring_markdown(
         (
             "- final_exec_stack_one_shot_post_allowed: "
             f"{_bool_text(result.final_exec_stack_one_shot_post_allowed)}"
+        ),
+        (
+            "- fresh_preflight_runtime_ready: "
+            f"{_bool_text(result.fresh_preflight_runtime_ready)}"
+        ),
+        f"- fresh_preflight_runtime_mode: {result.fresh_preflight_runtime_mode}",
+        f"- safe_preflight_runtime_label: {result.safe_preflight_runtime_label}",
+        f"- safe_preflight_runtime_status: {result.safe_preflight_runtime_status}",
+        (
+            "- public_market_check_ready: "
+            f"{_bool_text(result.public_market_check_ready)}"
+        ),
+        (
+            "- private_read_only_check_ready: "
+            f"{_bool_text(result.private_read_only_check_ready)}"
+        ),
+        (
+            "- local_static_check_ready: "
+            f"{_bool_text(result.local_static_check_ready)}"
+        ),
+        (
+            "- preflight_final_exec_stack_ready: "
+            f"{_bool_text(result.preflight_final_exec_stack_ready)}"
+        ),
+        (
+            "- preflight_post_guard_ready: "
+            f"{_bool_text(result.preflight_post_guard_ready)}"
+        ),
+        (
+            "- preflight_no_order_guard_ready: "
+            f"{_bool_text(result.preflight_no_order_guard_ready)}"
+        ),
+        (
+            "- preflight_safe_account_assets_count: "
+            f"{result.preflight_safe_account_assets_count}"
+        ),
+        (
+            "- preflight_safe_open_positions_count: "
+            f"{result.preflight_safe_open_positions_count}"
+        ),
+        (
+            "- preflight_safe_active_orders_count: "
+            f"{result.preflight_safe_active_orders_count}"
+        ),
+        (
+            "- preflight_runtime_fresh_preflight_executed: "
+            f"{_bool_text(result.preflight_runtime_fresh_preflight_executed)}"
+        ),
+        (
+            "- preflight_runtime_post_executed: "
+            f"{_bool_text(result.preflight_runtime_post_executed)}"
+        ),
+        (
+            "- preflight_runtime_http_post_executed: "
+            f"{_bool_text(result.preflight_runtime_http_post_executed)}"
+        ),
+        (
+            "- preflight_runtime_order_endpoint_called: "
+            f"{_bool_text(result.preflight_runtime_order_endpoint_called)}"
+        ),
+        (
+            "- preflight_runtime_live_order_once_called: "
+            f"{_bool_text(result.preflight_runtime_live_order_once_called)}"
+        ),
+        (
+            "- preflight_runtime_final_confirmation_received: "
+            f"{_bool_text(result.preflight_runtime_final_confirmation_received)}"
+        ),
+        (
+            "- preflight_runtime_ledger_updated: "
+            f"{_bool_text(result.preflight_runtime_ledger_updated)}"
+        ),
+        (
+            "- preflight_runtime_attempt_counter_persisted: "
+            f"{_bool_text(result.preflight_runtime_attempt_counter_persisted)}"
+        ),
+        (
+            "- preflight_runtime_actual_receipt_handoff_executed: "
+            f"{_bool_text(result.preflight_runtime_actual_receipt_handoff_executed)}"
         ),
         (
             "- credential_presence_adapter_ready: "
@@ -10419,6 +11036,120 @@ def _final_exec_stack_controlled_reasons(
     return tuple(dict.fromkeys(reasons))
 
 
+def _fresh_preflight_runtime_controlled_reasons(
+    snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    expected = (
+        LiveOrderRealFreshPreflightRuntimeControlledStatus
+        .FRESH_PREFLIGHT_RUNTIME_READY_NO_EXECUTION
+    )
+    result = snapshot.fresh_preflight_runtime_controlled_result
+    if not snapshot.input_snapshot.fresh_preflight_runtime_ready:
+        reasons.append("fresh_preflight_runtime_ready_flag_false")
+    if result.status is not expected:
+        reasons.append(f"fresh_preflight_runtime_status_{result.status.value}")
+    if not result.fresh_preflight_runtime_ready:
+        reasons.append("fresh_preflight_runtime_not_ready")
+    if not result.fresh_preflight_runtime_declared:
+        reasons.append("fresh_preflight_runtime_not_declared")
+    if not result.fresh_preflight_runtime_requested:
+        reasons.append("fresh_preflight_runtime_not_requested")
+    if result.safe_preflight_runtime_label != SAFE_PREFLIGHT_RUNTIME_LABEL:
+        reasons.append("fresh_preflight_runtime_safe_label_invalid")
+    if result.safe_preflight_runtime_status != expected.value:
+        reasons.append("fresh_preflight_runtime_safe_status_not_ready")
+    if not result.public_market_check_ready:
+        reasons.append("fresh_preflight_runtime_public_market_not_ready")
+    if not result.private_read_only_check_ready:
+        reasons.append("fresh_preflight_runtime_private_read_only_not_ready")
+    if not result.local_static_check_ready:
+        reasons.append("fresh_preflight_runtime_local_static_not_ready")
+    if not result.final_exec_stack_ready:
+        reasons.append("fresh_preflight_runtime_final_exec_stack_not_ready")
+    if not result.post_guard_ready:
+        reasons.append("fresh_preflight_runtime_post_guard_not_ready")
+    if not result.no_order_guard_ready:
+        reasons.append("fresh_preflight_runtime_no_order_guard_not_ready")
+    if result.safe_public_market_check_label != SAFE_PUBLIC_MARKET_CHECK_LABEL:
+        reasons.append("fresh_preflight_runtime_public_label_invalid")
+    if (
+        result.safe_private_read_only_check_label
+        != SAFE_PRIVATE_READ_ONLY_CHECK_LABEL
+    ):
+        reasons.append("fresh_preflight_runtime_private_label_invalid")
+    if result.safe_local_static_check_label != SAFE_LOCAL_STATIC_CHECK_LABEL:
+        reasons.append("fresh_preflight_runtime_local_label_invalid")
+    if result.safe_account_assets_count <= 0:
+        reasons.append("fresh_preflight_runtime_account_assets_count_not_positive")
+    if result.safe_open_positions_count != 0:
+        reasons.append("fresh_preflight_runtime_open_positions_count_not_zero")
+    if result.safe_active_orders_count != 0:
+        reasons.append("fresh_preflight_runtime_active_orders_count_not_zero")
+    if not result.git_state_expected_clean:
+        reasons.append("fresh_preflight_runtime_git_state_not_expected_clean")
+    if not result.head_origin_expected_match:
+        reasons.append("fresh_preflight_runtime_head_origin_not_expected_match")
+    if not result.post_disabled:
+        reasons.append("fresh_preflight_runtime_post_not_disabled")
+    if not result.live_order_once_disabled:
+        reasons.append("fresh_preflight_runtime_live_order_once_not_disabled")
+    if not result.fresh_final_separation_maintained:
+        reasons.append("fresh_preflight_runtime_fresh_final_not_separated")
+    if (
+        result.fresh_preflight_runtime_unknown
+        or result.fresh_preflight_runtime_failed
+        or result.fresh_preflight_runtime_unavailable
+        or result.fresh_preflight_runtime_timeout
+        or result.fresh_preflight_runtime_stale
+        or result.fresh_preflight_runtime_reused
+    ):
+        reasons.append("fresh_preflight_runtime_unknown_failed_or_stale")
+    if (
+        result.fresh_preflight_executed
+        or result.api_call_allowed
+        or result.api_call_executed
+        or result.public_api_call_executed
+        or result.private_api_call_executed
+        or result.post_allowed_this_step
+        or result.post_executed
+        or result.http_post_executed
+        or result.order_endpoint_called
+        or result.live_order_once_called
+    ):
+        reasons.append("fresh_preflight_runtime_execution_attempted")
+    if result.final_confirmation_received:
+        reasons.append("fresh_preflight_runtime_final_confirmation_received")
+    if (
+        result.ledger_update_allowed
+        or result.ledger_updated
+        or result.attempt_counter_persistence_allowed
+        or result.attempt_counter_persisted
+    ):
+        reasons.append("fresh_preflight_runtime_ledger_or_attempt_counter")
+    if (
+        result.actual_result_receipt_received
+        or result.actual_receipt_handoff_executed
+        or result.actual_receipt_handoff_allowed
+    ):
+        reasons.append("fresh_preflight_runtime_actual_receipt_or_handoff")
+    if (
+        result.raw_request_stored
+        or result.raw_response_stored
+        or result.broker_response_exposed
+        or result.api_response_exposed
+        or result.real_id_exposed
+        or result.ledger_state_actual_value_exposed
+    ):
+        reasons.append("fresh_preflight_runtime_raw_id_or_value_exposed")
+    if not result.safe_to_render:
+        reasons.append("fresh_preflight_runtime_render_not_safe")
+    if not result.safe_to_serialize:
+        reasons.append("fresh_preflight_runtime_serialize_not_safe")
+    reasons.extend(result.blocked_reasons)
+    return tuple(dict.fromkeys(reasons))
+
+
 def _credential_presence_adapter_reasons(
     snapshot: LiveOrderRealStep6GInternalWiringSnapshot,
 ) -> tuple[str, ...]:
@@ -11737,6 +12468,12 @@ def _build_check_results(
             not _final_exec_stack_controlled_reasons(snapshot),
             "dry-run execution stack ready without API POST real transport "
             "fresh final ledger or receipt execution",
+        ),
+        (
+            "fresh preflight runtime controlled",
+            not _fresh_preflight_runtime_controlled_reasons(snapshot),
+            "fresh preflight runtime route ready without preflight execution "
+            "POST final ledger or receipt execution",
         ),
         (
             "credential presence adapter",

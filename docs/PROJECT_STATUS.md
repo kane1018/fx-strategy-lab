@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-FRESH-PREFLIGHT-RUNTIME-C consolidated safe fresh preflight runtime implementation完了 / runtime route implementation only / no fresh preflight execution / no HTTP POST / no final confirmation** —
+  FRESH-PREFLIGHT-CHECK CASE 3の原因（complete safe fresh preflight runtime route未整備）を解消するため、
+  public market / private read-only / local-static checks、final exec stack readiness、POST guard、no-order guardを
+  safe label / safe status / safe boolean / safe count / blocked reason labelsだけへ統合するruntime contractを追加した。
+  `backend/app/live_verification/live_order_real_fresh_preflight_runtime_controlled.py` は
+  `FRESH_PREFLIGHT_RUNTIME_CONTROLLED_IMPLEMENTATION_ONLY`、`FRESH_PREFLIGHT_RUNTIME_READY_NO_EXECUTION`、
+  `fresh_preflight_runtime_ready`、safe route labels、safe account/open-position/active-order countsを扱う。
+  このStepはruntime route implementationであり、fresh preflight execution、HTTP POST、order endpoint、`live_order_once`、
+  final confirmation、ledger更新、attempt counter永続化、actual result receipt、actual receipt handoffには進まない。
+  raw request、raw response、broker/API response実体、ID、credential値、signature値、headers値、confirmation phrase、
+  ledger stateはresult / renderer / asdict / docsに含めない。Step 6G-IWにも `fresh_preflight_runtime_ready` gateを
+  最小連携し、public/private/local/final exec stack/post guard/no-order guard missing、unknown / failed / timeout /
+  unavailable / stale / reused、POST/order endpoint/`live_order_once`、final confirmation、ledger、actual receipt/handoff、
+  raw/broker/API/ID/value exposureをfail-closedで検査する。詳細は
+  [STEP6G_FRESH_PREFLIGHT_RUNTIME_CONTROLLED.md](STEP6G_FRESH_PREFLIGHT_RUNTIME_CONTROLLED.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-FRESH-PREFLIGHT-CHECK-RETRY fresh preflight execution with consolidated runtime /
+  no POST / no final confirmation execution**。実資金Step 6G再試行はまだ不可。
 - **Step 6G-PC-OX-R-FINAL-EXEC-STACK-C dry-run only one-shot execution stack implementation完了 / dry-run only / fake no-network transport / no API call / no POST / no live_order_once / no real transport** —
   FINAL-READINESS-V CASE 1 PASSの判断後、final readiness / POST guard / sanitized resultがsafe boundaryとして成立している前提で、
   dry-run one-shot execution orchestrator、fake/no-network transport path、dry-run one-shot decision、dry-run sanitized result /

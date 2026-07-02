@@ -363,6 +363,41 @@ def test_valid_full_fake_sanitized_chain_ready_no_api_no_post() -> None:
     assert result.final_exec_stack_actual_receipt_handoff_executed is False
     assert result.final_exec_stack_one_shot_post_allowed is False
     assert result.final_exec_stack_one_shot_post_readiness_blocked is True
+    assert result.fresh_preflight_runtime_ready is True
+    assert (
+        result.fresh_preflight_runtime_mode
+        == "FRESH_PREFLIGHT_RUNTIME_CONTROLLED_IMPLEMENTATION_ONLY"
+    )
+    assert (
+        result.safe_preflight_runtime_label
+        == "CONTROLLED_FRESH_PREFLIGHT_RUNTIME_ROUTE"
+    )
+    assert (
+        result.safe_preflight_runtime_status
+        == "FRESH_PREFLIGHT_RUNTIME_READY_NO_EXECUTION"
+    )
+    assert result.public_market_check_ready is True
+    assert result.private_read_only_check_ready is True
+    assert result.local_static_check_ready is True
+    assert result.preflight_final_exec_stack_ready is True
+    assert result.preflight_post_guard_ready is True
+    assert result.preflight_no_order_guard_ready is True
+    assert result.preflight_safe_account_assets_count == 1
+    assert result.preflight_safe_open_positions_count == 0
+    assert result.preflight_safe_active_orders_count == 0
+    assert result.preflight_runtime_fresh_preflight_executed is False
+    assert result.preflight_runtime_api_call_executed is False
+    assert result.preflight_runtime_public_api_call_executed is False
+    assert result.preflight_runtime_private_api_call_executed is False
+    assert result.preflight_runtime_post_executed is False
+    assert result.preflight_runtime_http_post_executed is False
+    assert result.preflight_runtime_order_endpoint_called is False
+    assert result.preflight_runtime_live_order_once_called is False
+    assert result.preflight_runtime_final_confirmation_received is False
+    assert result.preflight_runtime_ledger_updated is False
+    assert result.preflight_runtime_attempt_counter_persisted is False
+    assert result.preflight_runtime_actual_result_receipt_received is False
+    assert result.preflight_runtime_actual_receipt_handoff_executed is False
     assert result.credential_presence_adapter_ready is True
     assert result.presence_adapter_mode == "PRESENCE_ADAPTER_SKELETON_ONLY"
     assert result.operator_provided_presence_result is True
@@ -1645,6 +1680,79 @@ def test_final_exec_stack_not_ready_blocks_internal_wiring(
 @pytest.mark.parametrize(
     "overrides",
     [
+        {"fresh_preflight_runtime_ready": False},
+        {"fresh_preflight_runtime_declared": False},
+        {"fresh_preflight_runtime_unknown": True},
+        {"fresh_preflight_runtime_failed": True},
+        {"fresh_preflight_runtime_unavailable": True},
+        {"fresh_preflight_runtime_timeout": True},
+        {"fresh_preflight_runtime_stale": True},
+        {"fresh_preflight_runtime_reused": True},
+        {"public_market_check_ready": False},
+        {"private_read_only_check_ready": False},
+        {"local_static_check_ready": False},
+        {"preflight_safe_account_assets_count": 0},
+        {"preflight_safe_open_positions_count": 1},
+        {"preflight_safe_active_orders_count": 1},
+        {"preflight_git_state_expected_clean": False},
+        {"preflight_head_origin_expected_match": False},
+        {"preflight_no_order_guard_ready": False},
+        {"preflight_post_disabled": False},
+        {"preflight_live_order_once_disabled": False},
+        {"preflight_fresh_final_separation_maintained": False},
+        {"preflight_runtime_fresh_preflight_executed": True},
+        {"preflight_runtime_api_call_executed": True},
+        {"preflight_runtime_public_api_call_executed": True},
+        {"preflight_runtime_private_api_call_executed": True},
+        {"preflight_runtime_post_allowed_this_step": True},
+        {"preflight_runtime_post_executed": True},
+        {"preflight_runtime_http_post_executed": True},
+        {"preflight_runtime_order_endpoint_called": True},
+        {"preflight_runtime_live_order_once_called": True},
+        {"preflight_runtime_final_confirmation_received": True},
+        {"preflight_runtime_ledger_updated": True},
+        {"preflight_runtime_attempt_counter_persisted": True},
+        {"preflight_runtime_actual_result_receipt_received": True},
+        {"preflight_runtime_actual_receipt_handoff_executed": True},
+        {"preflight_runtime_raw_request_exposure_attempted": True},
+        {"preflight_runtime_raw_response_exposure_attempted": True},
+        {"preflight_runtime_broker_response_exposure_attempted": True},
+        {"preflight_runtime_api_response_exposure_attempted": True},
+        {"preflight_runtime_credential_value_exposure_attempted": True},
+        {"preflight_runtime_signature_value_exposure_attempted": True},
+        {"preflight_runtime_headers_value_exposure_attempted": True},
+        {"preflight_runtime_real_id_exposure_attempted": True},
+        {"preflight_runtime_confirmation_phrase_exposure_attempted": True},
+        {"preflight_runtime_ledger_state_exposure_attempted": True},
+    ],
+)
+def test_fresh_preflight_runtime_not_ready_blocks_internal_wiring(
+    overrides: dict[str, object],
+) -> None:
+    result = _build(**overrides)
+
+    assert (
+        result.status
+        is Status.BLOCKED_STEP6G_INTERNAL_WIRING_FRESH_PREFLIGHT_RUNTIME
+    )
+    assert result.fresh_preflight_runtime_ready is False
+    assert result.preflight_runtime_fresh_preflight_executed is False
+    assert result.preflight_runtime_post_executed is False
+    assert result.preflight_runtime_http_post_executed is False
+    assert result.preflight_runtime_order_endpoint_called is False
+    assert result.preflight_runtime_live_order_once_called is False
+    assert result.preflight_runtime_final_confirmation_received is False
+    assert result.preflight_runtime_ledger_updated is False
+    assert result.preflight_runtime_attempt_counter_persisted is False
+    assert result.preflight_runtime_actual_receipt_handoff_executed is False
+    assert result.post_allowed_this_step is False
+    assert result.post_executed is False
+    assert result.live_order_once_called is False
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
         {"operator_provided_presence_result": False},
         {"operator_presence_result_is_boolean_only": False},
         {"operator_presence_result_fresh": False},
@@ -2857,6 +2965,30 @@ def test_renderer_includes_warnings_and_no_sensitive_values() -> None:
     assert "final_exec_stack_attempt_counter_persisted: false" in rendered
     assert "final_exec_stack_actual_receipt_handoff_executed: false" in rendered
     assert "final_exec_stack_one_shot_post_allowed: false" in rendered
+    assert "fresh_preflight_runtime_ready: true" in rendered
+    assert (
+        "fresh_preflight_runtime_mode: "
+        "FRESH_PREFLIGHT_RUNTIME_CONTROLLED_IMPLEMENTATION_ONLY"
+    ) in rendered
+    assert (
+        "safe_preflight_runtime_label: "
+        "CONTROLLED_FRESH_PREFLIGHT_RUNTIME_ROUTE"
+    ) in rendered
+    assert (
+        "safe_preflight_runtime_status: "
+        "FRESH_PREFLIGHT_RUNTIME_READY_NO_EXECUTION"
+    ) in rendered
+    assert "public_market_check_ready: true" in rendered
+    assert "private_read_only_check_ready: true" in rendered
+    assert "local_static_check_ready: true" in rendered
+    assert "preflight_no_order_guard_ready: true" in rendered
+    assert "preflight_safe_open_positions_count: 0" in rendered
+    assert "preflight_safe_active_orders_count: 0" in rendered
+    assert "preflight_runtime_fresh_preflight_executed: false" in rendered
+    assert "preflight_runtime_post_executed: false" in rendered
+    assert "preflight_runtime_final_confirmation_received: false" in rendered
+    assert "preflight_runtime_ledger_updated: false" in rendered
+    assert "preflight_runtime_actual_receipt_handoff_executed: false" in rendered
     assert "credential_presence_adapter_ready: true" in rendered
     assert "presence_adapter_mode: PRESENCE_ADAPTER_SKELETON_ONLY" in rendered
     assert "handle_requested: true" in rendered
