@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C sealed credential/signing/headers provider foundation完了 / no actual HTTP POST** —
+  SEALED-REQUEST-BODY-RESULT-MAPPER-C CASE 1（sealed request/body/result mapper foundation実装済み）を受けて、
+  `backend/app/live_verification/live_order_real_one_shot_post_sealed_credential_signing_controlled.py`、
+  `backend/app/tests/test_live_verification_live_order_real_one_shot_post_sealed_credential_signing_controlled.py`、
+  `docs/STEP6G_ONE_SHOT_POST_SEALED_CREDENTIAL_SIGNING_CONTROLLED.md` を追加した。sealed credential provider safe summary、
+  sealed signing provider safe summary、sealed headers object、provider readiness summary、sealed request/body foundation
+  connectionを no-POST / no-credential-value / no-signature-value / no-headers-value / no-ledger / no-receipt のまま実装した。
+  新規moduleは `live_order_once`、broker/private API、HTTP client、env reader、credential reader、real signing helper、
+  real header builder、ledger writer、receipt handoffをimport/callしない。sentinel testsでrepr/asdict/rendererがcredential値、
+  credential length/hash/fingerprint/metadata、signature値、signature length/hash/fingerprint、headers値、headers
+  metadata/count、raw body、raw response、broker/API response、IDを出さないことを確認する。
+  `approved_primitive_actual_source_available` はfalseのままで、actual source callableやledger-free source factoryは未実装。
+  次の推奨Stepは **Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C**。次Stepでもactual HTTP POST、
+  POST-specific confirmation取得、credential/signature/header値表示、raw/ID/value露出、ledger/receipt/retry/repostは禁止。
 - **Step 6G-PC-OX-R-SEALED-REQUEST-BODY-RESULT-MAPPER-C sealed request/body/result mapper foundation完了 / no actual HTTP POST** —
   POST-ONLY-SOURCE-REFACTOR-C CASE 2（一度にledger-free POST-only sourceを安全に実装するには責務分離が大きすぎる）を受けて、
   `backend/app/live_verification/live_order_real_one_shot_post_sealed_request_result_controlled.py`、

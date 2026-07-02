@@ -114,15 +114,16 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-SEALED-REQUEST-BODY-RESULT-MAPPER-C, the recommended
-next Step is the sealed credential/signing provider design step. The sealed
-request/body/result mapper foundation is still not POST permission and does not
-make the current/default approved primitive actual source available by itself:
+After Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C, the recommended
+next Step is the ledger-free POST-only source factory design step. The sealed
+request/body/result mapper and sealed credential/signing provider foundations
+are still not POST permission and do not make the current/default approved
+primitive actual source available by themselves:
 
 ```text
-Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C:
-sealed credential/signing provider / no actual HTTP POST / no POST-specific
-confirmation / no credential value display
+Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C:
+ledger-free POST-only source factory / no actual HTTP POST / no POST-specific
+confirmation / no raw credential-signature-header value display
 ```
 
 That Step must not start with POST. It must keep credential values, signature

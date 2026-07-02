@@ -148,13 +148,15 @@ This implementation step did not:
 Current staged refactor direction:
 
 ```text
-Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C
+Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C
 ```
 
 The sealed request/body/result mapper foundation is implemented separately in
-`docs/STEP6G_ONE_SHOT_POST_SEALED_REQUEST_RESULT_CONTROLLED.md`. The next staged
-refactor may design sealed credential/signing/header handling, but it must not
-execute POST, obtain POST-specific confirmation, expose credential/signature/
+`docs/STEP6G_ONE_SHOT_POST_SEALED_REQUEST_RESULT_CONTROLLED.md`, and the sealed
+credential/signing/header provider foundation is implemented separately in
+`docs/STEP6G_ONE_SHOT_POST_SEALED_CREDENTIAL_SIGNING_CONTROLLED.md`. The next
+staged refactor may build the ledger-free POST-only source factory, but it must
+not execute POST, obtain POST-specific confirmation, expose credential/signature/
 header values, expose raw request/response values, expose IDs, update ledger
 state, hand off receipts, retry, or repost.
 

@@ -130,9 +130,12 @@ transport binding before this route is invoked by a later dedicated execution
 gate. The actual source, source, approved primitive, and binding
 default/import/summary/construct paths do not POST.
 
-A later `ONE-SHOT-POST-EXECUTION-GATE-RETRY-6` may pass the controlled binding
-only after a new POST-specific explicit confirmation and only if every gate is
-still clean. Previous POST-specific confirmation text is not reusable.
+The current staged refactor direction is
+`Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C`, after the sealed
+request/body/result mapper and sealed credential/signing provider foundations.
+A later dedicated execution gate may pass the controlled binding only after a
+new POST-specific explicit confirmation and only if every gate is still clean.
+Previous POST-specific confirmation text is not reusable.
 
 ## Result Mapping
 
@@ -182,17 +185,18 @@ This implementation step did not:
 
 ## Next Step
 
-Recommended next step:
+Current staged refactor next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-6
+Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C
 ```
 
-That step must first show the sanitized preview, then obtain a new
-POST-specific explicit confirmation in the current Codex session. Only after
-that may it consider one HTTP POST through the safe route, approved actual
-source boundary, approved primitive source boundary, approved primitive
-boundary, and controlled binding.
+That factory step must still avoid actual HTTP POST and POST-specific
+confirmation. A later execution gate must first show the sanitized preview,
+then obtain a new POST-specific explicit confirmation in the current Codex
+session. Only after that may it consider one HTTP POST through the safe route,
+approved actual source boundary, approved primitive source boundary, approved
+primitive boundary, and controlled binding.
 
 The next step must still keep these boundaries separate:
 

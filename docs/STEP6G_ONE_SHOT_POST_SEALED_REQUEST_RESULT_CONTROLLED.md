@@ -132,13 +132,20 @@ This implementation step did not:
 
 ## Next Step
 
-Recommended next step:
+The immediate provider foundation step has now been implemented separately in:
 
 ```text
-Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C
+docs/STEP6G_ONE_SHOT_POST_SEALED_CREDENTIAL_SIGNING_CONTROLLED.md
 ```
 
-That next step may design the credential/signing/header provider, but it must
+Recommended next step after that provider foundation:
+
+```text
+Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C
+```
+
+That next step may combine the sealed request/body/result mapper and sealed
+credential/signing provider into a ledger-free source factory, but it must
 still avoid actual HTTP POST, POST-specific confirmation, credential value
 display, signature value display, headers value display, raw request/response
 exposure, ledger updates, receipt handoff, retry, and repost.
