@@ -1,24 +1,25 @@
-# Step 6G One-Shot POST Approved Primitive Controlled
+# Step 6G One-Shot POST Approved Primitive Source Controlled
 
-Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-RESOLUTION-C implements the
-approved primitive boundary that can feed the controlled real transport binding
-in a later execution gate.
+Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C implements the
+approved primitive source supply boundary that can feed the approved primitive
+boundary and controlled real transport binding in a later execution gate.
 
-This step is boundary implementation only. It is not actual HTTP POST, not an
-order endpoint call, and not `live_order_once` execution.
+This step is source-boundary implementation only. It is not actual HTTP POST,
+not an order endpoint call, not `live_order_once` execution, and not a
+POST-specific confirmation step.
 
 ## Scope
 
 Implemented in:
 
-- `backend/app/live_verification/live_order_real_one_shot_post_approved_primitive_controlled.py`
+- `backend/app/live_verification/live_order_real_one_shot_post_approved_primitive_source_controlled.py`
 
 The boundary exposes:
 
-1. approved primitive availability safe summary
-2. approved primitive construction guard
-3. controlled callable interface
-4. sanitized primitive outcome mapping
+1. approved primitive source availability safe summary
+2. approved primitive source construction guard
+3. source-to-approved-primitive adapter
+4. controlled binding and executor compatibility surface
 5. no-execution default/import/summary/construct path
 
 The implementation does not import or call:
@@ -36,13 +37,15 @@ The implementation does not import or call:
 The availability summary exposes safe labels, booleans, counts, categories, and
 blocked reason labels only:
 
-- `approved_primitive_available`
-- `approved_primitive_status`
-- `approved_primitive_label`
-- `approved_primitive_default_no_execution=true`
-- `approved_primitive_import_executes_post=false`
-- `approved_primitive_construct_executes_post=false`
-- `approved_primitive_summary_executes_post=false`
+- `approved_primitive_source_available`
+- `approved_primitive_source_status`
+- `approved_primitive_source_label`
+- `approved_primitive_source_default_no_execution=true`
+- `approved_primitive_source_import_executes_post=false`
+- `approved_primitive_source_construct_executes_post=false`
+- `approved_primitive_source_summary_executes_post=false`
+- `approved_primitive_boundary_compatible`
+- `controlled_binding_compatible`
 - `controlled_executor_required=true`
 - `post_specific_confirmation_required=true`
 - `one_post_max=true`
@@ -58,11 +61,9 @@ blocked reason labels only:
 - `headers_value_exposed=false`
 - `real_id_exposed=false`
 
-## Approved Primitive Contract
+## Source Contract
 
-After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C, the
-caller-supplied primitive should come from the approved primitive source supply
-boundary:
+The boundary is constructed with a caller-supplied source:
 
 ```text
 construct_live_order_real_one_shot_post_approved_primitive_source_controlled(
@@ -70,25 +71,22 @@ construct_live_order_real_one_shot_post_approved_primitive_source_controlled(
 )
 ```
 
-That source boundary also does not call the supplied source at import, summary,
-or construction time. It provides the no-execution availability summary and the
-sanitized source adapter that can be passed into this approved primitive
-boundary.
+Construction does not call the source. Importing the module, rendering the
+summary, or constructing the boundary does not POST.
 
-The boundary is constructed with a caller-supplied primitive:
+The constructed `approved_primitive_source` can be passed to:
 
 ```text
 construct_live_order_real_one_shot_post_approved_primitive_controlled(
-  primitive=...
+  primitive=source_boundary.approved_primitive_source
 )
 ```
 
-Construction does not call the primitive. Importing the module, rendering the
-summary, or constructing the boundary does not POST.
-
-The primitive is acceptable only when the contract says:
+The source is acceptable only when the contract says:
 
 - approved primitive source supplied
+- approved primitive boundary compatible
+- controlled binding compatible
 - controlled executor required
 - POST-specific confirmation required
 - one POST max
@@ -100,21 +98,23 @@ The primitive is acceptable only when the contract says:
 - no credential/signature/header value exposure
 - no real/account/order/transaction ID exposure
 
-If any contract flag is unsafe, the boundary fails closed and the controlled
-callable returns a sanitized failed outcome without calling the primitive.
+If any contract flag is unsafe, the source boundary fails closed and the
+controlled callable returns a sanitized failed outcome without calling the
+source candidate.
 
 ## Controlled Binding Compatibility
 
-The controlled primitive is intended to be passed to:
+The intended chain for the next execution gate is:
 
 ```text
-construct_live_order_real_one_shot_post_real_transport_binding_controlled(
-  primitive=approved.controlled_primitive
-)
+approved source boundary
+  -> approved primitive boundary
+  -> controlled real transport binding
+  -> controlled one-shot executor
 ```
 
-The binding and executor still own the one-call boundary. Tests verify this
-connection using fake/monkeypatch primitives only.
+The approved primitive boundary, binding, and executor still own their own
+guards. Tests verify the chain using fake/monkeypatch sources only.
 
 Timeout, failure, unknown, and unavailable outcomes fail closed. Unsafe fake
 outcomes are sanitized so raw request/response, broker/API response, IDs,
@@ -129,6 +129,7 @@ This implementation step did not:
 - call an order endpoint
 - call `live_order_once`
 - obtain POST-specific confirmation
+- reuse a previous POST-specific confirmation
 - rerun fresh preflight
 - reacquire final confirmation
 - update ledger state
@@ -149,10 +150,10 @@ Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-5
 
 That step must first confirm the repository state and prerequisite gates, show
 the sanitized executable order preview, then obtain a new POST-specific explicit
-confirmation in the current Codex session. The RETRY-4 POST-specific
-confirmation is not reusable. Only after those checks may it consider one HTTP
-POST through the safe route, approved primitive source boundary, approved
-primitive boundary, and controlled binding.
+confirmation in the current Codex session. The confirmation from RETRY-4 is not
+reusable. Only after those checks may it consider one HTTP POST through the safe
+route, approved primitive source boundary, approved primitive boundary, and
+controlled binding.
 
 The next step must still keep these boundaries separate:
 

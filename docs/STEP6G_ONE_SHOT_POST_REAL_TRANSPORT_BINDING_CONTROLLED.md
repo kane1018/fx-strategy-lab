@@ -72,18 +72,25 @@ construct_live_order_real_one_shot_post_real_transport_binding_controlled(
 Construction does not call the primitive. Importing the module, rendering the
 summary, or constructing the binding does not POST.
 
-After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-RESOLUTION-C, the
-caller-supplied primitive should come through:
+After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C, the
+caller-supplied primitive should come through the approved primitive source
+boundary and approved primitive boundary:
 
 ```text
-construct_live_order_real_one_shot_post_approved_primitive_controlled(
-  primitive=...
+construct_live_order_real_one_shot_post_approved_primitive_source_controlled(
+  source=...
 )
 ```
 
-That approved primitive boundary also does not call the supplied primitive at
-import, summary, or construction time. It provides the no-execution availability
-summary and sanitized callable that can be passed into this binding.
+```text
+construct_live_order_real_one_shot_post_approved_primitive_controlled(
+  primitive=source_boundary.approved_primitive_source
+)
+```
+
+Those boundaries also do not call the supplied source or primitive at import,
+summary, or construction time. They provide the no-execution availability
+summaries and sanitized callable that can be passed into this binding.
 
 The primitive is acceptable only when the contract says:
 
@@ -140,13 +147,15 @@ This implementation step did not:
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-4
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-5
 ```
 
 That step must first confirm the repository state and prerequisite gates, show
 the sanitized executable order preview, then obtain a new POST-specific explicit
-confirmation in the current Codex session. Only after those checks may it
-consider one HTTP POST through the safe route and controlled binding.
+confirmation in the current Codex session. The RETRY-4 POST-specific
+confirmation is not reusable. Only after those checks may it consider one HTTP
+POST through the safe route, approved primitive source boundary, approved
+primitive boundary, and controlled binding.
 
 The next step must still keep these boundaries separate:
 

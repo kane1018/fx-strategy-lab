@@ -114,23 +114,25 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-RESOLUTION-C, the
+After Step 6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C, the
 recommended next Step is a retry of the dedicated real POST execution gate using
-the controlled route, approved primitive boundary, and controlled real transport
-binding. Route-ready, approved-primitive-ready, and binding-ready states are
-still not POST permission by themselves:
+the controlled route, approved primitive source boundary, approved primitive
+boundary, and controlled real transport binding. Route-ready,
+source-ready, approved-primitive-ready, and binding-ready states are still not
+POST permission by themselves:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-4:
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-5:
 dedicated real POST gate retry / requires sanitized preview, controlled
-approved primitive boundary, controlled binding, and new POST-specific
-confirmation first
+approved primitive source boundary, approved primitive boundary, controlled
+binding, and new POST-specific confirmation first
 ```
 
 That Step must not start with POST. It must first show the sanitized executable
 order preview, obtain a new explicit POST-specific confirmation, and must still
 keep HTTP POST separated from retry/repost, ledger update, actual result
 receipt, and actual receipt handoff.
+The POST-specific confirmation from RETRY-4 is not reusable.
 Until that separate step satisfies its own gates, Codex must still avoid env
 value exposure, credential value exposure, signature value exposure, headers
 value exposure, raw request/response exposure, broker/API response exposure,

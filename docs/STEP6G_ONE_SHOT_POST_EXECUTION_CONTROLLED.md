@@ -123,14 +123,15 @@ counters, receive actual receipts, or perform actual receipt handoff.
 ## Transport Boundary
 
 The route accepts a transport callable. Step
-6G-PC-OX-R-ONE-SHOT-POST-REAL-TRANSPORT-BINDING-C adds a controlled real
-transport binding contract that can be injected into this route by a later
-dedicated execution gate. The binding default/import/summary/construct paths do
-not POST.
+6G-PC-OX-R-ONE-SHOT-POST-APPROVED-PRIMITIVE-SOURCE-SUPPLY-C adds the approved
+primitive source supply boundary that can feed the approved primitive boundary
+and controlled real transport binding before this route is invoked by a later
+dedicated execution gate. The source, approved primitive, and binding
+default/import/summary/construct paths do not POST.
 
-A later `ONE-SHOT-POST-EXECUTION-GATE-RETRY-2` may pass the controlled binding
+A later `ONE-SHOT-POST-EXECUTION-GATE-RETRY-5` may pass the controlled binding
 only after a new POST-specific explicit confirmation and only if every gate is
-still clean.
+still clean. The RETRY-4 POST-specific confirmation is not reusable.
 
 ## Result Mapping
 
@@ -183,12 +184,13 @@ This implementation step did not:
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-2
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-5
 ```
 
 That step must first show the sanitized preview, then obtain a new
 POST-specific explicit confirmation in the current Codex session. Only after
-that may it consider one HTTP POST through the safe route.
+that may it consider one HTTP POST through the safe route, approved primitive
+source boundary, approved primitive boundary, and controlled binding.
 
 The next step must still keep these boundaries separate:
 
