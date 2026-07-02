@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C ledger-free POST-only source factory完了 / no actual HTTP POST** —
+  SEALED-CREDENTIAL-SIGNING-PROVIDER-C CASE 1（sealed credential/signing/headers provider foundation実装済み）を受けて、
+  `backend/app/live_verification/live_order_real_one_shot_post_ledger_free_source_factory_controlled.py`、
+  `backend/app/tests/test_live_verification_live_order_real_one_shot_post_ledger_free_source_factory_controlled.py`、
+  `docs/STEP6G_ONE_SHOT_POST_LEDGER_FREE_SOURCE_FACTORY_CONTROLLED.md` を追加した。ledger-free source factoryは、
+  sealed request/body/result foundation、sealed credential/signing provider、safe result mapperを組み合わせ、
+  controlled source callableを構成し、approved primitive actual source current/default routeへno-POSTで接続する。
+  新規moduleは `live_order_once`、broker/private API、HTTP client、env reader、credential reader、real signing helper、
+  real header builder、ledger writer、receipt handoffをimport/callしない。sentinel testsでrepr/asdict/rendererが
+  credential/signature/headers値、raw request/response、broker/API response、ID、client order id actual value、
+  ledger stateを出さないこと、fake/monkeypatch delegateだけでexactly-once、no retry、no second POST、
+  no ledger/receipt、accepted/rejected/failed/timeout/unknown/unavailable mappingを確認する。
+  `approved_primitive_actual_source_available` はcurrent/default routeでtrue。次の推奨Stepは
+  **Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7**。次Stepでもactual HTTP POSTはsanitized preview提示後の
+  新しいPOST-specific confirmationが成立するまで禁止で、ledger/receipt/retry/repostは引き続き分離必須。
 - **Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C sealed credential/signing/headers provider foundation完了 / no actual HTTP POST** —
   SEALED-REQUEST-BODY-RESULT-MAPPER-C CASE 1（sealed request/body/result mapper foundation実装済み）を受けて、
   `backend/app/live_verification/live_order_real_one_shot_post_sealed_credential_signing_controlled.py`、

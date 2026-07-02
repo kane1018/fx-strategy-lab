@@ -114,22 +114,21 @@ Final reports for Step 6G safe pace-up work should include:
 
 ## Current Next-Step Direction
 
-After Step 6G-PC-OX-R-SEALED-CREDENTIAL-SIGNING-PROVIDER-C, the recommended
-next Step is the ledger-free POST-only source factory design step. The sealed
-request/body/result mapper and sealed credential/signing provider foundations
-are still not POST permission and do not make the current/default approved
-primitive actual source available by themselves:
+After Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C, the recommended
+next Step is the dedicated one-shot POST execution gate retry. The sealed
+request/body/result mapper, sealed credential/signing provider, ledger-free
+source factory, and current/default approved primitive actual source route are
+still not POST permission by themselves:
 
 ```text
-Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C:
-ledger-free POST-only source factory / no actual HTTP POST / no POST-specific
-confirmation / no raw credential-signature-header value display
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7:
+sanitized preview -> new POST-specific confirmation -> at most one POST
 ```
 
-That Step must not start with POST. It must keep credential values, signature
-values, headers values, raw request/response values, broker/API responses, IDs,
-ledger updates, attempt counter persistence, actual receipt handoff, retry,
-repost, final confirmation, fresh preflight, and live-money Step 6G retry out
-of scope. A later dedicated POST execution gate still requires sanitized
-preview and a new POST-specific confirmation before any one-shot POST can be
-considered.
+That Step must not start with POST. It must first confirm repository state and
+all prerequisites, show the sanitized executable order preview, then obtain a
+new POST-specific confirmation in the current Codex session. It must keep
+credential values, signature values, headers values, raw request/response
+values, broker/API responses, IDs, ledger updates, attempt counter persistence,
+actual receipt handoff, retry, and repost out of scope unless a later dedicated
+step explicitly authorizes one of those separated actions.

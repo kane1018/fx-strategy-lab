@@ -113,11 +113,13 @@ This implementation step did not:
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7
 ```
 
-That next step may combine the sealed request/body/result foundation and sealed
-credential/signing provider into a ledger-free POST-only source factory, but it
-must still avoid actual HTTP POST, POST-specific confirmation, raw request or
-response exposure, credential/signature/headers value exposure, ID exposure,
-ledger updates, receipt handoff, retry, and repost.
+The ledger-free POST-only source factory is now documented separately in
+`docs/STEP6G_ONE_SHOT_POST_LEDGER_FREE_SOURCE_FACTORY_CONTROLLED.md`. A later
+execution gate may use the current/default approved primitive actual source
+route only after showing the sanitized preview and obtaining a new
+POST-specific confirmation. It must still avoid raw request or response
+exposure, credential/signature/headers value exposure, ID exposure, ledger
+updates, receipt handoff, retry, and repost.

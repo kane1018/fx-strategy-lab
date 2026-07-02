@@ -75,6 +75,20 @@ construct_live_order_real_one_shot_post_approved_primitive_actual_source_control
 Construction does not call the actual source. Importing the module, rendering
 the summary, or constructing the boundary does not POST.
 
+The current/default route is now supplied by the ledger-free source factory:
+
+```text
+build_current_live_order_real_one_shot_post_approved_primitive_actual_source_controlled()
+construct_current_live_order_real_one_shot_post_approved_primitive_actual_source_controlled()
+```
+
+These helpers lazily connect the sealed request/body/result foundation and
+sealed credential/signing provider through
+`live_order_real_one_shot_post_ledger_free_source_factory_controlled.py`.
+Calling the helpers constructs only safe wrappers and summaries; it does not
+execute POST, request POST-specific confirmation, call `live_order_once`, update
+ledgers, hand off receipts, retry, or expose raw/ID/value material.
+
 The constructed `approved_primitive_actual_source` can be passed to:
 
 ```text
@@ -148,17 +162,20 @@ This implementation step did not:
 Current staged refactor direction:
 
 ```text
-Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7
 ```
 
 The sealed request/body/result mapper foundation is implemented separately in
 `docs/STEP6G_ONE_SHOT_POST_SEALED_REQUEST_RESULT_CONTROLLED.md`, and the sealed
 credential/signing/header provider foundation is implemented separately in
-`docs/STEP6G_ONE_SHOT_POST_SEALED_CREDENTIAL_SIGNING_CONTROLLED.md`. The next
-staged refactor may build the ledger-free POST-only source factory, but it must
-not execute POST, obtain POST-specific confirmation, expose credential/signature/
-header values, expose raw request/response values, expose IDs, update ledger
-state, hand off receipts, retry, or repost.
+`docs/STEP6G_ONE_SHOT_POST_SEALED_CREDENTIAL_SIGNING_CONTROLLED.md`. The
+ledger-free POST-only source factory is implemented separately in
+`docs/STEP6G_ONE_SHOT_POST_LEDGER_FREE_SOURCE_FACTORY_CONTROLLED.md` and makes
+the current/default approved primitive actual source route available without
+POST. The next Step may retry the dedicated execution gate, but it must still
+not start with POST, reuse any previous POST-specific confirmation, expose
+credential/signature/header values, expose raw request/response values, expose
+IDs, update ledger state, hand off receipts, retry, or repost.
 
 A later dedicated POST execution gate must still first confirm repository state
 and prerequisites, show the sanitized executable order preview, then obtain a

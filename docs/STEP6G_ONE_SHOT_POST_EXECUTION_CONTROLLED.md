@@ -130,12 +130,13 @@ transport binding before this route is invoked by a later dedicated execution
 gate. The actual source, source, approved primitive, and binding
 default/import/summary/construct paths do not POST.
 
-The current staged refactor direction is
+The current/default approved primitive actual source route is now supplied by
 `Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C`, after the sealed
 request/body/result mapper and sealed credential/signing provider foundations.
-A later dedicated execution gate may pass the controlled binding only after a
-new POST-specific explicit confirmation and only if every gate is still clean.
-Previous POST-specific confirmation text is not reusable.
+That factory connection is still not execution permission. A later dedicated
+execution gate may pass the controlled binding only after a new POST-specific
+explicit confirmation and only if every gate is still clean. Previous
+POST-specific confirmation text is not reusable.
 
 ## Result Mapping
 
@@ -185,18 +186,17 @@ This implementation step did not:
 
 ## Next Step
 
-Current staged refactor next step:
+Current staged execution next step:
 
 ```text
-Step 6G-PC-OX-R-LEDGER-FREE-POST-ONLY-SOURCE-FACTORY-C
+Step 6G-PC-OX-R-ONE-SHOT-POST-EXECUTION-GATE-RETRY-7
 ```
 
-That factory step must still avoid actual HTTP POST and POST-specific
-confirmation. A later execution gate must first show the sanitized preview,
-then obtain a new POST-specific explicit confirmation in the current Codex
-session. Only after that may it consider one HTTP POST through the safe route,
-approved actual source boundary, approved primitive source boundary, approved
-primitive boundary, and controlled binding.
+That execution gate must not start with POST. It must first show the sanitized
+preview, then obtain a new POST-specific explicit confirmation in the current
+Codex session. Only after that may it consider one HTTP POST through the safe
+route, approved actual source boundary, approved primitive source boundary,
+approved primitive boundary, and controlled binding.
 
 The next step must still keep these boundaries separate:
 
