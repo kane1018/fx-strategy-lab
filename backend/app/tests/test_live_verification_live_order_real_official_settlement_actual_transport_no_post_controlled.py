@@ -79,6 +79,25 @@ def test_official_settlement_actual_transport_ready_no_post_path() -> None:
     assert result.real_network_client_binding_can_be_reached_after_execution_gate_authorization
     assert result.execution_gate_can_call_actual_transport_after_confirmation is True
     assert result.next_execution_gate_has_no_known_code_blocker is True
+    assert result.settlement_side_provenance_gate_confirmed is True
+    assert result.settlement_side_source_safe_artifact_available is True
+    assert result.settlement_side_source_safe_artifact_kind == "APPROVED_SAFE_ARTIFACT"
+    assert result.settlement_side_source_is_default_value is False
+    assert result.settlement_side_source_is_operator_input is False
+    assert result.settlement_side_source_is_raw_broker_value is False
+    assert result.settlement_side_source_is_position_specific_identifier is False
+    assert result.settlement_side_source_is_generic_opposite_order is False
+    assert (
+        result.settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact
+        is True
+    )
+    assert result.settlement_side_matches_official_settlement_side_semantics is True
+    assert result.settlement_side_safe_artifact_propagated_to_official_settlement_preview
+    assert result.settlement_side_safe_artifact_propagated_to_actual_transport_plan
+    assert result.settlement_side_safe_artifact_propagated_to_execution_gate
+    assert result.settlement_side_provenance_mechanically_confirmed is True
+    assert result.execution_gate_can_verify_settlement_side_provenance_before_post is True
+    assert result.next_execution_gate_has_no_known_side_provenance_blocker is True
 
     assert result.fake_http_transport_used is True
     assert result.fake_http_transport_call_count == 1
@@ -121,6 +140,11 @@ def test_official_settlement_actual_transport_plan_is_size_based_not_position_sp
     assert plan.entry_post_allowed is False
     assert plan.generic_close_allowed is False
     assert plan.raw_id_value_credential_header_exposure is False
+    assert plan.settlement_side_source_safe_label == (
+        "SETTLEMENT_SIDE_FROM_APPROVED_SAFE_ARTIFACT"
+    )
+    assert result.settlement_side_safe_artifact_propagated_to_actual_transport_plan is True
+    assert result.settlement_side_safe_artifact_propagated_to_execution_gate is True
 
 
 @pytest.mark.parametrize(
@@ -157,6 +181,27 @@ def test_official_settlement_actual_transport_plan_is_size_based_not_position_sp
         ("position_specific_identifier_safe_handling_ready", True),
         ("position_specific_preview_allowed", True),
         ("size_based_preview_allowed", False),
+        ("settlement_side_provenance_gate_confirmed", False),
+        ("settlement_side_source_safe_artifact_available", False),
+        ("settlement_side_source_is_default_value", True),
+        ("settlement_side_source_is_operator_input", True),
+        ("settlement_side_source_is_raw_broker_value", True),
+        ("settlement_side_source_is_position_specific_identifier", True),
+        ("settlement_side_source_is_generic_opposite_order", True),
+        (
+            "settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact",
+            False,
+        ),
+        ("settlement_side_matches_official_settlement_side_semantics", False),
+        (
+            "settlement_side_safe_artifact_propagated_to_official_settlement_preview",
+            False,
+        ),
+        ("settlement_side_safe_artifact_propagated_to_actual_transport_plan", False),
+        ("settlement_side_safe_artifact_propagated_to_execution_gate", False),
+        ("settlement_side_provenance_mechanically_confirmed", False),
+        ("execution_gate_can_verify_settlement_side_provenance_before_post", False),
+        ("next_execution_gate_has_no_known_side_provenance_blocker", False),
         ("retry_allowed", True),
         ("repost_allowed", True),
         ("second_settlement_allowed", True),
@@ -219,7 +264,7 @@ def test_actual_transport_render_and_safe_dict_do_not_expose_raw_values() -> Non
     for marker in FORBIDDEN_RENDER_MARKERS:
         assert marker not in rendered
         assert marker not in safe_dict_text
-    assert "actual_transport_plan" not in safe_dict_text
+    assert "'actual_transport_plan':" not in safe_dict_text
     assert "/private/v1/closeOrder" not in result_dict_text
     assert "api_key" not in result_dict_text
     assert "api_secret" not in result_dict_text

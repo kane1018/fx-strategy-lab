@@ -14,8 +14,13 @@ from app.live_verification.live_order_real_official_settlement_real_network_live
 )
 from app.live_verification.live_order_real_official_settlement_route_no_post_controlled import (
     SETTLEMENT_ROUTE_KIND_OFFICIAL_SIZE_BASED,
-    SETTLEMENT_SIDE_SEMANTICS_CONFIRMED,
     build_official_settlement_route_no_post_controlled,
+)
+from app.live_verification.live_order_real_official_settlement_side_provenance_gate_no_post_controlled import (  # noqa: E501
+    APPROVED_SAFE_ARTIFACT_KIND,
+    SETTLEMENT_SIDE_SOURCE_APPROVED_SAFE_ARTIFACT_LABEL,
+    SIDE_PROVENANCE_NOT_CONFIRMED_LABEL,
+    build_official_settlement_side_provenance_gate_no_post_controlled,
 )
 from app.live_verification.live_order_real_position_runtime_safe_read_controlled import (
     PositionReadOnlyControlledStatus,
@@ -55,7 +60,7 @@ OFFICIAL_SETTLEMENT_ACTUAL_TRANSPORT_REJECTED_RESULT = "RESULT_REJECTED_SANITIZE
 OFFICIAL_SETTLEMENT_ACTUAL_TRANSPORT_UNKNOWN_RESULT = "RESULT_UNKNOWN_SANITIZED"
 OFFICIAL_SETTLEMENT_ACTUAL_TRANSPORT_FAILED_RESULT = "RESULT_FAILED_SANITIZED"
 
-DEFAULT_SETTLEMENT_SIDE_SAFE_LABEL = "SELL"
+SETTLEMENT_SIDE_NOT_CONFIRMED_SAFE_LABEL = "SIDE_PROVENANCE_NOT_CONFIRMED"
 DEFAULT_SETTLEMENT_EXECUTION_TYPE_SAFE_LABEL = "MARKET"
 
 
@@ -129,9 +134,28 @@ class OfficialSettlementActualTransportInput:
     position_specific_preview_allowed: bool = False
     size_based_preview_allowed: bool = True
 
+    settlement_side_provenance_gate_confirmed: bool = False
+    settlement_side_source_safe_artifact_available: bool = False
+    settlement_side_source_safe_artifact_kind: str = SIDE_PROVENANCE_NOT_CONFIRMED_LABEL
+    settlement_side_source_is_default_value: bool = True
+    settlement_side_source_is_operator_input: bool = False
+    settlement_side_source_is_raw_broker_value: bool = False
+    settlement_side_source_is_position_specific_identifier: bool = False
+    settlement_side_source_is_generic_opposite_order: bool = False
+    settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact: (
+        bool
+    ) = False
+    settlement_side_matches_official_settlement_side_semantics: bool = False
+    settlement_side_safe_artifact_propagated_to_official_settlement_preview: bool = False
+    settlement_side_safe_artifact_propagated_to_actual_transport_plan: bool = False
+    settlement_side_safe_artifact_propagated_to_execution_gate: bool = False
+    settlement_side_provenance_mechanically_confirmed: bool = False
+    execution_gate_can_verify_settlement_side_provenance_before_post: bool = False
+    next_execution_gate_has_no_known_side_provenance_blocker: bool = False
+
     settlement_symbol_safe_label: str = SUPPORTED_SYMBOL
-    settlement_side_safe_label: str = DEFAULT_SETTLEMENT_SIDE_SAFE_LABEL
-    settlement_side_source_safe_label: str = SETTLEMENT_SIDE_SEMANTICS_CONFIRMED
+    settlement_side_safe_label: str = SETTLEMENT_SIDE_NOT_CONFIRMED_SAFE_LABEL
+    settlement_side_source_safe_label: str = SIDE_PROVENANCE_NOT_CONFIRMED_LABEL
     settlement_execution_type_safe_label: str = DEFAULT_SETTLEMENT_EXECUTION_TYPE_SAFE_LABEL
     settlement_size_safe_value: int = SUPPORTED_UNITS
 
@@ -216,6 +240,25 @@ class OfficialSettlementActualTransportResult:
     settlement_route_kind: str
     settlement_route_is_generic_order: bool
     settlement_route_is_dedicated: bool
+
+    settlement_side_provenance_gate_confirmed: bool
+    settlement_side_source_safe_artifact_available: bool
+    settlement_side_source_safe_artifact_kind: str
+    settlement_side_source_is_default_value: bool
+    settlement_side_source_is_operator_input: bool
+    settlement_side_source_is_raw_broker_value: bool
+    settlement_side_source_is_position_specific_identifier: bool
+    settlement_side_source_is_generic_opposite_order: bool
+    settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact: (
+        bool
+    )
+    settlement_side_matches_official_settlement_side_semantics: bool
+    settlement_side_safe_artifact_propagated_to_official_settlement_preview: bool
+    settlement_side_safe_artifact_propagated_to_actual_transport_plan: bool
+    settlement_side_safe_artifact_propagated_to_execution_gate: bool
+    settlement_side_provenance_mechanically_confirmed: bool
+    execution_gate_can_verify_settlement_side_provenance_before_post: bool
+    next_execution_gate_has_no_known_side_provenance_blocker: bool
 
     generic_order_executor_used_for_settlement: bool
     live_order_once_used_for_settlement: bool
@@ -390,8 +433,18 @@ def build_official_settlement_actual_transport_no_post_controlled(
     no_real_post = not client_result.actual_transport_real_http_post_executed
     no_broker_write = not client_result.actual_transport_broker_write_executed
     no_settlement_post = client_result.simulated_settlement_post_count == 0
+    plan_side_provenance_confirmed = (
+        plan is not None
+        and snapshot.settlement_side_provenance_mechanically_confirmed
+        and snapshot.settlement_side_safe_artifact_propagated_to_actual_transport_plan
+        and snapshot.settlement_side_safe_artifact_propagated_to_execution_gate
+        and plan.settlement_side_safe_label == snapshot.settlement_side_safe_label
+        and plan.settlement_side_source_safe_label
+        == SETTLEMENT_SIDE_SOURCE_APPROVED_SAFE_ARTIFACT_LABEL
+    )
     no_known_code_blocker = (
         ready
+        and plan_side_provenance_confirmed
         and fake_path_exercised
         and no_real_post
         and no_broker_write
@@ -443,6 +496,56 @@ def build_official_settlement_actual_transport_no_post_controlled(
         settlement_route_kind=snapshot.settlement_route_kind,
         settlement_route_is_generic_order=snapshot.settlement_route_is_generic_order,
         settlement_route_is_dedicated=snapshot.settlement_route_is_dedicated,
+        settlement_side_provenance_gate_confirmed=(
+            snapshot.settlement_side_provenance_gate_confirmed and ready
+        ),
+        settlement_side_source_safe_artifact_available=(
+            snapshot.settlement_side_source_safe_artifact_available and ready
+        ),
+        settlement_side_source_safe_artifact_kind=(
+            snapshot.settlement_side_source_safe_artifact_kind
+        ),
+        settlement_side_source_is_default_value=(
+            snapshot.settlement_side_source_is_default_value
+        ),
+        settlement_side_source_is_operator_input=(
+            snapshot.settlement_side_source_is_operator_input
+        ),
+        settlement_side_source_is_raw_broker_value=(
+            snapshot.settlement_side_source_is_raw_broker_value
+        ),
+        settlement_side_source_is_position_specific_identifier=(
+            snapshot.settlement_side_source_is_position_specific_identifier
+        ),
+        settlement_side_source_is_generic_opposite_order=(
+            snapshot.settlement_side_source_is_generic_opposite_order
+        ),
+        settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact=(
+            snapshot.settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact
+            and ready
+        ),
+        settlement_side_matches_official_settlement_side_semantics=(
+            snapshot.settlement_side_matches_official_settlement_side_semantics and ready
+        ),
+        settlement_side_safe_artifact_propagated_to_official_settlement_preview=(
+            snapshot.settlement_side_safe_artifact_propagated_to_official_settlement_preview
+            and ready
+        ),
+        settlement_side_safe_artifact_propagated_to_actual_transport_plan=(
+            plan_side_provenance_confirmed
+        ),
+        settlement_side_safe_artifact_propagated_to_execution_gate=(
+            snapshot.settlement_side_safe_artifact_propagated_to_execution_gate and ready
+        ),
+        settlement_side_provenance_mechanically_confirmed=(
+            plan_side_provenance_confirmed
+        ),
+        execution_gate_can_verify_settlement_side_provenance_before_post=(
+            plan_side_provenance_confirmed
+        ),
+        next_execution_gate_has_no_known_side_provenance_blocker=(
+            plan_side_provenance_confirmed
+        ),
         generic_order_executor_used_for_settlement=False,
         live_order_once_used_for_settlement=False,
         generic_order_endpoint_used_for_settlement=False,
@@ -548,6 +651,30 @@ def render_official_settlement_actual_transport_no_post_markdown(
         f"settlement_route_is_generic_order={result.settlement_route_is_generic_order}",
         f"settlement_route_is_dedicated={result.settlement_route_is_dedicated}",
         (
+            "settlement_side_provenance_gate_confirmed="
+            f"{result.settlement_side_provenance_gate_confirmed}"
+        ),
+        (
+            "settlement_side_source_safe_artifact_available="
+            f"{result.settlement_side_source_safe_artifact_available}"
+        ),
+        (
+            "settlement_side_source_is_default_value="
+            f"{result.settlement_side_source_is_default_value}"
+        ),
+        (
+            "settlement_side_safe_artifact_propagated_to_actual_transport_plan="
+            f"{result.settlement_side_safe_artifact_propagated_to_actual_transport_plan}"
+        ),
+        (
+            "settlement_side_safe_artifact_propagated_to_execution_gate="
+            f"{result.settlement_side_safe_artifact_propagated_to_execution_gate}"
+        ),
+        (
+            "settlement_side_provenance_mechanically_confirmed="
+            f"{result.settlement_side_provenance_mechanically_confirmed}"
+        ),
+        (
             "next_execution_gate_still_requires_fresh_runtime_read="
             f"{result.next_execution_gate_still_requires_fresh_runtime_read}"
         ),
@@ -573,6 +700,10 @@ def _default_input_snapshot() -> OfficialSettlementActualTransportInput:
     sender_adapter_result = (
         build_official_settlement_real_network_live_sender_adapter_no_post_controlled()
     )
+    side_provenance_result = (
+        build_official_settlement_side_provenance_gate_no_post_controlled()
+    )
+    side_artifact = side_provenance_result.side_provenance_artifact
     return OfficialSettlementActualTransportInput(
         official_settlement_no_post_preview_ready=(
             route_result.official_settlement_no_post_preview_ready
@@ -629,6 +760,72 @@ def _default_input_snapshot() -> OfficialSettlementActualTransportInput:
         ),
         position_specific_preview_allowed=route_result.position_specific_preview_allowed,
         size_based_preview_allowed=route_result.size_based_preview_allowed,
+        settlement_side_provenance_gate_confirmed=(
+            side_provenance_result.settlement_side_provenance_gate_confirmed
+        ),
+        settlement_side_source_safe_artifact_available=(
+            side_provenance_result.settlement_side_source_safe_artifact_available
+        ),
+        settlement_side_source_safe_artifact_kind=(
+            side_provenance_result.settlement_side_source_safe_artifact_kind
+        ),
+        settlement_side_source_is_default_value=(
+            side_provenance_result.settlement_side_source_is_default_value
+        ),
+        settlement_side_source_is_operator_input=(
+            side_provenance_result.settlement_side_source_is_operator_input
+        ),
+        settlement_side_source_is_raw_broker_value=(
+            side_provenance_result.settlement_side_source_is_raw_broker_value
+        ),
+        settlement_side_source_is_position_specific_identifier=(
+            side_provenance_result
+            .settlement_side_source_is_position_specific_identifier
+        ),
+        settlement_side_source_is_generic_opposite_order=(
+            side_provenance_result.settlement_side_source_is_generic_opposite_order
+        ),
+        settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact=(
+            side_provenance_result
+            .settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact
+        ),
+        settlement_side_matches_official_settlement_side_semantics=(
+            side_provenance_result
+            .settlement_side_matches_official_settlement_side_semantics
+        ),
+        settlement_side_safe_artifact_propagated_to_official_settlement_preview=(
+            side_provenance_result
+            .settlement_side_safe_artifact_propagated_to_official_settlement_preview
+        ),
+        settlement_side_safe_artifact_propagated_to_actual_transport_plan=(
+            side_provenance_result
+            .settlement_side_safe_artifact_propagated_to_actual_transport_plan
+        ),
+        settlement_side_safe_artifact_propagated_to_execution_gate=(
+            side_provenance_result
+            .settlement_side_safe_artifact_propagated_to_execution_gate
+        ),
+        settlement_side_provenance_mechanically_confirmed=(
+            side_provenance_result.settlement_side_provenance_mechanically_confirmed
+        ),
+        execution_gate_can_verify_settlement_side_provenance_before_post=(
+            side_provenance_result
+            .execution_gate_can_verify_settlement_side_provenance_before_post
+        ),
+        next_execution_gate_has_no_known_side_provenance_blocker=(
+            side_provenance_result
+            .next_execution_gate_has_no_known_side_provenance_blocker
+        ),
+        settlement_side_safe_label=(
+            side_artifact.settlement_side_safe_label
+            if side_artifact is not None
+            else SETTLEMENT_SIDE_NOT_CONFIRMED_SAFE_LABEL
+        ),
+        settlement_side_source_safe_label=(
+            side_artifact.settlement_side_source_safe_label
+            if side_artifact is not None
+            else SIDE_PROVENANCE_NOT_CONFIRMED_LABEL
+        ),
     )
 
 
@@ -715,6 +912,40 @@ def _blocked_reasons(snapshot: OfficialSettlementActualTransportInput) -> tuple[
         "settlement_route_is_dedicated": snapshot.settlement_route_is_dedicated,
         "size_based_preview_allowed": snapshot.size_based_preview_allowed,
         "one_settlement_post_max": snapshot.one_settlement_post_max,
+        "settlement_side_provenance_gate_confirmed": (
+            snapshot.settlement_side_provenance_gate_confirmed
+        ),
+        "settlement_side_source_safe_artifact_available": (
+            snapshot.settlement_side_source_safe_artifact_available
+        ),
+        (
+            "settlement_side_derived_from_fresh_entry_safe_artifact_"
+            "or_approved_safe_position_artifact"
+        ): (
+            snapshot
+            .settlement_side_derived_from_fresh_entry_safe_artifact_or_approved_safe_position_artifact
+        ),
+        "settlement_side_matches_official_settlement_side_semantics": (
+            snapshot.settlement_side_matches_official_settlement_side_semantics
+        ),
+        "settlement_side_safe_artifact_propagated_to_official_settlement_preview": (
+            snapshot.settlement_side_safe_artifact_propagated_to_official_settlement_preview
+        ),
+        "settlement_side_safe_artifact_propagated_to_actual_transport_plan": (
+            snapshot.settlement_side_safe_artifact_propagated_to_actual_transport_plan
+        ),
+        "settlement_side_safe_artifact_propagated_to_execution_gate": (
+            snapshot.settlement_side_safe_artifact_propagated_to_execution_gate
+        ),
+        "settlement_side_provenance_mechanically_confirmed": (
+            snapshot.settlement_side_provenance_mechanically_confirmed
+        ),
+        "execution_gate_can_verify_settlement_side_provenance_before_post": (
+            snapshot.execution_gate_can_verify_settlement_side_provenance_before_post
+        ),
+        "next_execution_gate_has_no_known_side_provenance_blocker": (
+            snapshot.next_execution_gate_has_no_known_side_provenance_blocker
+        ),
     }
     for name, value in required_true.items():
         if not value:
@@ -735,6 +966,21 @@ def _blocked_reasons(snapshot: OfficialSettlementActualTransportInput) -> tuple[
         ),
         "official_settlement_real_network_client_uses_position_specific_path": (
             snapshot.official_settlement_real_network_client_uses_position_specific_path
+        ),
+        "settlement_side_source_is_default_value": (
+            snapshot.settlement_side_source_is_default_value
+        ),
+        "settlement_side_source_is_operator_input": (
+            snapshot.settlement_side_source_is_operator_input
+        ),
+        "settlement_side_source_is_raw_broker_value": (
+            snapshot.settlement_side_source_is_raw_broker_value
+        ),
+        "settlement_side_source_is_position_specific_identifier": (
+            snapshot.settlement_side_source_is_position_specific_identifier
+        ),
+        "settlement_side_source_is_generic_opposite_order": (
+            snapshot.settlement_side_source_is_generic_opposite_order
         ),
         "has_multiple_positions": snapshot.has_multiple_positions,
         "operator_broker_ui_values_or_ids_provided": (
@@ -782,7 +1028,17 @@ def _blocked_reasons(snapshot: OfficialSettlementActualTransportInput) -> tuple[
         reasons.append("settlement_size_safe_value_not_supported")
     if not snapshot.settlement_symbol_safe_label:
         reasons.append("settlement_symbol_safe_label=empty")
-    if not snapshot.settlement_side_safe_label:
+    if snapshot.settlement_side_source_safe_artifact_kind != APPROVED_SAFE_ARTIFACT_KIND:
+        reasons.append("settlement_side_source_safe_artifact_kind_not_approved")
+    if (
+        snapshot.settlement_side_source_safe_label
+        != SETTLEMENT_SIDE_SOURCE_APPROVED_SAFE_ARTIFACT_LABEL
+    ):
+        reasons.append("settlement_side_source_safe_label_not_approved_artifact")
+    if (
+        not snapshot.settlement_side_safe_label
+        or snapshot.settlement_side_safe_label == SETTLEMENT_SIDE_NOT_CONFIRMED_SAFE_LABEL
+    ):
         reasons.append("settlement_side_safe_label=empty")
     if not snapshot.settlement_execution_type_safe_label:
         reasons.append("settlement_execution_type_safe_label=empty")
@@ -842,6 +1098,13 @@ def _validate_plan_is_official_settlement_only(
         errors.append("generic_close_allowed=true")
     if plan.raw_id_value_credential_header_exposure:
         errors.append("raw_id_value_credential_header_exposure=true")
+    if plan.settlement_side_safe_label == SETTLEMENT_SIDE_NOT_CONFIRMED_SAFE_LABEL:
+        errors.append("settlement_side_provenance_not_confirmed")
+    if (
+        plan.settlement_side_source_safe_label
+        != SETTLEMENT_SIDE_SOURCE_APPROVED_SAFE_ARTIFACT_LABEL
+    ):
+        errors.append("settlement_side_source_not_approved_safe_artifact")
     if errors:
         raise LiveVerificationValidationError(
             "official settlement actual transport plan blocked: " + ",".join(errors)
