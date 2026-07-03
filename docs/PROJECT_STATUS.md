@@ -82,6 +82,25 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-FRESH-POSITION-OPEN-SAFE-HANDOFF-GATE-C 完了 / confirmed fresh open position handed off to close execution gate / planning-only / no close POST / CASE 1** —
+  直前のfresh post-entry position confirmation gateはCASE 1で、fresh entry POSTは前Stepで1回のみ、
+  `RESULT_ACCEPTED_SANITIZED`、retry/repost/second entry=false、close POST=false、ledger/receipt=false、
+  raw/ID/value exposure=falseとして扱った。今回のStepでは
+  `backend/app/live_verification/live_order_real_fresh_position_open_safe_handoff_gate_controlled.py`
+  を追加し、fresh accepted summary + runtime position safe-read result + close route planning resultを
+  safe status/count/booleanだけへ閉じるhandoff gateを実装した。read-only runtime position checkは
+  `runtime_position_status=ONE_POSITION_OPEN`、`runtime_position_count_safe=1`、
+  `has_exactly_one_position=true` で、判定は
+  `handoff_gate_ready=true`、
+  `fresh_position_open_safe_handoff_ready=true`、
+  `next_cycle_state=FRESH_POSITION_OPEN_SAFE_HANDOFF_READY`、
+  `close_route_ready=true`、`close_planning_allowed=true`、
+  `close_execution_gate_may_be_planned=true`、`close_execution_allowed_now=false`。
+  このStepではactual entry POST、fresh entry POST再実行、retry/repost、second entry POST、actual close POST、
+  ledger update、receipt handoff、raw request/response、broker/API response、
+  account/order/transaction/position ID、actual price/PnL、credential/signature/header値、`.env` は扱っていない。
+  runbook: [STEP6G_FRESH_POSITION_OPEN_SAFE_HANDOFF_GATE.md](STEP6G_FRESH_POSITION_OPEN_SAFE_HANDOFF_GATE.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C**。
 - **Step 6G-PC-OX-R-FRESH-POST-ENTRY-POSITION-CONFIRMATION-GATE-C 完了 / fresh accepted entry effect confirmed by ONE_POSITION_OPEN / no retry / no close POST / CASE 1** —
   直前のfresh entry gateはCASE 1で、safe summary上
   `fresh_entry_http_post_executed=true`、`fresh_entry_post_execution_count=1`、

@@ -107,31 +107,30 @@ python3 -m pytest -q app/tests/test_live_verification_no_order_imports.py
 
 ## Next Step
 
+Current follow-up status after the fresh position open safe handoff gate:
+
+```text
+runtime_position_status=ONE_POSITION_OPEN
+runtime_position_count_safe=1
+close_route_ready=true
+close_planning_allowed=true
+close_execution_gate_may_be_planned=true
+close_execution_allowed_now=false
+close_post_executed=false
+close_post_count=0
+```
+
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C
 ```
 
-That step may only verify a current safe runtime position read as status/count.
-Actual close POST, entry POST, retry/repost, second POST, ledger update,
-receipt handoff, raw responses, broker/API responses, IDs, credential values,
-signature values, header values, and `.env` access remain forbidden unless a
-later separately approved execution gate explicitly scopes them.
-
-The runtime safe read check returned:
-
-```text
-position_status=NO_POSITION
-position_count_safe=0
-close_planning_allowed=false
-close_execution_allowed_now=false
-```
-
-Therefore the close execution gate is not the next step from this runtime
-state. The next bounded step is the Level 5 signal/entry cycle gate.
-
-The Level 5 signal/entry cycle gate follow-up is planning-only. With the
-runtime `NO_POSITION` premise and an injected safe `ENTRY_BUY` or `ENTRY_SELL`
-snapshot, the cycle can reach `ENTRY_READY`. It does not execute entry POST,
-does not execute close POST, and does not change the close execution boundary.
+That step is a separate execution gate. It must perform a new current runtime
+position read, operator readiness check, sanitized close preview, and
+close-specific confirmation before any actual close POST can be considered.
+The entry confirmation must not be reused. Actual close POST, entry POST,
+retry/repost, second POST, ledger update, receipt handoff, raw responses,
+broker/API responses, IDs, credential values, signature values, header values,
+and `.env` access remain forbidden unless that later separately approved close
+execution gate explicitly scopes them.

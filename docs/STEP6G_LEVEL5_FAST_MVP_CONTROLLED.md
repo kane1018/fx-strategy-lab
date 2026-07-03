@@ -131,6 +131,17 @@ The close route foundation is a no-POST readiness contract:
 
 It does not implement or execute close POST.
 
+Fresh position open safe handoff follow-up:
+
+- `FRESH_POSITION_OPEN_SAFE -> FRESH_POSITION_OPEN_SAFE_HANDOFF_READY`
+- current runtime safe read returned `ONE_POSITION_OPEN` / count `1`
+- close route planning is ready
+- `close_execution_gate_may_be_planned=true`
+- `close_execution_allowed_now=false`
+- `close_post_executed=false`
+- the next close execution gate must perform a new runtime position read,
+  operator readiness check, close preview, and close-specific confirmation
+
 ## Cycle State Machine
 
 States:

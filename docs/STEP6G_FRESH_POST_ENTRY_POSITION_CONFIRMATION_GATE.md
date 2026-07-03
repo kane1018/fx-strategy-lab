@@ -73,6 +73,17 @@ Recommended next step:
 Step 6G-PC-OX-R-FRESH-POSITION-OPEN-SAFE-HANDOFF-GATE-C
 ```
 
+Follow-up status:
+
+```text
+Step 6G-PC-OX-R-FRESH-POSITION-OPEN-SAFE-HANDOFF-GATE-C completed CASE 1
+fresh_position_open_safe_handoff_ready=true
+next_cycle_state=FRESH_POSITION_OPEN_SAFE_HANDOFF_READY
+close_execution_gate_may_be_planned=true
+close_execution_allowed_now=false
+close_post_executed=false
+```
+
 ### NO_POSITION
 
 ```text
