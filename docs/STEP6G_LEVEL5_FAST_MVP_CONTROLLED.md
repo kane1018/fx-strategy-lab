@@ -169,6 +169,23 @@ Close actual executor compatibility follow-up:
 - `transport_call_count=0`
 - actual close POST remains prohibited until a separate close execution gate
 
+Post-close position confirmation follow-up:
+
+- previous accepted close safe summary requires exactly one close POST,
+  `RESULT_ACCEPTED_SANITIZED`, retry/repost/second close=false, ledger=false,
+  receipt=false, and raw/ID/value exposure=false
+- close accepted status does not complete Level 5 by itself
+- post-close runtime safe read is required for safe status/count confirmation
+- `NO_POSITION` / count `0` maps to `LEVEL5_MINIMAL_CYCLE_COMPLETED`
+- `ONE_POSITION_OPEN` / count `1` maps to a still-open safe stop
+- `MULTIPLE_POSITIONS_BLOCKED` maps to manual position risk check
+- unknown or blocked position status fails closed
+- the current post-close runtime safe read returned
+  `MULTIPLE_POSITIONS_BLOCKED` / count `2`
+- Level 5 minimal cycle is not completed in that state
+- retry/repost/second close, entry POST, ledger, receipt, and raw/ID/value
+  exposure remain prohibited
+
 ## Cycle State Machine
 
 States:

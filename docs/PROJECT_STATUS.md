@@ -82,6 +82,26 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-POST-CLOSE-POSITION-CONFIRMATION-GATE-C 完了 / post-close runtime position confirmation / CASE 3** —
+  直前 close execution gate with compatible executor はCASE 1で、safe summary上
+  close POSTは1回のみ、`RESULT_ACCEPTED_SANITIZED`、retry/repost/second close=false、
+  entry POST this Step=false、ledger/receipt=false、raw/ID/value exposure=falseとして扱った。
+  今回のStepでは
+  `backend/app/live_verification/live_order_real_post_close_position_confirmation_gate_controlled.py`
+  を追加し、previous entry/close safe summary + runtime position safe-read resultを
+  safe status/count/booleanだけへ閉じるpost-close confirmation gateを実装した。
+  read-only runtime position checkは1回のみ実行し、safe resultは
+  `position_status=MULTIPLE_POSITIONS_BLOCKED`、`position_count_safe=2`、
+  `has_multiple_positions=true`。判定は
+  `post_close_position_status=POST_CLOSE_MULTIPLE_POSITIONS_BLOCKED`、
+  `next_cycle_state=HALTED_MANUAL_CHECK_REQUIRED`、
+  `level5_minimal_cycle_completed=false`、
+  `level5_full_auto_cycle_completed=false`。
+  retry/repost/second close、entry POST、ledger update、receipt handoff、raw request/response、
+  broker/API response、account/order/transaction/position ID、actual price/PnL、
+  credential/signature/header値、`.env` は扱っていない。
+  runbook: [STEP6G_POST_CLOSE_POSITION_CONFIRMATION_GATE.md](STEP6G_POST_CLOSE_POSITION_CONFIRMATION_GATE.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-MANUAL-POSITION-RISK-CHECK-GATE-C**。
 - **Step 6G-PC-OX-R-CLOSE-ORDER-ACTUAL-EXECUTOR-COMPATIBILITY-NO-POST-C 完了 / close actual executor compatibility ready / no actual close POST / CASE 1** —
   直前 close execution gate retry はCASE 2で、close executable previewは
   `SELL / USD_JPY / 100 / MARKET` までreadyだったが、既存 one-shot executor preview が
