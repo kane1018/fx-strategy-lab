@@ -13,9 +13,12 @@ from enum import Enum
 
 from app.live_verification.errors import LiveVerificationValidationError
 from app.live_verification.live_order_real_close_order_execution_route_controlled import (
+    APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC,
+    APPROVED_CLOSE_PRIMITIVE_KIND_DEPRECATED_UNSAFE_GENERIC,
     APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC,
     APPROVED_CLOSE_PRIMITIVE_KIND_NOT_APPROVED,
     NEXT_CYCLE_STATE_READY,
+    OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED,
     SAFE_SIDE_BUY,
     SAFE_SIDE_SELL,
     CloseOrderExecutionRouteControlledResult,
@@ -60,15 +63,24 @@ NEXT_STEP_CLOSE_EXECUTION_GATE_RETRY_WITH_COMPATIBLE_EXECUTOR = (
 NEXT_STEP_CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_FIX = (
     "fix_close_actual_executor_compatibility_blockers_no_post"
 )
+NEXT_STEP_OFFICIAL_SETTLEMENT_ROUTE_REVIEW = (
+    "Step 6G-PC-OX-R-GMO-FX-OFFICIAL-SETTLEMENT-ROUTE-REVIEW-C"
+)
 
 _CONCRETE_CLOSE_SIDE_LABELS = frozenset({SAFE_SIDE_SELL, SAFE_SIDE_BUY})
 
 
 class CloseActualExecutorCompatibilityControlledStatus(str, Enum):
     READY_NO_POST = "CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST"
+    DEPRECATED_UNSAFE_GENERIC_CLOSE = (
+        "CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_DEPRECATED_UNSAFE_GENERIC_CLOSE"
+    )
     BLOCKED_CONTEXT = "CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_BLOCKED_CONTEXT"
     BLOCKED_ROUTE = "CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_BLOCKED_ROUTE"
     BLOCKED_GUARD = "CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_BLOCKED_GUARD"
+    BLOCKED_OFFICIAL_SETTLEMENT_ROUTE = (
+        "CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE"
+    )
     BLOCKED_UNSAFE = "CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_BLOCKED_UNSAFE"
 
 
@@ -136,6 +148,12 @@ class CloseActualExecutorCompatibilityControlledInput:
     )
     input_approved_close_post_primitive_is_generic_order: bool = False
     input_generic_order_accepted_as_close_only_with_exact_one_position_guard: bool = False
+    official_gmo_rules_alignment_checked: bool = True
+    official_manual_url_recorded: bool = True
+    official_trading_rules_url_recorded: bool = True
+    generic_opposite_order_as_close_forbidden: bool = True
+    generic_close_primitive_revoked: bool = True
+    official_settlement_route_confirmed: bool = False
     runtime_position_status: PositionReadOnlyControlledStatus = (
         PositionReadOnlyControlledStatus.UNKNOWN_FAIL_CLOSED
     )
@@ -232,6 +250,13 @@ class CloseActualExecutorCompatibilityControlledResult:
     input_approved_close_post_primitive_kind: str
     input_approved_close_post_primitive_is_generic_order: bool
     input_generic_order_accepted_as_close_only_with_exact_one_position_guard: bool
+    official_gmo_rules_alignment_checked: bool
+    official_manual_url_recorded: bool
+    official_trading_rules_url_recorded: bool
+    generic_opposite_order_as_close_forbidden: bool
+    generic_close_primitive_revoked: bool
+    official_settlement_route_confirmed: bool
+    close_execution_blocked_reason: str
     runtime_position_status: PositionReadOnlyControlledStatus
     position_count_safe: int
     has_exactly_one_position: bool
@@ -273,6 +298,7 @@ class CloseActualExecutorCompatibilityControlledResult:
         for field_name in (
             "safe_close_actual_executor_compatibility_label",
             "input_approved_close_post_primitive_kind",
+            "close_execution_blocked_reason",
             "close_symbol_safe_label",
             "close_side_safe_label",
             "close_order_type_safe_label",
@@ -336,6 +362,19 @@ def build_close_actual_executor_compatibility_controlled(
         input_generic_order_accepted_as_close_only_with_exact_one_position_guard=(
             snapshot.input_generic_order_accepted_as_close_only_with_exact_one_position_guard
         ),
+        official_gmo_rules_alignment_checked=(
+            snapshot.official_gmo_rules_alignment_checked
+        ),
+        official_manual_url_recorded=snapshot.official_manual_url_recorded,
+        official_trading_rules_url_recorded=(
+            snapshot.official_trading_rules_url_recorded
+        ),
+        generic_opposite_order_as_close_forbidden=(
+            snapshot.generic_opposite_order_as_close_forbidden
+        ),
+        generic_close_primitive_revoked=snapshot.generic_close_primitive_revoked,
+        official_settlement_route_confirmed=snapshot.official_settlement_route_confirmed,
+        close_execution_blocked_reason=_close_execution_blocked_reason(reasons),
         runtime_position_status=snapshot.runtime_position_status,
         position_count_safe=snapshot.position_count_safe,
         has_exactly_one_position=snapshot.has_exactly_one_position,
@@ -367,7 +406,11 @@ def build_close_actual_executor_compatibility_controlled(
         recommended_next_step=(
             NEXT_STEP_CLOSE_EXECUTION_GATE_RETRY_WITH_COMPATIBLE_EXECUTOR
             if ready
-            else NEXT_STEP_CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_FIX
+            else (
+                NEXT_STEP_OFFICIAL_SETTLEMENT_ROUTE_REVIEW
+                if "official_settlement_route_not_confirmed" in reasons
+                else NEXT_STEP_CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_FIX
+            )
         ),
         blocked_reasons=reasons,
     )
@@ -435,6 +478,23 @@ def render_close_actual_executor_compatibility_markdown(
                 "approved_close_post_primitive_kind: "
                 f"{result.input_approved_close_post_primitive_kind}"
             ),
+            (
+                "official_gmo_rules_alignment_checked: "
+                f"{_bool_text(result.official_gmo_rules_alignment_checked)}"
+            ),
+            (
+                "generic_opposite_order_as_close_forbidden: "
+                f"{_bool_text(result.generic_opposite_order_as_close_forbidden)}"
+            ),
+            (
+                "generic_close_primitive_revoked: "
+                f"{_bool_text(result.generic_close_primitive_revoked)}"
+            ),
+            (
+                "official_settlement_route_confirmed: "
+                f"{_bool_text(result.official_settlement_route_confirmed)}"
+            ),
+            f"close_execution_blocked_reason: {result.close_execution_blocked_reason}",
             f"one_close_post_max: {_bool_text(result.one_close_post_max)}",
             f"close_retry_allowed: {_bool_text(result.close_retry_allowed)}",
             f"close_repost_allowed: {_bool_text(result.close_repost_allowed)}",
@@ -491,6 +551,14 @@ def _input_from_close_execution_route(
         input_generic_order_accepted_as_close_only_with_exact_one_position_guard=(
             result.generic_order_accepted_as_close_only_with_exact_one_position_guard
         ),
+        official_gmo_rules_alignment_checked=result.official_gmo_rules_alignment_checked,
+        official_manual_url_recorded=result.official_manual_url_recorded,
+        official_trading_rules_url_recorded=result.official_trading_rules_url_recorded,
+        generic_opposite_order_as_close_forbidden=(
+            result.generic_opposite_order_as_close_forbidden
+        ),
+        generic_close_primitive_revoked=result.generic_close_primitive_revoked,
+        official_settlement_route_confirmed=result.official_settlement_route_confirmed,
         runtime_position_status=result.runtime_position_status,
         position_count_safe=result.position_count_safe,
         has_exactly_one_position=result.has_exactly_one_position,
@@ -536,17 +604,43 @@ def _blocked_reasons(
         reasons.append("input_close_executable_preview_not_ready")
     if not snapshot.input_approved_close_post_primitive_ready:
         reasons.append("input_approved_close_post_primitive_not_ready")
-    if not snapshot.input_approved_close_post_primitive_is_generic_order:
-        reasons.append("input_approved_close_post_primitive_must_be_generic_order")
+    if snapshot.input_approved_close_post_primitive_is_generic_order:
+        reasons.append("generic_opposite_order_as_close_forbidden")
+        reasons.append("generic_close_primitive_revoked")
     if (
-        not snapshot.input_generic_order_accepted_as_close_only_with_exact_one_position_guard
+        not snapshot.input_approved_close_post_primitive_is_generic_order
+        and snapshot.input_approved_close_post_primitive_kind
+        != APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC
     ):
-        reasons.append("generic_order_close_exact_one_position_guard_required")
+        reasons.append("official_settlement_close_specific_primitive_required")
     if (
         snapshot.input_approved_close_post_primitive_kind
         != APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC
     ):
-        reasons.append("approved_close_post_primitive_kind_not_guarded_generic")
+        if snapshot.input_approved_close_post_primitive_kind not in {
+            APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC,
+            APPROVED_CLOSE_PRIMITIVE_KIND_DEPRECATED_UNSAFE_GENERIC,
+        }:
+            reasons.append("approved_close_post_primitive_kind_not_supported")
+    else:
+        reasons.append("guarded_generic_close_primitive_deprecated_unsafe")
+    if (
+        snapshot.input_approved_close_post_primitive_is_generic_order
+        and not snapshot.input_generic_order_accepted_as_close_only_with_exact_one_position_guard
+    ):
+        reasons.append("generic_order_close_exact_one_position_guard_required")
+    if not snapshot.official_manual_url_recorded:
+        reasons.append("official_manual_url_not_recorded")
+    if not snapshot.official_trading_rules_url_recorded:
+        reasons.append("official_trading_rules_url_not_recorded")
+    if not snapshot.official_gmo_rules_alignment_checked:
+        reasons.append("official_gmo_rules_alignment_not_checked")
+    if not snapshot.generic_opposite_order_as_close_forbidden:
+        reasons.append("generic_opposite_order_as_close_must_be_forbidden")
+    if not snapshot.generic_close_primitive_revoked:
+        reasons.append("generic_close_primitive_must_be_revoked")
+    if not snapshot.official_settlement_route_confirmed:
+        reasons.append("official_settlement_route_not_confirmed")
     if snapshot.runtime_position_status is not PositionReadOnlyControlledStatus.ONE_POSITION_OPEN:
         reasons.append("runtime_position_status_not_one_position_open")
     if snapshot.position_count_safe != 1:
@@ -590,11 +684,31 @@ def _blocked_reasons(
     return tuple(dict.fromkeys(reasons))
 
 
+def _close_execution_blocked_reason(reasons: tuple[str, ...]) -> str:
+    if "official_settlement_route_not_confirmed" in reasons:
+        return OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
+    if "generic_close_primitive_revoked" in reasons:
+        return "GENERIC_CLOSE_PRIMITIVE_REVOKED"
+    if reasons:
+        return "CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_BLOCKED"
+    return "NONE_NO_ACTUAL_POST_IN_THIS_STEP"
+
+
 def _status_from_reasons(
     reasons: tuple[str, ...],
 ) -> CloseActualExecutorCompatibilityControlledStatus:
     if not reasons:
         return CloseActualExecutorCompatibilityControlledStatus.READY_NO_POST
+    if "generic_close_primitive_revoked" in reasons:
+        return (
+            CloseActualExecutorCompatibilityControlledStatus
+            .DEPRECATED_UNSAFE_GENERIC_CLOSE
+        )
+    if "official_settlement_route_not_confirmed" in reasons:
+        return (
+            CloseActualExecutorCompatibilityControlledStatus
+            .BLOCKED_OFFICIAL_SETTLEMENT_ROUTE
+        )
     if any(reason.endswith("_exposure_blocked") for reason in reasons):
         return CloseActualExecutorCompatibilityControlledStatus.BLOCKED_UNSAFE
     context_blocked = any(
@@ -803,6 +917,12 @@ _INPUT_BOOL_FIELDS = (
     "input_approved_close_post_primitive_ready",
     "input_approved_close_post_primitive_is_generic_order",
     "input_generic_order_accepted_as_close_only_with_exact_one_position_guard",
+    "official_gmo_rules_alignment_checked",
+    "official_manual_url_recorded",
+    "official_trading_rules_url_recorded",
+    "generic_opposite_order_as_close_forbidden",
+    "generic_close_primitive_revoked",
+    "official_settlement_route_confirmed",
     "has_exactly_one_position",
     "has_multiple_positions",
     "one_close_post_max",
@@ -856,6 +976,12 @@ _RESULT_BOOL_FIELDS = (
     "input_approved_close_post_primitive_ready",
     "input_approved_close_post_primitive_is_generic_order",
     "input_generic_order_accepted_as_close_only_with_exact_one_position_guard",
+    "official_gmo_rules_alignment_checked",
+    "official_manual_url_recorded",
+    "official_trading_rules_url_recorded",
+    "generic_opposite_order_as_close_forbidden",
+    "generic_close_primitive_revoked",
+    "official_settlement_route_confirmed",
     "has_exactly_one_position",
     "has_multiple_positions",
     "one_close_post_max",

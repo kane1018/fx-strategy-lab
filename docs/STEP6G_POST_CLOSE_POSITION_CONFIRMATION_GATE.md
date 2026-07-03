@@ -119,3 +119,23 @@ Step 6G-PC-OX-R-MANUAL-POSITION-RISK-CHECK-GATE-C
 That next step must remain read-only and operator-safe. It must not execute
 entry POST, close POST, retry, repost, second close, ledger update, receipt
 handoff, or expose raw/ID/value fields.
+
+## Manual Risk Follow-up
+
+The manual risk gate records that `MULTIPLE_POSITIONS_BLOCKED` / count `2` is
+not `NO_POSITION` and does not complete the Level 5 cycle.
+
+It also revokes the previous generic opposite-order close assumption:
+
+```text
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+official_settlement_route_confirmed=false
+actual_close_post_allowed_now=false
+close_execution_blocked_reason=OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
+```
+
+Any future actual close POST is forbidden until a GMO FX official settlement
+route is confirmed and implemented as a close-specific primitive. The safe
+next step is manual flattening by the operator followed by read-only flat
+reconciliation.

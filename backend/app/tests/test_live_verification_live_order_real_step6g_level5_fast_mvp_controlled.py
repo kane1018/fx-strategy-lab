@@ -4,7 +4,9 @@ import ast
 from pathlib import Path
 
 from app.live_verification.live_order_real_close_order_execution_route_controlled import (
+    APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC,
     APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC,
+    NEXT_CYCLE_STATE_OFFICIAL_SETTLEMENT_ROUTE_MISSING,
     NEXT_CYCLE_STATE_READY,
     NEXT_CYCLE_STATE_SIDE_UNRESOLVED,
     CloseOrderExecutionRouteControlledInput,
@@ -655,7 +657,7 @@ def test_foundation_connects_one_position_to_close_planning_only() -> None:
     assert result.close_post_executed is False
 
 
-def test_foundation_accepts_close_execution_route_ready_no_post_input() -> None:
+def test_foundation_blocks_guarded_generic_close_execution_route_no_post_input() -> None:
     result = build_level5_fast_mvp_foundation(
         close_execution_route_input=CloseOrderExecutionRouteControlledInput(
             runtime_position_status=PositionReadOnlyControlledStatus.ONE_POSITION_OPEN,
@@ -674,10 +676,15 @@ def test_foundation_accepts_close_execution_route_ready_no_post_input() -> None:
     )
     rendered = render_level5_fast_mvp_foundation_markdown(result)
 
-    assert result.close_execution_route.close_execution_route_ready is True
-    assert result.close_execution_route.close_executable_preview_ready is True
+    assert result.close_execution_route.close_execution_route_ready is False
+    assert result.close_execution_route.close_executable_preview_ready is False
     assert result.close_execution_route.close_side_safe_label == "SELL"
-    assert result.close_execution_route.next_cycle_state == NEXT_CYCLE_STATE_READY
+    assert (
+        result.close_execution_route.next_cycle_state
+        == NEXT_CYCLE_STATE_OFFICIAL_SETTLEMENT_ROUTE_MISSING
+    )
+    assert result.close_execution_route.generic_close_primitive_revoked is True
+    assert result.close_execution_route.official_settlement_route_confirmed is False
     assert result.close_execution_route.actual_close_post_allowed_now is False
     assert result.close_execution_route.actual_close_post_executed is False
     assert result.close_execution_route.close_retry_allowed is False
@@ -685,9 +692,37 @@ def test_foundation_accepts_close_execution_route_ready_no_post_input() -> None:
     assert result.close_execution_route.close_second_post_allowed is False
     assert result.close_execution_route.ledger_update_this_step is False
     assert result.close_execution_route.receipt_handoff_this_step is False
-    assert "close_execution_route_ready: true" in rendered
-    assert "close_executable_preview_ready: true" in rendered
+    assert "close_execution_route_ready: false" in rendered
+    assert "close_executable_preview_ready: false" in rendered
     assert "actual_close_post_allowed_now: false" in rendered
+
+
+def test_foundation_accepts_official_close_specific_route_ready_no_post_input() -> None:
+    result = build_level5_fast_mvp_foundation(
+        close_execution_route_input=CloseOrderExecutionRouteControlledInput(
+            runtime_position_status=PositionReadOnlyControlledStatus.ONE_POSITION_OPEN,
+            position_count_safe=1,
+            has_exactly_one_position=True,
+            has_multiple_positions=False,
+            close_route_ready=True,
+            close_planning_allowed=True,
+            fresh_entry_side_safe_label="BUY",
+            approved_close_post_primitive_kind=(
+                APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC
+            ),
+            approved_close_post_primitive_is_close_specific=True,
+            approved_close_post_primitive_is_generic_order=False,
+            generic_order_accepted_as_close_only_with_exact_one_position_guard=False,
+            official_settlement_route_confirmed=True,
+        ),
+    )
+
+    assert result.close_execution_route.close_execution_route_ready is True
+    assert result.close_execution_route.close_executable_preview_ready is True
+    assert result.close_execution_route.close_side_safe_label == "SELL"
+    assert result.close_execution_route.next_cycle_state == NEXT_CYCLE_STATE_READY
+    assert result.close_execution_route.actual_close_post_allowed_now is False
+    assert result.close_execution_route.actual_close_post_executed is False
 
 
 def test_cycle_blocks_second_entry_when_position_route_has_one_position() -> None:

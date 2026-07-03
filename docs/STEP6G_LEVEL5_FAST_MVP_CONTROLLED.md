@@ -148,9 +148,10 @@ Close execution route follow-up:
 - concrete close side is required before executable preview: `SELL` / `BUY`
 - `OPPOSITE_OF_SAFE_POSITION_SIDE` remains planning-only and blocks executable
   preview
-- guarded generic primitive readiness requires exact-one-position guard,
-  concrete opposite side, fixed `100`, and `MARKET`
-- ready route state is `CLOSE_EXECUTION_GATE_READY_NO_POST`
+- guarded generic opposite-order close is revoked for actual settlement
+- official settlement route missing blocks actual close execution
+- generic opposite-order route state is
+  `CLOSE_EXECUTION_ROUTE_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE_MISSING`
 - actual close POST remains prohibited in this implementation step
 
 Close actual executor compatibility follow-up:
@@ -158,12 +159,12 @@ Close actual executor compatibility follow-up:
 - Level 5 foundation carries `close_actual_executor_compatibility`
 - generic entry BUY guard remains intact
 - generic entry `SELL` remains blocked
-- close-specific `SELL` / `BUY` is accepted only from the guarded close
-  execution route context
-- exact-one-position guard, approved guarded generic close primitive, fixed
-  `100`, and `MARKET` are required
-- ready compatibility state is
-  `CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST`
+- guarded generic close compatibility is deprecated unsafe for actual
+  settlement
+- close-specific `SELL` / `BUY` can be accepted only from a future official GMO
+  settlement primitive
+- exact-one-position guard, fixed `100`, and `MARKET` remain required
+- current generic opposite-order compatibility state is blocked, not ready
 - `actual_close_post_allowed_now=false`
 - `actual_close_post_executed=false`
 - `transport_call_count=0`
@@ -340,6 +341,30 @@ missing, and exposure-blocked statuses all block close planning.
 Actual close POST is still prohibited. `CLOSE_READY` is a planning state only
 and requires a separate close execution gate before any later close execution
 can be considered.
+
+After the post-close manual risk path, the guarded generic opposite-order close
+primitive is revoked for actual settlement. Level 5 must treat:
+
+```text
+BUY position + SELL position
+```
+
+as multiple positions, not as flat. The safe state is:
+
+```text
+position_status=MULTIPLE_POSITIONS_BLOCKED
+position_count_safe=2
+level5_minimal_cycle_completed=false
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+official_settlement_route_confirmed=false
+actual_close_post_allowed_now=false
+```
+
+Until a GMO FX official settlement route is confirmed and implemented as a
+close-specific primitive, Level 5 close execution remains fail-closed. The
+bounded next step is operator manual flattening followed by read-only runtime
+flat reconciliation.
 
 The runtime position safe read check returned `NO_POSITION` with safe count `0`.
 For Level 5 this means entry planning may be considered only in a later

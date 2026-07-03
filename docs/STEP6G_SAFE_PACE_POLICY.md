@@ -215,10 +215,11 @@ Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-ROUTE-IMPLEMENTATION-NO-POST-C
 After `Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-ROUTE-IMPLEMENTATION-NO-POST-C`,
 the close execution route foundation is also no-POST. It concrete-derives
 `SELL` / `BUY` from safe side labels only, blocks
-`OPPOSITE_OF_SAFE_POSITION_SIDE` for executable preview, and makes guarded
-generic primitive readiness explicit. A ready route means
-`CLOSE_EXECUTION_GATE_READY_NO_POST`; it does not allow close POST in the same
-step.
+`OPPOSITE_OF_SAFE_POSITION_SIDE` for executable preview, and now blocks guarded
+generic opposite-order close as unsafe for actual settlement. Generic opposite
+orders are not close primitives. Until a GMO FX official settlement route is
+confirmed, the route remains
+`CLOSE_EXECUTION_ROUTE_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE_MISSING`.
 
 Recommended next paced step:
 
@@ -228,17 +229,39 @@ Step 6G-PC-OX-R-CLOSE-ORDER-ACTUAL-EXECUTOR-COMPATIBILITY-NO-POST-C
 
 After `Step 6G-PC-OX-R-CLOSE-ORDER-ACTUAL-EXECUTOR-COMPATIBILITY-NO-POST-C`,
 the close actual executor compatibility foundation is no-POST. It preserves
-the generic entry BUY guard, keeps generic entry `SELL` blocked, and accepts
-`SELL` / `BUY` only as a close-specific guarded context from the close execution
-route. A ready compatibility state means
-`CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST`; it does not allow close
-POST in the same step.
+the generic entry BUY guard and keeps generic entry `SELL` blocked. After the
+manual risk check, guarded generic close compatibility is treated as deprecated
+unsafe for actual settlement. Only a future official close-specific settlement
+primitive may reach `CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST`.
+
+The former compatible-executor execution retry path is no longer an approved
+next step for actual close POST.
+
+After the later post-close confirmation returned
+`MULTIPLE_POSITIONS_BLOCKED` / count `2`, the guarded generic opposite-order
+close assumption is revoked. GMO FX official materials are now authoritative:
+buy and sell positions can coexist and must not be netted by Codex route logic.
+
+Current safe pace state:
+
+```text
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+official_settlement_route_confirmed=false
+actual_close_post_allowed_now=false
+close_execution_blocked_reason=OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
+level5_minimal_cycle_completed=false
+```
 
 Recommended next paced step:
 
 ```text
-Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-COMPATIBLE-EXECUTOR
+Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C
 ```
+
+That step is read-only after operator manual flattening. It must not execute
+entry POST, close POST, retry, repost, second close, ledger update, receipt
+handoff, or raw/ID/value handling.
 
 After `Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C`, the runtime
 position read-only check returned safe status/count only:

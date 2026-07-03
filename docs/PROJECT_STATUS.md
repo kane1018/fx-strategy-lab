@@ -82,6 +82,28 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-MANUAL-POSITION-RISK-CHECK-GATE-C 完了 / multiple positions risk confirmed / generic close primitive revoked / CASE 1** —
+  直前 post-close confirmation はCASE 3で、safe status/countは
+  `position_status=MULTIPLE_POSITIONS_BLOCKED`、`position_count_safe=2`、
+  `has_multiple_positions=true`。今回のStepでは
+  `backend/app/live_verification/live_order_real_manual_position_risk_check_gate_controlled.py`
+  を追加し、manual risk gateをsafe status/count/booleanのみで実装した。
+  `level5_minimal_cycle_completed=false`、
+  `level5_full_auto_cycle_completed=false`。
+  GMO FX公式manual/rulesをauthoritative sourceとして扱い、買建玉と売建玉はcoexistし得るため
+  Codex route logicではnetしない。
+  `generic_opposite_order_as_close_forbidden=true`、
+  `generic_close_primitive_revoked=true`、
+  `official_settlement_route_confirmed=false`、
+  `actual_close_post_allowed_now=false`、
+  `close_execution_blocked_reason=OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED`。
+  actual entry POST、actual close POST、close retry/repost、second close、ledger update、
+  receipt handoff、raw/ID/value exposure、`.env` は扱っていない。
+  runbook:
+  [STEP6G_MANUAL_POSITION_RISK_CHECK_GATE.md](STEP6G_MANUAL_POSITION_RISK_CHECK_GATE.md)、
+  [STEP6G_GMO_FX_OFFICIAL_RULES_ALIGNMENT.md](STEP6G_GMO_FX_OFFICIAL_RULES_ALIGNMENT.md)。
+  次の推奨Stepは
+  **Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C**。
 - **Step 6G-PC-OX-R-POST-CLOSE-POSITION-CONFIRMATION-GATE-C 完了 / post-close runtime position confirmation / CASE 3** —
   直前 close execution gate with compatible executor はCASE 1で、safe summary上
   close POSTは1回のみ、`RESULT_ACCEPTED_SANITIZED`、retry/repost/second close=false、
@@ -111,16 +133,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   を追加し、close execution route foundation由来のsafe previewだけを
   close-specific executor compatibility previewへ変換する no-POST adapterを実装した。
   generic entry BUY guardは維持し、generic entry `SELL` はblockしたままにする。
-  close-specific contextでは exact-one-position guard、approved guarded generic close primitive、
-  concrete close side、fixed `100` units、`MARKET`、retry/repost/second close=falseを必須にして、
-  `close_actual_executor_compatibility_ready=true`、
-  `close_specific_executor_preview_ready=true`、
+  後続manual risk gateにより、approved guarded generic close primitive はactual settlement用として撤回済み。
+  現在は official GMO settlement route が確認されるまで
+  `close_actual_executor_compatibility_ready=false`、
   `actual_close_post_allowed_now=false`、
   `actual_close_post_executed=false`、
-  `transport_call_count=0` を確認できる。
-  Level 5 foundationは
-  `CLOSE_EXECUTION_GATE_READY_NO_POST -> CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST`
-  の no-POST connectionを持つが、`CLOSE_SENT` / `CLOSE_POST_EXECUTED` / ledger / receipt へは進まない。
+  `transport_call_count=0` としてfail-closedに扱う。
+  Level 5 foundationは `close_actual_executor_compatibility` を持つが、generic opposite orderでは
+  `CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST` に進めない。
   runbook:
   [STEP6G_CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_CONTROLLED.md](STEP6G_CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_CONTROLLED.md)。
   次の推奨Stepは
@@ -2535,16 +2555,18 @@ mismatch block executable preview. The route exposes only sanitized preview
 fields: `USD_JPY`, fixed `100`, `MARKET`, concrete `SELL/BUY`, primitive
 readiness booleans, and no-retry/no-repost/no-second-close flags.
 
-Guarded generic primitive readiness is explicit and remains no-POST:
-`approved_close_post_primitive_ready=true` is possible only with exact-one-
-position guard, concrete opposite side, fixed 100 units, `MARKET`, and
-`generic_order_accepted_as_close_only_with_exact_one_position_guard=true`.
-Invocation is deferred and `actual_close_post_allowed_now=false`.
+Guarded generic primitive readiness is now revoked for actual settlement.
+Generic opposite orders can create opposite-side positions and must not be
+treated as close. Until a GMO FX official settlement route is confirmed,
+`official_settlement_route_confirmed=false`,
+`generic_close_primitive_revoked=true`, and
+`actual_close_post_allowed_now=false`.
 
-Level 5 foundation now carries `close_execution_route`. The ready no-POST state
-is `CLOSE_EXECUTION_GATE_READY_NO_POST`; this step does not reach `CLOSE_SENT`,
-`CLOSE_POST_EXECUTED`, post-close confirmation, ledger, receipt, or Level 5
-cycle completion. Details:
+Level 5 foundation now carries `close_execution_route`, but generic opposite
+orders block with
+`CLOSE_EXECUTION_ROUTE_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE_MISSING`. This path
+does not reach `CLOSE_SENT`, `CLOSE_POST_EXECUTED`, post-close confirmation,
+ledger, receipt, or Level 5 cycle completion. Details:
 [STEP6G_CLOSE_ORDER_EXECUTION_ROUTE_CONTROLLED.md](STEP6G_CLOSE_ORDER_EXECUTION_ROUTE_CONTROLLED.md).
 
 ## Step 6G Position Runtime Safe Read Check
@@ -2575,3 +2597,37 @@ the Level 5 signal/entry cycle gate. Actual entry POST, actual close POST,
 retry/repost, second POST, ledger update, receipt handoff, raw responses,
 broker/API responses, IDs, credential values, signature values, header values,
 and `.env` access remain prohibited.
+
+## Step 6G Manual Position Risk Check Gate
+
+Step 6G-PC-OX-R-MANUAL-POSITION-RISK-CHECK-GATE-C records the post-close
+multiple-position risk state with safe status/count only:
+
+```text
+position_status=MULTIPLE_POSITIONS_BLOCKED
+position_count_safe=2
+has_multiple_positions=true
+level5_minimal_cycle_completed=false
+level5_full_auto_cycle_completed=false
+```
+
+The generic opposite-order close assumption is revoked:
+
+```text
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+official_settlement_route_confirmed=false
+actual_close_post_allowed_now=false
+close_execution_blocked_reason=OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
+```
+
+GMO FX official manual/rule URLs are recorded as authoritative references.
+Buy and sell positions can coexist and must not be treated as netted by Codex
+route logic. Future actual close POST remains forbidden until an official
+settlement route is confirmed and implemented as a close-specific primitive.
+
+Recommended next step:
+
+```text
+Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C
+```

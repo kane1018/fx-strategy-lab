@@ -10,8 +10,9 @@ from app.live_verification.live_order_real_close_order_execution_route_controlle
     APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC,
     APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC,
     APPROVED_CLOSE_PRIMITIVE_KIND_NOT_APPROVED,
-    NEXT_CYCLE_STATE_READY,
+    NEXT_CYCLE_STATE_OFFICIAL_SETTLEMENT_ROUTE_MISSING,
     NEXT_CYCLE_STATE_SIDE_UNRESOLVED,
+    OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED,
     CloseOrderExecutionRouteControlledInput,
     CloseOrderExecutionRouteControlledStatus,
     build_close_order_execution_route_controlled,
@@ -45,6 +46,29 @@ def _ready_input(**overrides: object) -> CloseOrderExecutionRouteControlledInput
     return CloseOrderExecutionRouteControlledInput(**values)
 
 
+def _official_close_specific_input(
+    **overrides: object,
+) -> CloseOrderExecutionRouteControlledInput:
+    values = {
+        "runtime_position_status": PositionReadOnlyControlledStatus.ONE_POSITION_OPEN,
+        "position_count_safe": 1,
+        "has_exactly_one_position": True,
+        "has_multiple_positions": False,
+        "close_route_ready": True,
+        "close_planning_allowed": True,
+        "fresh_entry_side_safe_label": "BUY",
+        "approved_close_post_primitive_kind": (
+            APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC
+        ),
+        "approved_close_post_primitive_is_close_specific": True,
+        "approved_close_post_primitive_is_generic_order": False,
+        "generic_order_accepted_as_close_only_with_exact_one_position_guard": False,
+        "official_settlement_route_confirmed": True,
+    }
+    values.update(overrides)
+    return CloseOrderExecutionRouteControlledInput(**values)
+
+
 @pytest.mark.parametrize(
     ("entry_side", "close_side"),
     (
@@ -60,9 +84,12 @@ def test_fresh_entry_side_derives_concrete_close_side(
         _ready_input(fresh_entry_side_safe_label=entry_side),
     )
 
-    assert result.status is CloseOrderExecutionRouteControlledStatus.READY_NO_POST
-    assert result.close_execution_route_ready is True
-    assert result.close_executable_preview_ready is True
+    assert (
+        result.status
+        is CloseOrderExecutionRouteControlledStatus.BLOCKED_OFFICIAL_SETTLEMENT_ROUTE
+    )
+    assert result.close_execution_route_ready is False
+    assert result.close_executable_preview_ready is False
     assert result.side_derivation.close_side_derivation_source == (
         "fresh_entry_side_safe_label"
     )
@@ -71,6 +98,11 @@ def test_fresh_entry_side_derives_concrete_close_side(
     assert result.side_derivation.side_concrete is True
     assert result.side_derivation.opposite_placeholder_accepted is False
     assert result.side_derivation.codex_inferred_side is False
+    assert result.generic_close_primitive_revoked is True
+    assert result.official_settlement_route_confirmed is False
+    assert result.close_execution_blocked_reason == OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
+    assert "generic_close_primitive_revoked" in result.blocked_reasons
+    assert "official_settlement_route_not_confirmed" in result.blocked_reasons
 
 
 @pytest.mark.parametrize(
@@ -95,9 +127,11 @@ def test_operator_signal_and_position_side_derive_close_side(
         ),
     )
 
-    assert result.close_execution_route_ready is True
+    assert result.close_execution_route_ready is False
     assert result.close_side_safe_label == close_side
     assert result.executable_preview.close_side_safe_label == close_side
+    assert result.next_cycle_state == NEXT_CYCLE_STATE_OFFICIAL_SETTLEMENT_ROUTE_MISSING
+    assert result.close_execution_blocked_reason == OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
 
 
 def test_consistent_safe_inputs_are_accepted_without_codex_inference() -> None:
@@ -109,11 +143,13 @@ def test_consistent_safe_inputs_are_accepted_without_codex_inference() -> None:
         ),
     )
 
-    assert result.close_execution_route_ready is True
+    assert result.close_execution_route_ready is False
     assert result.close_side_safe_label == "SELL"
     assert result.side_derivation.close_side_derivation_source == "MULTIPLE_SAFE_INPUTS"
     assert result.side_derivation.input_side_safe_label == "CONSISTENT_SAFE_INPUTS"
     assert result.side_derivation.codex_inferred_side is False
+    assert result.generic_opposite_order_as_close_forbidden is True
+    assert result.generic_close_primitive_revoked is True
 
 
 def test_opposite_placeholder_is_blocked_for_executable_preview() -> None:
@@ -205,7 +241,11 @@ def test_close_executable_preview_keeps_fixed_units_market_and_no_post_flags() -
     result = build_close_order_execution_route_controlled(_ready_input())
     preview = result.executable_preview
 
-    assert result.next_cycle_state == NEXT_CYCLE_STATE_READY
+    assert result.next_cycle_state == NEXT_CYCLE_STATE_OFFICIAL_SETTLEMENT_ROUTE_MISSING
+    assert result.close_execution_route_ready is False
+    assert result.close_executable_preview_ready is False
+    assert preview.preview_ready is False
+    assert result.close_execution_blocked_reason == OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
     assert result.close_units_fixed == 100
     assert result.close_order_type_safe_label == CLOSE_ORDER_TYPE_SAFE_LABEL
     assert preview.close_units_fixed == 100
@@ -305,17 +345,23 @@ def test_generic_order_primitive_requires_explicit_exact_one_position_guard() ->
     assert "approved_close_post_primitive_kind_not_guarded_generic" in (
         wrong_kind.blocked_reasons
     )
-    assert guarded.approved_close_post_primitive_ready is True
+    assert guarded.approved_close_post_primitive_ready is False
     assert guarded.approved_close_post_primitive_is_generic_order is True
     assert (
         guarded.generic_order_accepted_as_close_only_with_exact_one_position_guard
         is True
     )
+    assert guarded.generic_opposite_order_as_close_forbidden is True
+    assert guarded.generic_close_primitive_revoked is True
+    assert "generic_opposite_order_as_close_forbidden" in guarded.blocked_reasons
+    assert "generic_close_primitive_revoked" in guarded.blocked_reasons
+    assert "guarded_generic_close_primitive_deprecated_unsafe" in guarded.blocked_reasons
+    assert "official_settlement_route_not_confirmed" in guarded.blocked_reasons
 
 
 def test_close_specific_primitive_can_be_declared_ready_without_invocation() -> None:
     result = build_close_order_execution_route_controlled(
-        _ready_input(
+        _official_close_specific_input(
             approved_close_post_primitive_kind=APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC,
             approved_close_post_primitive_is_close_specific=True,
             approved_close_post_primitive_is_generic_order=False,
@@ -328,6 +374,7 @@ def test_close_specific_primitive_can_be_declared_ready_without_invocation() -> 
     assert result.approved_close_post_primitive_is_close_specific is True
     assert result.close_primitive_invocation_deferred is True
     assert result.actual_close_post_allowed_now is False
+    assert result.close_execution_route_ready_for_actual_post is False
 
 
 def test_rendered_preview_and_asdict_exclude_unsafe_actual_values() -> None:

@@ -14,7 +14,9 @@ from app.live_verification.live_order_real_close_actual_executor_compatibility_c
     render_close_actual_executor_compatibility_markdown,
 )
 from app.live_verification.live_order_real_close_order_execution_route_controlled import (
+    APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC,
     APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC,
+    OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED,
     CloseOrderExecutionRouteControlledInput,
     build_close_order_execution_route_controlled,
 )
@@ -68,10 +70,12 @@ def _ready_route(entry_side: str = "BUY"):
             close_planning_allowed=True,
             fresh_entry_side_safe_label=entry_side,
             approved_close_post_primitive_kind=(
-                APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC
+                APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC
             ),
-            approved_close_post_primitive_is_generic_order=True,
-            generic_order_accepted_as_close_only_with_exact_one_position_guard=True,
+            approved_close_post_primitive_is_close_specific=True,
+            approved_close_post_primitive_is_generic_order=False,
+            generic_order_accepted_as_close_only_with_exact_one_position_guard=False,
+            official_settlement_route_confirmed=True,
         ),
     )
 
@@ -84,10 +88,36 @@ def _ready_input(**overrides: object) -> CloseActualExecutorCompatibilityControl
         "input_close_executable_preview_ready": True,
         "input_approved_close_post_primitive_ready": True,
         "input_approved_close_post_primitive_kind": (
+            APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC
+        ),
+        "input_approved_close_post_primitive_is_generic_order": False,
+        "input_generic_order_accepted_as_close_only_with_exact_one_position_guard": False,
+        "official_settlement_route_confirmed": True,
+        "runtime_position_status": PositionReadOnlyControlledStatus.ONE_POSITION_OPEN,
+        "position_count_safe": 1,
+        "has_exactly_one_position": True,
+        "has_multiple_positions": False,
+        "close_side_safe_label": "SELL",
+    }
+    values.update(overrides)
+    return CloseActualExecutorCompatibilityControlledInput(**values)
+
+
+def _generic_revoked_input(
+    **overrides: object,
+) -> CloseActualExecutorCompatibilityControlledInput:
+    values = {
+        "close_specific_context": True,
+        "generic_entry_context": False,
+        "input_close_execution_route_ready": True,
+        "input_close_executable_preview_ready": True,
+        "input_approved_close_post_primitive_ready": False,
+        "input_approved_close_post_primitive_kind": (
             APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC
         ),
         "input_approved_close_post_primitive_is_generic_order": True,
         "input_generic_order_accepted_as_close_only_with_exact_one_position_guard": True,
+        "official_settlement_route_confirmed": False,
         "runtime_position_status": PositionReadOnlyControlledStatus.ONE_POSITION_OPEN,
         "position_count_safe": 1,
         "has_exactly_one_position": True,
@@ -152,7 +182,7 @@ def test_generic_entry_buy_guard_is_intact_and_generic_sell_remains_blocked() ->
         replace(LiveOrderRealExecutableOrderPreviewInput(), side="SELL"),
     )
     close_preview = build_close_actual_executor_compatibility_controlled(
-        _ready_input(close_side_safe_label="SELL"),
+        _generic_revoked_input(close_side_safe_label="SELL"),
     )
 
     assert buy_preview.sanitized_order_preview_available is True
@@ -160,11 +190,14 @@ def test_generic_entry_buy_guard_is_intact_and_generic_sell_remains_blocked() ->
     assert sell_preview.sanitized_order_preview_available is False
     assert sell_preview.order_ambiguity is True
     assert "side_not_repo_defined_buy" in sell_preview.blocked_reasons
-    assert close_preview.close_specific_sell_accepted is True
-    assert close_preview.one_shot_executor_preview.sanitized_order_preview_available is True
-    assert close_preview.one_shot_executor_preview.side == "SELL"
+    assert close_preview.close_specific_sell_accepted is False
+    assert close_preview.one_shot_executor_preview.sanitized_order_preview_available is False
+    assert close_preview.one_shot_executor_preview.side == "UNSUPPORTED_REDACTED"
     assert close_preview.generic_entry_buy_guard_intact is True
     assert close_preview.generic_entry_sell_blocked is True
+    assert close_preview.generic_close_primitive_revoked is True
+    assert close_preview.close_execution_blocked_reason == OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
+    assert "generic_close_primitive_revoked" in close_preview.blocked_reasons
 
 
 @pytest.mark.parametrize(
@@ -240,12 +273,8 @@ def test_close_specific_preview_fails_closed_on_guard_or_contract_breaks(
             "has_exactly_one_position_required",
         ),
         (
-            {
-                "input_generic_order_accepted_as_close_only_with_exact_one_position_guard": (
-                    False
-                ),
-            },
-            "generic_order_close_exact_one_position_guard_required",
+            {"official_settlement_route_confirmed": False},
+            "official_settlement_route_not_confirmed",
         ),
     ),
 )
@@ -261,6 +290,30 @@ def test_exact_one_position_and_approved_close_guard_are_required(
     assert result.exact_one_position_guard_required is True
     assert result.approved_primitive_required is True
     assert reason in result.blocked_reasons
+
+
+def test_guarded_generic_close_primitive_is_revoked_for_actual_settlement() -> None:
+    result = build_close_actual_executor_compatibility_controlled(
+        _generic_revoked_input(),
+    )
+
+    assert result.status in {
+        Status.DEPRECATED_UNSAFE_GENERIC_CLOSE,
+        Status.BLOCKED_OFFICIAL_SETTLEMENT_ROUTE,
+    }
+    assert result.close_actual_executor_compatibility_ready is False
+    assert result.close_specific_executor_preview_ready is False
+    assert result.close_specific_sell_accepted is False
+    assert result.generic_opposite_order_as_close_forbidden is True
+    assert result.generic_close_primitive_revoked is True
+    assert result.official_settlement_route_confirmed is False
+    assert result.close_execution_blocked_reason == OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
+    assert result.actual_close_post_allowed_now is False
+    assert result.actual_close_post_executed is False
+    assert result.transport_call_count == 0
+    assert "generic_opposite_order_as_close_forbidden" in result.blocked_reasons
+    assert "generic_close_primitive_revoked" in result.blocked_reasons
+    assert "official_settlement_route_not_confirmed" in result.blocked_reasons
 
 
 @pytest.mark.parametrize(
@@ -326,10 +379,12 @@ def test_level5_connection_reaches_close_actual_executor_ready_only_no_post() ->
             close_planning_allowed=True,
             fresh_entry_side_safe_label="BUY",
             approved_close_post_primitive_kind=(
-                APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC
+                APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC
             ),
-            approved_close_post_primitive_is_generic_order=True,
-            generic_order_accepted_as_close_only_with_exact_one_position_guard=True,
+            approved_close_post_primitive_is_close_specific=True,
+            approved_close_post_primitive_is_generic_order=False,
+            generic_order_accepted_as_close_only_with_exact_one_position_guard=False,
+            official_settlement_route_confirmed=True,
         ),
     )
     rendered = render_level5_fast_mvp_foundation_markdown(result)

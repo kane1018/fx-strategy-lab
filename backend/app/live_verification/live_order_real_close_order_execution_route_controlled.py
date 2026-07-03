@@ -40,9 +40,13 @@ APPROVED_CLOSE_PRIMITIVE_KIND_NOT_APPROVED = "NOT_APPROVED"
 APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC = (
     "GUARDED_GENERIC_ORDER_CLOSE_PRIMITIVE_NO_POST"
 )
+APPROVED_CLOSE_PRIMITIVE_KIND_DEPRECATED_UNSAFE_GENERIC = (
+    "DEPRECATED_UNSAFE_GENERIC_CLOSE_PRIMITIVE_NO_POST"
+)
 APPROVED_CLOSE_PRIMITIVE_KIND_CLOSE_SPECIFIC = (
     "CLOSE_SPECIFIC_APPROVED_PRIMITIVE_NO_POST"
 )
+OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED = "OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED"
 PREVIOUS_CYCLE_STATE_FRESH_HANDOFF = "FRESH_POSITION_OPEN_SAFE_HANDOFF_READY"
 NEXT_CYCLE_STATE_READY = "CLOSE_EXECUTION_GATE_READY_NO_POST"
 NEXT_CYCLE_STATE_SIDE_UNRESOLVED = (
@@ -51,6 +55,9 @@ NEXT_CYCLE_STATE_SIDE_UNRESOLVED = (
 NEXT_CYCLE_STATE_SIDE_MISMATCH = "CLOSE_EXECUTION_ROUTE_BLOCKED_SIDE_MISMATCH"
 NEXT_CYCLE_STATE_PRIMITIVE_MISSING = (
     "CLOSE_EXECUTION_ROUTE_BLOCKED_PRIMITIVE_MISSING"
+)
+NEXT_CYCLE_STATE_OFFICIAL_SETTLEMENT_ROUTE_MISSING = (
+    "CLOSE_EXECUTION_ROUTE_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE_MISSING"
 )
 NEXT_CYCLE_STATE_POSITION_BLOCKED = "CLOSE_EXECUTION_ROUTE_BLOCKED_POSITION"
 NEXT_CYCLE_STATE_UNSAFE_BLOCKED = "CLOSE_EXECUTION_ROUTE_BLOCKED_UNSAFE"
@@ -88,6 +95,9 @@ class CloseOrderExecutionRouteControlledStatus(str, Enum):
     BLOCKED_POSITION = "CLOSE_EXECUTION_ROUTE_BLOCKED_POSITION"
     BLOCKED_PRIMITIVE_MISSING = (
         "CLOSE_EXECUTION_ROUTE_BLOCKED_PRIMITIVE_MISSING"
+    )
+    BLOCKED_OFFICIAL_SETTLEMENT_ROUTE = (
+        "CLOSE_EXECUTION_ROUTE_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE"
     )
     BLOCKED_UNSAFE = "CLOSE_EXECUTION_ROUTE_BLOCKED_UNSAFE"
 
@@ -179,6 +189,12 @@ class CloseOrderExecutionRouteControlledInput:
     approved_close_post_primitive_is_close_specific: bool = False
     approved_close_post_primitive_is_generic_order: bool = False
     generic_order_accepted_as_close_only_with_exact_one_position_guard: bool = False
+    official_gmo_rules_alignment_checked: bool = True
+    official_manual_url_recorded: bool = True
+    official_trading_rules_url_recorded: bool = True
+    generic_opposite_order_as_close_forbidden: bool = True
+    generic_close_primitive_revoked: bool = True
+    official_settlement_route_confirmed: bool = False
     close_primitive_invocation_deferred: bool = True
     actual_close_post_allowed_now: bool = False
     one_close_post_max: bool = True
@@ -236,6 +252,14 @@ class CloseOrderExecutionRouteControlledResult:
     approved_close_post_primitive_is_close_specific: bool
     approved_close_post_primitive_is_generic_order: bool
     generic_order_accepted_as_close_only_with_exact_one_position_guard: bool
+    official_gmo_rules_alignment_checked: bool
+    official_manual_url_recorded: bool
+    official_trading_rules_url_recorded: bool
+    generic_opposite_order_as_close_forbidden: bool
+    generic_close_primitive_revoked: bool
+    official_settlement_route_confirmed: bool
+    close_execution_route_ready_for_actual_post: bool
+    close_execution_blocked_reason: str
     close_primitive_invocation_deferred: bool
     actual_close_post_allowed_now: bool
     previous_cycle_state: str
@@ -292,6 +316,7 @@ class CloseOrderExecutionRouteControlledResult:
         for field_name in (
             "safe_close_execution_route_label",
             "approved_close_post_primitive_kind",
+            "close_execution_blocked_reason",
             "previous_cycle_state",
             "next_cycle_state",
             "close_symbol_safe_label",
@@ -321,6 +346,7 @@ def build_close_order_execution_route_controlled(
     position_reasons = _position_blocked_reasons(snapshot)
     primitive_ready = _approved_close_primitive_ready(snapshot, side_summary)
     primitive_reasons = _primitive_blocked_reasons(snapshot, side_summary)
+    official_reasons = _official_settlement_blocked_reasons(snapshot)
     unsafe_reasons = _unsafe_blocked_reasons(snapshot)
     contract_reasons = _contract_blocked_reasons(snapshot)
     reasons = tuple(
@@ -328,12 +354,19 @@ def build_close_order_execution_route_controlled(
             position_reasons
             + side_summary.blocked_reasons
             + primitive_reasons
+            + official_reasons
             + unsafe_reasons
             + contract_reasons,
         ),
     )
     ready = not reasons
-    next_state = _next_cycle_state(position_reasons, side_summary, primitive_ready, unsafe_reasons)
+    next_state = _next_cycle_state(
+        position_reasons,
+        side_summary,
+        primitive_ready,
+        unsafe_reasons,
+        official_reasons,
+    )
     status = _status_from_state(next_state, ready)
     preview = _sanitized_preview(snapshot, side_summary, primitive_ready, ready)
     return CloseOrderExecutionRouteControlledResult(
@@ -354,6 +387,20 @@ def build_close_order_execution_route_controlled(
         generic_order_accepted_as_close_only_with_exact_one_position_guard=(
             snapshot.generic_order_accepted_as_close_only_with_exact_one_position_guard
         ),
+        official_gmo_rules_alignment_checked=(
+            snapshot.official_gmo_rules_alignment_checked
+        ),
+        official_manual_url_recorded=snapshot.official_manual_url_recorded,
+        official_trading_rules_url_recorded=(
+            snapshot.official_trading_rules_url_recorded
+        ),
+        generic_opposite_order_as_close_forbidden=(
+            snapshot.generic_opposite_order_as_close_forbidden
+        ),
+        generic_close_primitive_revoked=snapshot.generic_close_primitive_revoked,
+        official_settlement_route_confirmed=snapshot.official_settlement_route_confirmed,
+        close_execution_route_ready_for_actual_post=False,
+        close_execution_blocked_reason=_close_execution_blocked_reason(reasons),
         close_primitive_invocation_deferred=True,
         actual_close_post_allowed_now=False,
         previous_cycle_state=snapshot.previous_cycle_state,
@@ -488,6 +535,27 @@ def render_close_order_executable_preview_markdown(
                 "approved_close_post_primitive_kind: "
                 f"{result.approved_close_post_primitive_kind}"
             ),
+            (
+                "official_gmo_rules_alignment_checked: "
+                f"{_bool_text(result.official_gmo_rules_alignment_checked)}"
+            ),
+            (
+                "generic_opposite_order_as_close_forbidden: "
+                f"{_bool_text(result.generic_opposite_order_as_close_forbidden)}"
+            ),
+            (
+                "generic_close_primitive_revoked: "
+                f"{_bool_text(result.generic_close_primitive_revoked)}"
+            ),
+            (
+                "official_settlement_route_confirmed: "
+                f"{_bool_text(result.official_settlement_route_confirmed)}"
+            ),
+            (
+                "close_execution_route_ready_for_actual_post: "
+                f"{_bool_text(result.close_execution_route_ready_for_actual_post)}"
+            ),
+            f"close_execution_blocked_reason: {result.close_execution_blocked_reason}",
             f"one_close_post_max: {_bool_text(result.one_close_post_max)}",
             f"close_retry_allowed: {_bool_text(result.close_retry_allowed)}",
             f"close_repost_allowed: {_bool_text(result.close_repost_allowed)}",
@@ -653,24 +721,17 @@ def _approved_close_primitive_ready(
 ) -> bool:
     if not side_summary.side_concrete:
         return False
+    if not snapshot.official_settlement_route_confirmed:
+        return False
     if snapshot.approved_close_post_primitive_is_close_specific:
         return snapshot.approved_close_post_primitive_kind not in {
             APPROVED_CLOSE_PRIMITIVE_KIND_NOT_APPROVED,
             SIDE_NOT_PROVIDED,
+            APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC,
+            APPROVED_CLOSE_PRIMITIVE_KIND_DEPRECATED_UNSAFE_GENERIC,
         }
     if snapshot.approved_close_post_primitive_is_generic_order:
-        return (
-            snapshot.generic_order_accepted_as_close_only_with_exact_one_position_guard
-            and snapshot.runtime_position_status
-            is PositionReadOnlyControlledStatus.ONE_POSITION_OPEN
-            and snapshot.position_count_safe == 1
-            and snapshot.has_exactly_one_position
-            and not snapshot.has_multiple_positions
-            and snapshot.close_units_fixed == SUPPORTED_UNITS
-            and snapshot.close_order_type_safe_label == CLOSE_ORDER_TYPE_SAFE_LABEL
-            and snapshot.approved_close_post_primitive_kind
-            == APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC
-        )
+        return False
     return False
 
 
@@ -683,16 +744,52 @@ def _primitive_blocked_reasons(
     if _approved_close_primitive_ready(snapshot, side_summary):
         return ()
     if snapshot.approved_close_post_primitive_is_generic_order:
+        reasons = [
+            "generic_opposite_order_as_close_forbidden",
+            "generic_close_primitive_revoked",
+        ]
         if not snapshot.generic_order_accepted_as_close_only_with_exact_one_position_guard:
-            return ("generic_order_close_guard_missing",)
+            reasons.append("generic_order_close_guard_missing")
         if (
             snapshot.approved_close_post_primitive_kind
-            != APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC
+            == APPROVED_CLOSE_PRIMITIVE_KIND_GUARDED_GENERIC
         ):
-            return ("approved_close_post_primitive_kind_not_guarded_generic",)
+            reasons.append("guarded_generic_close_primitive_deprecated_unsafe")
+        else:
+            reasons.append("approved_close_post_primitive_kind_not_guarded_generic")
+        return tuple(reasons)
     if snapshot.approved_close_post_primitive_is_close_specific:
         return ("approved_close_post_primitive_kind_missing",)
     return ("approved_close_post_primitive_missing",)
+
+
+def _official_settlement_blocked_reasons(
+    snapshot: CloseOrderExecutionRouteControlledInput,
+) -> tuple[str, ...]:
+    reasons: list[str] = []
+    if not snapshot.official_manual_url_recorded:
+        reasons.append("official_manual_url_not_recorded")
+    if not snapshot.official_trading_rules_url_recorded:
+        reasons.append("official_trading_rules_url_not_recorded")
+    if not snapshot.official_gmo_rules_alignment_checked:
+        reasons.append("official_gmo_rules_alignment_not_checked")
+    if not snapshot.generic_opposite_order_as_close_forbidden:
+        reasons.append("generic_opposite_order_as_close_must_be_forbidden")
+    if not snapshot.generic_close_primitive_revoked:
+        reasons.append("generic_close_primitive_must_be_revoked")
+    if not snapshot.official_settlement_route_confirmed:
+        reasons.append("official_settlement_route_not_confirmed")
+    return tuple(reasons)
+
+
+def _close_execution_blocked_reason(reasons: tuple[str, ...]) -> str:
+    if "official_settlement_route_not_confirmed" in reasons:
+        return OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
+    if "generic_close_primitive_revoked" in reasons:
+        return "GENERIC_CLOSE_PRIMITIVE_REVOKED"
+    if reasons:
+        return "CLOSE_EXECUTION_ROUTE_BLOCKED"
+    return "NONE_NO_ACTUAL_POST_IN_THIS_STEP"
 
 
 def _unsafe_blocked_reasons(
@@ -766,6 +863,7 @@ def _next_cycle_state(
     side_summary: CloseSideDerivationSummary,
     primitive_ready: bool,
     unsafe_reasons: tuple[str, ...],
+    official_reasons: tuple[str, ...],
 ) -> str:
     if unsafe_reasons:
         return NEXT_CYCLE_STATE_UNSAFE_BLOCKED
@@ -775,6 +873,8 @@ def _next_cycle_state(
         return NEXT_CYCLE_STATE_SIDE_MISMATCH
     if not side_summary.side_concrete:
         return NEXT_CYCLE_STATE_SIDE_UNRESOLVED
+    if official_reasons:
+        return NEXT_CYCLE_STATE_OFFICIAL_SETTLEMENT_ROUTE_MISSING
     if not primitive_ready:
         return NEXT_CYCLE_STATE_PRIMITIVE_MISSING
     return NEXT_CYCLE_STATE_READY
@@ -792,6 +892,8 @@ def _status_from_state(
         return CloseOrderExecutionRouteControlledStatus.BLOCKED_SIDE_UNRESOLVED
     if next_state == NEXT_CYCLE_STATE_PRIMITIVE_MISSING:
         return CloseOrderExecutionRouteControlledStatus.BLOCKED_PRIMITIVE_MISSING
+    if next_state == NEXT_CYCLE_STATE_OFFICIAL_SETTLEMENT_ROUTE_MISSING:
+        return CloseOrderExecutionRouteControlledStatus.BLOCKED_OFFICIAL_SETTLEMENT_ROUTE
     if next_state == NEXT_CYCLE_STATE_UNSAFE_BLOCKED:
         return CloseOrderExecutionRouteControlledStatus.BLOCKED_UNSAFE
     return CloseOrderExecutionRouteControlledStatus.BLOCKED_POSITION
@@ -890,6 +992,12 @@ _ROUTE_INPUT_BOOL_FIELDS = (
     "approved_close_post_primitive_is_close_specific",
     "approved_close_post_primitive_is_generic_order",
     "generic_order_accepted_as_close_only_with_exact_one_position_guard",
+    "official_gmo_rules_alignment_checked",
+    "official_manual_url_recorded",
+    "official_trading_rules_url_recorded",
+    "generic_opposite_order_as_close_forbidden",
+    "generic_close_primitive_revoked",
+    "official_settlement_route_confirmed",
     "close_primitive_invocation_deferred",
     "actual_close_post_allowed_now",
     "one_close_post_max",
@@ -922,6 +1030,13 @@ _ROUTE_RESULT_BOOL_FIELDS = (
     "approved_close_post_primitive_is_close_specific",
     "approved_close_post_primitive_is_generic_order",
     "generic_order_accepted_as_close_only_with_exact_one_position_guard",
+    "official_gmo_rules_alignment_checked",
+    "official_manual_url_recorded",
+    "official_trading_rules_url_recorded",
+    "generic_opposite_order_as_close_forbidden",
+    "generic_close_primitive_revoked",
+    "official_settlement_route_confirmed",
+    "close_execution_route_ready_for_actual_post",
     "close_primitive_invocation_deferred",
     "actual_close_post_allowed_now",
     "close_execution_gate_may_be_planned",

@@ -48,23 +48,28 @@ close_primitive_invocation_deferred=true
 actual_close_post_allowed_now=false
 ```
 
-`approved_close_post_primitive_ready=true` is allowed only when a close-specific
-primitive is declared, or when a guarded generic primitive is explicitly marked
-as acceptable for close with all of the following safe guards:
+After the manual position risk check, `GUARDED_GENERIC_ORDER_CLOSE_PRIMITIVE`
+is no longer approved as an actual close settlement primitive. A generic
+opposite `SELL` / `BUY` order can create an opposite-side position instead of
+settling the existing position. It must not be treated as close execution.
+
+The route now requires a GMO FX official settlement route before actual close
+execution can be considered:
 
 ```text
-runtime_position_status=ONE_POSITION_OPEN
-position_count_safe=1
-has_exactly_one_position=true
-has_multiple_positions=false
-close_side_safe_label=SELL/BUY
-close_units_fixed=100
-close_order_type_safe_label=MARKET
-generic_order_accepted_as_close_only_with_exact_one_position_guard=true
+official_gmo_rules_alignment_checked=true
+official_manual_url_recorded=true
+official_trading_rules_url_recorded=true
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+official_settlement_route_confirmed=false
+actual_close_post_allowed_now=false
+close_execution_blocked_reason=OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
 ```
 
-Without those guards the route remains
-`CLOSE_EXECUTION_ROUTE_BLOCKED_PRIMITIVE_MISSING`.
+Until the official settlement route is confirmed and represented as a
+close-specific primitive, the route remains fail-closed with
+`CLOSE_EXECUTION_ROUTE_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE_MISSING`.
 
 ## Sanitized Executable Preview
 
@@ -79,6 +84,11 @@ close_side_safe_label=SELL/BUY
 close_units_fixed=100
 close_order_type_safe_label=MARKET
 approved_close_post_primitive_ready=true/false
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+official_settlement_route_confirmed=false
+close_execution_route_ready_for_actual_post=false
+close_execution_blocked_reason=OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
 one_close_post_max=true
 close_retry_allowed=false
 close_repost_allowed=false
@@ -104,10 +114,9 @@ The Level 5 foundation carries the close execution route result:
 
 ```text
 FRESH_POSITION_OPEN_SAFE_HANDOFF_READY
-  + close_execution_route_ready=true
-  + close_side_safe_label=SELL/BUY
-  + approved_close_post_primitive_ready=true
-  -> CLOSE_EXECUTION_GATE_READY_NO_POST
+  + guarded generic opposite order only
+  + official_settlement_route_confirmed=false
+  -> CLOSE_EXECUTION_ROUTE_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE_MISSING
 
 FRESH_POSITION_OPEN_SAFE_HANDOFF_READY
   + close side unresolved
@@ -116,6 +125,11 @@ FRESH_POSITION_OPEN_SAFE_HANDOFF_READY
 FRESH_POSITION_OPEN_SAFE_HANDOFF_READY
   + primitive missing
   -> CLOSE_EXECUTION_ROUTE_BLOCKED_PRIMITIVE_MISSING
+
+FRESH_POSITION_OPEN_SAFE_HANDOFF_READY
+  + official close-specific settlement primitive confirmed
+  + exact-one-position guard
+  -> CLOSE_EXECUTION_GATE_READY_NO_POST
 ```
 
 The follow-up compatibility foundation keeps the route no-POST and connects
@@ -129,20 +143,21 @@ CLOSE_EXECUTION_GATE_READY_NO_POST
 ```
 
 The compatibility step preserves the generic entry BUY guard. Generic entry
-`SELL` remains blocked; `SELL` is accepted only as a close-specific guarded
-side from this close execution route.
+`SELL` remains blocked. Generic opposite orders are not settlement primitives;
+`SELL` / `BUY` may be accepted for actual close only after a close-specific GMO
+settlement primitive is confirmed.
 
 ## Next Step
 
-Recommended next step after the compatibility foundation:
+Recommended next safe step after a generic opposite-order close risk:
 
 ```text
-Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-COMPATIBLE-EXECUTOR
+Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C
 ```
 
-That next step must still perform a current runtime position read, operator
-close readiness, sanitized close preview, and a new close-specific confirmation
-before any actual close POST can be considered.
+That next step is read-only reconciliation after operator manual flattening.
+Any future actual close POST remains forbidden until the official GMO
+settlement route is confirmed and implemented as a close-specific primitive.
 
 This step does not reach `CLOSE_SENT`, `CLOSE_POST_EXECUTED`,
 `POST_CLOSE_POSITION_CONFIRMATION`, `LEDGER_UPDATED`, `RECEIPT_HANDOFF`, or
@@ -158,15 +173,15 @@ python3 -m pytest -q app/tests/test_live_verification_live_order_real_step6g_lev
 python3 -m pytest -q app/tests/test_live_verification_no_order_imports.py
 ```
 
-## Next Step
+## Official Alignment
 
-If the current runtime position is still `ONE_POSITION_OPEN` / count `1`, the
-next bounded step is:
+GMO FX official materials are recorded as the authoritative basis:
 
 ```text
-Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-EXECUTABLE-ROUTE
+https://coin.z.com/corp_imgs/manual/kawasefx-trading-manual.pdf
+https://coin.z.com/jp/corp/product/info/fx/#rule
 ```
 
-That later gate must perform a fresh runtime position read, operator readiness,
-sanitized close preview, and a new close-specific confirmation before any
-actual close POST can be considered.
+The implementation assumes hedged buy/sell positions can coexist and are not
+netted for safe route judgement. Actual close settlement requires a dedicated
+official settlement route, not a generic opposite order.

@@ -9,8 +9,10 @@ This step adds a no-POST close actual executor compatibility foundation for
 Level 5. It connects the close executable preview to a close-specific executor
 preview without invoking any transport.
 
-It fixes the prior blocker where the generic one-shot executor preview rejected
-`SELL` because that path is intentionally BUY-fixed for generic entry.
+It originally fixed the executor shape mismatch, but the later manual risk
+check proved that a generic opposite order must not be treated as settlement.
+This document now records that the compatibility layer is fail-closed unless a
+GMO FX official close-specific settlement route is confirmed.
 
 ## Implemented Module
 
@@ -36,13 +38,13 @@ Close-specific compatibility is separate:
 
 - `close_specific_context=true`
 - `generic_entry_context=false`
-- `SELL` or `BUY` is accepted only as a close side from the close execution
-  route foundation
-- the adapter emits a one-shot executor preview dataclass shape only after the
-  close-specific guards pass
+- `SELL` or `BUY` is not accepted from a guarded generic opposite order
+- the adapter emits a ready one-shot executor preview dataclass shape only
+  after a close-specific official settlement primitive is confirmed
 - exact-one-position guard is required
-- approved guarded generic close primitive is required
+- guarded generic close primitive is revoked for actual settlement
 - fixed `100` units and `MARKET` order type are required
+- `official_settlement_route_confirmed=false` blocks actual close execution
 
 ## Sanitized Close Executor Preview
 
@@ -59,7 +61,11 @@ close_side_safe_label=SELL/BUY
 close_units_fixed=100
 close_order_type_safe_label=MARKET
 approved_close_post_primitive_ready=true
-approved_close_post_primitive_kind=GUARDED_GENERIC_ORDER_CLOSE_PRIMITIVE_NO_POST
+approved_close_post_primitive_kind=CLOSE_SPECIFIC_APPROVED_PRIMITIVE_NO_POST
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+official_settlement_route_confirmed=true/false
+close_execution_blocked_reason=OFFICIAL_SETTLEMENT_ROUTE_NOT_CONFIRMED
 one_close_post_max=true
 close_retry_allowed=false
 close_repost_allowed=false
@@ -90,6 +96,8 @@ The compatibility preview blocks when any of the following is true:
 - generic entry context is used
 - close execution route or executable preview is not ready
 - approved close primitive is not ready
+- guarded generic opposite order is presented as close
+- official settlement route is not confirmed
 - exact-one-position guard is missing
 - runtime position is not `ONE_POSITION_OPEN`
 - position count is not `1`
@@ -112,6 +120,14 @@ CLOSE_EXECUTION_GATE_READY_NO_POST
   -> CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST
 
 CLOSE_EXECUTION_GATE_READY_NO_POST
+  + guarded generic opposite order only
+  -> CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_DEPRECATED_UNSAFE_GENERIC_CLOSE
+
+CLOSE_EXECUTION_GATE_READY_NO_POST
+  + official settlement route missing
+  -> CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_BLOCKED_OFFICIAL_SETTLEMENT_ROUTE
+
+CLOSE_EXECUTION_GATE_READY_NO_POST
   + executor compatibility blocked
   -> CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_BLOCKED
 ```
@@ -129,12 +145,12 @@ LEVEL5_CYCLE_COMPLETED
 
 ## Next Step
 
-Recommended next step:
+Recommended next safe step after the multiple-position risk:
 
 ```text
-Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-COMPATIBLE-EXECUTOR
+Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C
 ```
 
-That next step is a separate close execution gate. It must perform the current
-runtime position read, operator close readiness, sanitized close preview, and a
-new close-specific confirmation before any actual close POST can be considered.
+That next step is read-only after operator manual flattening. No further actual
+close POST is allowed until the official GMO settlement route is verified and
+implemented as a close-specific primitive.
