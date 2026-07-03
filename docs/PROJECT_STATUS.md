@@ -82,6 +82,24 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-API-PERMISSION-UPDATE-RECORD-NO-POST-C 完了 / API permission update safe declaration recorded / no-POST** —
+  operator safe declarationとして
+  `api_permission_update_recorded=true`、
+  `operator_enabled_api_permission_settlement_order=true`、
+  `operator_enabled_api_permission_execution_info=true`、
+  `api_permission_update_source=OPERATOR_SAFE_DECLARATION` を記録した。
+  これはCodexがAPIキー画面、秘密情報、raw権限画面値、API key、API secretを取得して確認したものではない。
+  `api_permission_raw_screen_value_exposed=false`、`api_key_value_exposed=false`、
+  `api_secret_value_exposed=false`、`credential_metadata_exposed=false`。
+  直近のcurrent fresh cycleでは、entry resultは `RESULT_ACCEPTED_SANITIZED`、official settlement POST countは1、
+  settlement resultは `RESULT_REJECTED_SANITIZED`。previous safe rejection reasonは unavailable のため、
+  `suspected_rejection_cause=API_PERMISSION_SETTLEMENT_ORDER_OR_EXECUTION_INFO_DISABLED_POSSIBLE` は
+  未確定の仮説として扱う。`rejection_cause_confirmed=false`、`raw_response_inspected=false`、
+  `broker_response_exposed=false`。このStepではactual settlement POST、entry POST、retry/repost、
+  second settlement POST、generic close、ledger/receipt、raw/ID/value exposureは行っていない。
+  read-only safe stateは `runtime_position_status_current=NO_POSITION`、`position_count_safe_current=0`、
+  `active_order_status_safe_current=NO_ACTIVE_ORDERS_SAFE`、`pending_order_status_safe_current=NO_PENDING_ORDER_SAFE`。
+  `next_fresh_cycle_note=settlement_permission_and_execution_info_permission_updated_before_next_attempt`。
 - **Step 6G-PC-OX-R-MANUAL-INTERVENTION-CYCLE-CLOSEOUT-AND-FRESH-RETRY-READINESS-NO-POST-C 完了 / manual intervention included closeout / fresh retry readiness / CASE 1** —
   直近のLevel 5再挑戦サイクルでは、previous entry POSTはsafe summary上1回のみで
   `RESULT_ACCEPTED_SANITIZED`、official settlement POSTも1回のみ実行され
