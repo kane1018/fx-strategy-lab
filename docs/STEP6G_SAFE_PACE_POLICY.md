@@ -371,3 +371,27 @@ that report only with safe booleans and read-only runtime position status/count.
 Such reconciliation must set `level5_full_auto_cycle_completed=false`. It may
 allow a later fresh-cycle plan only when retry/repost, second entry, close POST,
 ledger/receipt, and raw/ID/value exposure remain false.
+
+After the manual flatten reconciliation, the GMO official settlement route
+review confirmed a dedicated settlement route/parameter as no-POST evidence
+only:
+
+```text
+official_manual_accessed=true
+official_rules_accessed=true
+official_api_docs_accessed=true
+manual_buy_sell_not_netted_confirmed=true
+rules_settlement_quantity_no_lower_limit_confirmed=true
+rules_hedging_possible_confirmed=true
+repo_settlement_endpoint_found=true
+repo_settlement_parameter_found=true
+official_settlement_route_confirmed=true
+actual_close_post_allowed_now=false
+future_actual_close_post_requires_dedicated_settlement_gate=true
+```
+
+This review does not allow actual close POST. The next bounded step may only
+implement a no-POST dedicated settlement preview. It must not execute entry
+POST, close POST, retry/repost, ledger update, receipt handoff, raw request or
+response handling, broker/API response handling, ID exposure, credential value,
+signature value, header value, or `.env` access.

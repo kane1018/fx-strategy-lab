@@ -132,3 +132,19 @@ official_settlement_route_required=true
 
 The generic opposite-order close primitive remains revoked. The next bounded
 step is GMO official settlement route review, still no-POST.
+
+## GMO Official Settlement Route Review Follow-up
+
+The follow-up official settlement route review completed as CASE 1 no-POST:
+
+```text
+official_settlement_route_confirmed=true
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+actual_close_post_allowed_now=false
+future_actual_close_post_requires_dedicated_settlement_gate=true
+```
+
+This confirms a dedicated official settlement route/parameter as evidence only.
+Actual close POST remains forbidden until a future dedicated no-POST settlement
+preview and a later separate execution gate.

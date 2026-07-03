@@ -91,7 +91,7 @@ Recommended next step:
 Step 6G-PC-OX-R-GMO-OFFICIAL-SETTLEMENT-ROUTE-REVIEW-C
 ```
 
-That step must remain no-POST. It should review GMO official materials and
-existing code to identify whether a dedicated settlement route/parameter exists.
-Future actual close POST remains forbidden until that route is confirmed and
-implemented as a close-specific primitive.
+That step remained no-POST and confirmed a dedicated official settlement
+route/parameter as review evidence only. Future actual close POST remains
+forbidden until the route is implemented as a close-specific no-POST preview and
+a later separate execution gate is approved.

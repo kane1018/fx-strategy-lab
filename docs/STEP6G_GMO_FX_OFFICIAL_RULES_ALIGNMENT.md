@@ -69,6 +69,30 @@ This flat state removes the current position risk, but it does not validate a
 Codex close route. Future actual close POST remains forbidden until the official
 settlement route is reviewed and represented as a close-specific primitive.
 
+## Official Settlement Route Review Status
+
+The official settlement route review accessed GMO FX operation manual, trading
+rules, and official API docs. Safe result:
+
+```text
+official_manual_accessed=true
+official_rules_accessed=true
+official_api_docs_accessed=true
+manual_settlement_flow_found=true
+manual_buy_sell_not_netted_confirmed=true
+rules_api_new_order_min_confirmed=true
+rules_settlement_quantity_no_lower_limit_confirmed=true
+rules_hedging_possible_confirmed=true
+repo_settlement_endpoint_found=true
+repo_settlement_parameter_found=true
+official_settlement_route_confirmed=true
+actual_close_post_allowed_now=false
+```
+
+The confirmed route is a dedicated settlement route, not a generic opposite
+order. It is confirmed only as no-POST evidence for a future dedicated
+settlement preview implementation.
+
 ## Safety Boundary
 
 This alignment document does not contain raw request/response data, broker/API

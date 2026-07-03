@@ -387,3 +387,23 @@ signal/entry cycle gate, while close planning and close execution remain
 blocked. No actual entry POST, actual close POST, retry/repost, ledger update,
 receipt handoff, raw response, broker/API response, ID, credential, signature,
 or header value exposure is permitted by that runtime result.
+
+The GMO official settlement route review follow-up confirmed a dedicated
+official settlement route/parameter as no-POST evidence only:
+
+```text
+official_settlement_route_confirmed=true
+official_settlement_route_confirmation_basis=OFFICIAL_SETTLEMENT_ROUTE_CONFIRMED_NO_POST
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+actual_close_post_allowed_now=false
+future_actual_close_post_requires_dedicated_settlement_gate=true
+level5_minimal_cycle_completed=false
+level5_full_auto_cycle_completed=false
+fresh_cycle_allowed=false
+```
+
+Level 5 still must not reach `CLOSE_SENT`, `CLOSE_POST_EXECUTED`,
+`LEDGER_UPDATED`, `RECEIPT_HANDOFF`, or `LEVEL5_CYCLE_COMPLETED` from this
+review. The next bounded step is no-POST official settlement route
+implementation.

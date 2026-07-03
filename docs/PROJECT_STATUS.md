@@ -82,6 +82,28 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-GMO-OFFICIAL-SETTLEMENT-ROUTE-REVIEW-C 完了 / official settlement route confirmed no-POST / CASE 1** —
+  直前 manual flatten reconciliation はCASE 1で、
+  `position_status=NO_POSITION`、`position_count_safe=0`、
+  `manual_flatten_reconciled=true`。今回のStepでは
+  `backend/app/live_verification/live_order_real_gmo_official_settlement_route_review_controlled.py`
+  を追加し、GMO FX操作マニュアル、取引ルール、公式API docs、repo内docs/codeの
+  no-POST settlement route reviewをsafe boolean/labelだけで実装した。
+  公式manualではposition summary/listからのsettlement flowとbuy/sell非ネットを確認し、
+  取引ルールではAPI新規注文最小数量、決済数量下限なし、両建て可能、取引/注文受付時間を確認した。
+  公式API docsではgeneric orderとは別のdedicated settlement route/parameterを確認した。
+  判定は `official_settlement_route_confirmed=true`、
+  `official_settlement_route_confirmation_basis=OFFICIAL_SETTLEMENT_ROUTE_CONFIRMED_NO_POST`、
+  `generic_opposite_order_as_close_forbidden=true`、
+  `generic_close_primitive_revoked=true`、
+  `actual_close_post_allowed_now=false`、
+  `future_actual_close_post_requires_dedicated_settlement_gate=true`。
+  actual entry POST、actual close POST、retry/repost、second close、ledger update、
+  receipt handoff、raw/ID/value exposure、`.env` は扱っていない。
+  runbook:
+  [STEP6G_GMO_OFFICIAL_SETTLEMENT_ROUTE_REVIEW.md](STEP6G_GMO_OFFICIAL_SETTLEMENT_ROUTE_REVIEW.md)。
+  次の推奨Stepは
+  **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-ROUTE-NO-POST-IMPLEMENTATION-C**。
 - **Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C 完了 / operator manual flatten reconciled / read-only / CASE 1** —
   直前 manual position risk check はCASE 1で、safe status/countは
   `position_status=MULTIPLE_POSITIONS_BLOCKED`、`position_count_safe=2`、

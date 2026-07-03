@@ -159,6 +159,11 @@ That next step is read-only reconciliation after operator manual flattening.
 Any future actual close POST remains forbidden until the official GMO
 settlement route is confirmed and implemented as a close-specific primitive.
 
+The following GMO official settlement route review confirmed the dedicated
+official settlement route/parameter as no-POST evidence. This does not restore
+the guarded generic close primitive. Future route implementation must use a
+dedicated settlement primitive and stay no-POST until a later execution gate.
+
 This step does not reach `CLOSE_SENT`, `CLOSE_POST_EXECUTED`,
 `POST_CLOSE_POSITION_CONFIRMATION`, `LEDGER_UPDATED`, `RECEIPT_HANDOFF`, or
 `LEVEL5_CYCLE_COMPLETED`.

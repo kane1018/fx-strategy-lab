@@ -154,3 +154,8 @@ Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C
 That next step is read-only after operator manual flattening. No further actual
 close POST is allowed until the official GMO settlement route is verified and
 implemented as a close-specific primitive.
+
+The subsequent GMO official settlement route review confirmed, no-POST, a
+dedicated official settlement route/parameter. The generic opposite-order
+compatibility path remains revoked and must not be re-enabled. The next bounded
+step is a no-POST dedicated settlement route preview implementation.
