@@ -159,3 +159,10 @@ The subsequent GMO official settlement route review confirmed, no-POST, a
 dedicated official settlement route/parameter. The generic opposite-order
 compatibility path remains revoked and must not be re-enabled. The next bounded
 step is a no-POST dedicated settlement route preview implementation.
+
+That no-POST dedicated settlement route preview implementation now exists as
+`Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-ROUTE-NO-POST-IMPLEMENTATION-C`. It keeps
+`settlement_route_is_generic_order=false`,
+`generic_close_primitive_revoked=true`, and
+`actual_settlement_post_allowed_now=false`. The old generic opposite-order
+compatibility path remains blocked for actual settlement.

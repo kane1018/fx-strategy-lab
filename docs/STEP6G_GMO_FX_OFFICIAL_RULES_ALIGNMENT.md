@@ -93,6 +93,23 @@ The confirmed route is a dedicated settlement route, not a generic opposite
 order. It is confirmed only as no-POST evidence for a future dedicated
 settlement preview implementation.
 
+## Official Settlement No-POST Preview Status
+
+The follow-up no-POST preview implementation records:
+
+```text
+official_settlement_no_post_preview_ready=true
+settlement_route_kind=OFFICIAL_SIZE_BASED_SETTLEMENT
+generic_opposite_order_as_close_forbidden=true
+generic_close_primitive_revoked=true
+actual_settlement_post_allowed_now=false
+actual_close_post_allowed_now=false
+position_specific_identifier_safe_handling_ready=false
+```
+
+This confirms preview readiness only. It does not restore generic opposite
+order as a close primitive and does not authorize actual settlement execution.
+
 ## Safety Boundary
 
 This alignment document does not contain raw request/response data, broker/API

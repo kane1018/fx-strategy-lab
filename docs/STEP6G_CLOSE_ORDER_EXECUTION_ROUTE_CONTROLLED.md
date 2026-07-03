@@ -190,3 +190,8 @@ https://coin.z.com/jp/corp/product/info/fx/#rule
 The implementation assumes hedged buy/sell positions can coexist and are not
 netted for safe route judgement. Actual close settlement requires a dedicated
 official settlement route, not a generic opposite order.
+
+The dedicated settlement no-POST preview has now been implemented separately.
+It does not use this generic close execution route as an actual settlement
+primitive, and it keeps `actual_settlement_post_allowed_now=false` and
+`actual_close_post_allowed_now=false`.

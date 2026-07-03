@@ -128,6 +128,24 @@ That step must remain no-POST and create only a sanitized dedicated settlement
 preview. Actual close POST remains forbidden until a later separate execution
 gate with fresh confirmation.
 
+## Follow-up No-POST Preview Implementation
+
+`Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-ROUTE-NO-POST-IMPLEMENTATION-C` implemented
+the recommended sanitized dedicated settlement preview:
+
+```text
+official_settlement_no_post_preview_ready=true
+settlement_route_kind=OFFICIAL_SIZE_BASED_SETTLEMENT
+settlement_route_is_generic_order=false
+settlement_route_is_dedicated=true
+actual_settlement_post_allowed_now=false
+actual_close_post_allowed_now=false
+position_specific_identifier_safe_handling_ready=false
+position_specific_preview_allowed=false
+```
+
+The follow-up implementation still does not execute or authorize actual POST.
+
 ## Unsafe Data Boundary
 
 This document does not contain raw request/response data, broker/API responses,

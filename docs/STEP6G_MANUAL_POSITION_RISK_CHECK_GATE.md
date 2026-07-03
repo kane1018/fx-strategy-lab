@@ -148,3 +148,18 @@ future_actual_close_post_requires_dedicated_settlement_gate=true
 This confirms a dedicated official settlement route/parameter as evidence only.
 Actual close POST remains forbidden until a future dedicated no-POST settlement
 preview and a later separate execution gate.
+
+## Official Settlement No-POST Preview Follow-up
+
+The dedicated settlement preview implementation completed as no-POST:
+
+```text
+official_settlement_no_post_preview_ready=true
+settlement_route_kind=OFFICIAL_SIZE_BASED_SETTLEMENT
+actual_settlement_post_allowed_now=false
+actual_close_post_allowed_now=false
+position_specific_identifier_safe_handling_ready=false
+```
+
+This does not change the manual risk judgement: the previous cycle remains not
+completed as Level 5 full auto because manual flattening was required.

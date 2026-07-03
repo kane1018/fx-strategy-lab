@@ -395,3 +395,25 @@ implement a no-POST dedicated settlement preview. It must not execute entry
 POST, close POST, retry/repost, ledger update, receipt handoff, raw request or
 response handling, broker/API response handling, ID exposure, credential value,
 signature value, header value, or `.env` access.
+
+After `Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-ROUTE-NO-POST-IMPLEMENTATION-C`,
+the dedicated settlement preview is implemented as no-POST only:
+
+```text
+official_settlement_no_post_preview_ready=true
+settlement_route_kind=OFFICIAL_SIZE_BASED_SETTLEMENT
+settlement_route_is_generic_order=false
+settlement_route_is_dedicated=true
+settlement_route_invocation_deferred=true
+actual_settlement_post_allowed_now=false
+actual_close_post_allowed_now=false
+size_based_preview_allowed=true
+position_specific_identifier_safe_handling_ready=false
+position_specific_preview_allowed=false
+next_cycle_state=OFFICIAL_SETTLEMENT_PREVIEW_READY_NO_POST
+```
+
+This preview still does not allow actual POST. A later execution gate must
+re-check current runtime `ONE_POSITION_OPEN` / count `1`, operator readiness,
+sanitized settlement preview, settlement-specific confirmation, one-settlement
+POST maximum, no retry/repost/second close, and raw/ID/value non-exposure.

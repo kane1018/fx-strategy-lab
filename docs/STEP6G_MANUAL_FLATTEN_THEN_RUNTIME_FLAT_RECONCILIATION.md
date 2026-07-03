@@ -95,3 +95,15 @@ That step remained no-POST and confirmed a dedicated official settlement
 route/parameter as review evidence only. Future actual close POST remains
 forbidden until the route is implemented as a close-specific no-POST preview and
 a later separate execution gate is approved.
+
+The follow-up official settlement route no-POST implementation created that
+sanitized preview:
+
+```text
+official_settlement_no_post_preview_ready=true
+actual_settlement_post_allowed_now=false
+actual_close_post_allowed_now=false
+```
+
+Manual flatten reconciliation remains separate from Level 5 full-auto cycle
+completion.

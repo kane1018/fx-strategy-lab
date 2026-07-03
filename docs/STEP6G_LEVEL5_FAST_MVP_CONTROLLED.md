@@ -407,3 +407,19 @@ Level 5 still must not reach `CLOSE_SENT`, `CLOSE_POST_EXECUTED`,
 `LEDGER_UPDATED`, `RECEIPT_HANDOFF`, or `LEVEL5_CYCLE_COMPLETED` from this
 review. The next bounded step is no-POST official settlement route
 implementation.
+
+The no-POST implementation follow-up added a dedicated settlement preview state:
+
+```text
+OFFICIAL_SETTLEMENT_ROUTE_REVIEWED_NO_POST
+  + official_settlement_no_post_preview_ready=true
+  -> OFFICIAL_SETTLEMENT_PREVIEW_READY_NO_POST
+```
+
+This state records a size-based dedicated settlement preview with
+`actual_settlement_post_allowed_now=false` and
+`actual_close_post_allowed_now=false`. Position-specific settlement remains
+blocked until safe identifier handling is designed. The state must not reach
+`SETTLEMENT_POST_EXECUTED`, `CLOSE_POST_EXECUTED`,
+`POST_CLOSE_POSITION_CONFIRMATION`, `LEDGER_UPDATED`, `RECEIPT_HANDOFF`, or
+`LEVEL5_CYCLE_COMPLETED`.

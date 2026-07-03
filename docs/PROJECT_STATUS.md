@@ -82,6 +82,32 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-ROUTE-NO-POST-IMPLEMENTATION-C 完了 / official settlement no-POST preview ready / CASE 1** —
+  直前 GMO official settlement route review はCASE 1で、
+  `official_settlement_route_confirmed=true`、
+  `official_settlement_route_confirmation_basis=OFFICIAL_SETTLEMENT_ROUTE_CONFIRMED_NO_POST`、
+  `generic_opposite_order_as_close_forbidden=true`、
+  `generic_close_primitive_revoked=true`、`actual_close_post_allowed_now=false`。
+  今回のStepでは
+  `backend/app/live_verification/live_order_real_official_settlement_route_no_post_controlled.py`
+  を追加し、公式専用settlement routeをsafe labelだけのno-POST previewとして実装した。
+  判定は `official_settlement_no_post_preview_ready=true`、
+  `settlement_route_kind=OFFICIAL_SIZE_BASED_SETTLEMENT`、
+  `settlement_route_is_generic_order=false`、
+  `settlement_route_is_dedicated=true`、
+  `settlement_route_invocation_deferred=true`、
+  `actual_settlement_post_allowed_now=false`、
+  `actual_close_post_allowed_now=false`。
+  size-based pathは `size_based_preview_allowed=true`、raw request/endpoint exposure=false。
+  position-specific pathは存在するが、safe ID handling未整備のため
+  `position_specific_preview_allowed=false`、
+  `position_specific_execution_blocked_reason=SAFE_IDENTIFIER_HANDLING_NOT_READY`。
+  Level 5は `OFFICIAL_SETTLEMENT_PREVIEW_READY_NO_POST` までで停止し、actual entry/close/settlement POST、
+  retry/repost、second close、ledger/receipt、raw/ID/value exposure、`.env` は扱っていない。
+  runbook:
+  [STEP6G_OFFICIAL_SETTLEMENT_ROUTE_NO_POST_IMPLEMENTATION.md](STEP6G_OFFICIAL_SETTLEMENT_ROUTE_NO_POST_IMPLEMENTATION.md)。
+  次の推奨Stepは
+  **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-EXECUTION-GATE-C**。
 - **Step 6G-PC-OX-R-GMO-OFFICIAL-SETTLEMENT-ROUTE-REVIEW-C 完了 / official settlement route confirmed no-POST / CASE 1** —
   直前 manual flatten reconciliation はCASE 1で、
   `position_status=NO_POSITION`、`position_count_safe=0`、
