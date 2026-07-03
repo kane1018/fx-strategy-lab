@@ -82,6 +82,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-POST-ENTRY-POSITION-CONFIRMATION-GATE-C 完了 / read-only runtime position safe read / no retry / no close POST / CASE 2** —
+  直前のentry execution Step `CASE 3` を、safe summaryとして
+  `entry_http_post_executed=true`、`entry_post_execution_count=1`、`entry_retry_attempted=false`、
+  `entry_second_post_attempted=false`、`close_post_executed=false`、`ledger_updated=false`、
+  `receipt_handoff_executed=false`、`entry_sanitized_result_category=unknown/blocked` として扱った。
+  `backend/app/live_verification/live_order_real_post_entry_position_confirmation_gate_controlled.py` を追加し、
+  previous entry summary + credential presence safe booleans + runtime position safe-read resultをsafe status/countだけへ
+  閉じるpost-entry confirmation gateを実装した。今回のruntime safe readは
+  `position_status=NO_POSITION`、`position_count_safe=0` で、判定は
+  `position_confirmation_status=NO_POSITION_AFTER_ENTRY_POST`、
+  `entry_effect_confirmed_by_position=false`、`next_cycle_state=UNKNOWN_RESULT_SAFE_STOP`。
+  retry/repost、second entry POST、actual close POST、ledger update、receipt handoff、raw request/response、
+  broker/API response、account/order/transaction/position ID、credential/signature/header値、`.env` は扱っていない。
+  runbook: [STEP6G_POST_ENTRY_POSITION_CONFIRMATION_GATE.md](STEP6G_POST_ENTRY_POSITION_CONFIRMATION_GATE.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-ENTRY-UNKNOWN-NO-POSITION-CLOSEOUT-GATE-C**。
 - **Step 6G-PC-OX-R-LEVEL5-SIGNAL-ENTRY-CYCLE-GATE-C 完了 / planning-only / no actual entry POST / no close POST** —
   runtime safe readの `NO_POSITION` / safe count `0` 前提を受けて、Level 5 signal MVPをsafe label inputへ拡張し、
   entry planning gateとcycle `ENTRY_READY` を接続した。

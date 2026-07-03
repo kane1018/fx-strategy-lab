@@ -70,3 +70,23 @@ It uses injected safe labels, not raw market data or actual market values.
 POST, close POST, retry/repost, second POST, ledger update, receipt handoff,
 raw/ID/value exposure, credential/signature/header exposure, and `.env` access
 remain prohibited.
+
+## Post-Entry Follow-Up
+
+The later post-entry position confirmation gate reused the same safe
+status/count boundary after the previous entry execution Step returned
+`unknown/blocked` as a safe result category. The runtime read was executed once
+and returned:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+entry_effect_confirmed_by_position=false
+position_confirmation_status=NO_POSITION_AFTER_ENTRY_POST
+```
+
+That follow-up did not retry entry POST, run a second entry POST, run close
+POST, update a ledger, hand off a receipt, expose raw responses, expose
+broker/API responses, expose IDs, expose credential/signature/header values, or
+read `.env` files. Details:
+[STEP6G_POST_ENTRY_POSITION_CONFIRMATION_GATE.md](STEP6G_POST_ENTRY_POSITION_CONFIRMATION_GATE.md).

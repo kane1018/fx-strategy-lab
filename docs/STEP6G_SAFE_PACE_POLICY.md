@@ -248,3 +248,36 @@ stop before any unapproved actual entry POST, close POST, retry/repost, second
 POST, ledger update, receipt handoff, raw market data, actual market value,
 raw/broker/API response, account/order/transaction/position ID,
 credential/signature/header value, or `.env` access.
+
+After `Step 6G-PC-OX-R-POST-ENTRY-POSITION-CONFIRMATION-GATE-C`, the previous
+entry POST remained safe-summary only:
+
+```text
+entry_http_post_executed=true
+entry_post_execution_count=1
+entry_sanitized_result_category=unknown/blocked
+retry_attempted=false
+second_post_attempted=false
+close_post_executed=false
+```
+
+The post-entry runtime position safe read returned:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+position_confirmation_status=NO_POSITION_AFTER_ENTRY_POST
+entry_effect_confirmed_by_position=false
+next_cycle_state=UNKNOWN_RESULT_SAFE_STOP
+```
+
+Recommended next paced step:
+
+```text
+Step 6G-PC-OX-R-ENTRY-UNKNOWN-NO-POSITION-CLOSEOUT-GATE-C
+```
+
+That closeout gate must still prohibit retry/repost, second entry POST, actual
+close POST, ledger update, receipt handoff, raw responses, broker/API
+responses, IDs, credential values, signature values, header values, and `.env`
+access.

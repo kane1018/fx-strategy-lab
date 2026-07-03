@@ -239,6 +239,23 @@ close POST, actual entry POST, retry/repost, second POST, ledger update, receipt
 handoff, raw/ID/value exposure, credential/signature/header exposure, and `.env`
 access remain forbidden.
 
+## Post-Entry Position Confirmation Update
+
+After the later entry execution Step produced an `unknown/blocked` safe result
+category, the post-entry confirmation gate used one runtime position safe read
+to verify status/count only:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+entry_effect_confirmed_by_position=false
+next_cycle_state=UNKNOWN_RESULT_SAFE_STOP
+```
+
+This does not permit retry/repost, second entry POST, or close POST. The next
+bounded Step is
+`Step 6G-PC-OX-R-ENTRY-UNKNOWN-NO-POSITION-CLOSEOUT-GATE-C`.
+
 The close route implementation follow-up added a planning-only controlled close
 route. Level 5 now carries `close_order_route` alongside the existing close
 foundation. It allows close planning only for `ONE_POSITION_OPEN` with exactly
