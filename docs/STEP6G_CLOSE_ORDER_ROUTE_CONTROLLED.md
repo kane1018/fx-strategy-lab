@@ -65,6 +65,22 @@ ID, transaction ID, account ID, client order ID actual value, raw position,
 raw request, raw response, broker/API response, credential value, signature
 value, or headers value.
 
+## Executable Route Follow-up
+
+`Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-ROUTE-IMPLEMENTATION-NO-POST-C`
+adds the no-POST executable route foundation in:
+
+```text
+backend/app/live_verification/live_order_real_close_order_execution_route_controlled.py
+```
+
+That later foundation requires `close_side_safe_label=SELL/BUY` before a
+sanitized executable preview can be ready. The planning placeholder
+`OPPOSITE_OF_SAFE_POSITION_SIDE` is blocked for executable preview. Generic
+order primitive readiness is explicit and accepted only with exact-one-position
+guard, concrete opposite side, fixed `100`, and `MARKET`; primitive invocation
+remains deferred.
+
 ## Close Execution Readiness
 
 The route returns a planning-only readiness summary:
@@ -123,7 +139,7 @@ close_post_count=0
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-EXECUTABLE-ROUTE
 ```
 
 That step is a separate execution gate. It must perform a new current runtime

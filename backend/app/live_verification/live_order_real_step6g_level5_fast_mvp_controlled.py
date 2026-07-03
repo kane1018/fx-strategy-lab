@@ -14,6 +14,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 from app.live_verification.errors import LiveVerificationValidationError
+from app.live_verification.live_order_real_close_order_execution_route_controlled import (
+    CloseOrderExecutionRouteControlledInput,
+    CloseOrderExecutionRouteControlledResult,
+    build_close_order_execution_route_controlled,
+)
 from app.live_verification.live_order_real_close_order_route_controlled import (
     CloseOrderRouteControlledInput,
     CloseOrderRouteControlledResult,
@@ -569,6 +574,7 @@ class Level5FastMvpFoundationResult:
     position_status: PositionReadOnlyStatusResult
     close_route: CloseRouteFoundationResult
     close_order_route: CloseOrderRouteControlledResult
+    close_execution_route: CloseOrderExecutionRouteControlledResult
     signal: Level5SignalMvpResult
     entry_planning: Level5EntryPlanningGateResult
     cycle_transition: Level5CycleTransitionResult
@@ -892,6 +898,7 @@ def build_level5_fast_mvp_foundation(
     position_controlled_result: PositionReadOnlyControlledResult | None = None,
     close_input: CloseRouteFoundationInput | None = None,
     close_order_route_input: CloseOrderRouteControlledInput | None = None,
+    close_execution_route_input: CloseOrderExecutionRouteControlledInput | None = None,
     signal_input: Level5SignalMvpInput | None = None,
     cycle_input: Level5CycleTransitionInput | None = None,
 ) -> Level5FastMvpFoundationResult:
@@ -912,6 +919,13 @@ def build_level5_fast_mvp_foundation(
             position,
             position_controlled_result,
         ),
+    )
+    close_execution_route = (
+        build_close_order_execution_route_controlled(close_execution_route_input)
+        if close_execution_route_input is not None
+        else build_close_order_execution_route_controlled(
+            close_order_route_result=close_order_route,
+        )
     )
     signal = evaluate_level5_signal_mvp(
         signal_input
@@ -949,6 +963,7 @@ def build_level5_fast_mvp_foundation(
         position_status=position,
         close_route=close,
         close_order_route=close_order_route,
+        close_execution_route=close_execution_route,
         signal=signal,
         entry_planning=entry_planning,
         cycle_transition=cycle,
@@ -1014,6 +1029,22 @@ def render_level5_fast_mvp_foundation_markdown(
         (
             "- close_execution_allowed_now: "
             f"{_bool_text(result.close_order_route.close_execution_allowed_now)}"
+        ),
+        (
+            "- close_execution_route_ready: "
+            f"{_bool_text(result.close_execution_route.close_execution_route_ready)}"
+        ),
+        (
+            "- close_executable_preview_ready: "
+            f"{_bool_text(result.close_execution_route.close_executable_preview_ready)}"
+        ),
+        (
+            "- close_execution_next_cycle_state: "
+            f"{result.close_execution_route.next_cycle_state}"
+        ),
+        (
+            "- actual_close_post_allowed_now: "
+            f"{_bool_text(result.close_execution_route.actual_close_post_allowed_now)}"
         ),
         f"- signal_type: {result.signal.signal_type.value}",
         (

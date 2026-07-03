@@ -209,7 +209,21 @@ signature values, or header values.
 Recommended next paced step:
 
 ```text
-Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-ROUTE-IMPLEMENTATION-NO-POST-C
+```
+
+After `Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-ROUTE-IMPLEMENTATION-NO-POST-C`,
+the close execution route foundation is also no-POST. It concrete-derives
+`SELL` / `BUY` from safe side labels only, blocks
+`OPPOSITE_OF_SAFE_POSITION_SIDE` for executable preview, and makes guarded
+generic primitive readiness explicit. A ready route means
+`CLOSE_EXECUTION_GATE_READY_NO_POST`; it does not allow close POST in the same
+step.
+
+Recommended next paced step:
+
+```text
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-EXECUTABLE-ROUTE
 ```
 
 After `Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C`, the runtime

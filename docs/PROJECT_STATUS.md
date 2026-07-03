@@ -2476,6 +2476,34 @@ POST, ledger update, receipt handoff, runtime Private API writes, or raw/ID/valu
 exposure. Details:
 [STEP6G_CLOSE_ORDER_ROUTE_CONTROLLED.md](STEP6G_CLOSE_ORDER_ROUTE_CONTROLLED.md).
 
+## Step 6G Close Order Execution Route Controlled
+
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-ROUTE-IMPLEMENTATION-NO-POST-C adds the
+no-POST executable close route foundation:
+
+```text
+backend/app/live_verification/live_order_real_close_order_execution_route_controlled.py
+```
+
+The route derives concrete close side from safe labels only:
+`BUY -> SELL`, `SELL -> BUY`, `ENTRY_BUY -> SELL`, and
+`ENTRY_SELL -> BUY`. `OPPOSITE_OF_SAFE_POSITION_SIDE`, unknown side, and side
+mismatch block executable preview. The route exposes only sanitized preview
+fields: `USD_JPY`, fixed `100`, `MARKET`, concrete `SELL/BUY`, primitive
+readiness booleans, and no-retry/no-repost/no-second-close flags.
+
+Guarded generic primitive readiness is explicit and remains no-POST:
+`approved_close_post_primitive_ready=true` is possible only with exact-one-
+position guard, concrete opposite side, fixed 100 units, `MARKET`, and
+`generic_order_accepted_as_close_only_with_exact_one_position_guard=true`.
+Invocation is deferred and `actual_close_post_allowed_now=false`.
+
+Level 5 foundation now carries `close_execution_route`. The ready no-POST state
+is `CLOSE_EXECUTION_GATE_READY_NO_POST`; this step does not reach `CLOSE_SENT`,
+`CLOSE_POST_EXECUTED`, post-close confirmation, ledger, receipt, or Level 5
+cycle completion. Details:
+[STEP6G_CLOSE_ORDER_EXECUTION_ROUTE_CONTROLLED.md](STEP6G_CLOSE_ORDER_EXECUTION_ROUTE_CONTROLLED.md).
+
 ## Step 6G Position Runtime Safe Read Check
 
 Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C completed the runtime

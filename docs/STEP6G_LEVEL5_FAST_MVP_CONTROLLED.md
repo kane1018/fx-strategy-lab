@@ -142,6 +142,17 @@ Fresh position open safe handoff follow-up:
 - the next close execution gate must perform a new runtime position read,
   operator readiness check, close preview, and close-specific confirmation
 
+Close execution route follow-up:
+
+- Level 5 foundation carries `close_execution_route`
+- concrete close side is required before executable preview: `SELL` / `BUY`
+- `OPPOSITE_OF_SAFE_POSITION_SIDE` remains planning-only and blocks executable
+  preview
+- guarded generic primitive readiness requires exact-one-position guard,
+  concrete opposite side, fixed `100`, and `MARKET`
+- ready route state is `CLOSE_EXECUTION_GATE_READY_NO_POST`
+- actual close POST remains prohibited in this implementation step
+
 ## Cycle State Machine
 
 States:

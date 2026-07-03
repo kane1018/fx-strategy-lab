@@ -117,7 +117,14 @@ close_post_allowed_now=false
 Recommended next step:
 
 ```text
-Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-ROUTE-IMPLEMENTATION-NO-POST-C
+```
+
+After that no-POST route foundation is ready, the bounded close execution gate
+retry is:
+
+```text
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-EXECUTABLE-ROUTE
 ```
 
 ### NO_POSITION
