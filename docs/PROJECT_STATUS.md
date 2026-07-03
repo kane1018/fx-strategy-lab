@@ -82,6 +82,26 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-SAFE-REJECTION-CATEGORY-CAPTURE-DESIGN-NO-POST-C 完了 / safe rejection category capture implemented / no-POST** —
+  API権限更新後も official settlement POST が `RESULT_REJECTED_SANITIZED` だったため、
+  raw response / broker response / error message本文 / ID / 数量 / 価格 / credential を扱わずに
+  rejected結果を安全分類する境界を追加した。
+  `backend/app/live_verification/live_order_real_official_settlement_safe_rejection_category_no_post_controlled.py`
+  と
+  `backend/app/tests/test_live_verification_live_order_real_official_settlement_safe_rejection_category_no_post_controlled.py`
+  を追加。default rejected-only result は
+  `SAFE_REJECTION_CATEGORY_UNKNOWN` /
+  `SAFE_REJECTION_KIND_BROKER_REJECTED_REASON_UNAVAILABLE` /
+  `SAFE_REJECTION_SOURCE_SANITIZED_RESULT_ONLY` に落とす。
+  safe broker code label、safe HTTP status label、operator UI safe label、
+  official docs comparison safe result、synthetic fixture label がある場合だけ
+  category/kind/source/confidence を具体化する。actual settlement POST、entry POST、
+  retry/repost、second settlement POST、generic close、ledger/receipt、transport/HTTP call、
+  position-specific pathは行わない。sentinel testsで raw response、broker response、error message、
+  account/order/position/trade ID、数量、価格、credential、signature、headers が
+  asdict/render に出ないことを確認する。
+  次の推奨Stepは
+  **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-REJECTION-SAFE-CATEGORY-CAPTURE-INTEGRATION-NO-POST-C**。
 - **Step 6G-PC-OX-R-API-PERMISSION-UPDATE-RECORD-NO-POST-C 完了 / API permission update safe declaration recorded / no-POST** —
   operator safe declarationとして
   `api_permission_update_recorded=true`、
