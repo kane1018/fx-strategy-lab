@@ -82,6 +82,28 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C 完了 / operator manual flatten reconciled / read-only / CASE 1** —
+  直前 manual position risk check はCASE 1で、safe status/countは
+  `position_status=MULTIPLE_POSITIONS_BLOCKED`、`position_count_safe=2`、
+  `has_multiple_positions=true`。今回のStepでは
+  `backend/app/live_verification/live_order_real_manual_flatten_runtime_flat_reconciliation_controlled.py`
+  を追加し、operator safe boolean + runtime safe-read resultだけを使うflat reconciliation gateを実装した。
+  operator manual flatten safe booleanは期待値どおりで、runtime safe readは
+  `position_status=NO_POSITION`、`position_count_safe=0`、
+  `has_multiple_positions=false`。判定は
+  `manual_flatten_reconciled=true`、
+  `next_cycle_state=MANUAL_FLATTEN_RECONCILED_FLAT`、
+  `level5_minimal_cycle_completed=false`、
+  `level5_full_auto_cycle_completed=false`、
+  `fresh_cycle_allowed=false`。
+  generic opposite order as close forbidden、generic close primitive revoked、
+  official settlement route confirmed=falseは維持する。
+  actual entry POST、actual close POST、retry/repost、second close、ledger update、
+  receipt handoff、raw/ID/value exposure、`.env` は扱っていない。
+  runbook:
+  [STEP6G_MANUAL_FLATTEN_THEN_RUNTIME_FLAT_RECONCILIATION.md](STEP6G_MANUAL_FLATTEN_THEN_RUNTIME_FLAT_RECONCILIATION.md)。
+  次の推奨Stepは
+  **Step 6G-PC-OX-R-GMO-OFFICIAL-SETTLEMENT-ROUTE-REVIEW-C**。
 - **Step 6G-PC-OX-R-MANUAL-POSITION-RISK-CHECK-GATE-C 完了 / multiple positions risk confirmed / generic close primitive revoked / CASE 1** —
   直前 post-close confirmation はCASE 3で、safe status/countは
   `position_status=MULTIPLE_POSITIONS_BLOCKED`、`position_count_safe=2`、

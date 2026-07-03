@@ -54,6 +54,21 @@ receipt handoff=false
 raw/ID/value exposure=false
 ```
 
+## Manual Flatten Reconciliation Status
+
+After operator manual flattening, runtime safe read confirmed:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+manual_flatten_reconciled=true
+level5_full_auto_cycle_completed=false
+```
+
+This flat state removes the current position risk, but it does not validate a
+Codex close route. Future actual close POST remains forbidden until the official
+settlement route is reviewed and represented as a close-specific primitive.
+
 ## Safety Boundary
 
 This alignment document does not contain raw request/response data, broker/API

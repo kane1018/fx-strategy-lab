@@ -366,6 +366,21 @@ close-specific primitive, Level 5 close execution remains fail-closed. The
 bounded next step is operator manual flattening followed by read-only runtime
 flat reconciliation.
 
+The manual flatten runtime reconciliation follow-up confirmed:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+manual_flatten_reconciled=true
+level5_minimal_cycle_completed=false
+level5_full_auto_cycle_completed=false
+fresh_cycle_allowed=false
+```
+
+This resolves the current position risk but does not convert the interrupted
+cycle into a full auto Level 5 completion. The next bounded step is GMO
+official settlement route review.
+
 The runtime position safe read check returned `NO_POSITION` with safe count `0`.
 For Level 5 this means entry planning may be considered only in a later
 signal/entry cycle gate, while close planning and close execution remain

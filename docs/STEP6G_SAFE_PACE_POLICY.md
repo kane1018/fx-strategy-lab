@@ -263,6 +263,27 @@ That step is read-only after operator manual flattening. It must not execute
 entry POST, close POST, retry, repost, second close, ledger update, receipt
 handoff, or raw/ID/value handling.
 
+After `Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C`,
+operator manual flatten was reconciled with runtime safe status/count:
+
+```text
+position_status=NO_POSITION
+position_count_safe=0
+manual_flatten_reconciled=true
+level5_full_auto_cycle_completed=false
+fresh_cycle_allowed=false
+official_settlement_route_required=true
+```
+
+Recommended next paced step:
+
+```text
+Step 6G-PC-OX-R-GMO-OFFICIAL-SETTLEMENT-ROUTE-REVIEW-C
+```
+
+That step must remain no-POST and must not permit a future close POST until the
+official GMO settlement route is confirmed.
+
 After `Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C`, the runtime
 position read-only check returned safe status/count only:
 

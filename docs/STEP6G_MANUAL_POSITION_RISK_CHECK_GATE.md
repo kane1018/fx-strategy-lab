@@ -114,3 +114,21 @@ Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C
 The operator manually returns the account to flat in the broker UI. Codex then
 performs read-only `NO_POSITION` / count `0` reconciliation only. No retry,
 repost, second close, entry POST, ledger, or receipt handoff is allowed.
+
+## Manual Flatten Follow-up Result
+
+The follow-up runtime flat reconciliation confirmed:
+
+```text
+operator_manual_flatten_completed=true
+position_status=NO_POSITION
+position_count_safe=0
+manual_flatten_reconciled=true
+level5_minimal_cycle_completed=false
+level5_full_auto_cycle_completed=false
+fresh_cycle_allowed=false
+official_settlement_route_required=true
+```
+
+The generic opposite-order close primitive remains revoked. The next bounded
+step is GMO official settlement route review, still no-POST.
