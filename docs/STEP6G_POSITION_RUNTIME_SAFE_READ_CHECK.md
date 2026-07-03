@@ -90,3 +90,9 @@ POST, update a ledger, hand off a receipt, expose raw responses, expose
 broker/API responses, expose IDs, expose credential/signature/header values, or
 read `.env` files. Details:
 [STEP6G_POST_ENTRY_POSITION_CONFIRMATION_GATE.md](STEP6G_POST_ENTRY_POSITION_CONFIRMATION_GATE.md).
+
+The next closeout gate may only move `UNKNOWN_RESULT_SAFE_STOP` to
+`ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT` after another safe runtime position
+result confirms `NO_POSITION` / count `0`. If the runtime read is unknown,
+blocked, or inconclusive, the closeout gate fails closed and does not permit a
+fresh cycle, retry/repost, second entry POST, or close POST.

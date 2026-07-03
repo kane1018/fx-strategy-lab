@@ -256,6 +256,19 @@ This does not permit retry/repost, second entry POST, or close POST. The next
 bounded Step is
 `Step 6G-PC-OX-R-ENTRY-UNKNOWN-NO-POSITION-CLOSEOUT-GATE-C`.
 
+The entry unknown/no-position closeout gate adds a terminal safe state for this
+path:
+
+```text
+UNKNOWN_RESULT_SAFE_STOP + NO_POSITION
+  -> ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT
+```
+
+This state does not execute POST and does not allow retry/repost, second entry
+POST, or close POST. It only means a later fresh cycle may be planned in a
+separate gate after a new position read, new signal, new operator readiness
+check, and new entry confirmation.
+
 The close route implementation follow-up added a planning-only controlled close
 route. Level 5 now carries `close_order_route` alongside the existing close
 foundation. It allows close planning only for `ONE_POSITION_OPEN` with exactly

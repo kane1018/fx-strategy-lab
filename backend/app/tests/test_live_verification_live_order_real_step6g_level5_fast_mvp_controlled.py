@@ -243,6 +243,30 @@ def test_cycle_state_machine_position_check_halts_on_unknown() -> None:
     assert result.automatic_recovery_allowed is False
 
 
+def test_cycle_state_machine_closes_out_unknown_result_no_position() -> None:
+    result = transition_level5_cycle_state(
+        Level5CycleTransitionInput(
+            current_state=Level5CycleState.UNKNOWN_RESULT_SAFE_STOP,
+            position_status=PositionReadOnlyStatus.NO_POSITION,
+            entry_unknown_no_position_closeout_confirmed=True,
+        ),
+    )
+    blocked = transition_level5_cycle_state(
+        Level5CycleTransitionInput(
+            current_state=Level5CycleState.UNKNOWN_RESULT_SAFE_STOP,
+            position_status=PositionReadOnlyStatus.ONE_POSITION_OPEN,
+            entry_unknown_no_position_closeout_confirmed=True,
+        ),
+    )
+
+    assert result.next_state is Level5CycleState.ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT
+    assert result.retry_allowed is False
+    assert result.second_post_allowed is False
+    assert result.automatic_recovery_allowed is False
+    assert blocked.next_state is Level5CycleState.HALTED
+    assert "closeout_requires_no_position" in blocked.blocked_reasons
+
+
 def test_cycle_state_machine_prevents_second_entry() -> None:
     result = transition_level5_cycle_state(
         Level5CycleTransitionInput(

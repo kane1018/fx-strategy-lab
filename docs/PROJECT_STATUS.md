@@ -82,6 +82,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-ENTRY-UNKNOWN-NO-POSITION-CLOSEOUT-GATE-C 実装済み / live decision fail-closed / no retry / no close POST** —
+  previous entry attemptが `unknown/blocked` かつ post-entry confirmationで `NO_POSITION` だった状態を、
+  retry/repostではなくterminal closeoutとして扱うsafe gateを追加した。
+  `backend/app/live_verification/live_order_real_entry_unknown_no_position_closeout_gate_controlled.py` は、
+  previous entry POST count `1`、retry=false、second=false、close=false、runtime `NO_POSITION` / count `0`
+  の場合だけ `entry_unknown_no_position_closeout_completed=true`、
+  `next_cycle_state=ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT`、
+  `fresh_cycle_may_be_planned=true` を返す。このStepでは
+  `actual_entry_post_allowed_now=false`、`close_post_allowed_now=false` のまま。
+  Level 5 state machineにも `UNKNOWN_RESULT_SAFE_STOP -> ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT` を追加した。
+  manual UI確認はIDや価格なしのsafe booleanのみ。pending order safe routeがない場合は
+  `pending_order_safe_status=NOT_CHECKED_SOURCE_MISSING` として非blockingに扱う。
+  今回のruntime safe readは `UNKNOWN_FAIL_CLOSED` となったため、live closeout decisionはCASE 4相当で停止。
+  runbook: [STEP6G_ENTRY_UNKNOWN_NO_POSITION_CLOSEOUT_GATE.md](STEP6G_ENTRY_UNKNOWN_NO_POSITION_CLOSEOUT_GATE.md)。
 - **Step 6G-PC-OX-R-POST-ENTRY-POSITION-CONFIRMATION-GATE-C 完了 / read-only runtime position safe read / no retry / no close POST / CASE 2** —
   直前のentry execution Step `CASE 3` を、safe summaryとして
   `entry_http_post_executed=true`、`entry_post_execution_count=1`、`entry_retry_attempted=false`、

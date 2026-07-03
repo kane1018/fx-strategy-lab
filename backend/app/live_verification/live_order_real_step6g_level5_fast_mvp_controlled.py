@@ -76,6 +76,8 @@ class Level5CycleState(str, Enum):
     ENTRY_ACCEPTED_SANITIZED = "ENTRY_ACCEPTED_SANITIZED"
     POSITION_CHECK_PENDING = "POSITION_CHECK_PENDING"
     POSITION_OPEN_SAFE = "POSITION_OPEN_SAFE"
+    UNKNOWN_RESULT_SAFE_STOP = "UNKNOWN_RESULT_SAFE_STOP"
+    ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT = "ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT"
     EXIT_SIGNAL = "EXIT_SIGNAL"
     CLOSE_READY = "CLOSE_READY"
     CLOSE_SENT = "CLOSE_SENT"
@@ -519,6 +521,7 @@ class Level5CycleTransitionInput:
     close_execution_gate_passed: bool = False
     close_accepted_sanitized: bool = False
     no_position_after_close: bool = False
+    entry_unknown_no_position_closeout_confirmed: bool = False
     daily_limits_ok: bool = True
     retry_attempted: bool = False
     second_post_attempted: bool = False
@@ -850,6 +853,15 @@ def transition_level5_cycle_state(
         next_state = Level5CycleState.POSITION_CHECK_PENDING
     elif snapshot.current_state is Level5CycleState.POSITION_CHECK_PENDING:
         next_state, reasons = _position_check_next_state(snapshot.position_status)
+    elif snapshot.current_state is Level5CycleState.UNKNOWN_RESULT_SAFE_STOP:
+        if (
+            snapshot.entry_unknown_no_position_closeout_confirmed
+            and snapshot.position_status is PositionReadOnlyStatus.NO_POSITION
+        ):
+            next_state = Level5CycleState.ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT
+        elif snapshot.entry_unknown_no_position_closeout_confirmed:
+            next_state = Level5CycleState.HALTED
+            reasons = ("closeout_requires_no_position",)
     elif snapshot.current_state is Level5CycleState.POSITION_OPEN_SAFE:
         if snapshot.exit_signal:
             next_state = Level5CycleState.EXIT_SIGNAL
@@ -1658,6 +1670,7 @@ _CYCLE_INPUT_BOOL_FIELDS = (
     "close_execution_gate_passed",
     "close_accepted_sanitized",
     "no_position_after_close",
+    "entry_unknown_no_position_closeout_confirmed",
     "daily_limits_ok",
     "retry_attempted",
     "second_post_attempted",

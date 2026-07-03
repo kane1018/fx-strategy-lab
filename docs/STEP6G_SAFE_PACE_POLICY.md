@@ -281,3 +281,15 @@ That closeout gate must still prohibit retry/repost, second entry POST, actual
 close POST, ledger update, receipt handoff, raw responses, broker/API
 responses, IDs, credential values, signature values, header values, and `.env`
 access.
+
+The closeout gate may mark the previous unknown/no-position attempt terminal
+only as a safe state transition:
+
+```text
+UNKNOWN_RESULT_SAFE_STOP + NO_POSITION
+  -> ENTRY_UNKNOWN_NO_POSITION_CLOSED_OUT
+```
+
+`fresh_cycle_may_be_planned=true` is not POST permission. A later fresh cycle
+must require a new position read, new signal, new operator readiness check, and
+new entry confirmation.

@@ -96,6 +96,12 @@ entry POST, actual close POST, ledger update, receipt handoff, raw response
 handling, broker/API response display, ID display, credential/signature/header
 display, or `.env` access.
 
+The follow-up closeout gate is documented in
+[STEP6G_ENTRY_UNKNOWN_NO_POSITION_CLOSEOUT_GATE.md](STEP6G_ENTRY_UNKNOWN_NO_POSITION_CLOSEOUT_GATE.md).
+It treats the previous attempt as terminal only after a safe runtime position
+result confirms `NO_POSITION` / count `0`; otherwise it fails closed and keeps
+retry/repost, second entry, and close POST blocked.
+
 ## Verification
 
 Primary test:
