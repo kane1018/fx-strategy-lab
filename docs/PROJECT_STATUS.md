@@ -82,6 +82,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-MANUAL-INTERVENTION-CYCLE-CLOSEOUT-AND-FRESH-RETRY-READINESS-NO-POST-C 完了 / manual intervention included closeout / fresh retry readiness / CASE 1** —
+  直近のLevel 5再挑戦サイクルでは、previous entry POSTはsafe summary上1回のみで
+  `RESULT_ACCEPTED_SANITIZED`、official settlement POSTも1回のみ実行され
+  `RESULT_REJECTED_SANITIZED` だった。retry/repost/second settlement POST、entry POST after reject、
+  generic close、ledger/receipt、raw/ID/value exposure は行っていない。operator manual intervention後の
+  read-only safe confirmationで `runtime_position_after_manual_action=NO_POSITION`、
+  `position_count_safe_after_manual_action=0`、`active_order_status_safe=NO_ACTIVE_ORDERS_SAFE`、
+  `pending_order_status_safe=NO_PENDING_ORDER_SAFE` を確認した。
+  `cycle_closeout_status=MANUAL_INTERVENTION_INCLUDED_CLOSEOUT` として記録し、
+  manual intervention included のため `Level_5_full_auto_cycle_completed=false` を固定する。
+  fresh retry readinessは `fresh_cycle_required=true`、`previous_cycle_closed=true`、
+  `known_code_blocker_remaining=false`。次にLevel 5を狙う場合は別fresh cycleとして
+  Fresh entry gate → post-entry ONE_POSITION_OPEN/count=1 confirmation → official settlement execution gate →
+  post-settlement NO_POSITION/count=0 confirmation の順に進む。
+  次回settlement前には official settlement route、actual transport、real-network client binding、
+  settlement side provenance、operator readiness、settlement-specific confirmation、
+  retry/repost/second POST禁止をfreshに再確認する。
 - **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-ROUTE-NO-POST-IMPLEMENTATION-C 完了 / official settlement no-POST preview ready / CASE 1** —
   直前 GMO official settlement route review はCASE 1で、
   `official_settlement_route_confirmed=true`、
