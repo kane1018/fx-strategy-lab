@@ -554,7 +554,7 @@ def _classify(
     for label, classification in _SYNTHETIC_FIXTURE_MAP.items():
         if snapshot.synthetic_fixture_label == label:
             return classification
-    return _unavailable_classification(blocked=False)
+    return _rejected_unavailable_classification()
 
 
 def _classification(
@@ -597,6 +597,20 @@ def _unavailable_classification(*, blocked: bool) -> SafeRejectionClassification
         safe_rejection_reason_unavailable=True,
         requires_raw_response=False,
         requires_operator_ui_safe_label=not blocked,
+    )
+
+
+def _rejected_unavailable_classification() -> SafeRejectionClassification:
+    return SafeRejectionClassification(
+        category=SafeRejectionCategory.UNKNOWN,
+        kind=SafeRejectionKind.BROKER_REJECTED_REASON_UNAVAILABLE,
+        source=SafeRejectionSource.SANITIZED_RESULT_ONLY,
+        confidence=SafeRejectionConfidence.UNKNOWN,
+        selected_safe_detail_label=UNAVAILABLE_SAFE_LABEL,
+        safe_rejection_reason_available=False,
+        safe_rejection_reason_unavailable=True,
+        requires_raw_response=True,
+        requires_operator_ui_safe_label=True,
     )
 
 

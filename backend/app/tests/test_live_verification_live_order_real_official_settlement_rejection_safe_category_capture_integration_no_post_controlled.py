@@ -6,25 +6,24 @@ from pathlib import Path
 
 import pytest
 
+from app.live_verification.live_order_real_official_settlement_rejection_safe_category_capture_integration_no_post_controlled import (  # noqa: E501
+    OfficialSettlementRejectionSafeCategoryIntegrationInput,
+    OfficialSettlementRejectionSafeCategoryIntegrationStatus,
+    build_official_settlement_rejection_safe_category_capture_integration_no_post,
+    render_official_settlement_rejection_safe_category_capture_integration_markdown,
+)
 from app.live_verification.live_order_real_official_settlement_safe_rejection_category_no_post_controlled import (  # noqa: E501
     OFFICIAL_DOCS_SPEC_COMPARISON_PARAMETER_MISMATCH_CANDIDATE,
     OPERATOR_UI_SAFE_LABEL_POSITION_NOT_FOUND_OR_ALREADY_CLOSED,
     SAFE_BROKER_CODE_REQUIRED_PARAMETER_MISSING,
     SAFE_HTTP_STATUS_RATE_LIMIT,
-    SYNTHETIC_FIXTURE_SIDE_SEMANTICS_MISMATCH,
-    SafeRejectionCaptureStatus,
     SafeRejectionCategory,
-    SafeRejectionCategoryCaptureInput,
     SafeRejectionConfidence,
     SafeRejectionKind,
     SafeRejectionSource,
-    build_safe_rejection_category_capture_no_post_controlled,
-    render_safe_rejection_category_capture_markdown,
 )
 from app.live_verification.live_order_real_sanitized_post_result import (
     LiveOrderRealSafePostResultCategory,
-    LiveOrderRealSanitizedPostResultInput,
-    build_live_order_real_sanitized_post_result,
 )
 
 RAW_RESPONSE_SENTINEL = "RAW_RESPONSE_SHOULD_NOT_SURFACE"
@@ -42,19 +41,17 @@ HEADERS_VALUE_SENTINEL = "HEADERS_VALUE_SHOULD_NOT_SURFACE"
 
 
 def _build(**overrides: object):
-    return build_safe_rejection_category_capture_no_post_controlled(
-        input_snapshot=SafeRejectionCategoryCaptureInput(**overrides),
+    return build_official_settlement_rejection_safe_category_capture_integration_no_post(
+        OfficialSettlementRejectionSafeCategoryIntegrationInput(**overrides),
     )
 
 
-def test_rejected_result_without_safe_details_maps_to_unknown_unavailable() -> None:
+def test_rejected_result_uses_safe_category_capture_default_unknown_unavailable() -> None:
     result = _build()
 
-    assert result.status is SafeRejectionCaptureStatus.READY_NO_POST
-    assert result.safe_rejection_category_capture_ready is True
-    assert result.safe_rejection_kind_capture_ready is True
-    assert result.safe_rejection_source_capture_ready is True
-    assert result.safe_rejection_confidence_capture_ready is True
+    assert result.status is OfficialSettlementRejectionSafeCategoryIntegrationStatus.READY_NO_POST
+    assert result.safe_rejection_category_capture_integrated is True
+    assert result.official_settlement_rejected_result_uses_safe_category_capture is True
     assert result.safe_rejection_category == SafeRejectionCategory.UNKNOWN.value
     assert (
         result.safe_rejection_kind
@@ -64,28 +61,11 @@ def test_rejected_result_without_safe_details_maps_to_unknown_unavailable() -> N
     assert result.safe_rejection_confidence == SafeRejectionConfidence.UNKNOWN.value
     assert result.safe_rejection_reason_available is False
     assert result.safe_rejection_reason_unavailable is True
-    assert result.requires_raw_response is True
-    assert result.requires_operator_ui_safe_label is True
-    assert result.actual_settlement_post_executed is False
-    assert result.transport_call_count == 0
-    assert result.real_http_call_count == 0
-
-
-def test_existing_sanitized_rejected_result_maps_to_unknown_unavailable() -> None:
-    rejected_result = build_live_order_real_sanitized_post_result(
-        input_snapshot=LiveOrderRealSanitizedPostResultInput(result_rejected=True),
-    )
-    result = build_safe_rejection_category_capture_no_post_controlled(
-        sanitized_result=rejected_result,
-    )
-
-    assert result.safe_rejection_category == SafeRejectionCategory.UNKNOWN.value
-    assert (
-        result.safe_rejection_kind
-        == SafeRejectionKind.BROKER_REJECTED_REASON_UNAVAILABLE.value
-    )
-    assert result.safe_rejection_source == SafeRejectionSource.SANITIZED_RESULT_ONLY.value
-    assert result.safe_rejection_reason_unavailable is True
+    assert result.safe_rejection_requires_raw_response is True
+    assert result.safe_rejection_requires_operator_ui_safe_label is True
+    assert result.raw_response_inspected is False
+    assert result.broker_response_exposed is False
+    assert result.error_message_rendered is False
 
 
 @pytest.mark.parametrize(
@@ -127,16 +107,9 @@ def test_existing_sanitized_rejected_result_maps_to_unknown_unavailable() -> Non
             SafeRejectionSource.OFFICIAL_DOCS_SPEC_COMPARISON,
             SafeRejectionConfidence.MEDIUM,
         ),
-        (
-            {"synthetic_fixture_label": SYNTHETIC_FIXTURE_SIDE_SEMANTICS_MISMATCH},
-            SafeRejectionCategory.SIDE_OR_SETTLEMENT_SEMANTICS,
-            SafeRejectionKind.SIDE_SEMANTICS_MISMATCH_POSSIBLE,
-            SafeRejectionSource.SYNTHETIC_CLASSIFIER_FIXTURE,
-            SafeRejectionConfidence.HIGH,
-        ),
     ],
 )
-def test_safe_detail_labels_map_to_category_kind_source(
+def test_safe_detail_labels_classify_only_safe_category_fields(
     overrides: dict[str, object],
     category: SafeRejectionCategory,
     kind: SafeRejectionKind,
@@ -145,36 +118,62 @@ def test_safe_detail_labels_map_to_category_kind_source(
 ) -> None:
     result = _build(**overrides)
 
-    assert result.status is SafeRejectionCaptureStatus.READY_NO_POST
+    assert result.safe_rejection_category_capture_integrated is True
     assert result.safe_rejection_category == category.value
     assert result.safe_rejection_kind == kind.value
     assert result.safe_rejection_source == source.value
     assert result.safe_rejection_confidence == confidence.value
     assert result.safe_rejection_reason_available is True
     assert result.safe_rejection_reason_unavailable is False
-    assert result.requires_raw_response is False
+    assert result.safe_rejection_requires_raw_response is False
 
 
-def test_non_rejected_result_stays_unknown_without_raw_or_post() -> None:
+def test_non_rejected_official_settlement_result_blocks_integration() -> None:
     result = _build(
-        sanitized_result_category=(
+        official_settlement_result_category=(
             LiveOrderRealSafePostResultCategory.RESULT_ACCEPTED_SANITIZED.value
         ),
     )
 
-    assert result.safe_rejection_category == SafeRejectionCategory.UNKNOWN.value
-    assert result.safe_rejection_kind == SafeRejectionKind.UNKNOWN_SAFE.value
-    assert result.safe_rejection_source == SafeRejectionSource.SANITIZED_RESULT_ONLY.value
-    assert result.actual_settlement_post_executed is False
+    assert (
+        result.status
+        is OfficialSettlementRejectionSafeCategoryIntegrationStatus.BLOCKED_UNSAFE_INPUT
+    )
+    assert result.safe_rejection_category_capture_integrated is False
+    assert result.official_settlement_rejected_result_uses_safe_category_capture is False
+    assert "official_settlement_result_not_rejected_sanitized" in result.blocked_reasons
 
 
-def test_raw_value_and_secret_sentinels_never_surface_in_payload_or_render() -> None:
+def test_final_report_render_and_asdict_include_safe_fields_only() -> None:
+    result = _build(
+        safe_broker_code_label=SAFE_BROKER_CODE_REQUIRED_PARAMETER_MISSING,
+    )
+    payload = repr(asdict(result))
+    rendered = (
+        render_official_settlement_rejection_safe_category_capture_integration_markdown(
+            result,
+        )
+    )
+
+    assert SafeRejectionCategory.PARAMETER_OR_REQUEST_SHAPE.value in payload
+    assert SafeRejectionKind.REQUIRED_PARAMETER_MISSING.value in payload
+    assert SafeRejectionSource.SAFE_BROKER_ERROR_CODE_LABEL.value in payload
+    assert "safe_rejection_category_capture_integrated: true" in rendered
+    assert "actual_post_executed: false" in rendered
+    assert "settlement_post_count: 0" in rendered
+    assert "transport_call_count: 0" in rendered
+    assert "real_http_call_count: 0" in rendered
+    for forbidden in _FORBIDDEN_SENTINELS:
+        assert forbidden not in payload
+        assert forbidden not in rendered
+
+
+def test_raw_value_and_secret_sentinels_never_surface_when_blocked() -> None:
     result = _build(
         safe_broker_code_label=RAW_RESPONSE_SENTINEL,
         safe_http_status_label=BROKER_RESPONSE_SENTINEL,
         operator_ui_safe_label=ERROR_MESSAGE_SENTINEL,
         official_docs_comparison_safe_result=ACCOUNT_ID_SENTINEL,
-        synthetic_fixture_label=ORDER_ID_SENTINEL,
         raw_response_supplied=True,
         broker_response_supplied=True,
         error_message_text_supplied=True,
@@ -191,10 +190,16 @@ def test_raw_value_and_secret_sentinels_never_surface_in_payload_or_render() -> 
         env_read=True,
     )
     payload = repr(asdict(result))
-    rendered = render_safe_rejection_category_capture_markdown(result)
+    rendered = (
+        render_official_settlement_rejection_safe_category_capture_integration_markdown(
+            result,
+        )
+    )
 
-    assert result.status is SafeRejectionCaptureStatus.BLOCKED_UNSAFE_INPUT
-    assert result.safe_rejection_category_capture_ready is False
+    assert (
+        result.status
+        is OfficialSettlementRejectionSafeCategoryIntegrationStatus.BLOCKED_UNSAFE_INPUT
+    )
     assert result.raw_response_rendered is False
     assert result.broker_response_rendered is False
     assert result.error_message_rendered is False
@@ -207,21 +212,9 @@ def test_raw_value_and_secret_sentinels_never_surface_in_payload_or_render() -> 
     assert result.credential_value_rendered is False
     assert result.signature_value_rendered is False
     assert result.headers_value_rendered is False
+    assert result.raw_id_value_exposure is False
     assert result.env_read is False
-    for forbidden in (
-        RAW_RESPONSE_SENTINEL,
-        BROKER_RESPONSE_SENTINEL,
-        ERROR_MESSAGE_SENTINEL,
-        ACCOUNT_ID_SENTINEL,
-        ORDER_ID_SENTINEL,
-        POSITION_ID_SENTINEL,
-        TRADE_ID_SENTINEL,
-        QUANTITY_VALUE_SENTINEL,
-        PRICE_VALUE_SENTINEL,
-        CREDENTIAL_VALUE_SENTINEL,
-        SIGNATURE_VALUE_SENTINEL,
-        HEADERS_VALUE_SENTINEL,
-    ):
+    for forbidden in _FORBIDDEN_SENTINELS:
         assert forbidden not in payload
         assert forbidden not in rendered
 
@@ -229,12 +222,12 @@ def test_raw_value_and_secret_sentinels_never_surface_in_payload_or_render() -> 
 @pytest.mark.parametrize(
     "field_name",
     [
-        "actual_settlement_post_executed",
+        "actual_post_executed",
+        "retry",
+        "repost",
+        "second_post",
         "entry_post_executed",
-        "retry_attempted",
-        "repost_attempted",
-        "second_settlement_post_attempted",
-        "generic_close_post_executed",
+        "generic_close_executed",
         "ledger_update_attempted",
         "receipt_handoff_attempted",
         "generic_order_executor_used_for_settlement",
@@ -243,17 +236,21 @@ def test_raw_value_and_secret_sentinels_never_surface_in_payload_or_render() -> 
         "position_specific_path_executed",
     ],
 )
-def test_execution_attempts_block_and_render_as_not_executed(field_name: str) -> None:
+def test_execution_attempts_block_and_are_zeroed(field_name: str) -> None:
     result = _build(**{field_name: True})
 
-    assert result.status is SafeRejectionCaptureStatus.BLOCKED_EXECUTION_ATTEMPT
-    assert result.safe_rejection_category_capture_ready is False
-    assert result.actual_settlement_post_executed is False
+    assert (
+        result.status
+        is OfficialSettlementRejectionSafeCategoryIntegrationStatus
+        .BLOCKED_EXECUTION_ATTEMPT
+    )
+    assert result.safe_rejection_category_capture_integrated is False
+    assert result.actual_post_executed is False
+    assert result.retry is False
+    assert result.repost is False
+    assert result.second_post is False
     assert result.entry_post_executed is False
-    assert result.retry_attempted is False
-    assert result.repost_attempted is False
-    assert result.second_settlement_post_attempted is False
-    assert result.generic_close_post_executed is False
+    assert result.generic_close_executed is False
     assert result.ledger_update_attempted is False
     assert result.receipt_handoff_attempted is False
     assert result.generic_order_executor_used_for_settlement is False
@@ -262,26 +259,21 @@ def test_execution_attempts_block_and_render_as_not_executed(field_name: str) ->
     assert result.position_specific_path_executed is False
 
 
-@pytest.mark.parametrize("field_name", ["transport_call_count", "real_http_call_count"])
-def test_transport_or_http_call_count_blocks_and_is_zeroed(field_name: str) -> None:
+@pytest.mark.parametrize(
+    "field_name",
+    ["settlement_post_count", "transport_call_count", "real_http_call_count"],
+)
+def test_post_or_transport_count_blocks_and_is_zeroed(field_name: str) -> None:
     result = _build(**{field_name: 1})
 
-    assert result.status is SafeRejectionCaptureStatus.BLOCKED_EXECUTION_ATTEMPT
+    assert (
+        result.status
+        is OfficialSettlementRejectionSafeCategoryIntegrationStatus
+        .BLOCKED_EXECUTION_ATTEMPT
+    )
+    assert result.settlement_post_count == 0
     assert result.transport_call_count == 0
     assert result.real_http_call_count == 0
-
-
-def test_renderer_is_safe_summary_only() -> None:
-    result = _build(
-        safe_broker_code_label=SAFE_BROKER_CODE_REQUIRED_PARAMETER_MISSING,
-    )
-    rendered = render_safe_rejection_category_capture_markdown(result)
-
-    assert "safe_rejection_category_capture_ready: true" in rendered
-    assert SafeRejectionCategory.PARAMETER_OR_REQUEST_SHAPE.value in rendered
-    assert "actual_settlement_post_executed: false" in rendered
-    assert "transport_call_count: 0" in rendered
-    assert RAW_RESPONSE_SENTINEL not in rendered
 
 
 def test_module_has_no_http_env_broker_or_execution_imports() -> None:
@@ -319,7 +311,10 @@ def test_module_has_no_http_env_broker_or_execution_imports() -> None:
     path = (
         Path(__file__).resolve().parents[1]
         / "live_verification"
-        / "live_order_real_official_settlement_safe_rejection_category_no_post_controlled.py"
+        / (
+            "live_order_real_official_settlement_rejection_safe_category_"
+            "capture_integration_no_post_controlled.py"
+        )
     )
     tree = ast.parse(path.read_text(encoding="utf-8"))
 
@@ -334,6 +329,22 @@ def test_module_has_no_http_env_broker_or_execution_imports() -> None:
             assert not _is_blocked_module(module, blocked_modules)
         if isinstance(node, ast.Call):
             assert _call_name(node) not in blocked_call_names
+
+
+_FORBIDDEN_SENTINELS = (
+    RAW_RESPONSE_SENTINEL,
+    BROKER_RESPONSE_SENTINEL,
+    ERROR_MESSAGE_SENTINEL,
+    ACCOUNT_ID_SENTINEL,
+    ORDER_ID_SENTINEL,
+    POSITION_ID_SENTINEL,
+    TRADE_ID_SENTINEL,
+    QUANTITY_VALUE_SENTINEL,
+    PRICE_VALUE_SENTINEL,
+    CREDENTIAL_VALUE_SENTINEL,
+    SIGNATURE_VALUE_SENTINEL,
+    HEADERS_VALUE_SENTINEL,
+)
 
 
 def _is_blocked_module(module: str, blocked_modules: set[str]) -> bool:
