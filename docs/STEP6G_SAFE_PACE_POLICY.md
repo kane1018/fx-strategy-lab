@@ -223,7 +223,21 @@ step.
 Recommended next paced step:
 
 ```text
-Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-EXECUTABLE-ROUTE
+Step 6G-PC-OX-R-CLOSE-ORDER-ACTUAL-EXECUTOR-COMPATIBILITY-NO-POST-C
+```
+
+After `Step 6G-PC-OX-R-CLOSE-ORDER-ACTUAL-EXECUTOR-COMPATIBILITY-NO-POST-C`,
+the close actual executor compatibility foundation is no-POST. It preserves
+the generic entry BUY guard, keeps generic entry `SELL` blocked, and accepts
+`SELL` / `BUY` only as a close-specific guarded context from the close execution
+route. A ready compatibility state means
+`CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST`; it does not allow close
+POST in the same step.
+
+Recommended next paced step:
+
+```text
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-COMPATIBLE-EXECUTOR
 ```
 
 After `Step 6G-PC-OX-R-POSITION-RUNTIME-SAFE-READ-CHECK-C`, the runtime

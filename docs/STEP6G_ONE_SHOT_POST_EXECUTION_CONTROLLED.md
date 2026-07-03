@@ -56,6 +56,13 @@ only:
 The preview fails closed when the safe order candidate is missing, ambiguous,
 unsupported, Codex-inferred, or requires raw/ID/value exposure.
 
+For generic entry, the executable order preview remains repo-defined and
+BUY-fixed. Generic entry `SELL` is intentionally blocked. Close order
+compatibility is handled by
+`live_order_real_close_actual_executor_compatibility_controlled.py` as a
+separate close-specific no-POST adapter; it does not loosen this generic entry
+guard.
+
 The preview does not expose:
 
 - account ID

@@ -118,6 +118,32 @@ FRESH_POSITION_OPEN_SAFE_HANDOFF_READY
   -> CLOSE_EXECUTION_ROUTE_BLOCKED_PRIMITIVE_MISSING
 ```
 
+The follow-up compatibility foundation keeps the route no-POST and connects
+only sanitized safe fields:
+
+```text
+CLOSE_EXECUTION_GATE_READY_NO_POST
+  + close_actual_executor_compatibility_ready=true
+  + close_specific_executor_preview_ready=true
+  -> CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST
+```
+
+The compatibility step preserves the generic entry BUY guard. Generic entry
+`SELL` remains blocked; `SELL` is accepted only as a close-specific guarded
+side from this close execution route.
+
+## Next Step
+
+Recommended next step after the compatibility foundation:
+
+```text
+Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-COMPATIBLE-EXECUTOR
+```
+
+That next step must still perform a current runtime position read, operator
+close readiness, sanitized close preview, and a new close-specific confirmation
+before any actual close POST can be considered.
+
 This step does not reach `CLOSE_SENT`, `CLOSE_POST_EXECUTED`,
 `POST_CLOSE_POSITION_CONFIRMATION`, `LEDGER_UPDATED`, `RECEIPT_HANDOFF`, or
 `LEVEL5_CYCLE_COMPLETED`.

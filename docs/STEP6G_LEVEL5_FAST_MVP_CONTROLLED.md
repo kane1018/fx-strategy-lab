@@ -153,6 +153,22 @@ Close execution route follow-up:
 - ready route state is `CLOSE_EXECUTION_GATE_READY_NO_POST`
 - actual close POST remains prohibited in this implementation step
 
+Close actual executor compatibility follow-up:
+
+- Level 5 foundation carries `close_actual_executor_compatibility`
+- generic entry BUY guard remains intact
+- generic entry `SELL` remains blocked
+- close-specific `SELL` / `BUY` is accepted only from the guarded close
+  execution route context
+- exact-one-position guard, approved guarded generic close primitive, fixed
+  `100`, and `MARKET` are required
+- ready compatibility state is
+  `CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST`
+- `actual_close_post_allowed_now=false`
+- `actual_close_post_executed=false`
+- `transport_call_count=0`
+- actual close POST remains prohibited until a separate close execution gate
+
 ## Cycle State Machine
 
 States:

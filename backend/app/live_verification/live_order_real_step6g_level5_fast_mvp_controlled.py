@@ -14,6 +14,11 @@ from dataclasses import dataclass
 from enum import Enum
 
 from app.live_verification.errors import LiveVerificationValidationError
+from app.live_verification.live_order_real_close_actual_executor_compatibility_controlled import (
+    CloseActualExecutorCompatibilityControlledInput,
+    CloseActualExecutorCompatibilityControlledResult,
+    build_close_actual_executor_compatibility_controlled,
+)
 from app.live_verification.live_order_real_close_order_execution_route_controlled import (
     CloseOrderExecutionRouteControlledInput,
     CloseOrderExecutionRouteControlledResult,
@@ -575,6 +580,7 @@ class Level5FastMvpFoundationResult:
     close_route: CloseRouteFoundationResult
     close_order_route: CloseOrderRouteControlledResult
     close_execution_route: CloseOrderExecutionRouteControlledResult
+    close_actual_executor_compatibility: CloseActualExecutorCompatibilityControlledResult
     signal: Level5SignalMvpResult
     entry_planning: Level5EntryPlanningGateResult
     cycle_transition: Level5CycleTransitionResult
@@ -899,6 +905,9 @@ def build_level5_fast_mvp_foundation(
     close_input: CloseRouteFoundationInput | None = None,
     close_order_route_input: CloseOrderRouteControlledInput | None = None,
     close_execution_route_input: CloseOrderExecutionRouteControlledInput | None = None,
+    close_actual_executor_compatibility_input: (
+        CloseActualExecutorCompatibilityControlledInput | None
+    ) = None,
     signal_input: Level5SignalMvpInput | None = None,
     cycle_input: Level5CycleTransitionInput | None = None,
 ) -> Level5FastMvpFoundationResult:
@@ -925,6 +934,15 @@ def build_level5_fast_mvp_foundation(
         if close_execution_route_input is not None
         else build_close_order_execution_route_controlled(
             close_order_route_result=close_order_route,
+        )
+    )
+    close_actual_executor_compatibility = (
+        build_close_actual_executor_compatibility_controlled(
+            close_actual_executor_compatibility_input,
+        )
+        if close_actual_executor_compatibility_input is not None
+        else build_close_actual_executor_compatibility_controlled(
+            close_execution_route_result=close_execution_route,
         )
     )
     signal = evaluate_level5_signal_mvp(
@@ -964,6 +982,7 @@ def build_level5_fast_mvp_foundation(
         close_route=close,
         close_order_route=close_order_route,
         close_execution_route=close_execution_route,
+        close_actual_executor_compatibility=close_actual_executor_compatibility,
         signal=signal,
         entry_planning=entry_planning,
         cycle_transition=cycle,
@@ -1045,6 +1064,22 @@ def render_level5_fast_mvp_foundation_markdown(
         (
             "- actual_close_post_allowed_now: "
             f"{_bool_text(result.close_execution_route.actual_close_post_allowed_now)}"
+        ),
+        (
+            "- close_actual_executor_compatibility_ready: "
+            f"{_bool_text(result.close_actual_executor_compatibility.close_actual_executor_compatibility_ready)}"
+        ),
+        (
+            "- close_specific_executor_preview_ready: "
+            f"{_bool_text(result.close_actual_executor_compatibility.close_specific_executor_preview_ready)}"
+        ),
+        (
+            "- close_actual_executor_next_cycle_state: "
+            f"{result.close_actual_executor_compatibility.level5_connection.next_cycle_state}"
+        ),
+        (
+            "- close_actual_executor_transport_call_count: "
+            f"{result.close_actual_executor_compatibility.transport_call_count}"
         ),
         f"- signal_type: {result.signal.signal_type.value}",
         (

@@ -82,6 +82,29 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-CLOSE-ORDER-ACTUAL-EXECUTOR-COMPATIBILITY-NO-POST-C 完了 / close actual executor compatibility ready / no actual close POST / CASE 1** —
+  直前 close execution gate retry はCASE 2で、close executable previewは
+  `SELL / USD_JPY / 100 / MARKET` までreadyだったが、既存 one-shot executor preview が
+  generic entry用のBUY固定guardで `SELL` を拒否した。
+  今回のStepでは
+  `backend/app/live_verification/live_order_real_close_actual_executor_compatibility_controlled.py`
+  を追加し、close execution route foundation由来のsafe previewだけを
+  close-specific executor compatibility previewへ変換する no-POST adapterを実装した。
+  generic entry BUY guardは維持し、generic entry `SELL` はblockしたままにする。
+  close-specific contextでは exact-one-position guard、approved guarded generic close primitive、
+  concrete close side、fixed `100` units、`MARKET`、retry/repost/second close=falseを必須にして、
+  `close_actual_executor_compatibility_ready=true`、
+  `close_specific_executor_preview_ready=true`、
+  `actual_close_post_allowed_now=false`、
+  `actual_close_post_executed=false`、
+  `transport_call_count=0` を確認できる。
+  Level 5 foundationは
+  `CLOSE_EXECUTION_GATE_READY_NO_POST -> CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_READY_NO_POST`
+  の no-POST connectionを持つが、`CLOSE_SENT` / `CLOSE_POST_EXECUTED` / ledger / receipt へは進まない。
+  runbook:
+  [STEP6G_CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_CONTROLLED.md](STEP6G_CLOSE_ACTUAL_EXECUTOR_COMPATIBILITY_CONTROLLED.md)。
+  次の推奨Stepは
+  **Step 6G-PC-OX-R-CLOSE-ORDER-EXECUTION-GATE-C-RETRY-WITH-COMPATIBLE-EXECUTOR**。
 - **Step 6G-PC-OX-R-FRESH-POSITION-OPEN-SAFE-HANDOFF-GATE-C 完了 / confirmed fresh open position handed off to close execution gate / planning-only / no close POST / CASE 1** —
   直前のfresh post-entry position confirmation gateはCASE 1で、fresh entry POSTは前Stepで1回のみ、
   `RESULT_ACCEPTED_SANITIZED`、retry/repost/second entry=false、close POST=false、ledger/receipt=false、
