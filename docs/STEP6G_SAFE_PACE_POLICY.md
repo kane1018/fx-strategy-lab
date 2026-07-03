@@ -293,3 +293,9 @@ UNKNOWN_RESULT_SAFE_STOP + NO_POSITION
 `fresh_cycle_may_be_planned=true` is not POST permission. A later fresh cycle
 must require a new position read, new signal, new operator readiness check, and
 new entry confirmation.
+
+If an operator manually closes a position in the broker UI, Codex may reconcile
+that report only with safe booleans and read-only runtime position status/count.
+Such reconciliation must set `level5_full_auto_cycle_completed=false`. It may
+allow a later fresh-cycle plan only when retry/repost, second entry, close POST,
+ledger/receipt, and raw/ID/value exposure remain false.

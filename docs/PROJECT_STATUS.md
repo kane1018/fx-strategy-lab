@@ -82,6 +82,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-CLOSEOUT-DIRTY-WORKTREE-FREEZE-AND-MANUAL-CLOSE-RECONCILIATION-C 完了 / operator manual close reconciled by runtime NO_POSITION / no retry / no close POST** —
+  dirty worktreeのcloseout gate実装を破棄せず、fail-closed実装としてreview後にcommit/pushした。
+  その後、operatorがbroker UIで手動決済した報告をsafe booleanとして扱い、read-only runtime position checkで
+  `position_status=NO_POSITION`、`position_count_safe=0`、`has_open_position=false` を確認した。
+  判定は `manual_close_reconciled=true`、
+  `manual_close_reconciliation_basis=RUNTIME_NO_POSITION`、
+  `next_cycle_state=OPERATOR_MANUAL_CLOSE_RECONCILED`、
+  `level5_full_auto_cycle_completed=false`。
+  fresh cycle may be planned はtrueだが、このStepでの実POST許可ではなく、別Stepで新しいruntime position read、
+  signal、operator readiness、entry confirmationが必要。retry/repost、second entry POST、actual close POST、
+  ledger update、receipt handoff、raw/ID/value exposureは行っていない。
+  runbook: [STEP6G_OPERATOR_MANUAL_CLOSE_RECONCILIATION_GATE.md](STEP6G_OPERATOR_MANUAL_CLOSE_RECONCILIATION_GATE.md)。
 - **Step 6G-PC-OX-R-ENTRY-UNKNOWN-NO-POSITION-CLOSEOUT-GATE-C 実装済み / live decision fail-closed / no retry / no close POST** —
   previous entry attemptが `unknown/blocked` かつ post-entry confirmationで `NO_POSITION` だった状態を、
   retry/repostではなくterminal closeoutとして扱うsafe gateを追加した。

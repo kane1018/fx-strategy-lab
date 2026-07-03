@@ -138,3 +138,22 @@ During this implementation run, the safe runtime read path returned
 `UNKNOWN_FAIL_CLOSED` rather than a confirmed `NO_POSITION` result. Therefore
 the live closeout decision for this run is fail-closed; no retry, repost, second
 entry POST, close POST, ledger update, or receipt handoff was performed.
+
+## Operator Manual Close Follow-Up
+
+The follow-up dirty-worktree freeze and manual-close reconciliation gate
+preserved this fail-closed implementation in git, then reconciled the operator
+manual close report with a read-only runtime position result:
+
+```text
+operator_manual_close_reported=true
+operator_manual_close_source=BROKER_UI
+position_status=NO_POSITION
+position_count_safe=0
+manual_close_reconciled=true
+manual_close_reconciliation_basis=RUNTIME_NO_POSITION
+level5_full_auto_cycle_completed=false
+```
+
+Details:
+[STEP6G_OPERATOR_MANUAL_CLOSE_RECONCILIATION_GATE.md](STEP6G_OPERATOR_MANUAL_CLOSE_RECONCILIATION_GATE.md).

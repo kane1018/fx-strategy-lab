@@ -269,6 +269,12 @@ POST, or close POST. It only means a later fresh cycle may be planned in a
 separate gate after a new position read, new signal, new operator readiness
 check, and new entry confirmation.
 
+After operator manual close reconciliation, Level 5 may carry the safe state
+label `OPERATOR_MANUAL_CLOSE_RECONCILED`. This is not `CLOSED_SAFE` from a fully
+autonomous Level 5 cycle. It only records that the operator manual close report
+was reconciled with read-only `NO_POSITION` / count `0`, and that any later
+fresh cycle must start from new gates.
+
 The close route implementation follow-up added a planning-only controlled close
 route. Level 5 now carries `close_order_route` alongside the existing close
 foundation. It allows close planning only for `ONE_POSITION_OPEN` with exactly
