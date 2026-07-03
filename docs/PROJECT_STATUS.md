@@ -82,6 +82,27 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-FRESH-POST-ENTRY-POSITION-CONFIRMATION-GATE-C 完了 / fresh accepted entry effect confirmed by ONE_POSITION_OPEN / no retry / no close POST / CASE 1** —
+  直前のfresh entry gateはCASE 1で、safe summary上
+  `fresh_entry_http_post_executed=true`、`fresh_entry_post_execution_count=1`、
+  `fresh_entry_sanitized_result_category=RESULT_ACCEPTED_SANITIZED`、
+  `fresh_entry_safe_reconciliation_status=RECONCILIATION_READY_NO_RECEIPT_HANDOFF`、
+  `fresh_entry_retry_attempted=false`、`fresh_entry_repost_attempted=false`、
+  `fresh_entry_second_post_attempted=false`、`close_post_executed=false`、
+  `ledger/receipt=false`、`raw/ID/value exposure=false` として扱った。
+  `backend/app/live_verification/live_order_real_fresh_post_entry_position_confirmation_gate_controlled.py`
+  を追加し、fresh accepted summary + credential presence safe booleans + runtime position safe-read resultを
+  safe status/countだけへ閉じるfresh専用confirmation gateを実装した。今回のread-only runtime position checkは
+  `position_status=ONE_POSITION_OPEN`、`position_count_safe=1`、`has_exactly_one_position=true` で、判定は
+  `fresh_entry_effect_confirmed_by_position=true`、
+  `fresh_position_confirmation_status=FRESH_ENTRY_EFFECT_CONFIRMED_POSITION_OPEN_SAFE`、
+  `next_cycle_state=FRESH_POSITION_OPEN_SAFE`、
+  `close_execution_gate_may_be_planned=true`、
+  `close_execution_allowed_now=false`。retry/repost、second entry POST、actual close POST、
+  ledger update、receipt handoff、raw request/response、broker/API response、
+  account/order/transaction/position ID、actual price/PnL、credential/signature/header値、`.env` は扱っていない。
+  runbook: [STEP6G_FRESH_POST_ENTRY_POSITION_CONFIRMATION_GATE.md](STEP6G_FRESH_POST_ENTRY_POSITION_CONFIRMATION_GATE.md)。
+  次の推奨Stepは **Step 6G-PC-OX-R-FRESH-POSITION-OPEN-SAFE-HANDOFF-GATE-C**。
 - **Step 6G-PC-OX-R-CLOSEOUT-DIRTY-WORKTREE-FREEZE-AND-MANUAL-CLOSE-RECONCILIATION-C 完了 / operator manual close reconciled by runtime NO_POSITION / no retry / no close POST** —
   dirty worktreeのcloseout gate実装を破棄せず、fail-closed実装としてreview後にcommit/pushした。
   その後、operatorがbroker UIで手動決済した報告をsafe booleanとして扱い、read-only runtime position checkで
