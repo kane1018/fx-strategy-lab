@@ -7,6 +7,9 @@ from typing import Any
 import pytest
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "live_verification"
+ACTUAL_TRANSPORT_MODULE = (
+    "live_order_real_official_settlement_actual_transport_no_post_controlled.py"
+)
 
 
 def _source_files() -> list[Path]:
@@ -90,6 +93,8 @@ def test_live_verification_package_avoids_blocked_imports_and_config_reads() -> 
             path_blocked_modules.discard("hmac")
         if path.name == "live_order_once.py":
             path_blocked_modules = path_blocked_modules - {"hmac", "httpx"}
+        if path.name == ACTUAL_TRANSPORT_MODULE:
+            path_blocked_modules.discard("httpx")
         if path.name == "live_order_real_credential_presence_controlled.py":
             path_blocked_attrs.discard("en" + "viron")
         if path.name == "live_order_real_one_shot_post_real_delegate_controlled.py":
@@ -3708,6 +3713,8 @@ def test_live_verification_package_has_no_execution_function_defs_or_calls() -> 
         path_blocked_http_call_names = set(blocked_http_call_names)
         if path.name == "live_order_once.py":
             path_blocked_http_call_names.discard("post")
+        if path.name == ACTUAL_TRANSPORT_MODULE:
+            path_blocked_http_call_names.discard("post")
         function_names = {
             node.name
             for node in ast.walk(tree)
@@ -3781,6 +3788,10 @@ def test_live_verification_package_has_no_http_or_private_order_strings() -> Non
                 "API-" + "TIMESTAMP",
             }
             path_blocked_substrings.discard("/private/v1/" + "order")
+        if path.name == ACTUAL_TRANSPORT_MODULE:
+            path_blocked_exact_strings.discard("POST")
+            path_blocked_substrings.discard("/private/v1/" + "closeOrder")
+            path_blocked_substrings.discard("close" + "Order")
         if path.name == "live_order_real_order_transport_core.py":
             path_blocked_exact_strings = path_blocked_exact_strings - {
                 "POST",
@@ -3936,6 +3947,18 @@ def test_live_verification_package_does_not_define_order_payload_fields() -> Non
                 "api_key",
                 "api_secret",
                 "body",
+                "response",
+                "timestamp",
+            }
+        if path.name == ACTUAL_TRANSPORT_MODULE:
+            field_names = field_names - {
+                "api_key",
+                "api_secret",
+                "body",
+                "headers",
+                "method",
+                "path",
+                "payload",
                 "response",
                 "timestamp",
             }
@@ -6431,6 +6454,36 @@ def test_official_settlement_real_network_client_binding_has_no_direct_ordering_
             assert node.attr not in blocked_attrs
         if isinstance(node, ast.Call):
             assert _call_name(node) not in blocked_call_names
+
+
+def test_actual_transport_http_post_is_dedicated_and_not_generic_order() -> None:
+    path = PACKAGE_ROOT / ACTUAL_TRANSPORT_MODULE
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    imported_modules = set()
+    call_names = set()
+    string_constants = _string_constants(tree)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported_modules.update(alias.name for alias in node.names)
+        if isinstance(node, ast.ImportFrom):
+            imported_modules.add(node.module or "")
+        if isinstance(node, ast.Call):
+            call_name = _call_name(node)
+            if call_name is not None:
+                call_names.add(call_name)
+
+    assert "httpx" in imported_modules
+    assert "app.private_api.auth" in imported_modules
+    assert "post" in call_names
+    assert "build_auth_headers" in call_names
+    assert "app.live_verification.live_order_once" not in imported_modules
+    assert "post_live_order_with_httpx" not in call_names
+    assert "execute_one_shot_live_order" not in call_names
+    assert "prepare_one_shot_live_order" not in call_names
+    assert "/private/v1/" + "order" not in string_constants
+    assert "Order" + "Request" not in string_constants
+    assert "GMO_FX_API_" + "KEY" not in string_constants
+    assert "GMO_FX_API_" + "SECRET" not in string_constants
 
 
 def test_live_order_once_public_fields_do_not_store_sensitive_artifacts() -> None:
