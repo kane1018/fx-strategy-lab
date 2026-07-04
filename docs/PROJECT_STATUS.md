@@ -82,6 +82,29 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-REJECTION-SAFE-CATEGORY-REPORTING-HANDOFF-NO-POST-C 完了 / safe rejection category reporting handoff ready / no-POST** —
+  前Stepで統合した safe rejection category capture 結果を、final report と
+  ChatGPT一括引き継ぎ要約へ安全に出力する no-POST reporting/handoff adapter を追加した。
+  `backend/app/live_verification/live_order_real_official_settlement_rejection_safe_category_reporting_handoff_no_post_controlled.py`
+  と
+  `backend/app/tests/test_live_verification_live_order_real_official_settlement_rejection_safe_category_reporting_handoff_no_post_controlled.py`
+  を追加。official settlement rejected result の safe category / kind / source / confidence /
+  reason availability / requires_raw_response / requires_operator_ui_safe_label を
+  safe label / boolean のみで final report fragment と ChatGPT handoff summary に含める。
+  rejected-only result は `SAFE_REJECTION_CATEGORY_UNKNOWN` /
+  `SAFE_REJECTION_KIND_BROKER_REJECTED_REASON_UNAVAILABLE` /
+  `SAFE_REJECTION_SOURCE_SANITIZED_RESULT_ONLY` に落ち、
+  `safe_rejection_reason_available=false`、`safe_rejection_reason_unavailable=true`、
+  `safe_rejection_requires_raw_response=true`、
+  `safe_rejection_requires_operator_ui_safe_label=true` として扱う。
+  safe broker code label、safe HTTP status label、operator UI safe label、
+  official docs comparison safe result がある場合だけ category/kind/source/confidence を具体化する。
+  actual settlement POST、entry POST、retry/repost、second settlement POST、generic close、ledger/receipt、
+  transport/HTTP call、position-specific pathは行わない。sentinel testsで raw response、
+  broker response、error message、account/order/position/trade ID、数量、価格、credential、signature、
+  headers が asdict/render/final report/ChatGPT summary に出ないことを確認した。
+  次の推奨Stepは
+  **Step 6G-PC-OX-R-FRESH-ENTRY-SIGNAL-SAFE-LABEL-CONFIRMATION-NO-POST-C**。
 - **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-REJECTION-SAFE-CATEGORY-CAPTURE-INTEGRATION-NO-POST-C 完了 / safe rejection category capture integrated / no-POST** —
   前Stepで追加した safe rejection category capture 境界を、official settlement rejected result handling 用の
   no-POST adapterへ接続した。
