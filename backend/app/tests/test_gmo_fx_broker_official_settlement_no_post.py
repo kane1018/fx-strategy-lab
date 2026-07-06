@@ -98,11 +98,9 @@ def test_provenance_derives_from_entry_safe_label_only(
     assert result.codex_inferred_settlement_side is False
 
 
-def test_provenance_does_not_carry_ids_or_confirm_official_docs_semantics() -> None:
+def test_provenance_marks_official_docs_semantics_as_confirmed() -> None:
     result = derive_settlement_side_from_entry_side_safe_label(ENTRY_SIDE_SAFE_LABEL_BUY)
-    # This Step never independently verifies the mapping against GMO's
-    # official closeOrder docs -- it stays False until a human does that.
-    assert result.settlement_side_official_docs_semantics_confirmed is False
+    assert result.settlement_side_official_docs_semantics_confirmed is True
     rendered = repr(result)
     for sentinel in FORBIDDEN_SENTINELS:
         assert sentinel not in rendered

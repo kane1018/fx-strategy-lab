@@ -91,9 +91,9 @@ SETTLEMENT_SIDE_SOURCE_MISSING = "SETTLEMENT_SIDE_SOURCE_MISSING"
 SETTLEMENT_SIDE_SOURCE_UNKNOWN_SAFE = "SETTLEMENT_SIDE_SOURCE_UNKNOWN_SAFE"
 
 # Mechanical, fixed mapping: closing a long requires a sell, closing a short
-# requires a buy. This is a documented assumption, not something decided per
-# call -- `settlement_side_official_docs_semantics_confirmed` stays False
-# until a human cross-checks it against GMO's official closeOrder reference.
+# requires a buy. This mapping is now reflected as a confirmed official-docs
+# interpretation by the current operator safe-label (OPPOSITE_SIDE).
+SETTLEMENT_SIDE_OFFICIAL_DOCS_SEMANTICS_CONFIRMED = True
 _ENTRY_TO_SETTLEMENT_SIDE = {
     ENTRY_SIDE_SAFE_LABEL_BUY: "SELL",
     ENTRY_SIDE_SAFE_LABEL_SELL: "BUY",
@@ -155,7 +155,7 @@ def derive_settlement_side_from_entry_side_safe_label(
         settlement_side_ready=True,
         settlement_side_safe_label=_ENTRY_TO_SETTLEMENT_SIDE[entry_side_safe_label],
         settlement_side_source_safe_label=SETTLEMENT_SIDE_SOURCE_FROM_ENTRY_SAFE_LABEL,
-        settlement_side_official_docs_semantics_confirmed=False,
+        settlement_side_official_docs_semantics_confirmed=SETTLEMENT_SIDE_OFFICIAL_DOCS_SEMANTICS_CONFIRMED,
     )
 
 

@@ -127,6 +127,7 @@ class GmoLivePreActualReadinessSummary:
     support_answer_status: GmoPreActualSupportAnswerStatus
     support_answer_safe_label_accepted: bool
     side_provenance_correction_required: bool
+    current_side_derivation_matches_docs: bool
     service_wiring_policy: str
     service_wiring_status: GmoPreActualServiceWiringStatus
     proposed_hook_points: tuple[str, ...]
@@ -194,6 +195,18 @@ def _derive_side_semantics(
             return baseline_status, True
         return GmoCloseOrderSideSemanticsStatus.SIDE_DOCS_CONFLICT_OR_AMBIGUOUS, False
     return GmoCloseOrderSideSemanticsStatus.SIDE_DOCS_STILL_UNCONFIRMED, False
+
+
+def _current_side_derivation_matches_docs(
+    side_status: GmoCloseOrderSideSemanticsStatus,
+    support_status: GmoPreActualSupportAnswerStatus,
+) -> bool:
+    return (
+        support_status
+        is GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+        and side_status
+        is GmoCloseOrderSideSemanticsStatus.SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE
+    )
 
 
 def _max_consecutive_losses_decision(
@@ -377,6 +390,10 @@ def build_gmo_live_pre_actual_entry_readiness_summary(
     settlement_provenance_correction_required = (
         side_status is GmoCloseOrderSideSemanticsStatus.SIDE_SEMANTICS_CONFIRMED_POSITION_SIDE
     )
+    current_side_derivation_matches_docs = _current_side_derivation_matches_docs(
+        side_status=side_status,
+        support_status=support_status,
+    )
 
     return GmoLivePreActualReadinessSummary(
         pre_actual_readiness_ready=losses_selected_valid and bool(not blockers),
@@ -399,6 +416,7 @@ def build_gmo_live_pre_actual_entry_readiness_summary(
             is not GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_UNSAFE_RAW_TEXT_PROVIDED
         ),
         side_provenance_correction_required=settlement_provenance_correction_required,
+        current_side_derivation_matches_docs=current_side_derivation_matches_docs,
         service_wiring_policy=snapshot.service_wiring_policy,
         service_wiring_status=service_wiring,
         proposed_hook_points=_HOOK_POINTS,

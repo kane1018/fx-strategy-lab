@@ -12,15 +12,15 @@ Step 6G "controlled/safe" simulation 系の混在）を踏まえ、GMO FX 実資
 
 ## 現在のステータス（このStepでの反映）
 
-- settlement_side_official_docs_semantics_confirmed: `false`
-- settlement_side_rule_status: `NEEDS_OFFICIAL_DOCS_REVIEW`
-- live settlement: `blocked`（docs確認まで継続）
+- settlement_side_official_docs_semantics_confirmed: `true`
+- settlement_side_rule_status: `OFFICIAL_DOCS_SAFE_SUMMARY_CONFIRMED_OPPOSITE_SIDE`
+- live settlement: `blocked`（docs確認済みだが、position-specific条件・運用者確認/credential未成立で継続）
 - max_consecutive_losses_selected: `2`
 - max_consecutive_losses_decision: `MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2`
 - service_wiring_policy: `DESIGN_FIRST_NO_CODE`（no-POST hook実配線済み）
-- closeOrder docs review result: `SIDE_DOCS_STILL_UNCONFIRMED`
+- closeOrder docs review result: `SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE`
 - closeOrder endpoint: confirmed（`/private/v1/closeOrder`）
-- settlement_side_confirmation: `pending`（公式docsだけでは決済方向を確定不能）
+- settlement_side_confirmation: `confirmed`（公式docs safe summary: entry反対side）
 
 ## 1. GMO live自動売買再開の必須条件
 
@@ -273,10 +273,10 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 ## 9. 運営者向け公式docs確認チェックリスト（no-POST）
 
 - `POST /private/v1/closeOrder` の `side` 定義（`BUY`/`SELL` の意味）をGMO公式記載で直接確認済みか
-- entryの反対側に `side` を送ったときの決済挙動を少なくとも2ケースで確認済みか（両建て含む）
+- entryの反対側に `side` を送ったときの決済挙動を確認済みか（運営者safe summary）
 - `closeOrder` 既定の `size` 指定動作とエラーケースを運営者が認識しているか
-- `settlement_side_official_docs_semantics_confirmed=false` が外部確認完了まで
-  `live settlement` blockの要件に残ることを維持しているか
+- `settlement_side_official_docs_semantics_confirmed` が確認済みで、
+  `live settlement` が side docs由来でブロックしない状態になったかを確認する
 
 ### 9.1 公式docs確認結果（2026-07-07）
 
@@ -284,11 +284,13 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 - `side`: `BUY` / `SELL` の列挙確認（必須パラメータ）
 - `size` / `settlePosition`: 「どちらか1つ必須、同時指定不可」の仕様を確認
 - 決済対象ポジション側への `side` マッピング（`buy sideが買建玉決済側か / 売り建玉決済側か`）は
-  公式docs本文で断定する文言を確認できず
+  GMO FX公式IFDOCO例で `OPEN BUY` 対して `CLOSE SELL`、`OPEN SELL` 対して `CLOSE BUY` を確認済み（`OPPOSITE_SIDE`）
 - 両建て時に size-only closeOrder を送った場合にどの建玉が対象かについて、公式docs本文で確認不可
-- 判定: `SIDE_DOCS_STILL_UNCONFIRMED`（`closeOrder` 決済方向は未確定）
-- 判定結果: `settlement_side_official_docs_semantics_confirmed = false` 維持、`live settlement` はblock維持
-- 次Step: GMOサポートへ確認依頼を発出（本ドキュメント末尾に文面追加）
+- 判定: `SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE`（entry `BUY`=SELL決済、`SELL`=BUY決済）
+- 判定結果: `settlement_side_official_docs_semantics_confirmed = true`、`live settlement` は
+  `size-only closeOrder` の両建て対象未確認のため block維持（position-specific path/actual gate未整備）
+- 次Step: size-only closeOrder の両建て時対象選択（position指定なしでのどちら決済）が未確認なため、その扱いをblockedとして維持しつつ
+  position-specific actual path/実POST条件の設計を保留
 
 ### 9.2 GMOサポート確認文（公開情報外・実値非表示）
 

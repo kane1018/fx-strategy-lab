@@ -34,6 +34,7 @@ def test_default_summary_is_not_live_ready_and_flags_settled_side_docs_blocked()
         summary.support_answer_status
         is GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_NOT_RECEIVED
     )
+    assert summary.current_side_derivation_matches_docs is False
     assert summary.settlement_side_docs_status is (
         GmoCloseOrderSideSemanticsStatus.SIDE_DOCS_STILL_UNCONFIRMED
     )
@@ -90,6 +91,7 @@ def test_support_answer_position_side_is_classified_as_side_provenance_correctio
     )
     assert summary.settlement_side_official_docs_semantics_confirmed is False
     assert summary.side_provenance_correction_required is True
+    assert summary.current_side_derivation_matches_docs is False
     assert "SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED" in summary.blocked_reasons
 
 
@@ -99,6 +101,7 @@ def test_support_answer_opposite_side_is_consistent_and_no_correction_needed() -
             support_answer_status=(
                 GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
             ),
+            settlement_side_official_docs_semantics_confirmed=True,
             actual_entry_gate_ready=True,
             actual_settlement_gate_ready=True,
             credential_boundary_ready=True,
@@ -113,6 +116,8 @@ def test_support_answer_opposite_side_is_consistent_and_no_correction_needed() -
         is GmoCloseOrderSideSemanticsStatus.SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE
     )
     assert summary.side_provenance_correction_required is False
+    assert summary.current_side_derivation_matches_docs is True
+    assert summary.actual_settlement_gate_ready is True
 
 
 def test_raw_support_text_is_unsafe_and_rejected() -> None:
