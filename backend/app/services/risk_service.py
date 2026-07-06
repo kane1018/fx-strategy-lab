@@ -2,6 +2,12 @@ from dataclasses import dataclass
 
 from app.config import Settings
 from app.schemas.trading import OrderRequest, RiskConfig
+from app.services.gmo_live_safety_policy import (
+    GmoLiveEnablePolicyInput,
+    GmoLiveKillSwitchState,
+    evaluate_gmo_live_enable_policy,
+    evaluate_gmo_live_kill_switch,
+)
 
 
 @dataclass(frozen=True)
@@ -60,3 +66,66 @@ def evaluate_order_risk(
         # This MVP never routes live funds. The explicit blocker prevents accidental wiring.
         reasons.append("実資金ブローカーアダプターが未実装")
     return RiskDecision(allowed=not reasons, reasons=reasons)
+
+
+@dataclass(frozen=True)
+class GmoLiveReadinessShadowInput:
+    """Safe-label-only inputs for the GMO live shadow gate.
+
+    Never carries a real position ID, quantity, price, or credential.
+    """
+
+    live_enable_policy_input: GmoLiveEnablePolicyInput = GmoLiveEnablePolicyInput()
+    kill_switch_state: GmoLiveKillSwitchState = GmoLiveKillSwitchState()
+    generic_close_attempt_detected: bool = False
+    settlement_side_docs_status_classified: bool = False
+    paper_evidence_safe_label_present: bool = False
+    operator_live_enable_declared: bool = False
+
+
+@dataclass(frozen=True)
+class GmoLiveReadinessShadowResult:
+    entry_shadow_allowed: bool
+    settlement_shadow_allowed: bool
+    blocked_reasons: tuple[str, ...]
+    shadow_only: bool = True
+
+
+def evaluate_gmo_live_readiness_shadow(
+    shadow_input: GmoLiveReadinessShadowInput | None = None,
+) -> GmoLiveReadinessShadowResult:
+    """Shadow-only GMO live readiness classification.
+
+    This NEVER gates a real order request and is not called by
+    `evaluate_order_risk` -- the existing unconditional GMO live rejection
+    above is untouched. It exists so callers (tests, future reporting, a
+    future real integration Step) can observe what GMO live readiness WOULD
+    be, without wiring it into the real decision path. Default-constructed
+    input blocks everything, matching the existing default-deny posture.
+    """
+    snapshot = shadow_input or GmoLiveReadinessShadowInput()
+    reasons: list[str] = []
+
+    live_enable_result = evaluate_gmo_live_enable_policy(snapshot.live_enable_policy_input)
+    if not live_enable_result.live_enable_ready:
+        reasons.append("LIVE_ENABLE_POLICY_NOT_READY")
+
+    kill_switch_decision = evaluate_gmo_live_kill_switch(snapshot.kill_switch_state)
+    if not kill_switch_decision.entry_allowed:
+        reasons.append("KILL_SWITCH_TRIGGERED")
+
+    if snapshot.generic_close_attempt_detected:
+        reasons.append("GENERIC_CLOSE_ATTEMPT_DETECTED")
+    if not snapshot.settlement_side_docs_status_classified:
+        reasons.append("SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED")
+    if not snapshot.paper_evidence_safe_label_present:
+        reasons.append("PAPER_EVIDENCE_MISSING")
+    if not snapshot.operator_live_enable_declared:
+        reasons.append("OPERATOR_ENABLE_MISSING")
+
+    settlement_blocked = bool(reasons) or not kill_switch_decision.settlement_allowed
+    return GmoLiveReadinessShadowResult(
+        entry_shadow_allowed=not reasons,
+        settlement_shadow_allowed=not settlement_blocked,
+        blocked_reasons=tuple(reasons),
+    )

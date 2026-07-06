@@ -152,8 +152,24 @@ GMO live専用として以下のフィールドを新設する。数値は次の
    **`risk_service.evaluate_order_risk`・`bot_service`・`automation_service`へはまだ接続していない**
    （既存の無条件live拒否ブロックは意図的にそのまま維持）。テストは
    `test_gmo_live_policy_no_post.py`・`test_gmo_kill_switch_no_post.py`。
-7. `bot_service`/`automation_service`への実接続（上記policy/kill switchの実配線、今回は未実施）
-8. settlement reconciliation（post-settlement read-only確認、close_unconfirmed相当）実装
+7. ✅ **完了（shadow gate / adapter skeletonのみ、実自動売買ループは未変更）**:
+   `risk_service.py`に`evaluate_gmo_live_readiness_shadow`を追加（`evaluate_order_risk`は完全に
+   無変更・呼び出しなし。既存の無条件live拒否もそのまま）。`bot_service.start_bot`は
+   demo/practice以外を`risk_stopped`にする既存ガードがあり、`automation_service.AutomationRunner`は
+   `OandaBroker`・SQLAlchemy DBモデルに強く結合しているため、これらのファイル自体は変更せず、
+   独立したadapter `app/services/gmo_live_runner_boundary.py`
+   （`build_gmo_live_runner_boundary_summary`）を追加した。起動時OFF・kill switch・live enable
+   policyを合成してentry/settlement開始可否のみを計算し、`bot_service`/`automation_service`から
+   importされない（実配線は別Step）。テストは`test_gmo_live_risk_service_integration_no_post.py`・
+   `test_gmo_live_runner_boundary_no_post.py`。
+8. ✅ **完了（skeletonのみ、実read-only API接続なし）**:
+   `app/services/gmo_settlement_reconciliation.py`に`evaluate_gmo_settlement_reconciliation`を
+   追加。OANDAの`close_unconfirmed`と同じ思想で、settlement acceptedでも
+   `NO_POSITION`/`count=0`のsynthetic safe読み取りが揃うまで`reconciled=true`にしない。
+   `ONE_POSITION_OPEN`は未決済、`MULTIPLE_POSITIONS`は危険停止、読み取り不可/不明は
+   unknown停止。retry/repostは常にfalse。実read-only API接続は未実装（`app/private_api/`の
+   既存read-onlyクライアントとの接続は別Step）。テストは
+   `test_gmo_settlement_reconciliation_no_post.py`。
 9. ✅ **完了（純粋な状態機械シミュレーションのみ）**:
    `app/services/gmo_level5_fake_cycle.py`に`simulate_gmo_level5_fake_cycle`を追加。
    `GmoFxBroker`の実transportが未実装のため、実際にbroker経由でfake cycleを流すことはできず、
@@ -161,9 +177,15 @@ GMO live専用として以下のフィールドを新設する。数値は次の
    代替した。成功時のみ`level5_full_auto_cycle_completed=true`、rejected/unknown/timeout・
    manual intervention・retry/repost/generic close・kill switch発火のいずれでもfalseになることを
    `test_gmo_level5_fake_cycle_no_post.py`で確認。
-10. fake transportのみを使った統合テスト一式
-    （entry accepted→position確認→settlement accepted→NO_POSITION確認=Level5 true、
-    および全失敗分岐=Level5 false+bot停止）
+10. ✅ **完了（統合fake cycle。実transport未実装のため常にfail-closed）**:
+    `app/services/gmo_level5_integrated_fake_cycle.py`に
+    `run_gmo_level5_integrated_fake_cycle`を追加。前項9の純粋シミュレーションと異なり、
+    kill switch・live enable policyが**両方とも完全に許可的な**synthetic fixtureであっても、
+    実際の`GmoFxBroker.market_order()`（refusing fake HTTP client注入）を呼び出し、
+    実transport未実装のため必ず例外で止まることを確認する（＝上流ゲートの寛容さに関わらず、
+    現行アーキテクチャではLevel5成功に絶対到達できないことを実証する統合テスト）。
+    万一将来`market_order()`が例外を投げなくなった場合に備え、`AssertionError`で大声を上げる
+    フェイルセーフも入れた（`test_gmo_level5_integrated_fake_cycle_no_post.py`のmonkeypatchテストで確認）。
 11. `live_order_once.py`と Step 6G "controlled" simulation系（約130ファイル）の
     廃止・隔離（自動売買から使われないことを明示するマーカー追加、またはディレクトリ移動）
 12. 運営者レビュー・sign-offチェックリスト文書化
