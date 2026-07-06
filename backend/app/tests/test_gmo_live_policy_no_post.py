@@ -13,8 +13,10 @@ import pytest
 
 from app.services.gmo_live_safety_policy import (
     GmoLiveEnablePolicyInput,
+    GmoLiveMaxConsecutiveLossesDecisionStatus,
     GmoLiveRiskConfig,
     GmoLiveRiskConfigError,
+    classify_max_consecutive_losses_decision_status,
     evaluate_gmo_live_enable_policy,
 )
 
@@ -87,6 +89,24 @@ def test_gmo_live_risk_config_accepts_candidate_selection() -> None:
 
     with pytest.raises(GmoLiveRiskConfigError):
         GmoLiveRiskConfig(max_consecutive_losses_selected=5)
+
+
+def test_max_consecutive_losses_decision_required_by_default() -> None:
+    status = classify_max_consecutive_losses_decision_status(GmoLiveRiskConfig())
+    assert status is GmoLiveMaxConsecutiveLossesDecisionStatus.OPERATOR_DECISION_REQUIRED
+
+
+def test_max_consecutive_losses_decision_recorded_once_selected() -> None:
+    status = classify_max_consecutive_losses_decision_status(
+        GmoLiveRiskConfig(max_consecutive_losses_selected=2)
+    )
+    assert status is GmoLiveMaxConsecutiveLossesDecisionStatus.OPERATOR_DECISION_RECORDED
+
+
+def test_max_consecutive_losses_not_silently_defaulted_to_a_candidate() -> None:
+    """This Step must not pick 2 or 3 on the operator's behalf: it is a
+    risk-tolerance decision, not a safety invariant."""
+    assert GmoLiveRiskConfig().max_consecutive_losses_selected is None
 
 
 # --- live enable policy --------------------------------------------------------

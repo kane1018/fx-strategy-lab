@@ -35,13 +35,14 @@ from app.config import Settings
 from app.schemas.trading import OrderRequest, Side
 from app.services.gmo_live_runner_boundary import (
     GmoLiveRunnerBoundaryInput,
-    build_gmo_live_runner_boundary_summary,
+    build_gmo_live_service_boundary_summary,
 )
 from app.services.gmo_settlement_reconciliation import (
     GmoSettlementReconciliationStatus,
     GmoSettlementResultCategory,
     GmoSettlementSafeReadSnapshot,
     build_gmo_settlement_reconciliation_input_from_safe_snapshot,
+    build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result,
     evaluate_gmo_settlement_reconciliation,
 )
 from app.services.risk_service import (
@@ -56,7 +57,26 @@ class GmoLevel5IntegratedCycleInput:
     shadow_gate_input: GmoLiveReadinessShadowInput = GmoLiveReadinessShadowInput()
     manual_intervention_performed: bool = False
     settlement_snapshot: GmoSettlementSafeReadSnapshot | None = None
+    settlement_open_positions_count: int | None = None
+    settlement_active_orders_count: int | None = None
     simulate_accepted_transport_for_state_machine_test_only: bool = False
+
+    def resolved_settlement_snapshot(self) -> GmoSettlementSafeReadSnapshot | None:
+        """Prefer an explicit snapshot; otherwise build one from safe counts
+        via the same no-POST adapter a future real read-only client would
+        use. Returns None if neither is provided.
+        """
+        if self.settlement_snapshot is not None:
+            return self.settlement_snapshot
+        if (
+            self.settlement_open_positions_count is not None
+            and self.settlement_active_orders_count is not None
+        ):
+            return build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result(
+                open_positions_count=self.settlement_open_positions_count,
+                active_orders_count=self.settlement_active_orders_count,
+            )
+        return None
 
 
 @dataclass(frozen=True)
@@ -129,7 +149,8 @@ def run_gmo_level5_integrated_fake_cycle(
     snapshot = cycle_input or GmoLevel5IntegratedCycleInput()
     reasons: list[str] = []
 
-    runner_summary = build_gmo_live_runner_boundary_summary(snapshot.runner_boundary_input)
+    service_summary = build_gmo_live_service_boundary_summary(snapshot.runner_boundary_input)
+    runner_summary = service_summary.runner_summary
     if not runner_summary.runner_may_start_gmo_live_entry:
         reasons.append("runner_boundary_blocked")
 
@@ -192,7 +213,8 @@ def run_gmo_level5_integrated_fake_cycle(
             official_settlement_transport_fails_closed=settlement_fails_closed,
         )
 
-    if snapshot.settlement_snapshot is None:
+    resolved_snapshot = snapshot.resolved_settlement_snapshot()
+    if resolved_snapshot is None:
         return GmoLevel5IntegratedCycleResult(
             level5_full_auto_cycle_completed=False,
             entry_attempt_blocked_reason="settlement_snapshot_missing",
@@ -202,7 +224,7 @@ def run_gmo_level5_integrated_fake_cycle(
 
     reconciliation_input = build_gmo_settlement_reconciliation_input_from_safe_snapshot(
         settlement_result_category=GmoSettlementResultCategory.ACCEPTED_SANITIZED.value,
-        snapshot=snapshot.settlement_snapshot,
+        snapshot=resolved_snapshot,
     )
     reconciliation_result = evaluate_gmo_settlement_reconciliation(reconciliation_input)
     if reconciliation_result.status is not GmoSettlementReconciliationStatus.RECONCILED_NO_POSITION:

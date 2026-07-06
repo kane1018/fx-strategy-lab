@@ -148,6 +148,44 @@ def test_simulate_mode_with_reconciled_snapshot_reaches_level5_true() -> None:
     assert result.blocked_reasons == ()
 
 
+def test_simulate_mode_with_counts_based_snapshot_reaches_level5_true() -> None:
+    """Same as above, but via the read-only snapshot adapter that builds a
+    snapshot from safe counts (open_positions_count / active_orders_count)
+    instead of an explicit GmoSettlementSafeReadSnapshot.
+    """
+    result = run_gmo_level5_integrated_fake_cycle(
+        _permissive_input(
+            simulate_accepted_transport_for_state_machine_test_only=True,
+            settlement_open_positions_count=0,
+            settlement_active_orders_count=0,
+        )
+    )
+    assert result.level5_full_auto_cycle_completed is True
+
+
+def test_simulate_mode_counts_based_snapshot_with_open_position_blocks() -> None:
+    result = run_gmo_level5_integrated_fake_cycle(
+        _permissive_input(
+            simulate_accepted_transport_for_state_machine_test_only=True,
+            settlement_open_positions_count=1,
+            settlement_active_orders_count=0,
+        )
+    )
+    assert result.level5_full_auto_cycle_completed is False
+
+
+def test_explicit_snapshot_takes_precedence_over_counts() -> None:
+    result = run_gmo_level5_integrated_fake_cycle(
+        _permissive_input(
+            simulate_accepted_transport_for_state_machine_test_only=True,
+            settlement_snapshot=_reconciled_snapshot(),
+            settlement_open_positions_count=5,
+            settlement_active_orders_count=5,
+        )
+    )
+    assert result.level5_full_auto_cycle_completed is True
+
+
 def test_simulate_mode_without_snapshot_blocks() -> None:
     result = run_gmo_level5_integrated_fake_cycle(
         _permissive_input(simulate_accepted_transport_for_state_machine_test_only=True)

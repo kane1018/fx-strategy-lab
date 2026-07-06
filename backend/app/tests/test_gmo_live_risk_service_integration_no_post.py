@@ -19,6 +19,8 @@ from app.services.gmo_live_safety_policy import (
 from app.services.risk_service import (
     GmoLiveReadinessShadowInput,
     GmoLiveShadowBlockReason,
+    GmoLiveUnconditionalRejectionReplacementStatus,
+    classify_gmo_live_unconditional_rejection_replacement_readiness,
     evaluate_gmo_live_readiness_shadow,
     evaluate_order_risk,
 )
@@ -135,6 +137,34 @@ def test_shadow_gate_never_calls_evaluate_order_risk() -> None:
     shadow_start = text.index("def evaluate_gmo_live_readiness_shadow")
     shadow_source = text[shadow_start:]
     assert "evaluate_order_risk(" not in shadow_source
+
+
+def test_replacement_readiness_not_replaced_when_shadow_blocked() -> None:
+    status = classify_gmo_live_unconditional_rejection_replacement_readiness(
+        evaluate_gmo_live_readiness_shadow()
+    )
+    assert (
+        status
+        is GmoLiveUnconditionalRejectionReplacementStatus.NOT_REPLACED_UNCONDITIONAL_REJECTION_ACTIVE  # noqa: E501
+    )
+
+
+def test_replacement_readiness_shadow_ready_when_fully_permissive() -> None:
+    status = classify_gmo_live_unconditional_rejection_replacement_readiness(
+        evaluate_gmo_live_readiness_shadow(_permissive_shadow_input())
+    )
+    assert status is GmoLiveUnconditionalRejectionReplacementStatus.SHADOW_GATE_READY_BUT_NOT_WIRED
+
+
+def test_replacement_readiness_never_flips_unconditional_rejection() -> None:
+    """Regardless of the classification, evaluate_order_risk's live-mode
+    branch must still always append its unconditional rejection reason."""
+    text = MODULE_PATH.read_text(encoding="utf-8")
+    assert "実資金ブローカーアダプターが未実装" in text
+    replacement_start = text.index(
+        "class GmoLiveUnconditionalRejectionReplacementStatus"
+    )
+    assert "reasons.append" not in text[replacement_start:]
 
 
 def test_evaluate_order_risk_signature_is_unchanged() -> None:

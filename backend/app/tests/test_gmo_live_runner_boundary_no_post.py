@@ -12,6 +12,7 @@ import pathlib
 from app.services.gmo_live_runner_boundary import (
     GmoLiveRunnerBoundaryInput,
     build_gmo_live_runner_boundary_summary,
+    build_gmo_live_service_boundary_summary,
 )
 from app.services.gmo_live_safety_policy import (
     GmoLiveEnablePolicyInput,
@@ -111,6 +112,21 @@ def test_boundary_reports_not_wired_into_real_automation() -> None:
     result = build_gmo_live_runner_boundary_summary()
     assert result.wired_into_bot_service is False
     assert result.wired_into_automation_runner is False
+
+
+def test_service_boundary_blocks_by_default_and_reports_unwired() -> None:
+    summary = build_gmo_live_service_boundary_summary()
+    assert summary.runner_summary.runner_may_start_gmo_live_entry is False
+    assert summary.service_hook_wired is False
+    assert summary.service_hook_wired_into_bot_service is False
+    assert summary.service_hook_wired_into_automation_runner is False
+
+
+def test_service_boundary_allows_when_fully_permissive() -> None:
+    summary = build_gmo_live_service_boundary_summary(_permissive_boundary_input())
+    assert summary.runner_summary.runner_may_start_gmo_live_entry is True
+    assert summary.runner_summary.runner_may_start_gmo_live_settlement is True
+    assert summary.service_hook_wired is False
 
 
 def test_module_never_calls_a_real_post_capable_method() -> None:

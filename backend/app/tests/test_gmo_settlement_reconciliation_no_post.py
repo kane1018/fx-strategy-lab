@@ -15,6 +15,7 @@ from app.services.gmo_settlement_reconciliation import (
     GmoSettlementReconciliationStatus,
     GmoSettlementSafeReadSnapshot,
     build_gmo_settlement_reconciliation_input_from_safe_snapshot,
+    build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result,
     evaluate_gmo_settlement_reconciliation,
 )
 
@@ -157,6 +158,68 @@ def test_safe_snapshot_adapter_propagates_active_or_pending_conflict() -> None:
         result.status
         is GmoSettlementReconciliationStatus.BLOCKED_ACTIVE_OR_PENDING_ORDER_CONFLICT
     )
+
+
+def test_safe_snapshot_from_counts_zero_positions_is_no_position() -> None:
+    snapshot = build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result(
+        open_positions_count=0, active_orders_count=0,
+    )
+    assert snapshot.safe_read_succeeded is True
+    assert snapshot.position_status_safe == "NO_POSITION"
+    assert snapshot.position_count_safe == 0
+    assert snapshot.active_or_pending_order_conflict_detected is False
+
+
+def test_safe_snapshot_from_counts_one_position_is_one_open() -> None:
+    snapshot = build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result(
+        open_positions_count=1, active_orders_count=0,
+    )
+    assert snapshot.position_status_safe == "ONE_POSITION_OPEN"
+
+
+def test_safe_snapshot_from_counts_multiple_positions() -> None:
+    snapshot = build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result(
+        open_positions_count=3, active_orders_count=0,
+    )
+    assert snapshot.position_status_safe == "MULTIPLE_POSITIONS"
+
+
+def test_safe_snapshot_from_counts_active_orders_flag_conflict() -> None:
+    snapshot = build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result(
+        open_positions_count=0, active_orders_count=2,
+    )
+    assert snapshot.active_or_pending_order_conflict_detected is True
+
+
+def test_safe_snapshot_from_counts_read_failure_is_unavailable() -> None:
+    snapshot = build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result(
+        open_positions_count=0, active_orders_count=0, read_succeeded=False,
+    )
+    assert snapshot.safe_read_succeeded is False
+    assert snapshot.position_status_safe is None
+    assert snapshot.position_count_safe is None
+
+
+def test_safe_snapshot_from_counts_rejects_negative_counts() -> None:
+    with pytest.raises(ValueError, match="non-negative"):
+        build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result(
+            open_positions_count=-1, active_orders_count=0,
+        )
+
+
+def test_safe_snapshot_from_counts_signature_only_accepts_ints_and_bool() -> None:
+    """Structural guarantee: the function cannot receive raw responses, IDs,
+    quantities, or prices -- its parameters are only integers and a bool.
+    """
+    import inspect
+
+    signature = inspect.signature(
+        build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result
+    )
+    for name, parameter in signature.parameters.items():
+        assert parameter.annotation in ("int", "bool", int, bool), (
+            f"parameter {name} must be int or bool, got {parameter.annotation}"
+        )
 
 
 def test_module_does_not_import_live_verification_or_live_order_once() -> None:

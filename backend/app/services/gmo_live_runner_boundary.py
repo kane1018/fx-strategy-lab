@@ -89,3 +89,35 @@ def build_gmo_live_runner_boundary_summary(
         blocked_reasons=tuple(reasons),
         settlement_blocked_reasons=tuple(dict.fromkeys(settlement_reasons)),
     )
+
+
+@dataclass(frozen=True)
+class GmoLiveServiceBoundarySummary:
+    """The exact shape a future `bot_service.start_bot` / `AutomationRunner`
+    integration would call to decide whether to start GMO live entry or
+    settlement, without starting anything itself.
+
+    `service_hook_wired` stays False in this Step: `bot_service.py` and
+    `automation_service.py` do not import this module. It exists as the
+    named entry point those files would call in a later, dedicated
+    connection Step.
+    """
+
+    runner_summary: GmoLiveRunnerBoundaryResult
+    service_hook_wired: bool = False
+    service_hook_wired_into_bot_service: bool = False
+    service_hook_wired_into_automation_runner: bool = False
+
+
+def build_gmo_live_service_boundary_summary(
+    boundary_input: GmoLiveRunnerBoundaryInput | None = None,
+) -> GmoLiveServiceBoundarySummary:
+    """Service-facing hook wrapping `build_gmo_live_runner_boundary_summary`.
+
+    Never calls `GmoFxBroker.market_order` or `official_settlement_order`,
+    never imports `bot_service` or `automation_service`, never touches a
+    real HTTP client, credential, or `.env`.
+    """
+    return GmoLiveServiceBoundarySummary(
+        runner_summary=build_gmo_live_runner_boundary_summary(boundary_input),
+    )

@@ -190,3 +190,39 @@ def build_gmo_settlement_reconciliation_input_from_safe_snapshot(
             snapshot.active_or_pending_order_conflict_detected
         ),
     )
+
+
+def build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result(
+    *,
+    open_positions_count: int,
+    active_orders_count: int,
+    read_succeeded: bool = True,
+) -> GmoSettlementSafeReadSnapshot:
+    """Build a safe read snapshot from already-sanitized private_api counts.
+
+    This is the no-POST adapter boundary a future real
+    `app.private_api.readonly_client.PrivateReadonlyClient` integration would
+    plug into. Callers must pass only counts derived from its sanitized
+    `OpenPosition` / `ActiveOrder` lists (e.g. `len(open_positions)`) --
+    never the raw API response, never a position/order/trade ID, never a
+    quantity or price. The parameters here are plain integers and a
+    boolean, so this function is structurally unable to receive anything
+    else. It never calls the real client, never reads a credential, and
+    never reads `.env`.
+    """
+    if not read_succeeded:
+        return GmoSettlementSafeReadSnapshot(safe_read_succeeded=False)
+    if open_positions_count < 0 or active_orders_count < 0:
+        raise ValueError("counts must be non-negative")
+    if open_positions_count == 0:
+        position_status = GmoPostSettlementPositionStatus.NO_POSITION.value
+    elif open_positions_count == 1:
+        position_status = GmoPostSettlementPositionStatus.ONE_POSITION_OPEN.value
+    else:
+        position_status = GmoPostSettlementPositionStatus.MULTIPLE_POSITIONS.value
+    return GmoSettlementSafeReadSnapshot(
+        safe_read_succeeded=True,
+        position_status_safe=position_status,
+        position_count_safe=open_positions_count,
+        active_or_pending_order_conflict_detected=active_orders_count > 0,
+    )

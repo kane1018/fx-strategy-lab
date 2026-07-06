@@ -152,3 +152,38 @@ def evaluate_gmo_live_readiness_shadow(
         settlement_shadow_allowed=not settlement_blocked,
         blocked_reasons=tuple(reasons),
     )
+
+
+class GmoLiveUnconditionalRejectionReplacementStatus(str, Enum):
+    """Safe classification of whether `evaluate_order_risk`'s unconditional
+    GMO live rejection could be replaced by the shadow gate.
+
+    This label is informational only. Nothing in this module acts on it:
+    `evaluate_order_risk` keeps its unconditional rejection regardless of
+    this value. Replacing it is a separate, explicit decision this Step
+    does not make.
+    """
+
+    NOT_REPLACED_UNCONDITIONAL_REJECTION_ACTIVE = (
+        "NOT_REPLACED_UNCONDITIONAL_REJECTION_ACTIVE"
+    )
+    SHADOW_GATE_READY_BUT_NOT_WIRED = "SHADOW_GATE_READY_BUT_NOT_WIRED"
+
+
+def classify_gmo_live_unconditional_rejection_replacement_readiness(
+    shadow_result: GmoLiveReadinessShadowResult | None = None,
+) -> GmoLiveUnconditionalRejectionReplacementStatus:
+    """Classify replacement readiness as a safe label; changes nothing.
+
+    Regardless of the shadow gate's own result, `evaluate_order_risk`'s
+    unconditional GMO live rejection remains active in this Step -- this
+    function never flips it off. `SHADOW_GATE_READY_BUT_NOT_WIRED` only means
+    the shadow gate itself would currently allow the input it was given; it
+    does not mean the unconditional rejection has been or will be replaced.
+    """
+    result = shadow_result or evaluate_gmo_live_readiness_shadow()
+    if result.entry_shadow_allowed:
+        return GmoLiveUnconditionalRejectionReplacementStatus.SHADOW_GATE_READY_BUT_NOT_WIRED
+    return (
+        GmoLiveUnconditionalRejectionReplacementStatus.NOT_REPLACED_UNCONDITIONAL_REJECTION_ACTIVE
+    )

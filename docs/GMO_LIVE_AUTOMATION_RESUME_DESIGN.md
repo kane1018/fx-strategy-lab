@@ -206,6 +206,31 @@ GMO live専用として以下のフィールドを新設する。数値は次の
       machine_test_only`（実broker/hard guardには一切触れないテスト専用スイッチ、production
       コードでは常にFalseであることをテストで固定）を有効にし、かつsettlement reconciliationが
       `NO_POSITION`/`count=0`を確認した場合のみLevel5=trueに到達する設計とした。
+
+    **追記（Step 6G-PC-OX-R-GMO-LIVE-SERVICE-WIRING-READONLY-SNAPSHOT-NO-POST-SPRINT-C 完了）**:
+    - `gmo_live_runner_boundary.py`に`build_gmo_live_service_boundary_summary`（`GmoLiveServiceBoundarySummary`）
+      を追加。`bot_service.start_bot`/`AutomationRunner`が将来呼ぶことを想定した名前付きフック。
+      `service_hook_wired=false`固定で、`bot_service.py`/`automation_service.py`は今回も未変更・未import
+      （理由は前Stepと同じくOANDA/SQLAlchemyへの強結合）。
+    - `gmo_settlement_reconciliation.py`に`build_gmo_settlement_safe_read_snapshot_from_private_api_safe_result`
+      を追加。引数は`open_positions_count: int`・`active_orders_count: int`・`read_succeeded: bool`のみで、
+      raw response・ID・数量・価格を構造的に受け取れない設計。将来`app/private_api`の実read-onlyクライアントが
+      返す`OpenPosition`/`ActiveOrder`リストの`len()`を渡す形を想定（実接続はまだ行っていない）。
+    - `risk_service.py`に`classify_gmo_live_unconditional_rejection_replacement_readiness`を追加。
+      無条件拒否を置換するかどうかの判断はこのStepでも行わず、safe labelで分類するのみ
+      （`evaluate_order_risk`は無変更）。
+    - `gmo_live_safety_policy.py`に`classify_max_consecutive_losses_decision_status`を追加。
+      `max_consecutive_losses_selected`は`2`か`3`かを本Stepでも確定させず、
+      `OPERATOR_DECISION_REQUIRED`のまま維持（risk-tolerance判断であり安全不変条件ではないため）。
+    - `gmo_level5_integrated_fake_cycle.py`が上記service boundary・counts-basedスナップショットアダプタを
+      通る形に更新。
+    - **運営者向け注記**: GMO live自動化のno-POST基盤構築は本Stepまでで複数Sprintにわたり積み上がっている
+      （RiskConfig・kill switch・live enable policy・runner/service boundary・settlement reconciliation・
+      risk shadow gate・integrated fake cycle）。未解決のまま残っている決定事項は (a)
+      settlement side導出ルールのGMO公式closeOrder docsとの整合確認、(b) リスク上限の具体的数値、(c)
+      `bot_service`/`automation_service`への実配線タイミング。これらはコードの追加では解決できない
+      運営者判断/外部確認が必要な項目のため、次にno-POST scaffoldingをさらに積み上げる前に、
+      一度これらの意思決定を行うことを推奨する。
 11. `live_order_once.py`と Step 6G "controlled" simulation系（約130ファイル）の
     廃止・隔離（自動売買から使われないことを明示するマーカー追加、またはディレクトリ移動）
 12. 運営者レビュー・sign-offチェックリスト文書化

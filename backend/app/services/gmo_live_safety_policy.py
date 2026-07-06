@@ -87,6 +87,26 @@ class GmoLiveRiskConfig:
             )
 
 
+class GmoLiveMaxConsecutiveLossesDecisionStatus(str, Enum):
+    OPERATOR_DECISION_REQUIRED = "OPERATOR_DECISION_REQUIRED"
+    OPERATOR_DECISION_RECORDED = "OPERATOR_DECISION_RECORDED"
+
+
+def classify_max_consecutive_losses_decision_status(
+    risk_config: GmoLiveRiskConfig,
+) -> GmoLiveMaxConsecutiveLossesDecisionStatus:
+    """Classify whether the operator has picked between the two candidates.
+
+    This Step does not pick a value on the operator's behalf: choosing
+    between the two candidate limits is a risk-tolerance decision, not a
+    safety-invariant one, so it is left `OPERATOR_DECISION_REQUIRED` by
+    default rather than silently defaulting to either candidate.
+    """
+    if risk_config.max_consecutive_losses_selected is None:
+        return GmoLiveMaxConsecutiveLossesDecisionStatus.OPERATOR_DECISION_REQUIRED
+    return GmoLiveMaxConsecutiveLossesDecisionStatus.OPERATOR_DECISION_RECORDED
+
+
 class GmoLiveKillSwitchTrigger(str, Enum):
     MANUAL_STOP_REQUESTED = "manual_stop_requested"
     PROCESS_START_DEFAULT_OFF = "process_start_default_off"
