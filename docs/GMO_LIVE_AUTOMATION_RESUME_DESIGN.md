@@ -10,6 +10,15 @@ Step 6G "controlled/safe" simulation 系の混在）を踏まえ、GMO FX 実資
 `app/live_verification/`にあったが、production broker/service経路との分離のため
 `app/security/`へ移設済み）。
 
+## 現在のステータス（このStepでの反映）
+
+- settlement_side_official_docs_semantics_confirmed: `false`
+- settlement_side_rule_status: `NEEDS_OFFICIAL_DOCS_REVIEW`
+- live settlement: `blocked`（docs確認まで継続）
+- max_consecutive_losses_selected: `2`
+- max_consecutive_losses_decision: `MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2`
+- service_wiring_policy: `DESIGN_FIRST_NO_CODE`（実配線なし、summary hook設計のみ）
+
 ## 1. GMO live自動売買再開の必須条件
 
 以下がすべて満たされるまで、GMO実資金自動売買は有効化しない。
@@ -26,6 +35,8 @@ Step 6G "controlled/safe" simulation 系の混在）を踏まえ、GMO FX 実資
 7. 運営者による明示的な書面上の承認（sign-off）が記録されている。
 8. Kill switch・settlement照合ロジックが実装され、synthetic fixtureで全異常系がテスト済み。
 9. repo clean、HEAD==origin/main、全テスト green、ruff clean。
+10. `service_wiring_policy` が `DESIGN_FIRST_NO_CODE`（`bot_service`/`automation_service`は
+    未実配線）。
 
 ## 2. GmoFxBrokerの統合位置
 
@@ -83,7 +94,7 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 - `max_positions`: 1（構造上も1に固定）
 - `max_entries_per_day`: 1から開始（候補）
 - `max_settlements_per_position`: 1（同一ポジションへの決済試行は1回のみ）
-- `max_consecutive_losses`: 2 または 3（比較検討中）
+- `max_consecutive_losses`: `MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2`（2）で先行確定
 - `order_size_safe_label`: GMOの最小許容単位に固定。引き上げには設定ファイル変更＋
   再デプロイ＋レビューを必須とし、実行時にコードから変更不可にする。
 - `official_settlement_route_required`: True（固定・configで変更不可）
@@ -219,9 +230,9 @@ GMO live専用として以下のフィールドを新設する。数値は次の
     - `risk_service.py`に`classify_gmo_live_unconditional_rejection_replacement_readiness`を追加。
       無条件拒否を置換するかどうかの判断はこのStepでも行わず、safe labelで分類するのみ
       （`evaluate_order_risk`は無変更）。
-    - `gmo_live_safety_policy.py`に`classify_max_consecutive_losses_decision_status`を追加。
-      `max_consecutive_losses_selected`は`2`か`3`かを本Stepでも確定させず、
-      `OPERATOR_DECISION_REQUIRED`のまま維持（risk-tolerance判断であり安全不変条件ではないため）。
+    - `gmo_live_safety_policy.py`に`classify_max_consecutive_losses_decision_status`を更新し、
+      `max_consecutive_losses_selected=2`を本Stepで先行確定（`MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2`）した。
+      `2 / 3`候補外は引き続き例外。
     - `gmo_level5_integrated_fake_cycle.py`が上記service boundary・counts-basedスナップショットアダプタを
       通る形に更新。
     - **運営者向け注記**: GMO live自動化のno-POST基盤構築は本Stepまでで複数Sprintにわたり積み上がっている
@@ -236,7 +247,7 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 12. 運営者レビュー・sign-offチェックリスト文書化
 13. `GMO_FX_ORDER_ENABLED`を本番で手動ONにする（上記すべて完了後、十分なpaper実績確認後のみ）
 
-## 9. 次に実装する最小Step
+## 12. 次に実装する最小Step
 
 **`gmo_fx_broker.py`が`app.live_verification.*`を一切importしないことを固定する
 source-scan/isolationテストを追加する。**
@@ -251,7 +262,22 @@ source-scan/isolationテストを追加する。**
   `app.config` / `app.schemas.trading` / `app.services.market_data_service` /
   `app.services.risk_service`のみimport）ため、テスト追加は既存動作を壊さない。
 
-## 10. 確認事項
+## 9. 運営者向け公式docs確認チェックリスト（no-POST）
+
+- `POST /private/v1/closeOrder` の `side` 定義（`BUY`/`SELL` の意味）をGMO公式記載で直接確認済みか
+- entryの反対側に `side` を送ったときの決済挙動を少なくとも2ケースで確認済みか（両建て含む）
+- `closeOrder` 既定の `size` 指定動作とエラーケースを運営者が認識しているか
+- `settlement_side_official_docs_semantics_confirmed=false` が外部確認完了まで
+  `live settlement` blockの要件に残ることを維持しているか
+
+## 10. service wiring design note（DESIGN_FIRST_NO_CODE）
+
+- `bot_service` と `automation_service` への実配線は本Stepでは行わない。
+- 既存の OANDA / SQLAlchemy 結合は保持し、無変更。
+- 次Stepでは no-POST の summary hook（`GmoLiveServiceBoundarySummary`）を先に入れて、実POST/credential配線前提は保留。
+- `GmoFxBroker.market_order` / `official_settlement_order` の本番呼び出しは次Step以降。次Stepでも allow bridge は追加しない。
+
+## 11. 確認事項
 
 本書作成にあたり、実POST・credential使用・.env読取・raw response/broker response本文・
 ID・数量・価格・損益の表示は一切行っていない。コード実装（`.py`ファイルの追加・変更）も

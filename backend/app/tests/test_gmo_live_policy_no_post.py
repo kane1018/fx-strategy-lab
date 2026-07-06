@@ -18,6 +18,7 @@ from app.services.gmo_live_safety_policy import (
     GmoLiveRiskConfigError,
     classify_max_consecutive_losses_decision_status,
     evaluate_gmo_live_enable_policy,
+    has_reached_max_consecutive_losses,
 )
 
 MODULE_PATH = (
@@ -54,6 +55,9 @@ def test_gmo_live_risk_config_defaults_are_safe() -> None:
     assert config.max_positions == 1
     assert config.max_entries_per_day == 1
     assert config.max_settlements_per_position == 1
+    assert config.max_consecutive_losses_candidate_a == 2
+    assert config.max_consecutive_losses_candidate_b == 3
+    assert config.max_consecutive_losses_selected == 2
     assert config.official_settlement_route_required is True
     assert config.generic_close_allowed is False
     assert config.opposite_order_as_close_allowed is False
@@ -91,22 +95,40 @@ def test_gmo_live_risk_config_accepts_candidate_selection() -> None:
         GmoLiveRiskConfig(max_consecutive_losses_selected=5)
 
 
-def test_max_consecutive_losses_decision_required_by_default() -> None:
+def test_max_consecutive_losses_decision_default_is_minimal_start() -> None:
     status = classify_max_consecutive_losses_decision_status(GmoLiveRiskConfig())
-    assert status is GmoLiveMaxConsecutiveLossesDecisionStatus.OPERATOR_DECISION_REQUIRED
-
-
-def test_max_consecutive_losses_decision_recorded_once_selected() -> None:
-    status = classify_max_consecutive_losses_decision_status(
-        GmoLiveRiskConfig(max_consecutive_losses_selected=2)
+    assert (
+        status
+        is GmoLiveMaxConsecutiveLossesDecisionStatus.MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2
     )
-    assert status is GmoLiveMaxConsecutiveLossesDecisionStatus.OPERATOR_DECISION_RECORDED
 
 
-def test_max_consecutive_losses_not_silently_defaulted_to_a_candidate() -> None:
-    """This Step must not pick 2 or 3 on the operator's behalf: it is a
-    risk-tolerance decision, not a safety invariant."""
-    assert GmoLiveRiskConfig().max_consecutive_losses_selected is None
+def test_max_consecutive_losses_decision_records_candidate() -> None:
+    status = classify_max_consecutive_losses_decision_status(GmoLiveRiskConfig())
+    assert (
+        status
+        is GmoLiveMaxConsecutiveLossesDecisionStatus.MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2
+    )
+
+    status = classify_max_consecutive_losses_decision_status(
+        GmoLiveRiskConfig(max_consecutive_losses_selected=3)
+    )
+    assert (
+        status
+        is GmoLiveMaxConsecutiveLossesDecisionStatus.MINIMAL_START_MAX_CONSECUTIVE_LOSSES_3
+    )
+
+
+def test_consecutive_losses_limit_is_reached_with_minimal_start_two() -> None:
+    config = GmoLiveRiskConfig()
+    assert has_reached_max_consecutive_losses(1, config) is False
+    assert has_reached_max_consecutive_losses(2, config) is True
+    assert has_reached_max_consecutive_losses(3, config) is True
+
+
+def test_consecutive_losses_limit_without_selection_is_safe() -> None:
+    config = GmoLiveRiskConfig(max_consecutive_losses_selected=None)
+    assert has_reached_max_consecutive_losses(999, config) is False
 
 
 # --- live enable policy --------------------------------------------------------

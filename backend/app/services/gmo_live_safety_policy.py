@@ -44,7 +44,7 @@ class GmoLiveRiskConfig:
     max_settlements_per_position: int = 1
     max_consecutive_losses_candidate_a: int = 2
     max_consecutive_losses_candidate_b: int = 3
-    max_consecutive_losses_selected: int | None = None
+    max_consecutive_losses_selected: int | None = 2
     official_settlement_route_required: bool = True
     generic_close_allowed: bool = False
     opposite_order_as_close_allowed: bool = False
@@ -89,7 +89,12 @@ class GmoLiveRiskConfig:
 
 class GmoLiveMaxConsecutiveLossesDecisionStatus(str, Enum):
     OPERATOR_DECISION_REQUIRED = "OPERATOR_DECISION_REQUIRED"
-    OPERATOR_DECISION_RECORDED = "OPERATOR_DECISION_RECORDED"
+    MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2 = (
+        "MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2"
+    )
+    MINIMAL_START_MAX_CONSECUTIVE_LOSSES_3 = (
+        "MINIMAL_START_MAX_CONSECUTIVE_LOSSES_3"
+    )
 
 
 def classify_max_consecutive_losses_decision_status(
@@ -97,14 +102,35 @@ def classify_max_consecutive_losses_decision_status(
 ) -> GmoLiveMaxConsecutiveLossesDecisionStatus:
     """Classify whether the operator has picked between the two candidates.
 
-    This Step does not pick a value on the operator's behalf: choosing
-    between the two candidate limits is a risk-tolerance decision, not a
-    safety-invariant one, so it is left `OPERATOR_DECISION_REQUIRED` by
-    default rather than silently defaulting to either candidate.
+    The current rollout policy stores `max_consecutive_losses_selected=2` by
+    default (minimal-start), and keeps `None` as a safe decision-required
+    state for explicit operator re-selection cases.
     """
     if risk_config.max_consecutive_losses_selected is None:
         return GmoLiveMaxConsecutiveLossesDecisionStatus.OPERATOR_DECISION_REQUIRED
-    return GmoLiveMaxConsecutiveLossesDecisionStatus.OPERATOR_DECISION_RECORDED
+    if (
+        risk_config.max_consecutive_losses_selected
+        == risk_config.max_consecutive_losses_candidate_a
+    ):
+        return (
+            GmoLiveMaxConsecutiveLossesDecisionStatus.MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2
+        )
+    return GmoLiveMaxConsecutiveLossesDecisionStatus.MINIMAL_START_MAX_CONSECUTIVE_LOSSES_3
+
+
+def has_reached_max_consecutive_losses(
+    current_consecutive_losses: int,
+    risk_config: GmoLiveRiskConfig,
+) -> bool:
+    """Return whether the configured max consecutive losses limit has been reached.
+
+    If selection is explicitly unset, return False to avoid an unsafe auto
+    unlock; callers can decide whether this means "not reached" or "not
+    configured" in their own decision path.
+    """
+    if risk_config.max_consecutive_losses_selected is None:
+        return False
+    return current_consecutive_losses >= risk_config.max_consecutive_losses_selected
 
 
 class GmoLiveKillSwitchTrigger(str, Enum):
