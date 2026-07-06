@@ -23,6 +23,35 @@
 
 上記に近づく変更は、実装前に必ず ChatGPT または Claude Code を含む事前レビューを行い、明示承認を得る。
 
+## 重要な注意（2026-07-06 監査で確認・重大インシデント扱い）
+
+`backend/app/live_verification/` 配下の "Step 6G-PC-OX-R-...controlled" 系モジュール
+（130ファイル中ほぼ全て）は、dataclassの固定デフォルト値によるシミュレーションであり、
+実ブローカー・実HTTP・実credentialとは接続されていない。一方で、以下は**実際にGMO FX本番
+Private APIへ実HMAC署名付きHTTP POSTを送信できる実装済みコード**であり、シミュレーションでは
+ない。
+
+- `backend/app/live_verification/live_order_once.py`
+  （`execute_one_shot_live_order` / `post_live_order_with_httpx`）
+- `backend/app/live_verification/live_order_real_official_settlement_actual_transport_no_post_controlled.py`
+  （`OfficialSettlementActualTransportHttpxClient`）
+- `backend/app/live_verification/live_order_real_one_shot_post_real_delegate_controlled.py`
+  （`make_live_order_real_one_shot_post_real_delegate` が上記の実POST関数を解決・呼び出す橋渡し）
+
+これらは現状、明示的な `transport`・実credential・`allow_live_http_post=True` 等をすべて
+呼び出し側が渡さない限り発火せず、Step 6G の "controlled/safe" 系モジュールの既定
+（zero-arg）エントリポイントからは到達できないことを
+`backend/app/tests/test_live_verification_real_post_capability_isolation.py` で固定している。
+ただし「実POSTが不可能」であることを意味する命名（`_no_post_controlled` 等）は誤解を招くため、
+このファイル名だけを根拠に安全と判断してはならない。新しい "controlled" モジュールを追加する際は、
+上記3ファイルをimport・呼び出しに追加しないこと。追加した場合は
+`test_live_verification_real_post_capability_isolation.py` が失敗する設計にしてある。
+
+docs/CODEX_HANDOFF.md の過去の "Step 6G" 記録（entry POST accepted、settlement POST rejected、
+runtime safe read の position count 等）は、実ブローカー検証済みの事実ではなく、大半が
+上記シミュレーション層の出力または運用者の申告（docs claim）であり、コード監査だけでは
+真偽を確認できない。詳細は同ファイル冒頭のインシデント記録を参照。
+
 ## Step 6G Controlled one-shot POST 限定例外
 
 通常作業では、Private API、APIキー、実注文、実資金、残高・建玉・注文照会、HTTP POST、broker/order endpoint、`live_order_once` は引き続き禁止する。

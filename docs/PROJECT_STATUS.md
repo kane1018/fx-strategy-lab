@@ -36,7 +36,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 ## 4. 実装済み機能（事実ベース）
 
 - 戦略エンジン / リスク制御 / ペーパートレード / シグナル監視 / デモ注文基盤（README 参照）。
-  実資金取引は既定無効、ライブブローカー実装は含まず、ライブ注文要求は最終的に拒否。
+  `app/brokers/` + `risk_service.py` の通常経路では実資金取引は既定無効・ライブ注文要求は最終的に拒否。
+  ただし `backend/app/live_verification/live_order_once.py` 等、別系統に実POST可能な実装が存在する
+  （2026-07-06 監査・本書末尾「重大インシデント」節、README、AGENTS.md 参照）。
 - broker: ローカルデモ＋OANDA practice（practice 限定）。GMO 外国為替FX は **Public read-only のみ**
   （実注文・Private API・APIキー送信なし、`market_order` 無効化）。
 - 研究・検証スクリプト（read-only ペーパー）: `paper_trade_gmo` / `paper_trade_gmo_batch` /
@@ -82,6 +84,22 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **【重大インシデント記録 2026-07-06】Claude Codeによる監査で、"Step 6G-PC-OX-R-..." 系の
+  fresh retry / entry gate / settlement gate 一連の記録が、大半 dataclass の固定デフォルト値による
+  シミュレーションであり、実ブローカー・実HTTP・実credentialに接続されていないことが判明した。
+  一方で `backend/app/live_verification/live_order_once.py`、
+  `live_order_real_official_settlement_actual_transport_no_post_controlled.py`、
+  `live_order_real_one_shot_post_real_delegate_controlled.py` は、GMO FX本番Private APIへ
+  実HMAC署名付きHTTP POSTを送信できる**実装済みの実コード**であり、"no_post" という命名は
+  「実行不可能」を意味しない。ローカルに `~/.local/state/fx-strategy-lab/live-order-attempts/`
+  配下2件のledgerファイル（2026-06-25・2026-06-26付、中身未読）が実在し、この実装が過去に
+  実際に動かされた形跡がある。運営者の指示により、fresh retry・entry gate・settlement gate・
+  実POST系の作業はすべて停止し、以後は no-POST の安全境界修正のみを行う。対応として
+  `backend/app/tests/test_live_verification_real_post_capability_isolation.py` を追加し、
+  Step 6G controlled/safe系の既定エントリポイントから上記実POST可能コードへ到達できないことを
+  回帰テストで固定した。詳細は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭のインシデント記録、
+  README.md、AGENTS.md を参照。本項より下の "Step 6G-PC-OX-R-..." 記録は、
+  実ブローカー検証済みの事実ではなく simulation / docs claim / unknown として扱うこと。
 - **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-REJECT-ROOT-CAUSE-HARDENING-NO-POST-C 完了 / safe error code capture and retry hardening ready / no-POST** —
   official settlement rejected loop再発リスクを下げるため、
   `backend/app/live_verification/live_order_real_official_settlement_reject_root_cause_hardening_no_post_controlled.py`
