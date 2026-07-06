@@ -21,12 +21,23 @@ from app.services.bot_service import (
     stop_bot,
 )
 from app.services.broker_service import place_order
+from app.services.gmo_live_runner_boundary import (
+    GmoLiveServiceBoundarySummary,
+    build_gmo_live_service_no_post_hook_summary,
+)
 from app.services.log_service import record_error
 from app.services.market_data_service import candles_to_frame, pip_size
 from app.strategies import evaluate_strategy
 
 AUTO_MONITOR_ID = "auto-practice"
 _cycle_lock = Lock()
+
+
+def _build_automation_no_post_gmo_service_summary() -> GmoLiveServiceBoundarySummary:
+    # no-POST hook snapshot for AutomationRunner wiring; always fail-closed.
+    return build_gmo_live_service_no_post_hook_summary(
+        invoked_from_automation_runner=True,
+    )
 
 
 def get_or_create_automation_state(db: Session) -> AutoTradeState:
@@ -497,6 +508,7 @@ def run_automation_cycle(
     db: Session,
     broker: OandaBroker | None = None,
 ) -> dict[str, Any]:
+    _ = _build_automation_no_post_gmo_service_summary()
     if not _cycle_lock.acquire(blocking=False):
         return automation_snapshot(db)
     try:

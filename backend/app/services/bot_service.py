@@ -6,6 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.models import BotLog, BotStatus, RiskSettings
 from app.schemas.trading import RiskConfig
+from app.services.gmo_live_runner_boundary import (
+    GmoLiveServiceBoundarySummary,
+    build_gmo_live_service_no_post_hook_summary,
+)
 
 
 def get_or_create_bot_status(db: Session) -> BotStatus:
@@ -37,6 +41,13 @@ def bot_snapshot(db: Session) -> dict[str, Any]:
     }
 
 
+def _build_bot_service_live_no_post_hook_summary() -> GmoLiveServiceBoundarySummary:
+    # no-POST safety summary only; intentionally fails closed by default.
+    return build_gmo_live_service_no_post_hook_summary(
+        invoked_from_bot_service=True,
+    )
+
+
 def _record_bot_log(db: Session, status: BotStatus) -> None:
     db.add(
         BotLog(
@@ -50,9 +61,16 @@ def _record_bot_log(db: Session, status: BotStatus) -> None:
 def start_bot(db: Session, mode: str) -> dict[str, Any]:
     status = get_or_create_bot_status(db)
     if mode not in {"demo", "practice"}:
+        no_post_hook_summary = _build_bot_service_live_no_post_hook_summary()
+        _ = no_post_hook_summary.service_hook_wired_into_bot_service
         status.status = "risk_stopped"
         status.manual_stop_active = True
         status.stop_reason = "実資金BotはこのMVPでは起動できません"
+        if not no_post_hook_summary.runner_summary.runner_may_start_gmo_live_entry:
+            status.stop_reason = (
+                "実資金BotはこのMVPでは起動できません（"
+                "GMO live no-POST hook blocked）"
+            )
     else:
         status.mode = mode
         status.status = "running"

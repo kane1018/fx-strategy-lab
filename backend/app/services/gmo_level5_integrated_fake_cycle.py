@@ -35,7 +35,7 @@ from app.config import Settings
 from app.schemas.trading import OrderRequest, Side
 from app.services.gmo_live_runner_boundary import (
     GmoLiveRunnerBoundaryInput,
-    build_gmo_live_service_boundary_summary,
+    build_gmo_live_service_no_post_hook_summary,
 )
 from app.services.gmo_settlement_reconciliation import (
     GmoSettlementReconciliationStatus,
@@ -149,7 +149,9 @@ def run_gmo_level5_integrated_fake_cycle(
     snapshot = cycle_input or GmoLevel5IntegratedCycleInput()
     reasons: list[str] = []
 
-    service_summary = build_gmo_live_service_boundary_summary(snapshot.runner_boundary_input)
+    service_summary = build_gmo_live_service_no_post_hook_summary(
+        snapshot.runner_boundary_input
+    )
     runner_summary = service_summary.runner_summary
     if not runner_summary.runner_may_start_gmo_live_entry:
         reasons.append("runner_boundary_blocked")

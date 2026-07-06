@@ -1,9 +1,4 @@
-"""No-POST tests for the GMO live runner/bot-service boundary adapter.
-
-This adapter is intentionally not wired into bot_service.py or
-automation_service.py in this Step (see module docstring for why); these
-tests only pin the adapter's own behavior in isolation.
-"""
+"""No-POST tests for the GMO live runner/bot-service boundary adapter."""
 
 from __future__ import annotations
 
@@ -13,6 +8,7 @@ from app.services.gmo_live_runner_boundary import (
     GmoLiveRunnerBoundaryInput,
     build_gmo_live_runner_boundary_summary,
     build_gmo_live_service_boundary_summary,
+    build_gmo_live_service_no_post_hook_summary,
 )
 from app.services.gmo_live_safety_policy import (
     GmoLiveEnablePolicyInput,
@@ -127,6 +123,31 @@ def test_service_boundary_allows_when_fully_permissive() -> None:
     assert summary.runner_summary.runner_may_start_gmo_live_entry is True
     assert summary.runner_summary.runner_may_start_gmo_live_settlement is True
     assert summary.service_hook_wired is False
+
+
+def test_service_no_post_hook_summary_marks_wire_in_targets() -> None:
+    summary = build_gmo_live_service_no_post_hook_summary(
+        _permissive_boundary_input(),
+        invoked_from_bot_service=True,
+        invoked_from_automation_runner=True,
+    )
+    assert summary.service_hook_wired is True
+    assert summary.service_hook_wired_into_bot_service is True
+    assert summary.service_hook_wired_into_automation_runner is True
+
+
+def test_service_no_post_hook_summary_embeds_shadow_gate_state() -> None:
+    summary = build_gmo_live_service_no_post_hook_summary(
+        _permissive_boundary_input(
+            risk_config=GmoLiveRiskConfig(gmo_live_enabled=True),
+            live_enable_policy_input=GmoLiveEnablePolicyInput(**_ALL_ENABLE_GATES_TRUE),
+            kill_switch_state=GmoLiveKillSwitchState(process_start_default_off=False),
+            settlement_side_docs_status_classified=True,
+        )
+    )
+    assert summary.readiness_shadow_entry_allowed is True
+    assert summary.readiness_shadow_settlement_allowed is True
+    assert summary.readiness_shadow_blocked_reasons == ()
 
 
 def test_module_never_calls_a_real_post_capable_method() -> None:

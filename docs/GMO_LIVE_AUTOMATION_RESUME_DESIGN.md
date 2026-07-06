@@ -17,7 +17,7 @@ Step 6G "controlled/safe" simulation 系の混在）を踏まえ、GMO FX 実資
 - live settlement: `blocked`（docs確認まで継続）
 - max_consecutive_losses_selected: `2`
 - max_consecutive_losses_decision: `MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2`
-- service_wiring_policy: `DESIGN_FIRST_NO_CODE`（実配線なし、summary hook設計のみ）
+- service_wiring_policy: `DESIGN_FIRST_NO_CODE`（no-POST hook実配線済み）
 - closeOrder docs review result: `SIDE_DOCS_STILL_UNCONFIRMED`
 - closeOrder endpoint: confirmed（`/private/v1/closeOrder`）
 - settlement_side_confirmation: `pending`（公式docsだけでは決済方向を確定不能）
@@ -39,7 +39,7 @@ Step 6G "controlled/safe" simulation 系の混在）を踏まえ、GMO FX 実資
 8. Kill switch・settlement照合ロジックが実装され、synthetic fixtureで全異常系がテスト済み。
 9. repo clean、HEAD==origin/main、全テスト green、ruff clean。
 10. `service_wiring_policy` が `DESIGN_FIRST_NO_CODE`（`bot_service`/`automation_service`は
-    未実配線）。
+    no-POST hook 配線済み、実POST配線未実装）。
 
 ## 2. GmoFxBrokerの統合位置
 
@@ -262,14 +262,13 @@ GMO live専用として以下のフィールドを新設する。数値は次の
   - `support_answer_safe_label_capture_ready` と next step の判定
 - support回答は本文ではなく safe label で扱う前提（`SUPPORT_ANSWER_*`）に統一し、raw本文保存・表示は行わない。
 - service wiringは`DESIGN_FIRST_NO_CODE`継続。次Step候補は
-  **`NEXT_STEP_SERVICE_NO_POST_HOOK_WIRING`** を1本に絞る。
+  **`NEXT_STEP_CREDENTIAL_BOUNDARY_DESIGN`** を1本に絞る。
 
 ## 13. 次に実装する最小Step
 
-`bot_service.start_bot` / `AutomationRunner` の no-POST フック差し込み（設計で定義した
-`GmoLiveServiceBoundarySummary` / `GmoLiveRunnerBoundaryResult` の参照）を次Stepで最小実装する。
-実POST系 (`allow_bridge`, `allow_real_broker_post=True`, `allow_live_http_post=True`,
-`GmoFxBroker.market_order`/`official_settlement_order` 直接起動) はこのStepで行わない。
+- no-POST hook配線は完了。次Stepは credential境界 / 実POST readiness 確認の分離 Step に進む。
+- 実POST系 (`allow_bridge`, `allow_real_broker_post=True`, `allow_live_http_post=True`,
+  `GmoFxBroker.market_order`/`official_settlement_order` 直接起動) は次Step以降。
 
 ## 9. 運営者向け公式docs確認チェックリスト（no-POST）
 
@@ -303,20 +302,13 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 
 ## 10. service wiring design note（DESIGN_FIRST_NO_CODE）
 
-- `bot_service` と `automation_service` への実配線は本Stepでは行わない。
-- 既存の OANDA / SQLAlchemy 結合は保持し、無変更。
-- 次Step（no-POST）は `GmoLiveServiceBoundarySummary` 前提の hook を先に入れる。
-  先行接続ポイント:
-  - `bot_service.start_bot`: `build_gmo_live_service_boundary_summary` を評価し、`runner_may_start_gmo_live_entry / settlement` の
-    safe フラグのみ参照して起動可否判断に反映
-  - `automation_service.AutomationRunner`: SQLAlchemy（`AutoTradeState` / `OrderLog` / `Signal`）結合は維持しつつ、
-    live実行の前段のみ `GmoLiveRunnerBoundary` 結果を参照
-  - `risk_service`: `evaluate_order_risk` は現状無変更。将来は `GmoLiveReadinessShadowInput` を別経路で評価し、
-    summary結果へ橋渡し
-  - `reconciliation adapter`: `build_gmo_settlement_reconciliation_input_from_safe_snapshot` を
-    safe read-only snapshot 経路で差し込む
-- `GmoFxBroker.market_order` / `official_settlement_order` の本番呼び出しは次Step以降。
-  `allow bridge` 追加はしない。`app.live_verification` / `live_order_once` は触らない。
+- `bot_service.start_bot` / `automation_service`（`run_automation_cycle` / `AutomationRunner`）へ
+  `build_gmo_live_service_no_post_hook_summary` を no-POST フックとして実配線済み。
+- 実POSTメソッド呼び出し（`GmoFxBroker.market_order` / `official_settlement_order`）は未実装。
+- 既存の OANDA / SQLAlchemy 結合は維持し、無変更。
+- `risk_service` の実注文連携は未変更。`evaluate_gmo_live_readiness_shadow` は
+  サービス hook summary の shadow 判定として参照する形のみに留めている。
+- `app.live_verification` / `live_order_once` は触らない。
 
 ## 11. 確認事項
 

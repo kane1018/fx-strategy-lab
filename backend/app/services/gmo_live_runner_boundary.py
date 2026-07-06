@@ -1,19 +1,11 @@
-"""GMO live runner/bot-service boundary: adapter skeleton, not wired in yet.
+"""GMO live runner/service boundary adapter and no-POST hook summary inputs.
 
-`bot_service.start_bot` already hard-blocks any mode outside
-`{"demo", "practice"}`, and `automation_service.AutomationRunner` is tightly
-coupled to `OandaBroker` and SQLAlchemy-backed DB models
-(`AutoTradeState`, `OrderLog`, `Signal`). Rewiring either of those files to
-call into GMO live policy would mean touching the real, currently-working
-automation loop -- out of scope for a no-POST safety Step. This module
-instead provides a standalone adapter that composes the GMO live kill switch
-and live enable policy into a single "would a runner be allowed to start GMO
-live entry/settlement" summary.
+This module composes the GMO live kill-switch and live-enable policy into a
+single adapter result used by safety review and no-POST wiring.
 
-This module is not imported by `bot_service.py` or `automation_service.py`
-in this Step. That connection is deliberately deferred to a separate, later
-Step so the real automation loop is not touched as a side effect of adding a
-safety policy.
+`bot_service` and `automation_service` now call the no-POST hook helper during
+their entry paths so this summary can be observed without touching broker
+transport or private API execution.
 """
 
 from __future__ import annotations
@@ -26,6 +18,10 @@ from app.services.gmo_live_safety_policy import (
     GmoLiveRiskConfig,
     evaluate_gmo_live_enable_policy,
     evaluate_gmo_live_kill_switch,
+)
+from app.services.risk_service import (
+    GmoLiveReadinessShadowInput,
+    evaluate_gmo_live_readiness_shadow,
 )
 
 
@@ -93,20 +89,20 @@ def build_gmo_live_runner_boundary_summary(
 
 @dataclass(frozen=True)
 class GmoLiveServiceBoundarySummary:
-    """The exact shape a future `bot_service.start_bot` / `AutomationRunner`
-    integration would call to decide whether to start GMO live entry or
-    settlement, without starting anything itself.
+    """The exact shape consumed by `bot_service` / `AutomationRunner` to decide
+    no-POST GMO readiness.
 
-    `service_hook_wired` stays False in this Step: `bot_service.py` and
-    `automation_service.py` do not import this module. It exists as the
-    named entry point those files would call in a later, dedicated
-    connection Step.
+    The summary is intentionally fail-closed and does not carry broker result
+    payloads, credentials, or raw identifiers.
     """
 
     runner_summary: GmoLiveRunnerBoundaryResult
     service_hook_wired: bool = False
     service_hook_wired_into_bot_service: bool = False
     service_hook_wired_into_automation_runner: bool = False
+    readiness_shadow_entry_allowed: bool = False
+    readiness_shadow_settlement_allowed: bool = False
+    readiness_shadow_blocked_reasons: tuple[str, ...] = ()
 
 
 def build_gmo_live_service_boundary_summary(
@@ -118,6 +114,46 @@ def build_gmo_live_service_boundary_summary(
     never imports `bot_service` or `automation_service`, never touches a
     real HTTP client, credential, or `.env`.
     """
+    boundary_snapshot = boundary_input or GmoLiveRunnerBoundaryInput()
+    shadow_summary = evaluate_gmo_live_readiness_shadow(
+        GmoLiveReadinessShadowInput(
+            risk_config=boundary_snapshot.risk_config,
+            live_enable_policy_input=boundary_snapshot.live_enable_policy_input,
+            kill_switch_state=boundary_snapshot.kill_switch_state,
+            generic_close_attempt_detected=False,
+            settlement_side_docs_status_classified=boundary_snapshot.settlement_side_docs_status_classified,
+            paper_evidence_safe_label_present=True,
+            operator_live_enable_declared=True,
+        )
+    )
     return GmoLiveServiceBoundarySummary(
-        runner_summary=build_gmo_live_runner_boundary_summary(boundary_input),
+        runner_summary=build_gmo_live_runner_boundary_summary(boundary_snapshot),
+        readiness_shadow_entry_allowed=shadow_summary.entry_shadow_allowed,
+        readiness_shadow_settlement_allowed=shadow_summary.settlement_shadow_allowed,
+        readiness_shadow_blocked_reasons=shadow_summary.blocked_reasons,
+    )
+
+
+def build_gmo_live_service_no_post_hook_summary(
+    boundary_input: GmoLiveRunnerBoundaryInput | None = None,
+    *,
+    invoked_from_bot_service: bool = False,
+    invoked_from_automation_runner: bool = False,
+) -> GmoLiveServiceBoundarySummary:
+    """Build the no-POST service hook summary for a concrete caller.
+
+    This helper is intended for service wiring that is still in safety-only mode:
+    it only flips ``service_hook_wired`` / caller-specific flags so the caller can
+    prove where the hook is currently attached without changing any downstream
+    gate values.
+    """
+    base_summary = build_gmo_live_service_boundary_summary(boundary_input)
+    return GmoLiveServiceBoundarySummary(
+        runner_summary=base_summary.runner_summary,
+        readiness_shadow_entry_allowed=base_summary.readiness_shadow_entry_allowed,
+        readiness_shadow_settlement_allowed=base_summary.readiness_shadow_settlement_allowed,
+        readiness_shadow_blocked_reasons=base_summary.readiness_shadow_blocked_reasons,
+        service_hook_wired=True,
+        service_hook_wired_into_bot_service=invoked_from_bot_service,
+        service_hook_wired_into_automation_runner=invoked_from_automation_runner,
     )
