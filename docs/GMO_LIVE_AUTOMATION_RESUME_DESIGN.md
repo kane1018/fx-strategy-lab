@@ -142,12 +142,25 @@ GMO live専用として以下のフィールドを新設する。数値は次の
    `real_broker_post_hard_guard`を必ず呼び、production側で許可配線はなく、実HTTP transportも
    未実装のため常に例外で停止する（`test_gmo_fx_broker_official_settlement_no_post.py`）。
    position-specific settlement・risk_service接続・kill switch・paper実績チェックは未実装。
-6. GMO専用RiskConfigフィールドの追加（構造のみ、保守的な仮数値）
-7. `bot_service`/`automation_service`にGMO専用kill switch条件を追加
-   （settlement rejected/unknown/timeout、active/pending conflict、multiple positions、
-   `max_entries_per_day`、`max_settlements_per_position`）
+6. ✅ **完了（構造のみ、risk_service未接続）**: `app/services/gmo_live_safety_policy.py`に
+   `GmoLiveRiskConfig`（`max_positions`/`max_entries_per_day`/`max_settlements_per_position`等、
+   `generic_close_allowed`/`opposite_order_as_close_allowed`/`position_specific_actual_path_enabled`
+   はFalse固定で構築時に検証）、kill switch（`GmoLiveKillSwitchState`/
+   `evaluate_gmo_live_kill_switch`、15種のtriggerでentry/settlementを止め、retry/repost/generic
+   closeは常にFalse固定）、live enable policy（`GmoLiveEnablePolicyInput`/
+   `evaluate_gmo_live_enable_policy`、16項目全部trueでのみready）を追加した。
+   **`risk_service.evaluate_order_risk`・`bot_service`・`automation_service`へはまだ接続していない**
+   （既存の無条件live拒否ブロックは意図的にそのまま維持）。テストは
+   `test_gmo_live_policy_no_post.py`・`test_gmo_kill_switch_no_post.py`。
+7. `bot_service`/`automation_service`への実接続（上記policy/kill switchの実配線、今回は未実施）
 8. settlement reconciliation（post-settlement read-only確認、close_unconfirmed相当）実装
-9. Level 5 full auto completed状態機械の実装。synthetic fixtureで全異常系をテスト
+9. ✅ **完了（純粋な状態機械シミュレーションのみ）**:
+   `app/services/gmo_level5_fake_cycle.py`に`simulate_gmo_level5_fake_cycle`を追加。
+   `GmoFxBroker`の実transportが未実装のため、実際にbroker経由でfake cycleを流すことはできず、
+   entry/position/settlement/position確認の各段階をsafe label入力として与える純粋な状態機械で
+   代替した。成功時のみ`level5_full_auto_cycle_completed=true`、rejected/unknown/timeout・
+   manual intervention・retry/repost/generic close・kill switch発火のいずれでもfalseになることを
+   `test_gmo_level5_fake_cycle_no_post.py`で確認。
 10. fake transportのみを使った統合テスト一式
     （entry accepted→position確認→settlement accepted→NO_POSITION確認=Level5 true、
     および全失敗分岐=Level5 false+bot停止）
