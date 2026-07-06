@@ -82,6 +82,31 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 
 ## 5. 未実装 / 次フェーズ候補
 
+- **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-REJECT-ROOT-CAUSE-HARDENING-NO-POST-C 完了 / safe error code capture and retry hardening ready / no-POST** —
+  official settlement rejected loop再発リスクを下げるため、
+  `backend/app/live_verification/live_order_real_official_settlement_reject_root_cause_hardening_no_post_controlled.py`
+  と
+  `backend/app/tests/test_live_verification_live_order_real_official_settlement_reject_root_cause_hardening_no_post_controlled.py`
+  を追加した。hardening summaryは official settlement route、size-based target consistency、
+  side provenance、real-network client binding、safe rejection reporting をsafe label/booleanだけで束ねる。
+  safe error code captureは allowlist方式で、safe HTTP status label、safe API status label、
+  safe broker error code label、safe broker error code family、operator UI safe labelだけを分類対象にする。
+  raw response、broker response本文、error message本文、account/order/position/trade ID、数量、価格、
+  credential、signature、headers、`.env` は扱わない。GMO FX公式docsのerror code familyは、
+  size/target mismatch、position target not found、active order conflict、session/market、
+  account/permission、rate/temporary、parameter/request shape のsafe familyへ整理する。
+  position-specific settlementは `position_specific_safe_identifier_handling_ready=false`、
+  `position_specific_actual_path_allowed=false` のままで、将来使う場合はopaque handle設計が必要。
+  size-based settlementは `request_uses_size_only=true`、`request_includes_settlePosition=false`、
+  `size_and_settlePosition_mutually_exclusive=true` としてsafe labelで検証する。
+  operator UI safe label collectionは本文・ID・数量・価格・損益を受け取らず、
+  `UI_SAFE_REASON_PERMISSION`、`UI_SAFE_REASON_SIZE_OR_TARGET`、
+  `UI_SAFE_REASON_POSITION_NOT_FOUND`、`UI_SAFE_REASON_ACTIVE_ORDER_CONFLICT`、
+  `UI_SAFE_REASON_MARKET_OR_SESSION`、`UI_SAFE_REASON_RATE_LIMIT_OR_TEMPORARY`、
+  `UI_SAFE_REASON_UNKNOWN`、`UI_SAFE_REASON_NOT_DISPLAYED` のみ許可する。
+  manual close後のcurrent safe stateが `NO_POSITION/count=0` かつ active/pending clear なら
+  `fresh_retry_readiness=READY_WITH_FRESH_GATES_REQUIRED`。次の推奨Stepは
+  **Step 6G-PC-OX-R-FRESH-ENTRY-SIGNAL-SAFE-LABEL-CONFIRMATION-NO-POST-C**。
 - **Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-REJECTION-SAFE-CATEGORY-REPORTING-HANDOFF-NO-POST-C 完了 / safe rejection category reporting handoff ready / no-POST** —
   前Stepで統合した safe rejection category capture 結果を、final report と
   ChatGPT一括引き継ぎ要約へ安全に出力する no-POST reporting/handoff adapter を追加した。

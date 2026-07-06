@@ -37,6 +37,9 @@ SAFE_HTTP_STATUS_CLIENT_ERROR = "SAFE_HTTP_STATUS_CLIENT_ERROR"
 SAFE_HTTP_STATUS_RATE_LIMIT = "SAFE_HTTP_STATUS_RATE_LIMIT"
 SAFE_HTTP_STATUS_SERVER_ERROR = "SAFE_HTTP_STATUS_SERVER_ERROR"
 
+SAFE_API_STATUS_NONZERO = "SAFE_API_STATUS_NONZERO"
+SAFE_API_STATUS_REJECTED = "SAFE_API_STATUS_REJECTED"
+
 SAFE_BROKER_CODE_REQUIRED_PARAMETER_MISSING = (
     "SAFE_BROKER_CODE_REQUIRED_PARAMETER_MISSING"
 )
@@ -60,6 +63,25 @@ SAFE_BROKER_CODE_RATE_LIMIT_TEMPORARY_CONSTRAINT = (
     "SAFE_BROKER_CODE_RATE_LIMIT_TEMPORARY_CONSTRAINT"
 )
 
+SAFE_BROKER_ERROR_CODE_FAMILY_PARAMETER_OR_REQUEST_SHAPE = (
+    "SAFE_BROKER_ERROR_CODE_FAMILY_PARAMETER_OR_REQUEST_SHAPE"
+)
+SAFE_BROKER_ERROR_CODE_FAMILY_SIZE_OR_TARGET_MISMATCH = (
+    "SAFE_BROKER_ERROR_CODE_FAMILY_SIZE_OR_TARGET_MISMATCH"
+)
+SAFE_BROKER_ERROR_CODE_FAMILY_POSITION_STATE_OR_TARGET_NOT_FOUND = (
+    "SAFE_BROKER_ERROR_CODE_FAMILY_POSITION_STATE_OR_TARGET_NOT_FOUND"
+)
+SAFE_BROKER_ERROR_CODE_FAMILY_SESSION_OR_MARKET_CONSTRAINT = (
+    "SAFE_BROKER_ERROR_CODE_FAMILY_SESSION_OR_MARKET_CONSTRAINT"
+)
+SAFE_BROKER_ERROR_CODE_FAMILY_ACCOUNT_OR_PERMISSION_CONSTRAINT = (
+    "SAFE_BROKER_ERROR_CODE_FAMILY_ACCOUNT_OR_PERMISSION_CONSTRAINT"
+)
+SAFE_BROKER_ERROR_CODE_FAMILY_RATE_LIMIT_OR_TEMPORARY_CONSTRAINT = (
+    "SAFE_BROKER_ERROR_CODE_FAMILY_RATE_LIMIT_OR_TEMPORARY_CONSTRAINT"
+)
+
 OPERATOR_UI_SAFE_LABEL_POSITION_NOT_FOUND_OR_ALREADY_CLOSED = (
     "OPERATOR_UI_SAFE_LABEL_POSITION_NOT_FOUND_OR_ALREADY_CLOSED"
 )
@@ -67,6 +89,21 @@ OPERATOR_UI_SAFE_LABEL_MARKET_OR_SESSION_BLOCKED = (
     "OPERATOR_UI_SAFE_LABEL_MARKET_OR_SESSION_BLOCKED"
 )
 OPERATOR_UI_SAFE_LABEL_PERMISSION_WARNING = "OPERATOR_UI_SAFE_LABEL_PERMISSION_WARNING"
+
+OPERATOR_UI_REJECTION_SAFE_REASON_PERMISSION = "UI_SAFE_REASON_PERMISSION"
+OPERATOR_UI_REJECTION_SAFE_REASON_SIZE_OR_TARGET = "UI_SAFE_REASON_SIZE_OR_TARGET"
+OPERATOR_UI_REJECTION_SAFE_REASON_POSITION_NOT_FOUND = (
+    "UI_SAFE_REASON_POSITION_NOT_FOUND"
+)
+OPERATOR_UI_REJECTION_SAFE_REASON_ACTIVE_ORDER_CONFLICT = (
+    "UI_SAFE_REASON_ACTIVE_ORDER_CONFLICT"
+)
+OPERATOR_UI_REJECTION_SAFE_REASON_MARKET_OR_SESSION = "UI_SAFE_REASON_MARKET_OR_SESSION"
+OPERATOR_UI_REJECTION_SAFE_REASON_RATE_LIMIT_OR_TEMPORARY = (
+    "UI_SAFE_REASON_RATE_LIMIT_OR_TEMPORARY"
+)
+OPERATOR_UI_REJECTION_SAFE_REASON_UNKNOWN = "UI_SAFE_REASON_UNKNOWN"
+OPERATOR_UI_REJECTION_SAFE_REASON_NOT_DISPLAYED = "UI_SAFE_REASON_NOT_DISPLAYED"
 
 OFFICIAL_DOCS_SPEC_COMPARISON_PARAMETER_MISMATCH_CANDIDATE = (
     "OFFICIAL_DOCS_SPEC_COMPARISON_PARAMETER_MISMATCH_CANDIDATE"
@@ -170,8 +207,12 @@ class SafeRejectionSource(StrEnum):
     SYNTHETIC_CLASSIFIER_FIXTURE = (
         "SAFE_REJECTION_SOURCE_SYNTHETIC_CLASSIFIER_FIXTURE"
     )
+    SAFE_API_STATUS_LABEL = "SAFE_REJECTION_SOURCE_SAFE_API_STATUS_LABEL"
     SAFE_BROKER_ERROR_CODE_LABEL = (
         "SAFE_REJECTION_SOURCE_SAFE_BROKER_ERROR_CODE_LABEL"
+    )
+    SAFE_BROKER_ERROR_CODE_FAMILY = (
+        "SAFE_REJECTION_SOURCE_SAFE_BROKER_ERROR_CODE_FAMILY"
     )
     SAFE_HTTP_STATUS_LABEL = "SAFE_REJECTION_SOURCE_SAFE_HTTP_STATUS_LABEL"
     OPERATOR_UI_SAFE_LABEL = "SAFE_REJECTION_SOURCE_OPERATOR_UI_SAFE_LABEL"
@@ -219,7 +260,9 @@ class SafeRejectionCategoryCaptureInput:
         LiveOrderRealSafePostResultCategory.RESULT_REJECTED_SANITIZED.value
     )
     safe_http_status_label: str = UNAVAILABLE_SAFE_LABEL
+    safe_api_status_label: str = UNAVAILABLE_SAFE_LABEL
     safe_broker_code_label: str = UNAVAILABLE_SAFE_LABEL
+    safe_broker_error_code_family: str = UNAVAILABLE_SAFE_LABEL
     operator_ui_safe_label: str = UNAVAILABLE_SAFE_LABEL
     official_docs_comparison_safe_result: str = UNAVAILABLE_SAFE_LABEL
     synthetic_fixture_label: str = UNAVAILABLE_SAFE_LABEL
@@ -258,7 +301,9 @@ class SafeRejectionCategoryCaptureInput:
         for field_name in (
             "sanitized_result_category",
             "safe_http_status_label",
+            "safe_api_status_label",
             "safe_broker_code_label",
+            "safe_broker_error_code_family",
             "operator_ui_safe_label",
             "official_docs_comparison_safe_result",
             "synthetic_fixture_label",
@@ -541,6 +586,12 @@ def _classify(
 
     for label, classification in _SAFE_BROKER_CODE_MAP.items():
         if snapshot.safe_broker_code_label == label:
+            return classification
+    for label, classification in _SAFE_BROKER_ERROR_CODE_FAMILY_MAP.items():
+        if snapshot.safe_broker_error_code_family == label:
+            return classification
+    for label, classification in _SAFE_API_STATUS_MAP.items():
+        if snapshot.safe_api_status_label == label:
             return classification
     for label, classification in _SAFE_HTTP_STATUS_MAP.items():
         if snapshot.safe_http_status_label == label:
@@ -825,6 +876,68 @@ _SAFE_BROKER_CODE_MAP = {
     ),
 }
 
+_SAFE_BROKER_ERROR_CODE_FAMILY_MAP = {
+    SAFE_BROKER_ERROR_CODE_FAMILY_PARAMETER_OR_REQUEST_SHAPE: _classification(
+        category=SafeRejectionCategory.PARAMETER_OR_REQUEST_SHAPE,
+        kind=SafeRejectionKind.EXECUTION_TYPE_OR_MARKET_BOUND_MISMATCH,
+        source=SafeRejectionSource.SAFE_BROKER_ERROR_CODE_FAMILY,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=SAFE_BROKER_ERROR_CODE_FAMILY_PARAMETER_OR_REQUEST_SHAPE,
+    ),
+    SAFE_BROKER_ERROR_CODE_FAMILY_SIZE_OR_TARGET_MISMATCH: _classification(
+        category=SafeRejectionCategory.SIZE_OR_TARGET_MISMATCH,
+        kind=SafeRejectionKind.SIZE_BASED_TARGET_MISMATCH,
+        source=SafeRejectionSource.SAFE_BROKER_ERROR_CODE_FAMILY,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=SAFE_BROKER_ERROR_CODE_FAMILY_SIZE_OR_TARGET_MISMATCH,
+    ),
+    SAFE_BROKER_ERROR_CODE_FAMILY_POSITION_STATE_OR_TARGET_NOT_FOUND: _classification(
+        category=SafeRejectionCategory.POSITION_STATE_OR_TARGET_NOT_FOUND,
+        kind=SafeRejectionKind.SIZE_BASED_TARGET_MISMATCH,
+        source=SafeRejectionSource.SAFE_BROKER_ERROR_CODE_FAMILY,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=SAFE_BROKER_ERROR_CODE_FAMILY_POSITION_STATE_OR_TARGET_NOT_FOUND,
+    ),
+    SAFE_BROKER_ERROR_CODE_FAMILY_SESSION_OR_MARKET_CONSTRAINT: _classification(
+        category=SafeRejectionCategory.SESSION_OR_MARKET_CONSTRAINT,
+        kind=SafeRejectionKind.SESSION_CLOSED_OR_MAINTENANCE_POSSIBLE,
+        source=SafeRejectionSource.SAFE_BROKER_ERROR_CODE_FAMILY,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=SAFE_BROKER_ERROR_CODE_FAMILY_SESSION_OR_MARKET_CONSTRAINT,
+    ),
+    SAFE_BROKER_ERROR_CODE_FAMILY_ACCOUNT_OR_PERMISSION_CONSTRAINT: _classification(
+        category=SafeRejectionCategory.ACCOUNT_OR_PERMISSION_CONSTRAINT,
+        kind=SafeRejectionKind.ACCOUNT_OR_PERMISSION_STILL_POSSIBLE,
+        source=SafeRejectionSource.SAFE_BROKER_ERROR_CODE_FAMILY,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=SAFE_BROKER_ERROR_CODE_FAMILY_ACCOUNT_OR_PERMISSION_CONSTRAINT,
+    ),
+    SAFE_BROKER_ERROR_CODE_FAMILY_RATE_LIMIT_OR_TEMPORARY_CONSTRAINT: _classification(
+        category=SafeRejectionCategory.RATE_LIMIT_OR_TEMPORARY_CONSTRAINT,
+        kind=SafeRejectionKind.RATE_LIMIT_OR_TEMPORARY_CONSTRAINT,
+        source=SafeRejectionSource.SAFE_BROKER_ERROR_CODE_FAMILY,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=SAFE_BROKER_ERROR_CODE_FAMILY_RATE_LIMIT_OR_TEMPORARY_CONSTRAINT,
+    ),
+}
+
+_SAFE_API_STATUS_MAP = {
+    SAFE_API_STATUS_NONZERO: _classification(
+        category=SafeRejectionCategory.BROKER_REJECTED_UNCLASSIFIED,
+        kind=SafeRejectionKind.BROKER_REJECTED_REASON_UNAVAILABLE,
+        source=SafeRejectionSource.SAFE_API_STATUS_LABEL,
+        confidence=SafeRejectionConfidence.LOW,
+        label=SAFE_API_STATUS_NONZERO,
+    ),
+    SAFE_API_STATUS_REJECTED: _classification(
+        category=SafeRejectionCategory.BROKER_REJECTED_UNCLASSIFIED,
+        kind=SafeRejectionKind.BROKER_REJECTED_REASON_UNAVAILABLE,
+        source=SafeRejectionSource.SAFE_API_STATUS_LABEL,
+        confidence=SafeRejectionConfidence.LOW,
+        label=SAFE_API_STATUS_REJECTED,
+    ),
+}
+
 _SAFE_HTTP_STATUS_MAP = {
     SAFE_HTTP_STATUS_CLIENT_ERROR: _classification(
         category=SafeRejectionCategory.BROKER_REJECTED_UNCLASSIFIED,
@@ -870,6 +983,70 @@ _OPERATOR_UI_SAFE_LABEL_MAP = {
         source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
         confidence=SafeRejectionConfidence.MEDIUM,
         label=OPERATOR_UI_SAFE_LABEL_PERMISSION_WARNING,
+    ),
+    OPERATOR_UI_REJECTION_SAFE_REASON_PERMISSION: _classification(
+        category=SafeRejectionCategory.ACCOUNT_OR_PERMISSION_CONSTRAINT,
+        kind=SafeRejectionKind.ACCOUNT_OR_PERMISSION_STILL_POSSIBLE,
+        source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=OPERATOR_UI_REJECTION_SAFE_REASON_PERMISSION,
+    ),
+    OPERATOR_UI_REJECTION_SAFE_REASON_SIZE_OR_TARGET: _classification(
+        category=SafeRejectionCategory.SIZE_OR_TARGET_MISMATCH,
+        kind=SafeRejectionKind.SIZE_BASED_TARGET_MISMATCH,
+        source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=OPERATOR_UI_REJECTION_SAFE_REASON_SIZE_OR_TARGET,
+    ),
+    OPERATOR_UI_REJECTION_SAFE_REASON_POSITION_NOT_FOUND: _classification(
+        category=SafeRejectionCategory.POSITION_STATE_OR_TARGET_NOT_FOUND,
+        kind=SafeRejectionKind.SIZE_BASED_TARGET_MISMATCH,
+        source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=OPERATOR_UI_REJECTION_SAFE_REASON_POSITION_NOT_FOUND,
+    ),
+    OPERATOR_UI_REJECTION_SAFE_REASON_ACTIVE_ORDER_CONFLICT: _classification(
+        category=SafeRejectionCategory.SIZE_OR_TARGET_MISMATCH,
+        kind=SafeRejectionKind.SIZE_BASED_TARGET_MISMATCH,
+        source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=OPERATOR_UI_REJECTION_SAFE_REASON_ACTIVE_ORDER_CONFLICT,
+    ),
+    OPERATOR_UI_REJECTION_SAFE_REASON_MARKET_OR_SESSION: _classification(
+        category=SafeRejectionCategory.SESSION_OR_MARKET_CONSTRAINT,
+        kind=SafeRejectionKind.SESSION_CLOSED_OR_MAINTENANCE_POSSIBLE,
+        source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=OPERATOR_UI_REJECTION_SAFE_REASON_MARKET_OR_SESSION,
+    ),
+    OPERATOR_UI_REJECTION_SAFE_REASON_RATE_LIMIT_OR_TEMPORARY: _classification(
+        category=SafeRejectionCategory.RATE_LIMIT_OR_TEMPORARY_CONSTRAINT,
+        kind=SafeRejectionKind.RATE_LIMIT_OR_TEMPORARY_CONSTRAINT,
+        source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
+        confidence=SafeRejectionConfidence.MEDIUM,
+        label=OPERATOR_UI_REJECTION_SAFE_REASON_RATE_LIMIT_OR_TEMPORARY,
+    ),
+    OPERATOR_UI_REJECTION_SAFE_REASON_UNKNOWN: SafeRejectionClassification(
+        category=SafeRejectionCategory.UNKNOWN,
+        kind=SafeRejectionKind.UNKNOWN_SAFE,
+        source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
+        confidence=SafeRejectionConfidence.UNKNOWN,
+        selected_safe_detail_label=OPERATOR_UI_REJECTION_SAFE_REASON_UNKNOWN,
+        safe_rejection_reason_available=False,
+        safe_rejection_reason_unavailable=True,
+        requires_raw_response=False,
+        requires_operator_ui_safe_label=False,
+    ),
+    OPERATOR_UI_REJECTION_SAFE_REASON_NOT_DISPLAYED: SafeRejectionClassification(
+        category=SafeRejectionCategory.UNKNOWN,
+        kind=SafeRejectionKind.BROKER_REJECTED_REASON_UNAVAILABLE,
+        source=SafeRejectionSource.OPERATOR_UI_SAFE_LABEL,
+        confidence=SafeRejectionConfidence.UNKNOWN,
+        selected_safe_detail_label=OPERATOR_UI_REJECTION_SAFE_REASON_NOT_DISPLAYED,
+        safe_rejection_reason_available=False,
+        safe_rejection_reason_unavailable=True,
+        requires_raw_response=False,
+        requires_operator_ui_safe_label=False,
     ),
 }
 
