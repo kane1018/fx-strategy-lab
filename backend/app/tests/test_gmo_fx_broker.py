@@ -190,7 +190,7 @@ def test_market_order_is_disabled_and_makes_no_call() -> None:
         raise AssertionError("market_order must not perform any HTTP request")
 
     broker = GmoFxBroker(settings(), client=_client(handler))
-    with pytest.raises(GmoFxBrokerError, match="disabled"):
+    with pytest.raises(GmoFxBrokerError, match="hard guard"):
         broker.market_order(order())
 
 

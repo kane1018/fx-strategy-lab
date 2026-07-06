@@ -23,7 +23,12 @@ import httpx
 
 from app.brokers.base import Broker, BrokerResult
 from app.config import Settings, get_settings
+from app.private_api.order_builders import build_gmo_fx_entry_request_plan
 from app.schemas.trading import Candle, OrderRequest, RiskConfig, Side
+from app.security.real_broker_post_hard_guard import (
+    RealBrokerPostHardGuardError,
+    assert_real_broker_post_allowed,
+)
 from app.services.market_data_service import pip_size
 from app.services.risk_service import evaluate_order_risk
 
@@ -81,6 +86,8 @@ class GmoFxBroker(Broker):
         self,
         settings: Settings | None = None,
         client: httpx.Client | None = None,
+        *,
+        allow_real_broker_post: bool = False,
     ) -> None:
         self.settings = settings or get_settings()
         # Public API needs no authentication. We deliberately do not read or send
@@ -90,6 +97,10 @@ class GmoFxBroker(Broker):
             headers={"Accept": "application/json"},
             timeout=10,
         )
+        # Entry order-write skeleton only: no production caller sets this to
+        # True anywhere. Real transport is not implemented yet, so even a
+        # future True value would still stop at "transport not implemented".
+        self._allow_real_broker_post = allow_real_broker_post
 
     def _request(
         self,
@@ -190,11 +201,34 @@ class GmoFxBroker(Broker):
         return candles[-count:] if count else candles
 
     def market_order(self, request: OrderRequest) -> BrokerResult:
-        # Orders are intentionally NOT implemented for GMO in this phase. Even if
-        # GMO_FX_ORDER_ENABLED were set, no Private adapter exists, so this raises.
+        """Entry-only order-write skeleton; no real transport yet.
+
+        This never closes an existing position, and never treats a reverse
+        trade as a close-out -- closing an existing position uses a separate
+        dedicated method added in a later Step. It builds a pure entry
+        request plan, then must pass the shared real-broker-post hard guard
+        before any transport could ever be attempted. No production caller
+        flips the real-broker-post allow flag on, so this always stops at
+        the guard.
+        """
+        plan = build_gmo_fx_entry_request_plan(
+            symbol=normalize_symbol(request.symbol),
+            side="BUY" if request.side == Side.BUY else "SELL",
+            size=_size_str(request.units),
+        )
+        try:
+            assert_real_broker_post_allowed(allow=self._allow_real_broker_post)
+        except RealBrokerPostHardGuardError as error:
+            raise GmoFxBrokerError(
+                "GMO order placement is blocked by the real-broker-post hard "
+                f"guard (request_kind={plan.request_kind}). Enable only in a "
+                "later, explicitly authorized phase."
+            ) from error
+        # Real transport is intentionally not implemented yet. Even if a
+        # future caller flipped the real-broker-post allow flag on, there is
+        # still no HTTP client wired here -- that is a separate, later Step.
         raise GmoFxBrokerError(
-            "GMO order placement is disabled (Public read-only phase). "
-            "Enable only in a later, explicitly authorized phase."
+            "GMO order transport is not implemented (no-POST skeleton phase)."
         )
 
 

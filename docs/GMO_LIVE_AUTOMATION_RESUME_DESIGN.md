@@ -126,8 +126,11 @@ GMO live専用として以下のフィールドを新設する。数値は次の
    fake fixtureのみでテスト・`test_private_api_order_builders.py`）。settlementは
    `/private/v1/closeOrder`専用route固定、size-based以外（position-specific）は
    構造上サポートせず明示的に拒否する。
-4. `GmoFxBroker.market_order()`実装。上記builderで作った`GmoFxPrivateRequestPlan`を使い、
-   `real_broker_post_hard_guard`を実送信直前に必ず呼ぶ形にする
+4. ✅ **完了（no-POSTスケルトンのみ）**: `GmoFxBroker.market_order()`をentry専用skeletonとして
+   実装。上記builderで作った`GmoFxPrivateRequestPlan`を使い、`real_broker_post_hard_guard`を
+   実送信直前に必ず呼ぶ。production側で`allow_real_broker_post`をTrueにする配線は一切なく、
+   実HTTP transportも未実装のため常に例外で停止する（`test_gmo_fx_broker_market_order_no_post.py`）。
+   settlement・risk_service接続・kill switch・paper実績チェックはこのStepでは未実装。
 5. `GmoFxBroker`の official settlement専用メソッド実装（同様にhard guard必須）
 6. GMO専用RiskConfigフィールドの追加（構造のみ、保守的な仮数値）
 7. `bot_service`/`automation_service`にGMO専用kill switch条件を追加
