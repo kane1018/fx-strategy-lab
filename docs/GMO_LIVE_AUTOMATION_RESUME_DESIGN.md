@@ -18,6 +18,9 @@ Step 6G "controlled/safe" simulation 系の混在）を踏まえ、GMO FX 実資
 - max_consecutive_losses_selected: `2`
 - max_consecutive_losses_decision: `MINIMAL_START_MAX_CONSECUTIVE_LOSSES_2`
 - service_wiring_policy: `DESIGN_FIRST_NO_CODE`（実配線なし、summary hook設計のみ）
+- closeOrder docs review result: `SIDE_DOCS_STILL_UNCONFIRMED`
+- closeOrder endpoint: confirmed（`/private/v1/closeOrder`）
+- settlement_side_confirmation: `pending`（公式docsだけでは決済方向を確定不能）
 
 ## 1. GMO live自動売買再開の必須条件
 
@@ -270,12 +273,44 @@ source-scan/isolationテストを追加する。**
 - `settlement_side_official_docs_semantics_confirmed=false` が外部確認完了まで
   `live settlement` blockの要件に残ることを維持しているか
 
+### 9.1 公式docs確認結果（2026-07-07）
+
+- `closeOrder` endpoint: `POST /private/v1/closeOrder` の存在を公式docsで確認（`/private`）
+- `side`: `BUY` / `SELL` の列挙確認（必須パラメータ）
+- `size` / `settlePosition`: 「どちらか1つ必須、同時指定不可」の仕様を確認
+- 決済対象ポジション側への `side` マッピング（`buy sideが買建玉決済側か / 売り建玉決済側か`）は
+  公式docs本文で断定する文言を確認できず
+- 両建て時に size-only closeOrder を送った場合にどの建玉が対象かについて、公式docs本文で確認不可
+- 判定: `SIDE_DOCS_STILL_UNCONFIRMED`（`closeOrder` 決済方向は未確定）
+- 判定結果: `settlement_side_official_docs_semantics_confirmed = false` 維持、`live settlement` はblock維持
+- 次Step: GMOサポートへ確認依頼を発出（本ドキュメント末尾に文面追加）
+
+### 9.2 GMOサポート確認文（公開情報外・実値非表示）
+
+> GMOコイン外国為替FX API の `POST /private/v1/closeOrder` について、以下をご教示ください。
+> 1. `side` が決済対象建玉の「同一side」を意味するか、反対売買側を意味するか。
+> 2. 買建玉を決済する場合は `BUY` か `SELL` か。
+> 3. 売建玉を決済する場合は `SELL` か `BUY` か。
+> 4. `size` 指定と `settlePosition` 指定（positionId複数含む）で `side` の意味が変わるか。
+> 5. 同一銘柄で買建玉・売建玉が同時保有（両建て）されている場合、`size-only` closeOrder の `side` はどちらを対象にするか。
+> 実注文ID／建玉ID／数量／価格／損益等の実値は共有しません。仕様意味の確認のみご回答ください。
+
 ## 10. service wiring design note（DESIGN_FIRST_NO_CODE）
 
 - `bot_service` と `automation_service` への実配線は本Stepでは行わない。
 - 既存の OANDA / SQLAlchemy 結合は保持し、無変更。
-- 次Stepでは no-POST の summary hook（`GmoLiveServiceBoundarySummary`）を先に入れて、実POST/credential配線前提は保留。
-- `GmoFxBroker.market_order` / `official_settlement_order` の本番呼び出しは次Step以降。次Stepでも allow bridge は追加しない。
+- 次Step（no-POST）は `GmoLiveServiceBoundarySummary` 前提の hook を先に入れる。
+  先行接続ポイント:
+  - `bot_service.start_bot`: `build_gmo_live_service_boundary_summary` を評価し、`runner_may_start_gmo_live_entry / settlement` の
+    safe フラグのみ参照して起動可否判断に反映
+  - `automation_service.AutomationRunner`: SQLAlchemy（`AutoTradeState` / `OrderLog` / `Signal`）結合は維持しつつ、
+    live実行の前段のみ `GmoLiveRunnerBoundary` 結果を参照
+  - `risk_service`: `evaluate_order_risk` は現状無変更。将来は `GmoLiveReadinessShadowInput` を別経路で評価し、
+    summary結果へ橋渡し
+  - `reconciliation adapter`: `build_gmo_settlement_reconciliation_input_from_safe_snapshot` を
+    safe read-only snapshot 経路で差し込む
+- `GmoFxBroker.market_order` / `official_settlement_order` の本番呼び出しは次Step以降。
+  `allow bridge` 追加はしない。`app.live_verification` / `live_order_once` は触らない。
 
 ## 11. 確認事項
 
