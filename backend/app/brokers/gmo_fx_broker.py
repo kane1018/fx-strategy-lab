@@ -17,13 +17,17 @@ Response envelope: {"status": 0, "data": ..., "responsetime": "..."}; a non-zero
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum
 from typing import Any
 
 import httpx
 
 from app.brokers.base import Broker, BrokerResult
 from app.config import Settings, get_settings
-from app.private_api.order_builders import build_gmo_fx_entry_request_plan
+from app.private_api.order_builders import (
+    build_gmo_fx_entry_request_plan,
+    build_gmo_fx_official_settlement_request_plan,
+)
 from app.schemas.trading import Candle, OrderRequest, RiskConfig, Side
 from app.security.real_broker_post_hard_guard import (
     RealBrokerPostHardGuardError,
@@ -77,6 +81,82 @@ class GmoPrice:
     spread_pips: float
     timestamp: datetime
     status: str
+
+
+ENTRY_SIDE_SAFE_LABEL_BUY = "ENTRY_BUY"
+ENTRY_SIDE_SAFE_LABEL_SELL = "ENTRY_SELL"
+
+SETTLEMENT_SIDE_SOURCE_FROM_ENTRY_SAFE_LABEL = "SETTLEMENT_SIDE_FROM_ENTRY_SAFE_LABEL"
+SETTLEMENT_SIDE_SOURCE_MISSING = "SETTLEMENT_SIDE_SOURCE_MISSING"
+SETTLEMENT_SIDE_SOURCE_UNKNOWN_SAFE = "SETTLEMENT_SIDE_SOURCE_UNKNOWN_SAFE"
+
+# Mechanical, fixed mapping: closing a long requires a sell, closing a short
+# requires a buy. This is a documented assumption, not something decided per
+# call -- `settlement_side_official_docs_semantics_confirmed` stays False
+# until a human cross-checks it against GMO's official closeOrder reference.
+_ENTRY_TO_SETTLEMENT_SIDE = {
+    ENTRY_SIDE_SAFE_LABEL_BUY: "SELL",
+    ENTRY_SIDE_SAFE_LABEL_SELL: "BUY",
+}
+
+
+class GmoFxSettlementSideProvenanceStatus(str, Enum):
+    DERIVED_FROM_ENTRY_SAFE_LABEL = "DERIVED_FROM_ENTRY_SAFE_LABEL"
+    BLOCKED_MISSING_ENTRY_SIDE = "BLOCKED_MISSING_ENTRY_SIDE"
+    BLOCKED_UNKNOWN_ENTRY_SIDE = "BLOCKED_UNKNOWN_ENTRY_SIDE"
+
+
+@dataclass(frozen=True)
+class GmoFxSettlementSideProvenance:
+    """Safe-label-only settlement side derivation result.
+
+    Never carries a real position ID, quantity, price, or credential. The
+    settlement side is mechanically derived from an entry side safe label
+    only; it is never inferred, guessed, or chosen freely.
+    """
+
+    status: GmoFxSettlementSideProvenanceStatus
+    settlement_side_ready: bool
+    settlement_side_safe_label: str | None
+    settlement_side_source_safe_label: str
+    settlement_side_official_docs_semantics_confirmed: bool
+    codex_inferred_settlement_side: bool = False
+
+
+def derive_settlement_side_from_entry_side_safe_label(
+    entry_side_safe_label: str | None,
+) -> GmoFxSettlementSideProvenance:
+    """Derive the settlement (closing) side from an entry side safe label.
+
+    Only `ENTRY_BUY` / `ENTRY_SELL` are accepted. Anything else -- missing,
+    empty, or an unrecognized label -- blocks the derivation instead of
+    guessing. `codex_inferred_settlement_side` is always False: the side
+    comes from the fixed mapping above, not from any inference performed
+    here.
+    """
+    if not entry_side_safe_label:
+        return GmoFxSettlementSideProvenance(
+            status=GmoFxSettlementSideProvenanceStatus.BLOCKED_MISSING_ENTRY_SIDE,
+            settlement_side_ready=False,
+            settlement_side_safe_label=None,
+            settlement_side_source_safe_label=SETTLEMENT_SIDE_SOURCE_MISSING,
+            settlement_side_official_docs_semantics_confirmed=False,
+        )
+    if entry_side_safe_label not in _ENTRY_TO_SETTLEMENT_SIDE:
+        return GmoFxSettlementSideProvenance(
+            status=GmoFxSettlementSideProvenanceStatus.BLOCKED_UNKNOWN_ENTRY_SIDE,
+            settlement_side_ready=False,
+            settlement_side_safe_label=None,
+            settlement_side_source_safe_label=SETTLEMENT_SIDE_SOURCE_UNKNOWN_SAFE,
+            settlement_side_official_docs_semantics_confirmed=False,
+        )
+    return GmoFxSettlementSideProvenance(
+        status=GmoFxSettlementSideProvenanceStatus.DERIVED_FROM_ENTRY_SAFE_LABEL,
+        settlement_side_ready=True,
+        settlement_side_safe_label=_ENTRY_TO_SETTLEMENT_SIDE[entry_side_safe_label],
+        settlement_side_source_safe_label=SETTLEMENT_SIDE_SOURCE_FROM_ENTRY_SAFE_LABEL,
+        settlement_side_official_docs_semantics_confirmed=False,
+    )
 
 
 class GmoFxBroker(Broker):
@@ -229,6 +309,57 @@ class GmoFxBroker(Broker):
         # still no HTTP client wired here -- that is a separate, later Step.
         raise GmoFxBrokerError(
             "GMO order transport is not implemented (no-POST skeleton phase)."
+        )
+
+    def official_settlement_order(
+        self,
+        *,
+        symbol: str,
+        entry_side_safe_label: str | None,
+        size: float,
+    ) -> BrokerResult:
+        """Dedicated, size-based official settlement skeleton; no real
+        transport yet.
+
+        This is a separate method from `market_order` and never reuses it --
+        it never places a fresh order in a reverse direction and calls that
+        a close. It only accepts a size-based settlement request; there is
+        no position-specific identifier parameter here at all, so a safe
+        opaque handle for that path simply does not exist yet.
+
+        The settlement side is never chosen by this method or by whatever
+        calls it -- it is mechanically derived from `entry_side_safe_label`
+        via `derive_settlement_side_from_entry_side_safe_label`. If that
+        derivation is not ready (missing or unrecognized entry side safe
+        label), no settlement request plan is built at all.
+        """
+        provenance = derive_settlement_side_from_entry_side_safe_label(
+            entry_side_safe_label,
+        )
+        if not provenance.settlement_side_ready:
+            raise GmoFxBrokerError(
+                "GMO official settlement is blocked: settlement side "
+                f"provenance not ready (status={provenance.status.value})."
+            )
+        plan = build_gmo_fx_official_settlement_request_plan(
+            symbol=normalize_symbol(symbol),
+            side=provenance.settlement_side_safe_label,
+            size=_size_str(size),
+        )
+        try:
+            assert_real_broker_post_allowed(allow=self._allow_real_broker_post)
+        except RealBrokerPostHardGuardError as error:
+            raise GmoFxBrokerError(
+                "GMO official settlement is blocked by the real-broker-post "
+                f"hard guard (request_kind={plan.request_kind}). Enable "
+                "only in a later, explicitly authorized phase."
+            ) from error
+        # Real transport is intentionally not implemented yet. Even if a
+        # future caller flipped the real-broker-post allow flag on, there is
+        # still no HTTP client wired here -- that is a separate, later Step.
+        raise GmoFxBrokerError(
+            "GMO official settlement transport is not implemented "
+            "(no-POST skeleton phase)."
         )
 
 

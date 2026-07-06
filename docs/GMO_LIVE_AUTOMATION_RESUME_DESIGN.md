@@ -131,7 +131,17 @@ GMO live専用として以下のフィールドを新設する。数値は次の
    実送信直前に必ず呼ぶ。production側で`allow_real_broker_post`をTrueにする配線は一切なく、
    実HTTP transportも未実装のため常に例外で停止する（`test_gmo_fx_broker_market_order_no_post.py`）。
    settlement・risk_service接続・kill switch・paper実績チェックはこのStepでは未実装。
-5. `GmoFxBroker`の official settlement専用メソッド実装（同様にhard guard必須）
+5. ✅ **完了（no-POSTスケルトンのみ）**: `GmoFxBroker.official_settlement_order()`を
+   size-based専用skeletonとして実装。`market_order()`とは別メソッドで、generic opposite orderは
+   使わず、entry builderではなく`build_gmo_fx_official_settlement_request_plan`のみを使う。
+   settlement side（決済方向）は`entry_side_safe_label`（`ENTRY_BUY`/`ENTRY_SELL`のみ）から
+   `derive_settlement_side_from_entry_side_safe_label`で機械的に導出し、side provenanceが
+   ready でない限りrequest planを作らずに停止する。導出ルール（entryの反対sideで決済）自体は
+   GMO公式closeOrder docsとの整合を人手でまだ確認していないため、
+   `settlement_side_official_docs_semantics_confirmed=false`のまま。実送信直前で
+   `real_broker_post_hard_guard`を必ず呼び、production側で許可配線はなく、実HTTP transportも
+   未実装のため常に例外で停止する（`test_gmo_fx_broker_official_settlement_no_post.py`）。
+   position-specific settlement・risk_service接続・kill switch・paper実績チェックは未実装。
 6. GMO専用RiskConfigフィールドの追加（構造のみ、保守的な仮数値）
 7. `bot_service`/`automation_service`にGMO専用kill switch条件を追加
    （settlement rejected/unknown/timeout、active/pending conflict、multiple positions、

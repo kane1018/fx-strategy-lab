@@ -129,7 +129,10 @@ def test_market_order_uses_entry_builder_not_settlement() -> None:
 
 def test_market_order_does_not_reference_settlement_or_generic_close() -> None:
     text = MODULE_PATH.read_text(encoding="utf-8")
-    market_order_source = text[text.index("def market_order") :]
+    start = text.index("def market_order")
+    next_method_offset = text.find("\n    def ", start + len("def market_order"))
+    end = next_method_offset if next_method_offset != -1 else len(text)
+    market_order_source = text[start:end]
     forbidden_terms = (
         "closeOrder",
         "settlement",
