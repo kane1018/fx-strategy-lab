@@ -118,11 +118,16 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 ## 8. no-POSTで先に実装すべきStep一覧
 
 1. 本設計書のリスク上限数値・段階的ロールアウト期間の確定（別途議論）
-2. **`gmo_fx_broker.py`が`app.live_verification.*`を一切importしないことを固定する
-   source-scan/isolationテストの追加**（本書の次の最小Step、下記9参照）
-3. `app/private_api/`に、新規注文・official settlement用のpure body/signing builder関数を
-   追加（実送信なし。`app/private_api/auth.py`の`build_auth_headers`を再利用、fake fixtureのみでテスト）
-4. `GmoFxBroker.market_order()`実装。`real_broker_post_hard_guard`を実送信直前に必ず呼ぶ形にする
+2. ✅ **完了**: `gmo_fx_broker.py`が`app.live_verification.*`を一切importしないことを固定する
+   source-scan/isolationテスト追加（`test_gmo_fx_broker_live_verification_isolation.py`）。
+   同Stepで`real_broker_post_hard_guard.py`を`app.security`へ移設済み。
+3. ✅ **完了**: `app/private_api/order_builders.py`に、entry注文用・official settlement用の
+   pure body/signing-ready request plan builderを追加（実送信なし、`auth.py`は呼ばない設計、
+   fake fixtureのみでテスト・`test_private_api_order_builders.py`）。settlementは
+   `/private/v1/closeOrder`専用route固定、size-based以外（position-specific）は
+   構造上サポートせず明示的に拒否する。
+4. `GmoFxBroker.market_order()`実装。上記builderで作った`GmoFxPrivateRequestPlan`を使い、
+   `real_broker_post_hard_guard`を実送信直前に必ず呼ぶ形にする
 5. `GmoFxBroker`の official settlement専用メソッド実装（同様にhard guard必須）
 6. GMO専用RiskConfigフィールドの追加（構造のみ、保守的な仮数値）
 7. `bot_service`/`automation_service`にGMO専用kill switch条件を追加
