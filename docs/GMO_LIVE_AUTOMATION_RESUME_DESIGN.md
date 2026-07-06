@@ -250,20 +250,26 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 12. 運営者レビュー・sign-offチェックリスト文書化
 13. `GMO_FX_ORDER_ENABLED`を本番で手動ONにする（上記すべて完了後、十分なpaper実績確認後のみ）
 
-## 12. 次に実装する最小Step
+## 12. pre-actual readiness convergence（no-POST）
 
-**`gmo_fx_broker.py`が`app.live_verification.*`を一切importしないことを固定する
-source-scan/isolationテストを追加する。**
+- `backend/app/services/gmo_live_pre_actual_readiness.py` を追加し、GMO live実POST前の収束用サマリーを safe boolean / safe label だけで評価できるようにした。
+- `backend/app/tests/test_gmo_live_pre_actual_readiness_no_post.py` を追加し、以下を検証:
+  - default で未ready
+  - side docs未確認/支持回答未取得時の settlement block
+  - support safe label 受領時の導出（position/opposite/ambiguous/raw分類）
+  - max_consecutive_losses=2/3反映と候補外拒否
+  - credential境界がfalseならactual entry gate / settlement gate不可
+  - `support_answer_safe_label_capture_ready` と next step の判定
+- support回答は本文ではなく safe label で扱う前提（`SUPPORT_ANSWER_*`）に統一し、raw本文保存・表示は行わない。
+- service wiringは`DESIGN_FIRST_NO_CODE`継続。次Step候補は
+  **`NEXT_STEP_SERVICE_NO_POST_HOOK_WIRING`** を1本に絞る。
 
-理由:
-- 新規production codeの追加が一切不要（テストファイル1つのみ）。
-- 「Step 6G controlled系・simulation系とは明確に分離する」という最優先原則を、
-  実装より先にテストとして固定できる。
-- 既存の`test_live_verification_real_post_capability_isolation.py`と同じ設計パターンを
-  再利用でき、今後の全GmoFxBroker実装がこの境界を最初から守る形になる。
-- 現状の`gmo_fx_broker.py`は既にこの境界を満たしている（`app.brokers.base` /
-  `app.config` / `app.schemas.trading` / `app.services.market_data_service` /
-  `app.services.risk_service`のみimport）ため、テスト追加は既存動作を壊さない。
+## 13. 次に実装する最小Step
+
+`bot_service.start_bot` / `AutomationRunner` の no-POST フック差し込み（設計で定義した
+`GmoLiveServiceBoundarySummary` / `GmoLiveRunnerBoundaryResult` の参照）を次Stepで最小実装する。
+実POST系 (`allow_bridge`, `allow_real_broker_post=True`, `allow_live_http_post=True`,
+`GmoFxBroker.market_order`/`official_settlement_order` 直接起動) はこのStepで行わない。
 
 ## 9. 運営者向け公式docs確認チェックリスト（no-POST）
 
@@ -315,5 +321,5 @@ source-scan/isolationテストを追加する。**
 ## 11. 確認事項
 
 本書作成にあたり、実POST・credential使用・.env読取・raw response/broker response本文・
-ID・数量・価格・損益の表示は一切行っていない。コード実装（`.py`ファイルの追加・変更）も
-行っていない。本ファイル（`.md`のみ）の新規追加のみ。
+ID・数量・価格・損益の表示は一切行っていない。no-POST条件に従い、本文/API生レスポンスや
+生パラメータの保存・表示は行わない。
