@@ -14,9 +14,11 @@ import pathlib
 from app.services.gmo_live_safety_policy import (
     GmoLiveEnablePolicyInput,
     GmoLiveKillSwitchState,
+    GmoLiveRiskConfig,
 )
 from app.services.risk_service import (
     GmoLiveReadinessShadowInput,
+    GmoLiveShadowBlockReason,
     evaluate_gmo_live_readiness_shadow,
     evaluate_order_risk,
 )
@@ -45,6 +47,7 @@ _ALL_ENABLE_GATES_TRUE = {
 
 def _permissive_shadow_input(**overrides: object) -> GmoLiveReadinessShadowInput:
     values: dict[str, object] = {
+        "risk_config": GmoLiveRiskConfig(gmo_live_enabled=True),
         "live_enable_policy_input": GmoLiveEnablePolicyInput(**_ALL_ENABLE_GATES_TRUE),
         "kill_switch_state": GmoLiveKillSwitchState(process_start_default_off=False),
         "generic_close_attempt_detected": False,
@@ -61,6 +64,15 @@ def test_shadow_gate_blocks_by_default() -> None:
     assert result.entry_shadow_allowed is False
     assert result.settlement_shadow_allowed is False
     assert result.shadow_only is True
+    assert GmoLiveShadowBlockReason.GMO_LIVE_ENABLED_FALSE.value in result.blocked_reasons
+
+
+def test_shadow_gate_blocked_when_gmo_live_enabled_is_false() -> None:
+    result = evaluate_gmo_live_readiness_shadow(
+        _permissive_shadow_input(risk_config=GmoLiveRiskConfig(gmo_live_enabled=False))
+    )
+    assert result.entry_shadow_allowed is False
+    assert GmoLiveShadowBlockReason.GMO_LIVE_ENABLED_FALSE.value in result.blocked_reasons
 
 
 def test_shadow_gate_blocked_when_live_enable_policy_not_ready() -> None:

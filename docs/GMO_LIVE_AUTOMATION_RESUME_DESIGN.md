@@ -186,6 +186,26 @@ GMO live専用として以下のフィールドを新設する。数値は次の
     現行アーキテクチャではLevel5成功に絶対到達できないことを実証する統合テスト）。
     万一将来`market_order()`が例外を投げなくなった場合に備え、`AssertionError`で大声を上げる
     フェイルセーフも入れた（`test_gmo_level5_integrated_fake_cycle_no_post.py`のmonkeypatchテストで確認）。
+
+    **追記（Step 6G-PC-OX-R-GMO-LIVE-RUNTIME-PIPELINE-INTEGRATION-NO-POST-SPRINT-C 完了）**:
+    - `gmo_live_runner_boundary.py`に`risk_config.gmo_live_enabled`ゲートと
+      `settlement_side_docs_status_classified`（settlement専用ブロック）を追加。
+      `bot_service.py`/`automation_service.py`は引き続き変更・import なし
+      （既存自動売買ループがOANDA/SQLAlchemyに強く結合しているため、実配線は別Stepへ延期）。
+    - `gmo_settlement_reconciliation.py`に`GmoSettlementSafeReadSnapshot`と
+      `build_gmo_settlement_reconciliation_input_from_safe_snapshot`を追加。将来
+      `app/private_api`の実read-onlyクライアントが返すsafe snapshotを reconciliation input へ
+      変換する境界を用意（実read-only API接続はまだ行っていない）。`active_or_pending_order_conflict`
+      ゲートも追加。
+    - `risk_service.py`に`GmoLiveShadowBlockReason`（structured safe label enum）を追加し、
+      `evaluate_gmo_live_readiness_shadow`が`risk_config.gmo_live_enabled`も見るよう拡張。
+      `evaluate_order_risk`は完全に無変更（既存の無条件live拒否は維持）。
+    - `gmo_level5_integrated_fake_cycle.py`をrunner boundary・risk shadow gate・settlement
+      reconciliationを通す形に強化。実broker skeleton経由のdefaultパスは、上流ゲートが完全に
+      許可的でも必ずfail-closedになることを維持しつつ、`simulate_accepted_transport_for_state_
+      machine_test_only`（実broker/hard guardには一切触れないテスト専用スイッチ、production
+      コードでは常にFalseであることをテストで固定）を有効にし、かつsettlement reconciliationが
+      `NO_POSITION`/`count=0`を確認した場合のみLevel5=trueに到達する設計とした。
 11. `live_order_once.py`と Step 6G "controlled" simulation系（約130ファイル）の
     廃止・隔離（自動売買から使われないことを明示するマーカー追加、またはディレクトリ移動）
 12. 運営者レビュー・sign-offチェックリスト文書化

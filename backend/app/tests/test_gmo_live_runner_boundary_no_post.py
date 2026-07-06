@@ -16,6 +16,7 @@ from app.services.gmo_live_runner_boundary import (
 from app.services.gmo_live_safety_policy import (
     GmoLiveEnablePolicyInput,
     GmoLiveKillSwitchState,
+    GmoLiveRiskConfig,
 )
 
 MODULE_PATH = (
@@ -69,17 +70,41 @@ def test_boundary_blocked_when_kill_switch_triggered_even_if_policy_ready() -> N
     assert "KILL_SWITCH_TRIGGERED" in result.blocked_reasons
 
 
-def test_boundary_allows_entry_and_settlement_when_fully_permissive() -> None:
+def _permissive_boundary_input(**overrides: object) -> GmoLiveRunnerBoundaryInput:
+    values: dict[str, object] = {
+        "process_just_started": False,
+        "risk_config": GmoLiveRiskConfig(gmo_live_enabled=True),
+        "live_enable_policy_input": GmoLiveEnablePolicyInput(**_ALL_ENABLE_GATES_TRUE),
+        "kill_switch_state": GmoLiveKillSwitchState(process_start_default_off=False),
+        "settlement_side_docs_status_classified": True,
+    }
+    values.update(overrides)
+    return GmoLiveRunnerBoundaryInput(**values)
+
+
+def test_boundary_blocked_when_gmo_live_enabled_is_false() -> None:
     result = build_gmo_live_runner_boundary_summary(
-        GmoLiveRunnerBoundaryInput(
-            process_just_started=False,
-            live_enable_policy_input=GmoLiveEnablePolicyInput(**_ALL_ENABLE_GATES_TRUE),
-            kill_switch_state=GmoLiveKillSwitchState(process_start_default_off=False),
-        )
+        _permissive_boundary_input(risk_config=GmoLiveRiskConfig(gmo_live_enabled=False))
     )
+    assert result.runner_may_start_gmo_live_entry is False
+    assert "GMO_LIVE_ENABLED_FALSE" in result.blocked_reasons
+
+
+def test_boundary_blocks_settlement_when_side_docs_not_classified() -> None:
+    result = build_gmo_live_runner_boundary_summary(
+        _permissive_boundary_input(settlement_side_docs_status_classified=False)
+    )
+    assert result.runner_may_start_gmo_live_entry is True
+    assert result.runner_may_start_gmo_live_settlement is False
+    assert "SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED" in result.settlement_blocked_reasons
+
+
+def test_boundary_allows_entry_and_settlement_when_fully_permissive() -> None:
+    result = build_gmo_live_runner_boundary_summary(_permissive_boundary_input())
     assert result.runner_may_start_gmo_live_entry is True
     assert result.runner_may_start_gmo_live_settlement is True
     assert result.blocked_reasons == ()
+    assert result.settlement_blocked_reasons == ()
 
 
 def test_boundary_reports_not_wired_into_real_automation() -> None:

@@ -1,10 +1,12 @@
 from dataclasses import dataclass
+from enum import Enum
 
 from app.config import Settings
 from app.schemas.trading import OrderRequest, RiskConfig
 from app.services.gmo_live_safety_policy import (
     GmoLiveEnablePolicyInput,
     GmoLiveKillSwitchState,
+    GmoLiveRiskConfig,
     evaluate_gmo_live_enable_policy,
     evaluate_gmo_live_kill_switch,
 )
@@ -68,6 +70,23 @@ def evaluate_order_risk(
     return RiskDecision(allowed=not reasons, reasons=reasons)
 
 
+class GmoLiveShadowBlockReason(str, Enum):
+    """Structured safe-label categories for GmoLiveReadinessShadowResult.
+
+    A safe result type kept independent of `evaluate_order_risk`'s free-text
+    Japanese reasons, so a future real integration Step can match on stable
+    enum values instead of parsing strings.
+    """
+
+    GMO_LIVE_ENABLED_FALSE = "GMO_LIVE_ENABLED_FALSE"
+    LIVE_ENABLE_POLICY_NOT_READY = "LIVE_ENABLE_POLICY_NOT_READY"
+    KILL_SWITCH_TRIGGERED = "KILL_SWITCH_TRIGGERED"
+    GENERIC_CLOSE_ATTEMPT_DETECTED = "GENERIC_CLOSE_ATTEMPT_DETECTED"
+    SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED = "SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED"
+    PAPER_EVIDENCE_MISSING = "PAPER_EVIDENCE_MISSING"
+    OPERATOR_ENABLE_MISSING = "OPERATOR_ENABLE_MISSING"
+
+
 @dataclass(frozen=True)
 class GmoLiveReadinessShadowInput:
     """Safe-label-only inputs for the GMO live shadow gate.
@@ -75,6 +94,7 @@ class GmoLiveReadinessShadowInput:
     Never carries a real position ID, quantity, price, or credential.
     """
 
+    risk_config: GmoLiveRiskConfig = GmoLiveRiskConfig()
     live_enable_policy_input: GmoLiveEnablePolicyInput = GmoLiveEnablePolicyInput()
     kill_switch_state: GmoLiveKillSwitchState = GmoLiveKillSwitchState()
     generic_close_attempt_detected: bool = False
@@ -106,22 +126,25 @@ def evaluate_gmo_live_readiness_shadow(
     snapshot = shadow_input or GmoLiveReadinessShadowInput()
     reasons: list[str] = []
 
+    if not snapshot.risk_config.gmo_live_enabled:
+        reasons.append(GmoLiveShadowBlockReason.GMO_LIVE_ENABLED_FALSE.value)
+
     live_enable_result = evaluate_gmo_live_enable_policy(snapshot.live_enable_policy_input)
     if not live_enable_result.live_enable_ready:
-        reasons.append("LIVE_ENABLE_POLICY_NOT_READY")
+        reasons.append(GmoLiveShadowBlockReason.LIVE_ENABLE_POLICY_NOT_READY.value)
 
     kill_switch_decision = evaluate_gmo_live_kill_switch(snapshot.kill_switch_state)
     if not kill_switch_decision.entry_allowed:
-        reasons.append("KILL_SWITCH_TRIGGERED")
+        reasons.append(GmoLiveShadowBlockReason.KILL_SWITCH_TRIGGERED.value)
 
     if snapshot.generic_close_attempt_detected:
-        reasons.append("GENERIC_CLOSE_ATTEMPT_DETECTED")
+        reasons.append(GmoLiveShadowBlockReason.GENERIC_CLOSE_ATTEMPT_DETECTED.value)
     if not snapshot.settlement_side_docs_status_classified:
-        reasons.append("SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED")
+        reasons.append(GmoLiveShadowBlockReason.SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED.value)
     if not snapshot.paper_evidence_safe_label_present:
-        reasons.append("PAPER_EVIDENCE_MISSING")
+        reasons.append(GmoLiveShadowBlockReason.PAPER_EVIDENCE_MISSING.value)
     if not snapshot.operator_live_enable_declared:
-        reasons.append("OPERATOR_ENABLE_MISSING")
+        reasons.append(GmoLiveShadowBlockReason.OPERATOR_ENABLE_MISSING.value)
 
     settlement_blocked = bool(reasons) or not kill_switch_decision.settlement_allowed
     return GmoLiveReadinessShadowResult(

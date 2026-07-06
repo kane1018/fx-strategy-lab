@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from app.services.gmo_live_safety_policy import (
     GmoLiveEnablePolicyInput,
     GmoLiveKillSwitchState,
+    GmoLiveRiskConfig,
     evaluate_gmo_live_enable_policy,
     evaluate_gmo_live_kill_switch,
 )
@@ -31,8 +32,10 @@ from app.services.gmo_live_safety_policy import (
 @dataclass(frozen=True)
 class GmoLiveRunnerBoundaryInput:
     process_just_started: bool = True
+    risk_config: GmoLiveRiskConfig = GmoLiveRiskConfig()
     live_enable_policy_input: GmoLiveEnablePolicyInput = GmoLiveEnablePolicyInput()
     kill_switch_state: GmoLiveKillSwitchState = GmoLiveKillSwitchState()
+    settlement_side_docs_status_classified: bool = False
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,7 @@ class GmoLiveRunnerBoundaryResult:
     runner_may_start_gmo_live_settlement: bool
     process_start_default_off_enforced: bool
     blocked_reasons: tuple[str, ...]
+    settlement_blocked_reasons: tuple[str, ...]
     wired_into_bot_service: bool = False
     wired_into_automation_runner: bool = False
 
@@ -58,6 +62,8 @@ def build_gmo_live_runner_boundary_summary(
     reasons: list[str] = []
     if snapshot.process_just_started:
         reasons.append("PROCESS_START_DEFAULT_OFF")
+    if not snapshot.risk_config.gmo_live_enabled:
+        reasons.append("GMO_LIVE_ENABLED_FALSE")
 
     live_enable_result = evaluate_gmo_live_enable_policy(snapshot.live_enable_policy_input)
     if not live_enable_result.live_enable_ready:
@@ -67,12 +73,19 @@ def build_gmo_live_runner_boundary_summary(
     if not kill_switch_decision.entry_allowed:
         reasons.append("KILL_SWITCH_TRIGGERED")
 
-    blocked = bool(reasons)
+    entry_blocked = bool(reasons)
+
+    settlement_reasons = list(reasons)
+    if not snapshot.settlement_side_docs_status_classified:
+        settlement_reasons.append("SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED")
+    if not kill_switch_decision.settlement_allowed:
+        settlement_reasons.append("KILL_SWITCH_SETTLEMENT_BLOCKED")
+    settlement_blocked = bool(settlement_reasons)
+
     return GmoLiveRunnerBoundaryResult(
-        runner_may_start_gmo_live_entry=not blocked,
-        runner_may_start_gmo_live_settlement=(
-            not blocked and kill_switch_decision.settlement_allowed
-        ),
+        runner_may_start_gmo_live_entry=not entry_blocked,
+        runner_may_start_gmo_live_settlement=not settlement_blocked,
         process_start_default_off_enforced=snapshot.process_just_started,
         blocked_reasons=tuple(reasons),
+        settlement_blocked_reasons=tuple(dict.fromkeys(settlement_reasons)),
     )

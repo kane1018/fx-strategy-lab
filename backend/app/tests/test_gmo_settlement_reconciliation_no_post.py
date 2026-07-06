@@ -13,6 +13,8 @@ import pytest
 from app.services.gmo_settlement_reconciliation import (
     GmoSettlementReconciliationInput,
     GmoSettlementReconciliationStatus,
+    GmoSettlementSafeReadSnapshot,
+    build_gmo_settlement_reconciliation_input_from_safe_snapshot,
     evaluate_gmo_settlement_reconciliation,
 )
 
@@ -97,6 +99,64 @@ def test_rejected_status_is_distinguished_from_unknown() -> None:
     )
     assert rejected.status is GmoSettlementReconciliationStatus.BLOCKED_SETTLEMENT_NOT_ACCEPTED
     assert unknown.status is GmoSettlementReconciliationStatus.UNKNOWN_SAFE_READ_UNAVAILABLE
+
+
+def test_active_or_pending_conflict_blocks_regardless_of_position_status() -> None:
+    result = evaluate_gmo_settlement_reconciliation(
+        GmoSettlementReconciliationInput(
+            settlement_result_category="ACCEPTED_SANITIZED",
+            post_settlement_position_status_safe="NO_POSITION",
+            post_settlement_position_count_safe=0,
+            active_or_pending_order_conflict_detected=True,
+        )
+    )
+    assert result.reconciled is False
+    assert (
+        result.status
+        is GmoSettlementReconciliationStatus.BLOCKED_ACTIVE_OR_PENDING_ORDER_CONFLICT
+    )
+
+
+def test_safe_snapshot_adapter_maps_successful_read_through() -> None:
+    reconciliation_input = build_gmo_settlement_reconciliation_input_from_safe_snapshot(
+        settlement_result_category="ACCEPTED_SANITIZED",
+        snapshot=GmoSettlementSafeReadSnapshot(
+            safe_read_succeeded=True,
+            position_status_safe="NO_POSITION",
+            position_count_safe=0,
+        ),
+    )
+    result = evaluate_gmo_settlement_reconciliation(reconciliation_input)
+    assert result.reconciled is True
+    assert result.status is GmoSettlementReconciliationStatus.RECONCILED_NO_POSITION
+
+
+def test_safe_snapshot_adapter_maps_failed_read_to_unavailable() -> None:
+    reconciliation_input = build_gmo_settlement_reconciliation_input_from_safe_snapshot(
+        settlement_result_category="ACCEPTED_SANITIZED",
+        snapshot=GmoSettlementSafeReadSnapshot(safe_read_succeeded=False),
+    )
+    result = evaluate_gmo_settlement_reconciliation(reconciliation_input)
+    assert result.reconciled is False
+    assert result.status is GmoSettlementReconciliationStatus.UNKNOWN_SAFE_READ_UNAVAILABLE
+
+
+def test_safe_snapshot_adapter_propagates_active_or_pending_conflict() -> None:
+    reconciliation_input = build_gmo_settlement_reconciliation_input_from_safe_snapshot(
+        settlement_result_category="ACCEPTED_SANITIZED",
+        snapshot=GmoSettlementSafeReadSnapshot(
+            safe_read_succeeded=True,
+            position_status_safe="NO_POSITION",
+            position_count_safe=0,
+            active_or_pending_order_conflict_detected=True,
+        ),
+    )
+    result = evaluate_gmo_settlement_reconciliation(reconciliation_input)
+    assert result.reconciled is False
+    assert (
+        result.status
+        is GmoSettlementReconciliationStatus.BLOCKED_ACTIVE_OR_PENDING_ORDER_CONFLICT
+    )
 
 
 def test_module_does_not_import_live_verification_or_live_order_once() -> None:
