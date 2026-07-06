@@ -590,6 +590,13 @@ class GmoLiveActualSettlementGateReadinessSummary:
     settlement_side_docs_status: GmoCloseOrderSideSemanticsStatus
     side_provenance_correction_required: bool
     settlement_side_official_docs_semantics_confirmed: bool
+    size_only_one_position_settlement_candidate_ready: bool
+    size_only_multiple_position_targeting_block_retained: bool
+    size_only_dual_position_targeting_block_retained: bool
+    position_specific_actual_path_enabled: bool
+    full_cycle_design_ready_no_post: bool
+    actual_settlement_POST_allowed: bool
+    entry_only_actual_post_recommended: bool
 
 
 def build_gmo_live_actual_entry_gate_readiness_summary(
@@ -694,6 +701,39 @@ def _settlement_side_docs_confirmed(
     )
 
 
+def _size_only_settlement_flags(
+    permit: GmoLiveSettlementPermit,
+    settlement_side_status: GmoCloseOrderSideSemanticsStatus,
+    support_status: GmoPreActualSupportAnswerStatus,
+) -> tuple[bool, bool, bool, bool]:
+    one_position_candidate = (
+        permit.pre_settlement_open_positions_count == 1
+        and permit.pre_settlement_active_or_pending_order_conflict_count == 0
+        and permit.permit_ready
+    )
+    multiple_position_targeting_block = permit.pre_settlement_open_positions_count > 1
+    dual_position_targeting_block = permit.pre_settlement_open_positions_count > 1
+    support_safe_for_design = support_status is (
+        GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+    )
+    design_accepted = (
+        one_position_candidate
+        and support_safe_for_design
+        and settlement_side_status
+        is GmoCloseOrderSideSemanticsStatus.SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE
+        and permit.settlement_route_required
+        and permit.generic_close_forbidden
+        and permit.side_provenance_ready
+        and permit.side_docs_confirmed
+    )
+    return (
+        one_position_candidate,
+        multiple_position_targeting_block,
+        dual_position_targeting_block,
+        design_accepted,
+    )
+
+
 def build_gmo_live_actual_settlement_gate_readiness_summary(
     *,
     runner_summary: GmoLiveRunnerBoundaryResult,
@@ -703,7 +743,7 @@ def build_gmo_live_actual_settlement_gate_readiness_summary(
     support_answer_status: GmoPreActualSupportAnswerStatus | str,
     settlement_side_status: GmoCloseOrderSideSemanticsStatus,
     max_consecutive_losses_selected: int | None = 2,
-) -> GmoLiveActualSettlementGateReadinessSummary:
+    ) -> GmoLiveActualSettlementGateReadinessSummary:
     """Build the settlement actual-gate readiness summary.
 
     This no-POST summary never raises and never decides allow/deny for any
@@ -781,6 +821,17 @@ def build_gmo_live_actual_settlement_gate_readiness_summary(
             GmoActualSettlementGateReadinessStatus.ACTUAL_SETTLEMENT_GATE_DESIGN_READY_NO_POST
         )
 
+    (
+        size_only_one_position_settlement_candidate_ready,
+        size_only_multiple_position_targeting_block_retained,
+        size_only_dual_position_targeting_block_retained,
+        full_cycle_design_ready_no_post,
+    ) = _size_only_settlement_flags(
+        permit=permit,
+        settlement_side_status=settlement_side_status,
+        support_status=support_status,
+    )
+
     return GmoLiveActualSettlementGateReadinessSummary(
         actual_settlement_gate_ready=not blocked_reasons,
         status=status,
@@ -796,4 +847,20 @@ def build_gmo_live_actual_settlement_gate_readiness_summary(
         settlement_side_official_docs_semantics_confirmed=_settlement_side_docs_confirmed(
             settlement_side_status,
         ),
+        size_only_one_position_settlement_candidate_ready=(
+            size_only_one_position_settlement_candidate_ready
+        ),
+        size_only_multiple_position_targeting_block_retained=(
+            size_only_multiple_position_targeting_block_retained
+        ),
+        size_only_dual_position_targeting_block_retained=(
+            size_only_dual_position_targeting_block_retained
+        ),
+        position_specific_actual_path_enabled=False,
+        full_cycle_design_ready_no_post=(
+            full_cycle_design_ready_no_post
+            and not side_provenance_correction_required
+        ),
+        actual_settlement_POST_allowed=False,
+        entry_only_actual_post_recommended=False,
     )

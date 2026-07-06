@@ -65,6 +65,12 @@ class GmoPreActualNextStep(str, Enum):
     NEXT_STEP_BLOCKED_UNTIL_SIDE_DOCS_CONFIRMED = (
         "NEXT_STEP_BLOCKED_UNTIL_SIDE_DOCS_CONFIRMED"
     )
+    NEXT_STEP_ENTRY_ACTUAL_GATE_PRECHECK_NO_POST_OR_OPERATOR_CONFIRMATION_DESIGN = (
+        "NEXT_STEP_ENTRY_ACTUAL_GATE_PRECHECK_NO_POST_OR_OPERATOR_CONFIRMATION_DESIGN"
+    )
+    NEXT_STEP_CREDENTIAL_ACTUAL_USE_POLICY_DECISION = (
+        "NEXT_STEP_CREDENTIAL_ACTUAL_USE_POLICY_DECISION"
+    )
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,8 @@ class GmoPreActualReadinessInput:
     credential_boundary_ready: bool = False
     actual_entry_gate_ready: bool = False
     actual_settlement_gate_ready: bool = False
+    pre_settlement_open_positions_count: int = 0
+    pre_settlement_active_or_pending_order_conflict_count: int = 0
     existing_oanda_sqlalchemy_coupling_safe: bool = True
     service_wiring_policy: str = "DESIGN_FIRST_NO_CODE"
 
@@ -128,6 +136,14 @@ class GmoLivePreActualReadinessSummary:
     support_answer_safe_label_accepted: bool
     side_provenance_correction_required: bool
     current_side_derivation_matches_docs: bool
+    size_only_one_position_settlement_candidate_ready: bool
+    size_only_multiple_position_targeting_block_retained: bool
+    size_only_dual_position_targeting_block_retained: bool
+    position_specific_actual_path_enabled: bool
+    full_cycle_actual_ready: bool
+    full_cycle_design_ready_no_post: bool
+    entry_only_actual_post_recommended: bool
+    actual_settlement_POST_allowed: bool
     service_wiring_policy: str
     service_wiring_status: GmoPreActualServiceWiringStatus
     proposed_hook_points: tuple[str, ...]
@@ -288,8 +304,30 @@ def classify_gmo_live_pre_actual_blockers(
         blockers.append("ACTUAL_ENTRY_GATE_NOT_READY")
     if not summary_input.actual_settlement_gate_ready:
         blockers.append("ACTUAL_SETTLEMENT_GATE_NOT_READY")
+    if summary_input.pre_settlement_open_positions_count > 1:
+        blockers.append("BLOCKER_SIZE_ONLY_MULTIPLE_POSITION_TARGETING_UNCONFIRMED")
+        blockers.append("BLOCKER_POST_ENTRY_ONE_POSITION_CONFIRMATION_REQUIRED")
+        blockers.append("BLOCKER_POSITION_SPECIFIC_PATH_DISABLED")
+    if summary_input.pre_settlement_open_positions_count == 0:
+        blockers.append("BLOCKER_POST_ENTRY_ONE_POSITION_CONFIRMATION_REQUIRED")
+    if summary_input.pre_settlement_active_or_pending_order_conflict_count > 0:
+        blockers.append("BLOCKER_ACTIVE_PENDING_CLEAR_READ_REQUIRED")
+        blockers.append("BLOCKER_POST_ENTRY_ONE_POSITION_CONFIRMATION_REQUIRED")
     if not summary_input.existing_oanda_sqlalchemy_coupling_safe:
         blockers.append("EXISTING_OANDA_SQLALCHEMY_COUPLING_BLOCKED")
+    if (
+        not summary_input.readonly_snapshot_adapter_ready
+        or not summary_input.settlement_reconciliation_ready
+    ):
+        blockers.append("BLOCKER_RUNTIME_NO_POSITION_READ_REQUIRED")
+    if summary_input.support_answer_status in {
+        GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_NOT_RECEIVED,
+        GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_AMBIGUOUS,
+        GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_CONFLICTING,
+        GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_UNSAFE_RAW_TEXT_PROVIDED,
+    }:
+        blockers.append("BLOCKER_OPERATOR_SETTLEMENT_CONFIRMATION_REQUIRED")
+        blockers.append("BLOCKER_OPERATOR_ENTRY_CONFIRMATION_REQUIRED")
 
     return tuple(blockers)
 
@@ -314,38 +352,23 @@ def _service_wiring_status(
 def _next_step(
     summary_input: GmoPreActualReadinessInput,
     support_status: GmoPreActualSupportAnswerStatus,
-    service_wiring_status: GmoPreActualServiceWiringStatus,
+    _service_wiring_status: GmoPreActualServiceWiringStatus,
 ) -> GmoPreActualNextStep:
     if not summary_input.credential_boundary_ready:
-        # Credential boundary is still part of live POST readiness; no-post wiring can
-        # be prepared in parallel with this step.
-        credential_ready = False
-    else:
-        credential_ready = True
+        return GmoPreActualNextStep.NEXT_STEP_CREDENTIAL_ACTUAL_USE_POLICY_DECISION
 
-    if service_wiring_status in {
-        GmoPreActualServiceWiringStatus.SERVICE_WIRING_CAN_PROCEED_TO_NO_POST_HOOK,
-        GmoPreActualServiceWiringStatus.SERVICE_WIRING_DESIGN_READY,
+    if support_status in {
+        GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_NOT_RECEIVED,
+        GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_AMBIGUOUS,
+        GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_CONFLICTING,
+        GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_UNSAFE_RAW_TEXT_PROVIDED,
     }:
-        if support_status in {
-            GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_AMBIGUOUS,
-            GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_CONFLICTING,
-        }:
-            return GmoPreActualNextStep.NEXT_STEP_GMO_SUPPORT_ANSWER_SAFE_LABEL_CAPTURE
-        if (
-            support_status
-            is GmoPreActualSupportAnswerStatus.SUPPORT_ANSWER_UNSAFE_RAW_TEXT_PROVIDED
-        ):
-            return GmoPreActualNextStep.NEXT_STEP_GMO_SUPPORT_ANSWER_SAFE_LABEL_CAPTURE
-        return GmoPreActualNextStep.NEXT_STEP_SERVICE_NO_POST_HOOK_WIRING
+        return GmoPreActualNextStep.NEXT_STEP_GMO_SUPPORT_ANSWER_SAFE_LABEL_CAPTURE
 
-    if not credential_ready:
-        return GmoPreActualNextStep.NEXT_STEP_CREDENTIAL_BOUNDARY_DESIGN
-
-    if not summary_input.existing_oanda_sqlalchemy_coupling_safe:
-        return GmoPreActualNextStep.NEXT_STEP_ACTUAL_ENTRY_GATE_DESIGN
-
-    return GmoPreActualNextStep.NEXT_STEP_BLOCKED_UNTIL_SIDE_DOCS_CONFIRMED
+    return (
+        GmoPreActualNextStep
+        .NEXT_STEP_ENTRY_ACTUAL_GATE_PRECHECK_NO_POST_OR_OPERATOR_CONFIRMATION_DESIGN
+    )
 
 
 def build_gmo_live_pre_actual_entry_readiness_summary(
@@ -375,6 +398,31 @@ def build_gmo_live_pre_actual_entry_readiness_summary(
         and snapshot.settlement_reconciliation_ready
         and snapshot.credential_boundary_ready
     )
+
+    size_only_one_position_settlement_candidate_ready = (
+        snapshot.pre_settlement_open_positions_count == 1
+        and snapshot.pre_settlement_active_or_pending_order_conflict_count == 0
+    )
+    size_only_multiple_position_targeting_block_retained = (
+        snapshot.pre_settlement_open_positions_count > 1
+    )
+    size_only_dual_position_targeting_block_retained = (
+        snapshot.pre_settlement_open_positions_count > 1
+    )
+    full_cycle_design_ready_no_post = (
+        snapshot.settlement_side_official_docs_semantics_confirmed
+        and side_status
+        is GmoCloseOrderSideSemanticsStatus.SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE
+        and support_status
+        is GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+        and snapshot.readonly_snapshot_adapter_ready
+        and snapshot.settlement_reconciliation_ready
+        and size_only_one_position_settlement_candidate_ready
+        and not size_only_multiple_position_targeting_block_retained
+        and not size_only_dual_position_targeting_block_retained
+    )
+    if not size_only_one_position_settlement_candidate_ready:
+        blockers.append("BLOCKER_POST_ENTRY_ONE_POSITION_CONFIRMATION_REQUIRED")
 
     entry_gate_ready = (
         snapshot.actual_entry_gate_ready
@@ -433,6 +481,20 @@ def build_gmo_live_pre_actual_entry_readiness_summary(
         credential_boundary_ready=snapshot.credential_boundary_ready,
         actual_entry_gate_ready=entry_gate_ready,
         actual_settlement_gate_ready=settlement_gate_ready,
+        size_only_one_position_settlement_candidate_ready=(
+            size_only_one_position_settlement_candidate_ready
+        ),
+        size_only_multiple_position_targeting_block_retained=(
+            size_only_multiple_position_targeting_block_retained
+        ),
+        size_only_dual_position_targeting_block_retained=(
+            size_only_dual_position_targeting_block_retained
+        ),
+        position_specific_actual_path_enabled=False,
+        full_cycle_actual_ready=False,
+        full_cycle_design_ready_no_post=full_cycle_design_ready_no_post,
+        entry_only_actual_post_recommended=False,
+        actual_settlement_POST_allowed=False,
         blocked_reasons=tuple(dict.fromkeys(blockers)),
         recommended_next_step=next_step,
     )

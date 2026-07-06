@@ -29,6 +29,18 @@ def test_default_summary_is_not_live_ready_and_flags_settled_side_docs_blocked()
     assert summary.pre_actual_readiness_ready is False
     assert summary.actual_entry_gate_ready is False
     assert summary.actual_settlement_gate_ready is False
+    assert summary.full_cycle_actual_ready is False
+    assert summary.size_only_one_position_settlement_candidate_ready is False
+    assert summary.size_only_multiple_position_targeting_block_retained is False
+    assert summary.size_only_dual_position_targeting_block_retained is False
+    assert summary.position_specific_actual_path_enabled is False
+    assert summary.full_cycle_design_ready_no_post is False
+    assert summary.entry_only_actual_post_recommended is False
+    assert summary.actual_settlement_POST_allowed is False
+    assert (
+        summary.recommended_next_step
+        is GmoPreActualNextStep.NEXT_STEP_CREDENTIAL_ACTUAL_USE_POLICY_DECISION
+    )
     assert summary.settlement_side_official_docs_semantics_confirmed is False
     assert (
         summary.support_answer_status
@@ -53,6 +65,7 @@ def test_side_docs_not_confirmed_blocks_settlement_readiness() -> None:
     )
 
     assert summary.actual_settlement_gate_ready is False
+    assert summary.full_cycle_design_ready_no_post is False
     assert "SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED" in summary.blocked_reasons
 
 
@@ -92,12 +105,15 @@ def test_support_answer_position_side_is_classified_as_side_provenance_correctio
     assert summary.settlement_side_official_docs_semantics_confirmed is False
     assert summary.side_provenance_correction_required is True
     assert summary.current_side_derivation_matches_docs is False
+    assert summary.full_cycle_design_ready_no_post is False
     assert "SETTLEMENT_SIDE_DOCS_NOT_CONFIRMED" in summary.blocked_reasons
 
 
 def test_support_answer_opposite_side_is_consistent_and_no_correction_needed() -> None:
     summary = build_gmo_live_pre_actual_entry_readiness_summary(
         GmoPreActualReadinessInput(
+            pre_settlement_open_positions_count=1,
+            pre_settlement_active_or_pending_order_conflict_count=0,
             support_answer_status=(
                 GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
             ),
@@ -118,6 +134,12 @@ def test_support_answer_opposite_side_is_consistent_and_no_correction_needed() -
     assert summary.side_provenance_correction_required is False
     assert summary.current_side_derivation_matches_docs is True
     assert summary.actual_settlement_gate_ready is True
+    assert summary.size_only_one_position_settlement_candidate_ready is True
+    assert summary.size_only_multiple_position_targeting_block_retained is False
+    assert summary.size_only_dual_position_targeting_block_retained is False
+    assert summary.position_specific_actual_path_enabled is False
+    assert summary.full_cycle_design_ready_no_post is True
+    assert summary.full_cycle_actual_ready is False
 
 
 def test_raw_support_text_is_unsafe_and_rejected() -> None:
@@ -200,7 +222,7 @@ def test_service_wiring_policy_and_no_post_hook_plan_are_reflected() -> None:
     )
     assert (
         summary.recommended_next_step
-        is GmoPreActualNextStep.NEXT_STEP_SERVICE_NO_POST_HOOK_WIRING
+        is GmoPreActualNextStep.NEXT_STEP_GMO_SUPPORT_ANSWER_SAFE_LABEL_CAPTURE
     )
     assert len(summary.proposed_hook_points) >= 1
 
@@ -224,6 +246,91 @@ def test_cycle_alias_returns_same_ready_snapshot_shape() -> None:
     cycle_summary = build_gmo_live_pre_actual_cycle_readiness_summary()
 
     assert cycle_summary == entry_summary
+
+
+def test_size_only_one_position_settlement_candidate_is_recorded() -> None:
+    summary = build_gmo_live_pre_actual_entry_readiness_summary(
+        GmoPreActualReadinessInput(
+            pre_settlement_open_positions_count=1,
+            pre_settlement_active_or_pending_order_conflict_count=0,
+            settlement_side_official_docs_semantics_confirmed=True,
+            support_answer_status=(
+                GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+            ),
+            actual_entry_gate_ready=True,
+            actual_settlement_gate_ready=True,
+            credential_boundary_ready=True,
+            gmo_live_enable_policy_ready=True,
+            readonly_snapshot_adapter_ready=True,
+            settlement_reconciliation_ready=True,
+        )
+    )
+
+    assert summary.size_only_one_position_settlement_candidate_ready is True
+    assert summary.size_only_multiple_position_targeting_block_retained is False
+    assert summary.size_only_dual_position_targeting_block_retained is False
+    assert summary.position_specific_actual_path_enabled is False
+    assert summary.full_cycle_design_ready_no_post is True
+    assert summary.full_cycle_actual_ready is False
+    assert (
+        "BLOCKER_POST_ENTRY_ONE_POSITION_CONFIRMATION_REQUIRED"
+        not in summary.blocked_reasons
+    )
+
+
+def test_multiple_positions_keep_size_only_blocking() -> None:
+    summary = build_gmo_live_pre_actual_entry_readiness_summary(
+        GmoPreActualReadinessInput(
+            pre_settlement_open_positions_count=2,
+            pre_settlement_active_or_pending_order_conflict_count=0,
+            settlement_side_official_docs_semantics_confirmed=True,
+            support_answer_status=(
+                GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+            ),
+            actual_entry_gate_ready=True,
+            actual_settlement_gate_ready=True,
+            credential_boundary_ready=True,
+            gmo_live_enable_policy_ready=True,
+            readonly_snapshot_adapter_ready=True,
+            settlement_reconciliation_ready=True,
+        )
+    )
+
+    assert summary.size_only_one_position_settlement_candidate_ready is False
+    assert summary.size_only_multiple_position_targeting_block_retained is True
+    assert summary.size_only_dual_position_targeting_block_retained is True
+    assert (
+        "BLOCKER_SIZE_ONLY_MULTIPLE_POSITION_TARGETING_UNCONFIRMED"
+        in summary.blocked_reasons
+    )
+
+
+def test_active_pending_conflict_blocks_size_only_candidate() -> None:
+    summary = build_gmo_live_pre_actual_entry_readiness_summary(
+        GmoPreActualReadinessInput(
+            pre_settlement_open_positions_count=1,
+            pre_settlement_active_or_pending_order_conflict_count=1,
+            settlement_side_official_docs_semantics_confirmed=True,
+            support_answer_status=(
+                GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+            ),
+            actual_entry_gate_ready=True,
+            actual_settlement_gate_ready=True,
+            credential_boundary_ready=True,
+            gmo_live_enable_policy_ready=True,
+            readonly_snapshot_adapter_ready=True,
+            settlement_reconciliation_ready=True,
+        )
+    )
+
+    assert summary.size_only_one_position_settlement_candidate_ready is False
+    assert (
+        "BLOCKER_ACTIVE_PENDING_CLEAR_READ_REQUIRED" in summary.blocked_reasons
+    )
+    assert (
+        "BLOCKER_POST_ENTRY_ONE_POSITION_CONFIRMATION_REQUIRED"
+        in summary.blocked_reasons
+    )
 
 
 def test_module_does_not_import_live_verification_or_live_order_once() -> None:

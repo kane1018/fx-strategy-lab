@@ -231,6 +231,13 @@ def test_settlement_gate_readiness_ready_when_all_inputs_safe() -> None:
     assert summary.runner_boundary_ready is True
     assert summary.risk_shadow_settlement_allowed is True
     assert summary.side_provenance_correction_required is False
+    assert summary.size_only_one_position_settlement_candidate_ready is True
+    assert summary.size_only_multiple_position_targeting_block_retained is False
+    assert summary.size_only_dual_position_targeting_block_retained is False
+    assert summary.position_specific_actual_path_enabled is False
+    assert summary.full_cycle_design_ready_no_post is True
+    assert summary.actual_settlement_POST_allowed is False
+    assert summary.entry_only_actual_post_recommended is False
 
 
 def test_settlement_gate_readiness_blocked_when_support_not_received() -> None:
@@ -308,6 +315,78 @@ def test_settlement_gate_readiness_blocks_when_side_provenance_correction_requir
         )
     )
     assert summary.side_provenance_correction_required is True
+    assert summary.full_cycle_design_ready_no_post is False
+    assert summary.actual_settlement_POST_allowed is False
+
+
+def test_settlement_gate_full_cycle_flags_for_multiple_positions() -> None:
+    permit = build_gmo_live_settlement_permit(
+        pre_settlement_open_positions_count=2,
+        pre_settlement_active_or_pending_order_conflict_count=0,
+        settlement_route_required=True,
+        generic_close_forbidden=True,
+        side_provenance_ready=True,
+        side_docs_confirmed=True,
+        max_settlement_post_count=1,
+        entry_post_not_allowed=True,
+        retry_allowed=False,
+        repost_allowed=False,
+        manual_intervention_performed=False,
+    )
+
+    summary = build_gmo_live_actual_settlement_gate_readiness_summary(
+        runner_summary=_runner_summary(),
+        shadow_result=_shadow_result(),
+        credential_boundary=build_gmo_live_credential_boundary_snapshot(
+            sealed_provider_ready=True,
+        ),
+        permit=permit,
+        support_answer_status=(
+            GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+        ),
+        settlement_side_status=GmoCloseOrderSideSemanticsStatus.SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE,
+    )
+
+    assert summary.actual_settlement_gate_ready is False
+    assert summary.size_only_one_position_settlement_candidate_ready is False
+    assert summary.size_only_multiple_position_targeting_block_retained is True
+    assert summary.size_only_dual_position_targeting_block_retained is True
+    assert summary.position_specific_actual_path_enabled is False
+    assert summary.full_cycle_design_ready_no_post is False
+    assert summary.actual_settlement_POST_allowed is False
+
+
+def test_settlement_gate_full_cycle_flags_for_active_pending_conflict() -> None:
+    permit = build_gmo_live_settlement_permit(
+        pre_settlement_open_positions_count=1,
+        pre_settlement_active_or_pending_order_conflict_count=1,
+        settlement_route_required=True,
+        generic_close_forbidden=True,
+        side_provenance_ready=True,
+        side_docs_confirmed=True,
+        max_settlement_post_count=1,
+        entry_post_not_allowed=True,
+        retry_allowed=False,
+        repost_allowed=False,
+        manual_intervention_performed=False,
+    )
+
+    summary = build_gmo_live_actual_settlement_gate_readiness_summary(
+        runner_summary=_runner_summary(),
+        shadow_result=_shadow_result(),
+        credential_boundary=build_gmo_live_credential_boundary_snapshot(
+            sealed_provider_ready=True,
+        ),
+        permit=permit,
+        support_answer_status=(
+            GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+        ),
+        settlement_side_status=GmoCloseOrderSideSemanticsStatus.SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE,
+    )
+
+    assert summary.actual_settlement_gate_ready is False
+    assert summary.size_only_one_position_settlement_candidate_ready is False
+    assert summary.full_cycle_design_ready_no_post is False
 
 
 def test_module_does_not_import_live_verification_or_live_order_once() -> None:

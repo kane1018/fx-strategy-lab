@@ -261,12 +261,21 @@ GMO live専用として以下のフィールドを新設する。数値は次の
   - credential境界がfalseならactual entry gate / settlement gate不可
   - `support_answer_safe_label_capture_ready` と next step の判定
 - support回答は本文ではなく safe label で扱う前提（`SUPPORT_ANSWER_*`）に統一し、raw本文保存・表示は行わない。
-- service wiringは`DESIGN_FIRST_NO_CODE`継続。次Step候補は
-  **`NEXT_STEP_CREDENTIAL_BOUNDARY_DESIGN`** を1本に絞る。
+- service wiringは`DESIGN_FIRST_NO_CODE`継続。設計readinessは以下を新たに固定:
+  - `size-only settlement` は `open_positions_count == 1` 且つ `active/pending=0` の場合のみ候補化
+  - `multiple/dual position` の場合は候補扱いをブロックしたまま維持
+  - `position_specific_actual_path_enabled=False`（実装は現時点で未接続）
+  - `actual_settlement_POST_allowed=False`
+  - `full_cycle_design_ready_no_post` と `full_cycle_actual_ready` を分離し、前者は候補条件で成立し得る設計ready、
+    後者は別Stepの実POST承認前提のため常時false
+- 次Step候補は **`NEXT_STEP_ENTRY_ACTUAL_GATE_PRECHECK_NO_POST_OR_OPERATOR_CONFIRMATION_DESIGN`** に
+  絞る（credential不足時のみ `NEXT_STEP_CREDENTIAL_ACTUAL_USE_POLICY_DECISION`）。
 
 ## 13. 次に実装する最小Step
 
-- no-POST hook配線は完了。次Stepは credential境界 / 実POST readiness 確認の分離 Step に進む。
+- no-POST hook配線は完了。次Stepは entry/settlement actual gate 前提の分離Stepへ進む。
+  - 推奨: `NEXT_STEP_ENTRY_ACTUAL_GATE_PRECHECK_NO_POST_OR_OPERATOR_CONFIRMATION_DESIGN`
+  - credential不足時のみ: `NEXT_STEP_CREDENTIAL_ACTUAL_USE_POLICY_DECISION`
 - 実POST系 (`allow_bridge`, `allow_real_broker_post=True`, `allow_live_http_post=True`,
   `GmoFxBroker.market_order`/`official_settlement_order` 直接起動) は次Step以降。
 
