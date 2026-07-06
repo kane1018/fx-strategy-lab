@@ -26,6 +26,10 @@ from app.live_verification.live_order_real_one_shot_post_ledger_free_source_fact
     construct_live_order_real_one_shot_post_ledger_free_source_factory_controlled,
     map_live_order_real_one_shot_post_ledger_free_source_outcome,
 )
+from app.live_verification.real_broker_post_hard_guard import (
+    RealBrokerPostHardGuardError,
+    assert_real_broker_post_allowed,
+)
 
 SAFE_REAL_POST_DELEGATE_LABEL = "CONTROLLED_REAL_POST_DELEGATE_REFERENCE"
 SAFE_REAL_POST_DELEGATE_SOURCE_LABEL = "CONTROLLED_REAL_POST_DELEGATE_SOURCE"
@@ -454,6 +458,16 @@ def _make_materialized_real_post_delegate_runner(
     def materialized_runner(
         input_snapshot: LiveOrderRealOneShotPostTransportInput,
     ) -> LiveOrderRealOneShotPostTransportResult:
+        try:
+            assert_real_broker_post_allowed(
+                allow=input_snapshot.allow_real_broker_post,
+            )
+        except RealBrokerPostHardGuardError:
+            return _safe_transport_result(
+                TransportCategory.TRANSPORT_UNAVAILABLE_FAIL_CLOSED,
+                fake_transport_used=False,
+                unavailable=True,
+            )
         try:
             material = _build_sealed_real_post_runner_material(
                 input_snapshot,

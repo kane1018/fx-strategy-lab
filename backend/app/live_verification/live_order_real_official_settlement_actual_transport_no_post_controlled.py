@@ -29,6 +29,10 @@ from app.live_verification.live_order_real_step6g_level5_fast_mvp_controlled imp
     SUPPORTED_SYMBOL,
     SUPPORTED_UNITS,
 )
+from app.live_verification.real_broker_post_hard_guard import (
+    RealBrokerPostHardGuardError,
+    assert_real_broker_post_allowed,
+)
 from app.private_api.auth import build_auth_headers
 
 STEP_NAME = (
@@ -297,6 +301,7 @@ class OfficialSettlementActualTransportHttpClientProtocol(Protocol):
         self,
         *,
         plan: OfficialSettlementActualTransportPlan,
+        allow_real_broker_post: bool = False,
     ) -> OfficialSettlementActualTransportClientResult:
         ...
 
@@ -309,6 +314,7 @@ class OfficialSettlementActualTransportFakeHttpClient:
         self,
         *,
         plan: OfficialSettlementActualTransportPlan,
+        allow_real_broker_post: bool = False,
     ) -> OfficialSettlementActualTransportClientResult:
         _validate_plan_is_official_settlement_only(plan)
         self.call_count += 1
@@ -346,8 +352,22 @@ class OfficialSettlementActualTransportHttpxClient:
         self,
         *,
         plan: OfficialSettlementActualTransportPlan,
+        allow_real_broker_post: bool = False,
     ) -> OfficialSettlementActualTransportClientResult:
         _validate_plan_is_official_settlement_only(plan)
+        try:
+            assert_real_broker_post_allowed(allow=allow_real_broker_post)
+        except RealBrokerPostHardGuardError:
+            return OfficialSettlementActualTransportClientResult(
+                sanitized_result_category=OFFICIAL_SETTLEMENT_ACTUAL_TRANSPORT_BLOCKED_RESULT,
+                fake_http_transport_used=False,
+                fake_http_transport_call_count=0,
+                real_http_client_call_count=0,
+                actual_transport_real_http_post_executed=False,
+                actual_transport_broker_write_executed=False,
+                simulated_settlement_post_count=0,
+            )
+
         body = _serialize_official_settlement_body(plan)
         timestamp = self._timestamp_factory()
         headers = build_auth_headers(

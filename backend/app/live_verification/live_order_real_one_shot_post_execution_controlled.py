@@ -384,6 +384,7 @@ class LiveOrderRealOneShotPostTransportInput:
     one_post_max: bool
     retry_allowed: bool
     timeout_fail_closed: bool
+    allow_real_broker_post: bool = False
 
     def __post_init__(self) -> None:
         for field_name, value in (
@@ -399,7 +400,12 @@ class LiveOrderRealOneShotPostTransportInput:
         _validate_non_negative_int("size", self.size)
         _validate_bool_fields(
             self,
-            ("one_post_max", "retry_allowed", "timeout_fail_closed"),
+            (
+                "one_post_max",
+                "retry_allowed",
+                "timeout_fail_closed",
+                "allow_real_broker_post",
+            ),
         )
 
 

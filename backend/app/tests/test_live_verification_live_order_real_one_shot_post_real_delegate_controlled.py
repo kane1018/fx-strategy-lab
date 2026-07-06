@@ -76,7 +76,9 @@ def _assert_no_sentinel_exposure(*payloads: str) -> None:
         assert sentinel not in joined
 
 
-def _transport_input() -> LiveOrderRealOneShotPostTransportInput:
+def _transport_input(
+    *, allow_real_broker_post: bool = False,
+) -> LiveOrderRealOneShotPostTransportInput:
     return LiveOrderRealOneShotPostTransportInput(
         execution_step="ONE_SHOT_POST_EXECUTION_GATE_RETRY_8",
         symbol="USD_JPY",
@@ -89,6 +91,7 @@ def _transport_input() -> LiveOrderRealOneShotPostTransportInput:
         one_post_max=True,
         retry_allowed=False,
         timeout_fail_closed=True,
+        allow_real_broker_post=allow_real_broker_post,
     )
 
 
@@ -265,13 +268,17 @@ def test_materialized_runner_uses_fake_post_reference_once_after_confirmation() 
         confirmation=_confirmed(),
     )
 
-    assert calls == ["called"]
+    # The Step 6G controlled execution route never sets allow_real_broker_post on
+    # the TransportInput it builds, so the real-broker-post hard guard denies
+    # before the fake post reference is ever invoked. This is the intended
+    # default-deny behavior added after the 2026-07-06 incident, not a bug.
+    assert calls == []
     assert connection.summary.real_post_delegate_runner_materialized is True
     assert connection.summary.real_post_delegate_runner_supplied is True
     assert connection.summary.delegate_runner_missing is False
     assert connection.summary.source_callable_unavailable_due_missing_runner is False
     assert execution.status is (
-        ExecutionStatus.ONE_SHOT_POST_EXECUTION_TRANSPORT_COMPLETED_SAFE_SUMMARY
+        ExecutionStatus.ONE_SHOT_POST_EXECUTION_BLOCKED_UNAVAILABLE_FAIL_CLOSED
     )
     assert execution.post_execution_count == 1
     assert execution.retry_attempted is False
@@ -284,6 +291,40 @@ def test_materialized_runner_uses_fake_post_reference_once_after_confirmation() 
     assert execution.signature_value_exposed is False
     assert execution.headers_value_exposed is False
     assert execution.real_id_exposed is False
+
+
+def test_source_delegate_denies_by_default_and_requires_explicit_allow_true() -> None:
+    """Prove the real-broker-post hard guard at the lowest wiring layer.
+
+    `connection.source_delegate` is the raw materialized runner (bypassing the
+    Step 6G execution route, which never sets allow_real_broker_post). It must
+    still deny by default, deny for any non-True value, and only reach the
+    injected fake transport when allow_real_broker_post is the literal True.
+    """
+    calls: list[str] = []
+
+    def fake_post_reference(*args: object, **kwargs: object) -> object:
+        calls.append("called")
+        return _FakeLiveOrderTransportResponse()
+
+    connection = construct_live_order_real_one_shot_post_real_delegate_controlled(
+        post_function_reference=fake_post_reference,
+        credential_lookup=lambda _name: CREDENTIAL_VALUE_SENTINEL,
+        timestamp_factory=lambda: "1700000000000",
+        client_order_id_factory=lambda: "S6GTESTCLIENT02",
+    )
+
+    denied_result = connection.source_delegate(_transport_input())
+    assert calls == []
+    assert denied_result.result_category is TransportCategory.TRANSPORT_UNAVAILABLE_FAIL_CLOSED
+    assert denied_result.fake_transport_used is False
+    assert denied_result.unavailable is True
+
+    allowed_result = connection.source_delegate(
+        _transport_input(allow_real_broker_post=True),
+    )
+    assert calls == ["called"]
+    assert allowed_result.result_category is TransportCategory.TRANSPORT_ACCEPTED_SANITIZED
 
 
 @pytest.mark.parametrize(

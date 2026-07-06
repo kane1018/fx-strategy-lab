@@ -25,6 +25,10 @@ import httpx
 
 from app.live_verification.errors import LiveVerificationLiveOrderOnceError
 from app.live_verification.precheck import SUPPORTED_SYMBOL, SUPPORTED_UNITS
+from app.live_verification.real_broker_post_hard_guard import (
+    RealBrokerPostHardGuardError,
+    assert_real_broker_post_allowed,
+)
 
 LIVE_ORDER_SIZE = str(SUPPORTED_UNITS)
 LIVE_ORDER_EXECUTION_TYPE = "MARKET"
@@ -622,6 +626,14 @@ def execute_one_shot_live_order(
         timestamp=timestamp,
         body_serialization=body_serialization,
     )
+    try:
+        assert_real_broker_post_allowed(allow=allow_live_http_post)
+    except RealBrokerPostHardGuardError:
+        return _blocked_result(
+            state_before=state_before,
+            state_after=started.state,
+            fail_reason="real_broker_post_hard_guard_denied",
+        )
     try:
         transport_response = transport(
             LIVE_ORDER_ENDPOINT_URL,

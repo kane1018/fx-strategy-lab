@@ -212,3 +212,76 @@ def test_real_delegate_fails_closed_without_env_credentials(
     result = runner(input_snapshot)
     assert not getattr(result, "http_post_executed", False)
     assert not getattr(result, "network_transport_used", False)
+
+
+def test_shared_hard_guard_denies_everything_except_literal_true() -> None:
+    from app.live_verification.real_broker_post_hard_guard import (
+        RealBrokerPostHardGuardError,
+        assert_real_broker_post_allowed,
+    )
+
+    for denied_value in (False, None, 0, 1, "true", "True", "yes"):
+        with pytest.raises(RealBrokerPostHardGuardError):
+            assert_real_broker_post_allowed(allow=denied_value)
+
+    result = assert_real_broker_post_allowed(allow=True)
+    assert result.allowed is True
+
+
+def test_official_settlement_actual_transport_hard_guard_denies_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.live_verification.live_order_real_official_settlement_actual_transport_no_post_controlled import (  # noqa: E501
+        OFFICIAL_SETTLEMENT_ACTUAL_TRANSPORT_BLOCKED_RESULT,
+        OfficialSettlementActualTransportHttpxClient,
+        build_official_settlement_actual_transport_no_post_controlled,
+    )
+
+    monkeypatch.setattr(httpx.Client, "send", _block_network, raising=True)
+    monkeypatch.setattr(httpx.Client, "request", _block_network, raising=True)
+    monkeypatch.setattr(httpx.Client, "post", _block_network, raising=True)
+
+    plan = build_official_settlement_actual_transport_no_post_controlled().actual_transport_plan
+    assert plan is not None
+
+    client = OfficialSettlementActualTransportHttpxClient(
+        api_key="unused-in-denied-path",
+        api_secret="unused-in-denied-path",
+        timestamp_factory=lambda: "1700000000000",
+    )
+
+    for denied_kwargs in ({}, {"allow_real_broker_post": False}, {"allow_real_broker_post": None}):
+        result = client.send_official_settlement(plan=plan, **denied_kwargs)
+        assert result.sanitized_result_category == (
+            OFFICIAL_SETTLEMENT_ACTUAL_TRANSPORT_BLOCKED_RESULT
+        )
+        assert result.real_http_client_call_count == 0
+        assert result.actual_transport_real_http_post_executed is False
+        assert result.actual_transport_broker_write_executed is False
+
+    # With explicit allow=True the guard opens, so code proceeds to the real
+    # httpx.Client boundary — which this test blocks via monkeypatch, proving
+    # the guard (not a network failure) is what stopped the denied cases above.
+    with pytest.raises(_NetworkCallAttempted):
+        client.send_official_settlement(plan=plan, allow_real_broker_post=True)
+
+
+def test_live_verification_real_post_call_sites_are_all_hard_guarded() -> None:
+    """Source scan: any live_verification file with an httpx .post( call must
+    reference the shared hard guard. Fails if a future module adds an
+    unguarded real POST call site.
+    """
+    import pathlib
+
+    live_verification_dir = pathlib.Path(live_verification_package.__file__).parent
+    offenders = []
+    for path in sorted(live_verification_dir.glob("*.py")):
+        if path.name == "__init__.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        if ".post(" in text and "real_broker_post_hard_guard" not in text:
+            offenders.append(path.name)
+    assert offenders == [], (
+        "found live_verification files with an unguarded .post( call site: "
+        f"{offenders}"
+    )
