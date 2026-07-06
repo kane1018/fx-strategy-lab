@@ -29,11 +29,11 @@ from app.live_verification.live_order_real_step6g_level5_fast_mvp_controlled imp
     SUPPORTED_SYMBOL,
     SUPPORTED_UNITS,
 )
-from app.live_verification.real_broker_post_hard_guard import (
+from app.private_api.auth import build_auth_headers
+from app.security.real_broker_post_hard_guard import (
     RealBrokerPostHardGuardError,
     assert_real_broker_post_allowed,
 )
-from app.private_api.auth import build_auth_headers
 
 STEP_NAME = (
     "Step 6G-PC-OX-R-OFFICIAL-SETTLEMENT-"

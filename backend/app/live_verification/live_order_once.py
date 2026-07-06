@@ -25,7 +25,7 @@ import httpx
 
 from app.live_verification.errors import LiveVerificationLiveOrderOnceError
 from app.live_verification.precheck import SUPPORTED_SYMBOL, SUPPORTED_UNITS
-from app.live_verification.real_broker_post_hard_guard import (
+from app.security.real_broker_post_hard_guard import (
     RealBrokerPostHardGuardError,
     assert_real_broker_post_allowed,
 )

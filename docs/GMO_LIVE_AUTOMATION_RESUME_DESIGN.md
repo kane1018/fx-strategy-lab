@@ -6,7 +6,9 @@ Step 6G "controlled/safe" simulation 系の混在）を踏まえ、GMO FX 実資
 数値（リスク上限の具体的な金額・数量）は本書では決め切らず、設定項目と判定構造のみを固める。
 
 関連: [`../AGENTS.md`](../AGENTS.md)、[`CODEX_HANDOFF.md`](CODEX_HANDOFF.md)（インシデント記録）、
-`backend/app/live_verification/real_broker_post_hard_guard.py`（既存hard guard）。
+`backend/app/security/real_broker_post_hard_guard.py`（既存hard guard。当初
+`app/live_verification/`にあったが、production broker/service経路との分離のため
+`app/security/`へ移設済み）。
 
 ## 1. GMO live自動売買再開の必須条件
 

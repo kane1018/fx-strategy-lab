@@ -4,8 +4,10 @@ Step 6G controlled/simulation family.
 Context: an incident audit found that a small number of modules under
 `app.live_verification` (including `live_order_once`) contain genuine
 httpx-based HTTP POST capability toward real GMO FX endpoints, guarded by a
-shared default-deny hard guard (`real_broker_post_hard_guard`). The design for
-a future real `GmoFxBroker` order-write path
+shared default-deny hard guard now living at
+`app.security.real_broker_post_hard_guard` (relocated out of
+`app.live_verification` specifically so production broker code can depend on
+it). The design for a future real `GmoFxBroker` order-write path
 (`docs/GMO_LIVE_AUTOMATION_RESUME_DESIGN.md`) requires that production broker/
 service code never import the `app.live_verification` simulation family or
 `live_order_once`, and never wire `allow_real_broker_post=True` /
@@ -137,3 +139,53 @@ def test_known_broker_and_service_files_are_covered_by_the_scan(
     path = APP_ROOT / candidate_relative_path
     assert path.exists(), f"expected file missing, scan assumptions may be stale: {path}"
     assert path in _production_python_files()
+
+
+def test_hard_guard_lives_outside_live_verification() -> None:
+    """The shared real-broker-post hard guard must be importable from a
+    production-safe location, and must no longer exist inside
+    `app.live_verification`.
+    """
+    from app.security.real_broker_post_hard_guard import (
+        RealBrokerPostHardGuardError,
+        assert_real_broker_post_allowed,
+    )
+
+    assert callable(assert_real_broker_post_allowed)
+    assert issubclass(RealBrokerPostHardGuardError, RuntimeError)
+
+    with pytest.raises(ModuleNotFoundError):
+        __import__("app.live_verification.real_broker_post_hard_guard")
+
+    old_path = APP_ROOT / "live_verification" / "real_broker_post_hard_guard.py"
+    assert not old_path.exists(), "old hard guard location must be removed, not just unused"
+
+
+def test_app_security_package_is_covered_by_the_production_scan() -> None:
+    """app/security must be scanned as production code (not silently excluded),
+    so it stays subject to the same live_verification-import ban as brokers.
+    """
+    security_dir = APP_ROOT / "security"
+    assert security_dir.exists()
+    scanned = _production_python_files()
+    assert any(path.parts[len(APP_ROOT.parts) :][0] == "security" for path in scanned)
+
+
+def test_real_post_capable_files_reference_the_new_hard_guard_location() -> None:
+    """The three known real-POST-capable live_verification modules must import
+    the guard from its new location, not the removed old one.
+    """
+    real_post_capable_files = (
+        "live_verification/live_order_once.py",
+        "live_verification/live_order_real_official_settlement_actual_transport_no_post_controlled.py",  # noqa: E501
+        "live_verification/live_order_real_one_shot_post_real_delegate_controlled.py",
+    )
+    for relative_path in real_post_capable_files:
+        path = APP_ROOT / relative_path
+        text = path.read_text(encoding="utf-8")
+        assert "app.security.real_broker_post_hard_guard" in text, (
+            f"{relative_path} does not reference the relocated hard guard"
+        )
+        assert "app.live_verification.real_broker_post_hard_guard" not in text, (
+            f"{relative_path} still references the removed old hard guard location"
+        )

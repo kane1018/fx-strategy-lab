@@ -1,13 +1,18 @@
 """Hard guard for the real broker POST boundary.
 
 Incident context: an audit found that a small number of modules under
-`app.live_verification` (`live_order_once`,
+`app.live_verification` (the one-shot live order primitive,
 `live_order_real_official_settlement_actual_transport_no_post_controlled`,
 `live_order_real_one_shot_post_real_delegate_controlled`) contain genuine
 httpx-based HTTP POST capability toward real GMO FX endpoints, separate from
 the "Step 6G controlled/safe" simulation family. This module is the single
 shared, default-deny checkpoint that each of those real-POST call sites must
 pass immediately before touching the network.
+
+This module intentionally lives outside `app.live_verification` (which
+production broker/service code must never import) so that a future real
+`GmoFxBroker` order-write path can depend on this checkpoint without
+depending on the Step 6G controlled/simulation family.
 
 This guard does not read environment variables or `.env`, does not accept or
 inspect credential values, and does not accept or inspect request/response

@@ -215,7 +215,7 @@ def test_real_delegate_fails_closed_without_env_credentials(
 
 
 def test_shared_hard_guard_denies_everything_except_literal_true() -> None:
-    from app.live_verification.real_broker_post_hard_guard import (
+    from app.security.real_broker_post_hard_guard import (
         RealBrokerPostHardGuardError,
         assert_real_broker_post_allowed,
     )

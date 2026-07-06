@@ -26,7 +26,7 @@ from app.live_verification.live_order_real_one_shot_post_ledger_free_source_fact
     construct_live_order_real_one_shot_post_ledger_free_source_factory_controlled,
     map_live_order_real_one_shot_post_ledger_free_source_outcome,
 )
-from app.live_verification.real_broker_post_hard_guard import (
+from app.security.real_broker_post_hard_guard import (
     RealBrokerPostHardGuardError,
     assert_real_broker_post_allowed,
 )
