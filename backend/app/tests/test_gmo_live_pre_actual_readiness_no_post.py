@@ -303,6 +303,11 @@ def test_multiple_positions_keep_size_only_blocking() -> None:
         "BLOCKER_SIZE_ONLY_MULTIPLE_POSITION_TARGETING_UNCONFIRMED"
         in summary.blocked_reasons
     )
+    assert (
+        "operator_size_only_closeOrder_dual_position_targeting="
+        "SETTLE_POSITION_REQUIRED_FOR_DUAL_OR_MULTIPLE_POSITIONS"
+        in summary.blocked_reasons
+    )
 
 
 def test_active_pending_conflict_blocks_size_only_candidate() -> None:
@@ -330,6 +335,32 @@ def test_active_pending_conflict_blocks_size_only_candidate() -> None:
     assert (
         "BLOCKER_POST_ENTRY_ONE_POSITION_CONFIRMATION_REQUIRED"
         in summary.blocked_reasons
+    )
+
+
+def test_size_only_dual_position_required_label_absent_when_one_position_safe_candidate() -> None:
+    summary = build_gmo_live_pre_actual_entry_readiness_summary(
+        GmoPreActualReadinessInput(
+            pre_settlement_open_positions_count=1,
+            pre_settlement_active_or_pending_order_conflict_count=0,
+            settlement_side_official_docs_semantics_confirmed=True,
+            support_answer_status=(
+                GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+            ),
+            actual_entry_gate_ready=True,
+            actual_settlement_gate_ready=True,
+            credential_boundary_ready=True,
+            gmo_live_enable_policy_ready=True,
+            readonly_snapshot_adapter_ready=True,
+            settlement_reconciliation_ready=True,
+        )
+    )
+
+    assert summary.size_only_one_position_settlement_candidate_ready is True
+    assert (
+        "operator_size_only_closeOrder_dual_position_targeting="
+        "SETTLE_POSITION_REQUIRED_FOR_DUAL_OR_MULTIPLE_POSITIONS"
+        not in summary.blocked_reasons
     )
 
 

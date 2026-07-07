@@ -12,6 +12,7 @@ from enum import Enum
 
 from app.services.gmo_live_credential_boundary import GmoLiveCredentialBoundary
 from app.services.gmo_live_pre_actual_readiness import (
+    OPERATOR_SIZE_ONLY_CLOSEORDER_DUAL_POSITION_TARGETING_LABEL,
     GmoCloseOrderSideSemanticsStatus,
     GmoPreActualSupportAnswerStatus,
     normalize_support_answer_status,
@@ -785,6 +786,11 @@ def build_gmo_live_actual_settlement_gate_readiness_summary(
 
     if not permit.permit_ready:
         blocked_reasons.append("settlement_permit_not_ready")
+
+    if permit.pre_settlement_open_positions_count > 1:
+        blocked_reasons.append(
+            OPERATOR_SIZE_ONLY_CLOSEORDER_DUAL_POSITION_TARGETING_LABEL
+        )
 
     if support_status is (
         GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_POSITION_SIDE

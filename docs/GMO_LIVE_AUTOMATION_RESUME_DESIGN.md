@@ -295,6 +295,8 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 - 決済対象ポジション側への `side` マッピング（`buy sideが買建玉決済側か / 売り建玉決済側か`）は
   GMO FX公式IFDOCO例で `OPEN BUY` 対して `CLOSE SELL`、`OPEN SELL` 対して `CLOSE BUY` を確認済み（`OPPOSITE_SIDE`）
 - 両建て時に size-only closeOrder を送った場合にどの建玉が対象かについて、公式docs本文で確認不可
+- `operator_size_only_closeOrder_dual_position_targeting=SETTLE_POSITION_REQUIRED_FOR_DUAL_OR_MULTIPLE_POSITIONS`
+  を、両建て/複数建玉時のsafe policyとして確定扱いする。
 - 判定: `SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE`（entry `BUY`=SELL決済、`SELL`=BUY決済）
 - 判定結果: `settlement_side_official_docs_semantics_confirmed = true`、`live settlement` は
   `size-only closeOrder` の両建て対象未確認のため block維持（position-specific path/actual gate未整備）

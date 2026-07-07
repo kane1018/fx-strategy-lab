@@ -117,6 +117,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   `position_specific_actual_path_allowed=false` のままで、将来使う場合はopaque handle設計が必要。
   size-based settlementは `request_uses_size_only=true`、`request_includes_settlePosition=false`、
   `size_and_settlePosition_mutually_exclusive=true` としてsafe labelで検証する。
+  両建て/複数建玉時は size-only closeOrder を候補化しない policy として
+  `operator_size_only_closeOrder_dual_position_targeting=SETTLE_POSITION_REQUIRED_FOR_DUAL_OR_MULTIPLE_POSITIONS`
+  を保持する。
   operator UI safe label collectionは本文・ID・数量・価格・損益を受け取らず、
   `UI_SAFE_REASON_PERMISSION`、`UI_SAFE_REASON_SIZE_OR_TARGET`、
   `UI_SAFE_REASON_POSITION_NOT_FOUND`、`UI_SAFE_REASON_ACTIVE_ORDER_CONFLICT`、

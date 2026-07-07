@@ -354,6 +354,46 @@ def test_settlement_gate_full_cycle_flags_for_multiple_positions() -> None:
     assert summary.position_specific_actual_path_enabled is False
     assert summary.full_cycle_design_ready_no_post is False
     assert summary.actual_settlement_POST_allowed is False
+    assert (
+        "operator_size_only_closeOrder_dual_position_targeting="
+        "SETTLE_POSITION_REQUIRED_FOR_DUAL_OR_MULTIPLE_POSITIONS"
+        in summary.blocked_reasons
+    )
+
+
+def test_settlement_gate_without_dual_position_label_when_one_position_is_candidate() -> None:
+    permit = build_gmo_live_settlement_permit(
+        pre_settlement_open_positions_count=1,
+        pre_settlement_active_or_pending_order_conflict_count=0,
+        settlement_route_required=True,
+        generic_close_forbidden=True,
+        side_provenance_ready=True,
+        side_docs_confirmed=True,
+        max_settlement_post_count=1,
+        entry_post_not_allowed=True,
+        retry_allowed=False,
+        repost_allowed=False,
+        manual_intervention_performed=False,
+    )
+
+    summary = build_gmo_live_actual_settlement_gate_readiness_summary(
+        runner_summary=_runner_summary(),
+        shadow_result=_shadow_result(),
+        credential_boundary=build_gmo_live_credential_boundary_snapshot(
+            sealed_provider_ready=True,
+        ),
+        permit=permit,
+        support_answer_status=(
+            GmoPreActualSupportAnswerStatus.SUPPORT_CONFIRMED_CLOSEORDER_SIDE_IS_OPPOSITE_SIDE
+        ),
+        settlement_side_status=GmoCloseOrderSideSemanticsStatus.SIDE_SEMANTICS_CONFIRMED_OPPOSITE_SIDE,
+    )
+
+    assert (
+        "operator_size_only_closeOrder_dual_position_targeting="
+        "SETTLE_POSITION_REQUIRED_FOR_DUAL_OR_MULTIPLE_POSITIONS"
+        not in summary.blocked_reasons
+    )
 
 
 def test_settlement_gate_full_cycle_flags_for_active_pending_conflict() -> None:

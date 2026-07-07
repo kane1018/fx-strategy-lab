@@ -41,6 +41,12 @@ class GmoCloseOrderSideSemanticsStatus(str, Enum):
     SIDE_DOCS_CONFLICT_OR_AMBIGUOUS = "SIDE_DOCS_CONFLICT_OR_AMBIGUOUS"
 
 
+OPERATOR_SIZE_ONLY_CLOSEORDER_DUAL_POSITION_TARGETING_LABEL = (
+    "operator_size_only_closeOrder_dual_position_targeting="
+    "SETTLE_POSITION_REQUIRED_FOR_DUAL_OR_MULTIPLE_POSITIONS"
+)
+
+
 class GmoPreActualServiceWiringStatus(str, Enum):
     SERVICE_WIRING_DESIGN_READY = "SERVICE_WIRING_DESIGN_READY"
     SERVICE_WIRING_CAN_PROCEED_TO_NO_POST_HOOK = (
@@ -305,6 +311,7 @@ def classify_gmo_live_pre_actual_blockers(
     if not summary_input.actual_settlement_gate_ready:
         blockers.append("ACTUAL_SETTLEMENT_GATE_NOT_READY")
     if summary_input.pre_settlement_open_positions_count > 1:
+        blockers.append(OPERATOR_SIZE_ONLY_CLOSEORDER_DUAL_POSITION_TARGETING_LABEL)
         blockers.append("BLOCKER_SIZE_ONLY_MULTIPLE_POSITION_TARGETING_UNCONFIRMED")
         blockers.append("BLOCKER_POST_ENTRY_ONE_POSITION_CONFIRMATION_REQUIRED")
         blockers.append("BLOCKER_POSITION_SPECIFIC_PATH_DISABLED")
