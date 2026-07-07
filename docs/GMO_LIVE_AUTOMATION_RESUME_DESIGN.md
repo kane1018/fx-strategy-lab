@@ -414,7 +414,49 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - 2026-07-06 インシデントの正式remediation宣言
 - hard guard への `allow` 供給を「allow bridge を作らずに」operator gate から渡す controlled設計
 
-### 16.4 Level 5 full auto cycle
+### 16.4 STEP_6G_PC_OX_R_RESUME_DESIGN_OPERATOR_CONDITIONS_RECORD_SAFE_LABELS_NO_POST_C
+
+本セクションは **no-POST記録**。実POST許可ではない。
+
+- actual POST許可: `false`（`actual_post_permission_this_step`）
+- entry POST許可: `false`（`entry_post_permission_this_step`）
+- settlement POST許可: `false`（`settlement_post_permission_this_step`）
+- POST count: `0`
+- no-POST基盤状況: 運用側条件を除き整備済み。`actual_entry_POST_allowed` は既定 `false` 維持
+- Level 5 full auto cycle completed: `false`
+- RESUME_DESIGN §1 operator condition status: `NOT_COMPLETE`
+- paper trade evidence status: `PAPER_TRADE_EVIDENCE_UNKNOWN`（`paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`）
+- kill switch / settlement anomaly tests: `SYNTHETIC_ONLY_NOT_SUFFICIENT`（`kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`）
+- operator sign-off: `OPERATOR_SIGNOFF_NOT_RECORDED`
+- incident remediation: `INCIDENT_REMEDIATION_NOT_DECLARED`
+- operator UI no-position/no-active-pending check: `OPERATOR_UI_NOT_CONFIRMED`
+- credential actual use policy: `CREDENTIAL_ACTUAL_USE_NOT_APPROVED`
+- raw/ID/value exposure: `false`（raw報告/生報告/credential/値の実露出なし）
+- operator_acknowledges_actual_broker_write_risk: `false`
+- operator_acknowledges_one_post_max_no_retry_no_repost: `false`
+- operator_acknowledges_raw_id_value_credential_non_exposure: `true`
+- operator_acknowledges_no_generic_close: `true`
+- operator_acknowledges_no_settlement_post_in_entry_step: `true`
+- operator_acknowledges_incident_history: `true`
+- operator_acknowledges_resume_conditions_not_equal_actual_post_permission: `true`
+- remaining operator blockers:
+  - paper trade evidence
+  - kill switch / settlement anomaly tests beyond synthetic-only
+  - written sign-off
+  - incident remediation declaration
+  - GMO管理画面での建玉ゼロ/有効注文ゼロ確認
+  - credential actual use policy approval
+- remaining code blockers:
+  - production real entry transport
+  - credential sealed provider real operation
+  - runtime safe read real connection
+  - hard guard allow controlled供給設計
+- next recommended step:
+  - operatorがsafe summaryを提示するまで、RESUME_DESIGN §1 は未完了
+  - code 側で進める場合は、real HTTPなしの production signed POST interface no-POST設計に限定
+  - actual POST gate へは進まない
+
+### 16.5 Level 5 full auto cycle
 
 `Level_5_full_auto_cycle_completed=false`（不変）。entry POST自体が未到達のため、
 post-entry read-only confirmation・settlement・full cycle はいずれも未着手。
