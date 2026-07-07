@@ -15,7 +15,7 @@ and no `.env` access are performed here.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Protocol, runtime_checkable
 
 from app.private_api.auth import build_auth_headers
@@ -75,7 +75,11 @@ class SignedEntryRequestFactory:
 
 
 def _safe_timestamp() -> str:
-    # No realtime clock is needed in this no-POST step.
+    # Inert no-POST default. "0" can never be a broker-valid API timestamp,
+    # so a sender left with this default cannot produce an acceptable signed
+    # request. A real millisecond-epoch timestamp factory is injected only at
+    # the reviewed actual execution step, alongside the real HTTP client and
+    # the sealed credential.
     return "0"
 
 
@@ -129,10 +133,15 @@ class GmoActualEntryOneShotHttpSender:
         http_client: ActualEntrySenderHttpClient,
         sealed_credential: SealedCredentialForActualEntry,
         request_factory: SignedEntryRequestFactory | None = None,
+        timestamp_factory: Callable[[], str] | None = None,
     ) -> None:
         self.http_client = http_client
         self.sealed_credential = sealed_credential
         self.request_factory = request_factory or SignedEntryRequestFactory()
+        # Defaults to the inert "0" factory: without an explicitly injected
+        # real timestamp factory this sender cannot sign a broker-valid
+        # request, keeping the default state fail-closed.
+        self.timestamp_factory = timestamp_factory or _safe_timestamp
         self.send_attempt_count = 0
 
     def __repr__(self) -> str:
@@ -189,7 +198,7 @@ class GmoActualEntryOneShotHttpSender:
             method=method,
             path=path,
             body_json=body_json,
-            timestamp=_safe_timestamp(),
+            timestamp=self.timestamp_factory(),
         )
 
 

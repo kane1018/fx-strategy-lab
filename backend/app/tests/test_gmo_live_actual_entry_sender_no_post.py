@@ -66,6 +66,36 @@ class _FakeResponse:
         self.status_code = status_code
 
 
+def test_default_timestamp_factory_is_inert_zero() -> None:
+    # Without an explicitly injected real timestamp factory the sender signs
+    # with "0", which can never be a broker-valid API timestamp: the default
+    # sender state stays fail-closed for actual execution.
+    client = _FakeHttpClient(response=_FakeResponse(200))
+    sender = GmoActualEntryOneShotHttpSender(
+        http_client=client,
+        sealed_credential=_FakeSealedCredential(),
+    )
+    sender.send_entry_once_sanitized(
+        method="POST", path="/private/v1/order", body_json="{}"
+    )
+    _, _, headers, _ = client.requests[0]
+    assert headers["API-TIMESTAMP"] == "0"
+
+
+def test_injected_timestamp_factory_is_used_for_signing() -> None:
+    client = _FakeHttpClient(response=_FakeResponse(200))
+    sender = GmoActualEntryOneShotHttpSender(
+        http_client=client,
+        sealed_credential=_FakeSealedCredential(),
+        timestamp_factory=lambda: "1234567890123",
+    )
+    sender.send_entry_once_sanitized(
+        method="POST", path="/private/v1/order", body_json="{}"
+    )
+    _, _, headers, _ = client.requests[0]
+    assert headers["API-TIMESTAMP"] == "1234567890123"
+
+
 class _FakeSealedCredential:
     def __init__(self, api_key: str = "test-key", api_secret: str = "test-secret") -> None:
         self.api_key = api_key
