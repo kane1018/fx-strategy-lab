@@ -6,7 +6,9 @@ new helpers remain value-less and code-safe.
 
 from __future__ import annotations
 
+import json
 import pathlib
+from typing import Any
 
 from app.services.gmo_live_evidence_criteria import (
     GmoKillSwitchAndSettlementAnomalyEvidenceInput,
@@ -23,6 +25,18 @@ MODULE_PATH = (
     pathlib.Path(__file__).resolve().parents[1]
     / "services"
     / "gmo_live_evidence_criteria.py"
+)
+PAPER_SHADOW_FIXTURE_PATH = (
+    pathlib.Path(__file__).resolve().parent
+    / "fixtures"
+    / "no_post_evidence"
+    / "paper_shadow_safe_evidence_no_post.json"
+)
+ANOMALY_REPLAY_FIXTURE_PATH = (
+    pathlib.Path(__file__).resolve().parent
+    / "fixtures"
+    / "no_post_evidence"
+    / "anomaly_replay_safe_evidence_no_post.json"
 )
 
 
@@ -288,3 +302,140 @@ def test_evidence_criteria_module_has_no_runtime_network_or_direct_credentials_r
     assert "load_dotenv" not in collapsed
     assert "allow_real_broker_post=True" not in collapsed
     assert "allow_live_http_post=True" not in collapsed
+
+
+def _load_json_fixture(path: pathlib.Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert isinstance(payload, dict), f"fixture must be JSON object: {path}"
+    return payload
+
+
+def test_paper_evidence_can_be_confirmed_from_reproducible_no_post_artifact() -> None:
+    fixture = _load_json_fixture(PAPER_SHADOW_FIXTURE_PATH)
+    summary = build_gmo_live_paper_trade_evidence_safe_summary(
+        GmoPaperTradeEvidenceCriteriaInput(
+            evidence_source_exists=True,
+            evidence_location_safe_label_exists=fixture[
+                "evidence_location_safe_label_exists"
+            ],
+            paper_trade_period_safe_label_exists=True,
+            paper_trade_run_count_safe_label_exists=True,
+            paper_trade_result_category_safe_label_exists=True,
+            evidence_reproducible_or_checked_by_report=fixture[
+                "evidence_reproducible_or_checked_by_report"
+            ],
+            evidence_relevant_to_gmo_live_entry_readiness=fixture[
+                "evidence_relevant_to_gmo_live_entry_readiness"
+            ],
+            evidence_is_not_unrelated_backtest=fixture[
+                "evidence_is_not_unrelated_backtest"
+            ],
+            raw_profit_loss_values_exposed=fixture["raw_profit_loss_values_exposed"],
+            raw_trade_ids_exposed=fixture["raw_trade_ids_exposed"],
+            raw_order_ids_exposed=fixture["raw_order_ids_exposed"],
+            raw_position_ids_exposed=fixture["raw_position_ids_exposed"],
+            evidence_does_not_imply_actual_post_permission=fixture[
+                "evidence_does_not_imply_actual_post_permission"
+            ],
+            paper_trade_period_safe_label=fixture["paper_trade_period_safe_label"],
+            paper_trade_run_count_safe_label=fixture["paper_trade_run_count_safe_label"],
+            paper_trade_result_category=fixture["paper_trade_result_category"],
+            performance_report_location_safe_label=fixture[
+                "performance_report_location_safe_label"
+            ],
+        )
+    )
+    assert summary.paper_trade_evidence_status is (
+        GmoPaperTradeEvidenceStatus.PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY
+    )
+    assert summary.paper_trade_period_safe_label == fixture["paper_trade_period_safe_label"]
+    assert summary.paper_trade_run_count_safe_label == fixture["paper_trade_run_count_safe_label"]
+    assert summary.paper_trade_result_category == fixture["paper_trade_result_category"]
+    assert (
+        summary.performance_report_location_safe_label
+        == fixture["performance_report_location_safe_label"]
+    )
+
+
+def test_anomaly_evidence_replay_artifact_reinforces_synthetic_only_limitation() -> None:
+    fixture = _load_json_fixture(ANOMALY_REPLAY_FIXTURE_PATH)
+    summary = build_gmo_live_kill_switch_anomaly_safe_summary(
+        GmoKillSwitchAndSettlementAnomalyEvidenceInput(
+            evidence_source_exists=True,
+            kill_switch_failure_modes_safe_labels=tuple(
+                fixture["kill_switch_failure_modes_safe_labels"]
+            ),
+            settlement_reconciliation_failure_modes_safe_labels=tuple(
+                fixture["settlement_reconciliation_failure_modes_safe_labels"]
+            ),
+            tested_failure_modes_safe_labels=tuple(fixture["tested_failure_modes_safe_labels"]),
+            kill_switch_test_scope_safe_label_exists=fixture[
+                "kill_switch_test_scope_safe_label_exists"
+            ],
+            settlement_reconciliation_test_scope_safe_label_exists=fixture[
+                "settlement_reconciliation_test_scope_safe_label_exists"
+            ],
+            retry_requested_blocked=fixture["retry_requested_blocked"],
+            repost_requested_blocked=fixture["repost_requested_blocked"],
+            second_post_requested_blocked=fixture["second_post_requested_blocked"],
+            settlement_post_in_entry_step_blocked=fixture[
+                "settlement_post_in_entry_step_blocked"
+            ],
+            generic_close_attempt_blocked=fixture["generic_close_attempt_blocked"],
+            active_or_pending_order_conflict_blocked=fixture[
+                "active_or_pending_order_conflict_blocked"
+            ],
+            position_count_nonzero_blocked=fixture["position_count_nonzero_blocked"],
+            runtime_read_stale_blocked=fixture["runtime_read_stale_blocked"],
+            runtime_read_unknown_blocked=fixture["runtime_read_unknown_blocked"],
+            missing_credential_boundary_blocked=fixture[
+                "missing_credential_boundary_blocked"
+            ],
+            unknown_result_no_retry_blocked=fixture["unknown_result_no_retry_blocked"],
+            rejected_result_no_retry_blocked=fixture["rejected_result_no_retry_blocked"],
+            timeout_result_no_retry_blocked=fixture["timeout_result_no_retry_blocked"],
+            raw_id_value_exposure_attempt_blocked=fixture[
+                "raw_id_value_exposure_attempt_blocked"
+            ],
+            fake_settlement_reconciliation_mismatch_blocked=fixture[
+                "fake_settlement_reconciliation_mismatch_blocked"
+            ],
+            fake_kill_switch_trigger_blocked=fixture["fake_kill_switch_trigger_blocked"],
+            fake_no_order_guard_triggered_blocked=fixture[
+                "fake_no_order_guard_triggered_blocked"
+            ],
+            fake_level5_cycle_anomaly_blocked=fixture["fake_level5_cycle_anomaly_blocked"],
+            synthetic_only=fixture["synthetic_only"],
+            real_broker_write_used=fixture["real_broker_write_used"],
+            raw_response_exposed=fixture["raw_response_exposed"],
+            raw_ids_exposed=fixture["raw_ids_exposed"],
+            raw_price_or_size_values_exposed=fixture["raw_price_or_size_values_exposed"],
+            evidence_does_not_imply_actual_post_permission=fixture[
+                "evidence_does_not_imply_actual_post_permission"
+            ],
+            tested_failure_modes_distinguish_multiple_blocks=fixture[
+                "tested_failure_modes_distinguish_multiple_blocks"
+            ],
+            tested_failure_modes_distinguish_unknown_result_no_retry=fixture[
+                "tested_failure_modes_distinguish_unknown_result_no_retry"
+            ],
+        )
+    )
+    assert summary.kill_switch_anomaly_test_status is (
+        GmoKillSwitchAndSettlementAnomalyEvidenceStatus.SYNTHETIC_ONLY_NOT_SUFFICIENT
+    )
+    assert summary.real_broker_write_used is False
+    assert summary.synthetic_only is True
+    assert summary.raw_response_exposed is False
+    assert summary.raw_ids_exposed is False
+    assert summary.raw_price_or_size_values_exposed is False
+    assert summary.kill_switch_test_scope_safe_label == "SYNTHETIC_TESTS_ONLY"
+    assert summary.settlement_reconciliation_test_scope_safe_label == (
+        "SYNTHETIC_TESTS_ONLY"
+    )
+    assert "raw_response_exposure_blocked" not in summary.tested_failure_modes_safe_labels
+    assert "retry_blocked" in summary.tested_failure_modes_safe_labels
+    assert (
+        "fake_settlement_reconciliation_mismatch_blocked"
+        in summary.tested_failure_modes_safe_labels
+    )

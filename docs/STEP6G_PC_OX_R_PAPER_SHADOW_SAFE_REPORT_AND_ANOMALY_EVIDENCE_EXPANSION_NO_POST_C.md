@@ -16,26 +16,27 @@ No-POST範囲で、paper/shadow evidence と kill switch / settlement anomaly ev
 - raw_id_value_exposure: `false`
 
 ## paper / shadow evidence
-- paper_trade_evidence_status: `PAPER_TRADE_EVIDENCE_NOT_READY`
-- evidence_source_exists: `false`
-- evidence_location_safe_label_exists: `false`
-- paper_trade_period_safe_label_exists: `false`
-- paper_trade_period_safe_label: `NOT_PROVIDED`
-- paper_trade_run_count_safe_label_exists: `false`
-- paper_trade_run_count_safe_label: `NOT_PROVIDED`
-- paper_trade_result_category_safe_label_exists: `false`
-- paper_trade_result_category: `NOT_PROVIDED`
-- performance_report_location_safe_label: `NOT_PROVIDED`
-- evidence_reproducible_or_checked_by_report: `false`
-- evidence_relevant_to_gmo_live_entry_readiness: `false`
-- evidence_is_not_unrelated_backtest: `false`
+- paper_trade_evidence_status: `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY`
+- evidence_source_exists: `true`
+- evidence_location_safe_label_exists: `true`
+- evidence_location_safe_label: `docs/REPRODUCIBLE_NO_POST_PAPER_SHADOW_EVIDENCE_SUMMARY.md`
+- paper_trade_period_safe_label_exists: `true`
+- paper_trade_period_safe_label: `LEVEL5_FAKE_CYCLE_SYNTHETIC_WINDOW_V1`
+- paper_trade_run_count_safe_label_exists: `true`
+- paper_trade_run_count_safe_label: `RUN_COUNT_SAFE_FIXTURE_SCENARIOS`
+- paper_trade_result_category_safe_label_exists: `true`
+- paper_trade_result_category: `NO_POST_ENTRY_EXECUTION_PATH`
+- performance_report_location_safe_label: `docs/REPRODUCIBLE_NO_POST_PAPER_SHADOW_EVIDENCE_SUMMARY.md`
+- evidence_reproducible_or_checked_by_report: `true`
+- evidence_relevant_to_gmo_live_entry_readiness: `true`
+- evidence_is_not_unrelated_backtest: `true`
 - raw_profit_loss_values_exposed: `false`
 - raw_trade_ids_exposed: `false`
 - raw_order_ids_exposed: `false`
 - raw_position_ids_exposed: `false`
 - evidence_does_not_imply_actual_post_permission: `true`
 - synthetic/replay coverage: `DETERMINISTIC_REPLAY_FIXTURES_BASED`
-- evidence availability source safe summary files: `docs/STEP6G_PC_OX_R_PAPER_SHADOW_SAFE_REPORT_AND_ANOMALY_EVIDENCE_EXPANSION_NO_POST_C.md`
+- evidence availability source safe summary files: `docs/STEP6G_PC_OX_R_PAPER_SHADOW_SAFE_REPORT_AND_ANOMALY_EVIDENCE_EXPANSION_NO_POST_C.md`, `docs/REPRODUCIBLE_NO_POST_PAPER_SHADOW_EVIDENCE_SUMMARY.md`, `backend/app/tests/fixtures/no_post_evidence/paper_shadow_safe_evidence_no_post.json`
 
 ## kill switch / settlement anomaly evidence
 - kill_switch_anomaly_test_status: `SYNTHETIC_ONLY_NOT_SUFFICIENT`
@@ -49,7 +50,7 @@ No-POST範囲で、paper/shadow evidence と kill switch / settlement anomaly ev
 - raw_price_or_size_values_exposed: `false`
 - evidence_does_not_imply_actual_post_permission: `true`
 - fake runtime safe read evidence sources: `test_gmo_kill_switch_no_post.py`, `test_gmo_settlement_reconciliation_no_post.py`, `test_gmo_level5_fake_cycle_no_post.py`, `test_gmo_level5_integrated_fake_cycle_no_post.py`
-- missing evidence before synthetic-only to confirm: `NON_SYNTHETIC_REALISTIC_REPLAY` / `checked-in paper/shadow report + period/run/result evidence`
+- missing evidence before synthetic-only to confirm: `NON_SYNTHETIC_REALISTIC_REPLAY` / `additional non-synthetic replay evidence`
 - remaining no-POST next step: `synthetic再現を超えるチェック（no-POSTで記録可能な追加）` を追加し、条件を満たしたときのみ `KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED` を更新
 
 ## code-side readiness check snapshot
@@ -59,5 +60,5 @@ No-POST範囲で、paper/shadow evidence と kill switch / settlement anomaly ev
 - fake transport only for entry: `confirmed`
 
 ## 結論（safe summary）
-- paper/shadow evidence objective criteria: `NOT_READY`（満たせていない項目あり）
+- paper/shadow evidence objective criteria: `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY`
 - anomaly evidence objective criteria: `SYNTHETIC_ONLY_NOT_SUFFICIENT`（synthetic-onlyの時点）

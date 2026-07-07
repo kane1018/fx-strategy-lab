@@ -1,0 +1,21 @@
+# Reproducible no-POST Paper/Shadow Evidence Summary
+
+- evidence_source_safe_labels:
+  - `backend/app/tests/test_gmo_level5_fake_cycle_no_post.py`
+  - `backend/app/tests/test_gmo_level5_integrated_fake_cycle_no_post.py`
+  - `backend/app/tests/test_gmo_settlement_reconciliation_no_post.py`
+- evidence_source_exists: `true`
+- evidence_location_safe_label_exists: `true`
+- paper_trade_period_safe_label: `LEVEL5_FAKE_CYCLE_SYNTHETIC_WINDOW_V1`
+- paper_trade_run_count_safe_label: `RUN_COUNT_SAFE_FIXTURE_SCENARIOS`
+- paper_trade_result_category: `NO_POST_ENTRY_EXECUTION_PATH`
+- performance_report_location_safe_label: `docs/REPRODUCIBLE_NO_POST_PAPER_SHADOW_EVIDENCE_SUMMARY.md`
+- evidence_reproducible_or_checked_by_report: `true`
+- evidence_relevant_to_gmo_live_entry_readiness: `true`
+- evidence_is_not_unrelated_backtest: `true`
+- raw_profit_loss_values_exposed: `false`
+- raw_trade_ids_exposed: `false`
+- raw_order_ids_exposed: `false`
+- raw_position_ids_exposed: `false`
+- evidence_does_not_imply_actual_post_permission: `true`
+- deterministic_replay_or_checked_fixtures: `test_gmo_level5_fake_cycle_no_post.py, test_gmo_level5_integrated_fake_cycle_no_post.py`

@@ -438,8 +438,8 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - operator_approves_sealed_credential_provider_design_no_value_exposure: `true`
 - operator_approves_controlled_hard_guard_permit_design_no_allow_bridge: `true`
 - no-post objective evidence audit:
-  - paper trade evidence: `PAPER_TRADE_EVIDENCE_NOT_READY`
-    - paper evidence criteria status: `PAPER_TRADE_EVIDENCE_NOT_READY`
+  - paper trade evidence: `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY`
+    - paper evidence criteria status: `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY`
     - paper trade evidence safe summary: `docs/STEP6G_PC_OX_R_PAPER_SHADOW_SAFE_REPORT_AND_ANOMALY_EVIDENCE_EXPANSION_NO_POST_C.md`
     - `paper_trade_evidence_criteria` は no-POST で safe label のみで判定可能な条件を明文化済み（本Step）
       - evidence source exists
@@ -448,7 +448,7 @@ repo側の実POST基盤が未整備だったためである。判明した一次
       - reproducible or checked-in report / deterministic test / documented runbook
       - no raw P/L / trade ID / order ID / position ID / price/size exposure
       - relevance to GMO live entry readiness and no implication to actual POST permission
-    - `paper_trade_source_exists=false`, `paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`
+    - `paper_trade_source_exists=true`, `paper_trade_period_safe_label=LEVEL5_FAKE_CYCLE_SYNTHETIC_WINDOW_V1`, `paper_trade_run_count_safe_label=RUN_COUNT_SAFE_FIXTURE_SCENARIOS`, `paper_trade_result_category=NO_POST_ENTRY_EXECUTION_PATH`, `performance_report_location_safe_label=docs/REPRODUCIBLE_NO_POST_PAPER_SHADOW_EVIDENCE_SUMMARY.md`
     - `raw_profit_loss_values_exposed=false`, `raw_trade_ids_exposed=false`, `raw_order_ids_exposed=false`, `raw_position_ids_exposed=false`, `raw_price_or_size_values_exposed=false`
     - 次手順（no-POST）: 上記安全 summary の充足条件を満たす `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY` エビデンスに更新
   - kill switch / settlement anomaly audit: `SYNTHETIC_ONLY_NOT_SUFFICIENT`
@@ -470,12 +470,13 @@ repo側の実POST基盤が未整備だったためである。判明した一次
     - `kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`
     - `anomaly_deterministic_or_replay_coverage_safe_label=DETERMINISTIC_REPLAY_FIXTURES_BASED`
     - `anomaly_evidence_sources= test_gmo_kill_switch_no_post.py, test_gmo_settlement_reconciliation_no_post.py, test_gmo_level5_fake_cycle_no_post.py, test_gmo_level5_integrated_fake_cycle_no_post.py`
+    - `anomaly_replay_evidence_source=backend/app/tests/fixtures/no_post_evidence/anomaly_replay_safe_evidence_no_post.json`
     - 次手順（no-POST）: synthetic外の evidence / テストを追加し `KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED` を更新
 - actual_post_permission_this_step: `false`（本Stepは actual POST 許可ではない）
 - entry_post_permission_this_step: `false`（本Stepは entry POST 許可ではない）
 - settlement_post_permission_this_step: `false`（本Stepは settlement POST 許可ではない）
 - current-turn entry POST exact confirmation: `false`（別ターンで operator_signal_type と exact confirmation を再入力）
-- paper trade evidence status: `PAPER_TRADE_EVIDENCE_NOT_READY`（`paper_trade_source_exists=false`, `paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`）
+- paper trade evidence status: `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY`（`paper_trade_source_exists=true`, `paper_trade_period_safe_label=LEVEL5_FAKE_CYCLE_SYNTHETIC_WINDOW_V1`, `paper_trade_run_count_safe_label=RUN_COUNT_SAFE_FIXTURE_SCENARIOS`, `paper_trade_result_category=NO_POST_ENTRY_EXECUTION_PATH`, `performance_report_location_safe_label=docs/REPRODUCIBLE_NO_POST_PAPER_SHADOW_EVIDENCE_SUMMARY.md`）
 - kill switch / settlement anomaly tests: `SYNTHETIC_ONLY_NOT_SUFFICIENT`（`kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`）
 - operator sign-off: `OPERATOR_SIGNOFF_RECORDED_FOR_NO_POST_NEXT_GATE_DESIGN`
 - incident remediation: `OPERATOR_DECLARES_2026_07_06_INCIDENT_REMEDIATED_FOR_NO_POST_RESUME_DESIGN`
@@ -493,7 +494,6 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - operator_acknowledges_incident_history: `true`
 - operator_acknowledges_resume_conditions_not_equal_actual_post_permission: `true`
 - remaining operator blockers:
-  - paper trade evidence
   - kill switch / settlement anomaly tests beyond synthetic-only
 - remaining code blockers:
   - production real entry transport
@@ -524,7 +524,7 @@ no-POST境界を明示し、実行可否ではなく**設計状態**を記録す
   `actual_entry_POST_allowed=false` を固定し、allow直書きを許容しない
 - `entry` と `official settlement` の境界は維持（closeOrder / settlePosition / generic close へは流用不可）
 - remaining operator blockers:
-  - paper trade evidence
+  - kill switch / settlement anomaly tests beyond synthetic-only
   - kill switch / settlement anomaly tests beyond synthetic-only
 - remaining code blockers:
   - production real entry transport actual 実装
