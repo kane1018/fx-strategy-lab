@@ -314,6 +314,51 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 - このStepは実POST許可Stepではない。credential実運用承認・operator confirmationは
   引き続き未成立のblockerとして残る。
 
+## 15. entry POST gate 設計（ENTRY_POST_GATE_WITH_OPERATOR_CURRENT_TURN_CONFIRMATION・未実行）
+
+本節は entry POST gate の**設計語彙の記録のみ**であり、実行許可ではない。
+本節の記載を operator confirmation の代わりに読み取ることは**できない**:
+current-turn confirmation は実行タスクのそのターン内で operator が直接入力した場合のみ有効で、
+本docs・過去ログ・ファイル・前回報告からの再利用（banking）は無効とする
+（§14 precheck が構造的に confirmation 入力fieldを持たないのと同じ原則）。
+
+### 15.1 current-turn operator必須入力（許可値・完全一致のみ）
+
+- `operator_signal_type`: `ENTRY_BUY` / `ENTRY_SELL` / `HOLD`
+  （HOLDはno-POST停止。AI/Codex/Fable5/ChatGPTによる代入・推測は禁止）
+- `operator_current_turn_exact_confirmation`:
+  `CONFIRM_ONE_ENTRY_POST_MAX_NO_RETRY_NO_REPOST_NO_SETTLEMENT`
+- `operator_readiness`:
+  `OPERATOR_READY_FOR_ONE_ENTRY_POST_MAX_NO_RETRY_NO_REPOST`
+- `operator_understands_risk`:
+  `OPERATOR_ACKNOWLEDGES_ACTUAL_BROKER_WRITE_RISK`
+- 4つすべてがcurrent-turnで明示され、1文字でも不一致なら停止。
+
+### 15.2 POST前必須gate（すべてfail-closed）
+
+fresh repo check（main / HEAD==origin/main / clean / 期待commit）、
+credential presence safe boolean、credential actual use boundary ready、
+runtime safe read 実施・fresh、`NO_POSITION`/count=0、active/pending clear、
+fresh operator signal、one entry POST max、retry/repost/second POST禁止、
+settlement POST禁止、generic close禁止、raw/ID/value/credential非露出、
+result は sanitized category のみ。
+
+### 15.3 実行時制約と結果分岐
+
+- entry order POST のみ・最大1回。timeout/unknown/rejected/network/client/server error
+  いずれでも再送しない。POST後は即停止。
+- `RESULT_ACCEPTED_SANITIZED` → 停止。次Step: `POST_ENTRY_READ_ONLY_CONFIRMATION_NO_POST`
+- `RESULT_REJECTED_SANITIZED` → 停止・再送なし。次Step: `REJECTED_SAFE_REVIEW_NO_POST`
+- `RESULT_UNKNOWN_SANITIZED` → 停止・再送なし。次Step: `UNKNOWN_RESULT_SAFE_REVIEW_NO_POST`
+- `HOLD` / precheck blocked → no-POSTで停止。
+
+### 15.4 現在の状態
+
+- 状態: `READY_FOR_OPERATOR_CURRENT_TURN_CONFIRMATION`（operator入力待ち・未実行）
+- 実行用Codex指示書はFable5最終報告（actual POST doorstep package）に含まれる。
+- 実行にはさらに、実transport実装・hard guard通過設計・credential sealed provider等の
+  未実装事項の解決と運営者の明示承認が別途必要（§1の必須条件は不変）。
+
 ## 9. 運営者向け公式docs確認チェックリスト（no-POST）
 
 - `POST /private/v1/closeOrder` の `side` 定義（`BUY`/`SELL` の意味）をGMO公式記載で直接確認済みか
