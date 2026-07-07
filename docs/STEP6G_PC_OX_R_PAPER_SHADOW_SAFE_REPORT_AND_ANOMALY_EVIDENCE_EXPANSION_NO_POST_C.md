@@ -68,3 +68,20 @@ No-POST範囲で、paper/shadow evidence と kill switch / settlement anomaly ev
 ## 結論（safe summary）
 - paper/shadow evidence objective criteria: `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY`
 - anomaly evidence objective criteria: `SYNTHETIC_ONLY_NOT_SUFFICIENT`（synthetic-onlyの時点）
+
+## 追補（次Step設計）
+
+- 当該Step追加: `READ_ONLY_RUNTIME_SAFE_CONFIRMATION_GATE_DESIGN` をno-POSTで定義
+  - doc: `docs/READ_ONLY_RUNTIME_SAFE_CONFIRMATION_GATE_DESIGN.md`
+  - 実行確認: いいえ（design-only）
+  - next_required_input:
+    - `OPERATOR_PROVIDED_PRE_SANITIZED_ANOMALY_EVIDENCE_ARTIFACT`
+    - `READ_ONLY_RUNTIME_SAFE_CONFIRMATION_GATE_DESIGN` 実施時の
+      `operator_current_turn_exact_confirmation` / `read-only runtime safe summary`
+- 変更なしの再要約:
+  - `paper_trade_evidence_status`: `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY`
+  - `anomaly_evidence_status`: `SYNTHETIC_ONLY_NOT_SUFFICIENT`
+  - `anomaly_non_synthetic_evidence_status`: `NOT_AVAILABLE_IN_REPO`
+  - `repo_non_synthetic_safe_artifact_available`: `false`
+  - `synthetic_only解除可否`: `false`
+  - `actual_entry_POST_allowed`: `false`
