@@ -58,6 +58,23 @@ class TestSafeLabels:
         )
         assert profile.internal_raw_value_source_present is False
 
+    def test_configured_internal_source_presence_flows_into_profile(self) -> None:
+        class _PresentSource:
+            def present_safe_boolean(self) -> bool:
+                return True
+
+        profile = build_approved_entry_order_profile(
+            internal_value_source=_PresentSource()
+        )
+        assert profile.internal_raw_value_source_status is (
+            GmoApprovedEntryInternalRawValueSourceStatus
+            .INTERNAL_RAW_VALUE_SOURCE_PRESENT_NOT_EXPOSED
+        )
+        assert profile.internal_raw_value_source_present is True
+        # Presence never becomes a POST permission.
+        assert profile.actual_entry_POST_allowed is False
+        assert not profile
+
     def test_not_configured_profile_is_fail_closed(self) -> None:
         profile = build_approved_entry_order_profile_not_configured()
         assert profile.profile_status is (

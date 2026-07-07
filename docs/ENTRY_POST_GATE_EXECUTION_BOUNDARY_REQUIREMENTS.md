@@ -28,9 +28,11 @@ The actual gate must satisfy ALL of the following, fresh, in the same turn:
 5. Approved entry order profile present as a safe-label source
    (`gmo_live_approved_entry_order_profile`): symbol `USD_JPY`, size profile
    `GMO_MINIMUM_ALLOWED_SIZE`, executionType `MARKET`. The profile is never
-   a POST permission, and the raw numeric size is never displayed. A
-   reviewed INTERNAL raw value source must additionally exist; while it is
-   missing the gate blocks with
+   a POST permission, and the raw numeric size is never displayed. The
+   INTERNAL raw values are supplied by the operator at the actual gate turn
+   via the sealed interface in
+   `gmo_live_approved_entry_internal_value_source` (values used internally
+   only, never displayed); while they are not supplied the gate blocks with
    `INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE` /
    `WAITING_FOR_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE`
    (see `docs/APPROVED_ENTRY_ORDER_PROFILE_NO_POST.md`).

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from typing import Protocol
 
 APPROVED_ENTRY_SYMBOL_SAFE_LABEL = "USD_JPY"
 APPROVED_ENTRY_SIZE_PROFILE_SAFE_LABEL = "GMO_MINIMUM_ALLOWED_SIZE"
@@ -110,15 +111,38 @@ class ApprovedEntryOrderProfile:
         )
 
 
-def build_approved_entry_order_profile() -> ApprovedEntryOrderProfile:
+class ApprovedEntryInternalValueSourcePresence(Protocol):
+    """Presence-only view of a sealed internal value source. Never a value."""
+
+    def present_safe_boolean(self) -> bool:
+        """Return True only if operator-supplied values are sealed inside."""
+
+
+def build_approved_entry_order_profile(
+    *,
+    internal_value_source: ApprovedEntryInternalValueSourcePresence | None = None,
+) -> ApprovedEntryOrderProfile:
     """Build the current repo-approved safe-label profile.
 
-    The internal raw value source is reported as MISSING because no reviewed
-    internal numeric source exists in the repository yet; the actual gate
-    must block on this until such a source is added in an explicitly
-    reviewed step. This function never invents or embeds a numeric value.
+    ``internal_value_source`` is the sealed operator-supplied holder from
+    ``gmo_live_approved_entry_internal_value_source``; only its presence safe
+    boolean is consulted here, never a value. Without a configured source the
+    profile reports the internal raw value source as MISSING and every
+    actual gate must block on it. This function never invents or embeds a
+    numeric value.
     """
 
+    internal_source_present = bool(
+        internal_value_source is not None
+        and internal_value_source.present_safe_boolean()
+    )
+    internal_source_status = (
+        GmoApprovedEntryInternalRawValueSourceStatus
+        .INTERNAL_RAW_VALUE_SOURCE_PRESENT_NOT_EXPOSED
+        if internal_source_present
+        else GmoApprovedEntryInternalRawValueSourceStatus
+        .INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE
+    )
     return ApprovedEntryOrderProfile(
         profile_status=(
             GmoApprovedEntryOrderProfileStatus
@@ -130,10 +154,7 @@ def build_approved_entry_order_profile() -> ApprovedEntryOrderProfile:
             APPROVED_ENTRY_EXECUTION_TYPE_SAFE_LABEL
         ),
         profile_source_safe_label=APPROVED_ENTRY_PROFILE_SOURCE_SAFE_LABEL,
-        internal_raw_value_source_status=(
-            GmoApprovedEntryInternalRawValueSourceStatus
-            .INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE
-        ),
+        internal_raw_value_source_status=internal_source_status,
     )
 
 

@@ -32,22 +32,37 @@ module contains no digit literals at all, enforced by a source-scan test).
 - The AI must never infer the size, the symbol, or the executionType; when
   the profile is not configured, binding stays `NOT_BOUND` fail-closed.
 
-## 3. Internal raw value source (separate concern, currently MISSING)
+## 3. Internal raw value source (operator-supplied sealed interface)
 
-An actual send additionally needs a reviewed INTERNAL raw value source for
-the numeric values the broker body requires. That source does not exist in
-the repository yet, so:
+An actual send additionally needs the INTERNAL raw values (symbol / size)
+for the broker body. The repository ships NO raw numeric size; instead a
+sealed operator-supplied interface exists:
 
-- `internal_raw_value_source_status`:
-  `INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE`
-- request plan binding stops at
-  `ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_INTERNAL_VALUE_SOURCE`
-- final preflight stops at
-  `WAITING_FOR_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE`
-- every actual gate must block (`APPROVED_SIZE_RUNTIME_VALUE_SOURCE_MISSING`
-  family) until the internal source is added in an explicitly reviewed
-  no-POST step. When it is added, its value must be used internally only and
-  never displayed, logged, or reported.
+Source module:
+`backend/app/services/gmo_live_approved_entry_internal_value_source.py`
+(`SealedApprovedEntryInternalValueSource`)
+
+- Default state is NOT CONFIGURED:
+  `INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE`, request plan
+  binding stops at
+  `ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_INTERNAL_VALUE_SOURCE`, final
+  preflight stops at `WAITING_FOR_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE`,
+  and every actual gate blocks.
+- At the actual gate turn, the OPERATOR supplies the symbol and size values
+  to the gate runner (the AI never infers, defaults, or displays them). The
+  holder validates the symbol against the approved safe label and the size
+  shape, seals the values (`__slots__`, sanitized repr/str, no public value
+  accessor, never truthy), and reports
+  `INTERNAL_RAW_VALUE_SOURCE_PRESENT_NOT_EXPOSED` as presence only.
+- The sealed values flow ONLY into
+  `build_bound_entry_request_plan_internal`, which hands them to the
+  audited entry-only request plan builder; the resulting plan goes only to
+  the injected actual sender and is never reported, previewed, or logged.
+  A source-scan test enforces that the module contains no multi-digit
+  literal, so a raw size can never be committed inside it.
+- Presence of values is never a POST permission: the fresh current-turn
+  operator input, fresh runtime read, permit, hard guard, and activation
+  gates all still apply, and `actual_entry_POST_allowed` stays false.
 
 ## 4. Actual gate requirements unchanged
 
