@@ -359,6 +359,66 @@ result は sanitized category のみ。
 - 実行にはさらに、実transport実装・hard guard通過設計・credential sealed provider等の
   未実装事項の解決と運営者の明示承認が別途必要（§1の必須条件は不変）。
 
+## 16. entry actual POST 到達不能の原因分析と no-POST安全基盤（実装済み）
+
+### 16.1 原因（operator入力ではなくinfra未整備）
+
+operatorが current-turn で `ENTRY_SELL` を含む5項目を完全一致で入力し、operator入力gateは
+PASSした。それでも entry POST が実行されなかった理由は、operator入力の不足ではなく、
+repo側の実POST基盤が未整備だったためである。判明した一次blocker:
+
+- `ENTRY_POST_BLOCKED_PRODUCTION_TRANSPORT_NOT_IMPLEMENTED`:
+  `GmoFxBroker.market_order()` は transport未実装で必ず例外。
+- `ENTRY_POST_BLOCKED_APPROVED_TRANSPORT_REQUIRES_FORBIDDEN_OPERATIONS`:
+  実POST可能な唯一の経路（`app.live_verification`内 one-shot）は env credential読取・
+  hard guard `allow=True`・real HTTP を要し、no-POST安全境界（`.env`読取禁止・
+  hard guard改変禁止・新規POST経路作成禁止）と両立しない。
+- `ENTRY_POST_BLOCKED_CREDENTIAL_ACTUAL_USE_BOUNDARY_NOT_READY`:
+  `credential_boundary_ready_for_actual_post` は構造上常に false。
+- `ENTRY_POST_BLOCKED_RUNTIME_SAFE_READ_REQUIRES_AUTHENTICATED_CONNECTION`:
+  NO_POSITION/count=0 確認に認証接続（credential実使用）が必要。
+
+### 16.2 no-POSTで整備した安全基盤（fake-only・default fail-closed）
+
+- `gmo_live_sealed_credential_provider.py`: presence safe boolean のみを答える
+  sealed provider境界。値・長さ・hash・fingerprint・prefix/suffix を扱うfieldが構造上存在せず、
+  env読取surfaceも無い。`credential_actual_use_ready` は current-turn 認可がある場合のみ true、
+  既定 false。
+- `gmo_live_entry_post_permit.py`: ephemeral・single-use・entry専用 permit。one POST max、
+  保存不可・再利用不可、settlement/close/cancel/change には使用不可（scope拒否）、
+  retry/repost context では不許可、`hard_guard_allow_resolved` は常に false（`allow=True`を
+  導出しない＝hard guard default-deny維持）。
+- `gmo_live_runtime_safe_read.py`: fake read-only client のみ。safe status/safe count だけを返し、
+  raw payload・positionId・size・price・PnL・timestamp を保持するfieldが構造上存在しない。
+  gate は performed/fresh/NO_POSITION/count=0/active-pending clear/market open/ticker fresh/
+  spread within limit の全成立時のみ ready、unknown/stale/非0は block。
+- `gmo_live_entry_transport.py`: entry専用 transport interface と fake transport、
+  「production real transport未実装」を明示する fail-closed transport、fake-only 状態機械。
+  結果は sanitized category（ACCEPTED/REJECTED/UNKNOWN）のみで、raw/response/ID/生値の
+  field無し。real transport は状態機械が拒否、いかなる結果でも再送（retry/repost/second POST）
+  なし。
+- `gmo_live_entry_actual_post_gate_readiness.py`: 上記4境界を統合。**全fakeが揃っても
+  `actual_entry_POST_allowed` は常に false**、`entry_post_execution_gate_is_separate_step=True`、
+  `production_real_transport_implemented=False`、`PRODUCTION_REAL_ENTRY_TRANSPORT_NOT_IMPLEMENTED`
+  を常時 blocked_reason に含める。`__bool__` も false。
+
+### 16.3 まだ actual POST 許可ではない
+
+本Stepは no-POST安全基盤の整備のみで、実POST解禁ではない。実POSTに進むには以下が別途必要
+（本Stepでは扱わない・偽装しない）:
+
+- production real entry transport の実装（`auth.py`署名再利用、no-POSTスケルトン解消）
+- credential sealed provider の実実装と、安全境界内での実運用承認
+- runtime safe read の実 read-only client 接続
+- RESUME_DESIGN §1 の未達条件（paper実績・kill switch全異常系実テスト・運営者書面sign-off記録）
+- 2026-07-06 インシデントの正式remediation宣言
+- hard guard への `allow` 供給を「allow bridge を作らずに」operator gate から渡す controlled設計
+
+### 16.4 Level 5 full auto cycle
+
+`Level_5_full_auto_cycle_completed=false`（不変）。entry POST自体が未到達のため、
+post-entry read-only confirmation・settlement・full cycle はいずれも未着手。
+
 ## 9. 運営者向け公式docs確認チェックリスト（no-POST）
 
 - `POST /private/v1/closeOrder` の `side` 定義（`BUY`/`SELL` の意味）をGMO公式記載で直接確認済みか
