@@ -25,9 +25,18 @@ The actual gate must satisfy ALL of the following, fresh, in the same turn:
    - `MARKET_OPEN_SAFE`
    - `TICKER_FRESH_SAFE`
    - `SPREAD_WITHIN_LIMIT_SAFE`
-5. Entry request plan current-turn binding: `ENTRY_REQUEST_PLAN_BOUND_SAFE`
+5. Approved entry order profile present as a safe-label source
+   (`gmo_live_approved_entry_order_profile`): symbol `USD_JPY`, size profile
+   `GMO_MINIMUM_ALLOWED_SIZE`, executionType `MARKET`. The profile is never
+   a POST permission, and the raw numeric size is never displayed. A
+   reviewed INTERNAL raw value source must additionally exist; while it is
+   missing the gate blocks with
+   `INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE` /
+   `WAITING_FOR_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE`
+   (see `docs/APPROVED_ENTRY_ORDER_PROFILE_NO_POST.md`).
+6. Entry request plan current-turn binding: `ENTRY_REQUEST_PLAN_BOUND_SAFE`
    (see section 2).
-6. Operator current-turn inputs (exact match, never banked, never
+7. Operator current-turn inputs (exact match, never banked, never
    substituted by the AI):
    - signal `ENTRY_BUY` or `ENTRY_SELL` (HOLD is never executable)
    - `CONFIRM_ONE_ENTRY_POST_MAX_NO_RETRY_NO_REPOST_NO_SETTLEMENT`
@@ -35,10 +44,10 @@ The actual gate must satisfy ALL of the following, fresh, in the same turn:
    - `OPERATOR_ACKNOWLEDGES_ACTUAL_BROKER_WRITE_RISK`
    - `OPERATOR_ACKNOWLEDGES_SENDER_MAY_USE_CREDENTIALS_INTERNALLY_WITH_NO_VALUE_EXPOSURE`
      (canonical spelling; see section 8)
-7. Written sign-off recorded (`docs/ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md`).
-8. One-use entry permit usable, hard guard default-deny present, sanitized
+8. Written sign-off recorded (`docs/ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md`).
+9. One-use entry permit usable, hard guard default-deny present, sanitized
    preview ready, real sender injection ready.
-9. Final preflight status
+10. Final preflight status
    `READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION`
    (`gmo_live_entry_final_preflight`). READY statuses are classifications,
    never POST permissions.

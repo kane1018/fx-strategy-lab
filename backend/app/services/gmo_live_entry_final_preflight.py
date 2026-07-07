@@ -120,6 +120,12 @@ class GmoEntryFinalPreflightStatus(str, Enum):
     READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST = (
         "READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST"
     )
+    WAITING_FOR_APPROVED_ENTRY_ORDER_PROFILE = (
+        "WAITING_FOR_APPROVED_ENTRY_ORDER_PROFILE"
+    )
+    WAITING_FOR_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE = (
+        "WAITING_FOR_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE"
+    )
     WAITING_FOR_ENTRY_REQUEST_PLAN_BINDING = (
         "WAITING_FOR_ENTRY_REQUEST_PLAN_BINDING"
     )
@@ -150,6 +156,12 @@ class GmoEntryFinalPreflightNextOperatorInput(str, Enum):
         "RESOLVE_PRODUCTION_ENTRY_CODE_BLOCKERS"
     )
     PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF = "PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF"
+    PROVIDE_APPROVED_ENTRY_ORDER_PROFILE = (
+        "PROVIDE_APPROVED_ENTRY_ORDER_PROFILE"
+    )
+    PROVIDE_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE = (
+        "PROVIDE_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE"
+    )
     BIND_ENTRY_REQUEST_PLAN_AT_ACTUAL_GATE = (
         "BIND_ENTRY_REQUEST_PLAN_AT_ACTUAL_GATE"
     )
@@ -208,6 +220,15 @@ class GmoEntryFinalPreflightInput:
     # reviewed call site is implemented and fail-closed; still never a POST
     # permission by itself)
     actual_entry_execution_boundary_implemented: bool = False
+
+    # approved entry order profile gate (safe-label profile source present in
+    # the repo via ``gmo_live_approved_entry_order_profile``; never a POST
+    # permission and never a raw value)
+    approved_entry_order_profile_present: bool = False
+    # a reviewed internal raw value source for the actual sender exists
+    # (separate from the safe-label profile; absent means the actual gate
+    # blocks with APPROVED_SIZE_RUNTIME_VALUE_SOURCE_MISSING)
+    approved_entry_internal_value_source_present: bool = False
 
     # entry request plan binding gate (current-turn binding classified by
     # ``gmo_live_entry_request_plan_binding``; the safe boolean here means the
@@ -376,6 +397,16 @@ def build_gmo_entry_final_preflight_package(
     if not signoff_recorded:
         blockers.append("ACTUAL_ENTRY_WRITTEN_SIGNOFF_NOT_RECORDED")
 
+    profile_present = preflight_input.approved_entry_order_profile_present
+    if not profile_present:
+        blockers.append("APPROVED_ENTRY_ORDER_PROFILE_MISSING")
+
+    internal_value_source_present = (
+        preflight_input.approved_entry_internal_value_source_present
+    )
+    if not internal_value_source_present:
+        blockers.append("APPROVED_ENTRY_INTERNAL_VALUE_SOURCE_MISSING")
+
     request_plan_bound = preflight_input.entry_request_plan_bound_safe
     if not request_plan_bound:
         blockers.append("ENTRY_REQUEST_PLAN_NOT_BOUND")
@@ -454,6 +485,23 @@ def build_gmo_entry_final_preflight_package(
         next_input = (
             GmoEntryFinalPreflightNextOperatorInput
             .PROVIDE_ENTRY_SIGNAL_AND_EXACT_INPUTS_IN_SEPARATE_STEP
+        )
+    elif not profile_present:
+        status = (
+            GmoEntryFinalPreflightStatus.WAITING_FOR_APPROVED_ENTRY_ORDER_PROFILE
+        )
+        next_input = (
+            GmoEntryFinalPreflightNextOperatorInput
+            .PROVIDE_APPROVED_ENTRY_ORDER_PROFILE
+        )
+    elif not internal_value_source_present:
+        status = (
+            GmoEntryFinalPreflightStatus
+            .WAITING_FOR_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE
+        )
+        next_input = (
+            GmoEntryFinalPreflightNextOperatorInput
+            .PROVIDE_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE
         )
     elif not request_plan_bound:
         status = GmoEntryFinalPreflightStatus.WAITING_FOR_ENTRY_REQUEST_PLAN_BINDING

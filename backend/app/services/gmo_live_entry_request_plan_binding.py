@@ -35,6 +35,9 @@ from app.private_api.order_builders import (
     GmoFxPrivateRequestPlan,
     build_gmo_fx_entry_request_plan,
 )
+from app.services.gmo_live_approved_entry_order_profile import (
+    ApprovedEntryOrderProfile,
+)
 
 
 class GmoEntryRequestPlanBindingError(RuntimeError):
@@ -45,6 +48,9 @@ class GmoEntryRequestPlanStatus(str, Enum):
     ENTRY_REQUEST_PLAN_BOUND_SAFE = "ENTRY_REQUEST_PLAN_BOUND_SAFE"
     ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_FRESH_ACTUAL_GATE = (
         "ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_FRESH_ACTUAL_GATE"
+    )
+    ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_INTERNAL_VALUE_SOURCE = (
+        "ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_INTERNAL_VALUE_SOURCE"
     )
     ENTRY_REQUEST_PLAN_NOT_BOUND_NO_POST = "ENTRY_REQUEST_PLAN_NOT_BOUND_NO_POST"
     ENTRY_REQUEST_PLAN_UNSAFE_TO_USE = "ENTRY_REQUEST_PLAN_UNSAFE_TO_USE"
@@ -83,6 +89,9 @@ class EntryRequestPlanBindingInput:
     approved_size_source_present: bool = False
     approved_execution_type_source_present: bool = False
     ai_inference_required: bool = False
+    # The safe-label profile alone is not enough for a real send: a reviewed
+    # internal raw value source must additionally exist. Default-deny.
+    internal_raw_value_source_present: bool = False
 
     # violations (any true makes the plan unsafe to use)
     raw_body_exposure_requested: bool = False
@@ -136,6 +145,35 @@ _NOT_BOUND_REASONS: tuple[tuple[str, str], ...] = (
 )
 
 
+def binding_input_from_approved_profile(
+    *,
+    profile: ApprovedEntryOrderProfile,
+    operator_signal_type_safe_label: str,
+    current_turn_binding_confirmed: bool,
+) -> EntryRequestPlanBindingInput:
+    """Derive a binding input from the repo-approved safe-label profile.
+
+    The operator signal and the current-turn confirmation must be supplied
+    fresh by the actual gate for THIS turn; they are never read from history
+    by this function. Everything else is derived mechanically from the
+    profile: when the safe labels are ready, no AI inference is required;
+    when they are not, the input stays default-deny.
+    """
+
+    labels_ready = profile.safe_labels_ready
+    return EntryRequestPlanBindingInput(
+        operator_signal_type_safe_label=operator_signal_type_safe_label,
+        current_turn_binding_confirmed=current_turn_binding_confirmed,
+        approved_symbol_source_present=labels_ready,
+        approved_size_source_present=labels_ready,
+        approved_execution_type_source_present=labels_ready,
+        ai_inference_required=not labels_ready,
+        internal_raw_value_source_present=(
+            profile.internal_raw_value_source_present
+        ),
+    )
+
+
 def bind_entry_request_plan_current_turn(
     binding_input: EntryRequestPlanBindingInput,
 ) -> EntryRequestPlanBindingResult:
@@ -171,6 +209,21 @@ def bind_entry_request_plan_current_turn(
             status=GmoEntryRequestPlanStatus.ENTRY_REQUEST_PLAN_NOT_BOUND_NO_POST,
             order_kind_safe_label="",
             blocked_reasons=tuple(not_bound_reasons),
+            request_plan_is_entry_only=True,
+            request_plan_current_turn_binding=False,
+        )
+
+    if not binding_input.internal_raw_value_source_present:
+        # Safe-label binding is otherwise complete, but no reviewed internal
+        # raw value source exists for an actual send: the actual gate must
+        # block (APPROVED_SIZE_RUNTIME_VALUE_SOURCE_MISSING family).
+        return EntryRequestPlanBindingResult(
+            status=(
+                GmoEntryRequestPlanStatus
+                .ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_INTERNAL_VALUE_SOURCE
+            ),
+            order_kind_safe_label=order_kind.value,
+            blocked_reasons=("INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE",),
             request_plan_is_entry_only=True,
             request_plan_current_turn_binding=False,
         )
@@ -288,6 +341,11 @@ class ActualEntryGateSanitizedPreview:
     order_kind_safe_label: str
     request_plan_status_safe_label: str
     request_plan_is_entry_only: bool
+    approved_profile_status_safe_label: str
+    approved_symbol_safe_label: str
+    approved_size_profile_safe_label: str
+    approved_execution_type_safe_label: str
+    internal_raw_value_source_status_safe_label: str
     market_status_safe_label: str
     ticker_freshness_safe_label: str
     spread_status_safe_label: str
@@ -314,6 +372,7 @@ def build_actual_entry_gate_sanitized_preview(
     *,
     operator_signal_type_safe_label: str,
     binding_preview: EntryRequestPlanSafePreview,
+    approved_profile: ApprovedEntryOrderProfile,
     market_status_safe_label: str,
     ticker_freshness_safe_label: str,
     spread_status_safe_label: str,
@@ -333,6 +392,17 @@ def build_actual_entry_gate_sanitized_preview(
             binding_preview.request_plan_status_safe_label
         ),
         request_plan_is_entry_only=binding_preview.request_plan_is_entry_only,
+        approved_profile_status_safe_label=approved_profile.profile_status.value,
+        approved_symbol_safe_label=approved_profile.approved_symbol_safe_label,
+        approved_size_profile_safe_label=(
+            approved_profile.approved_size_profile_safe_label
+        ),
+        approved_execution_type_safe_label=(
+            approved_profile.approved_execution_type_safe_label
+        ),
+        internal_raw_value_source_status_safe_label=(
+            approved_profile.internal_raw_value_source_status.value
+        ),
         market_status_safe_label=market_status_safe_label,
         ticker_freshness_safe_label=ticker_freshness_safe_label,
         spread_status_safe_label=spread_status_safe_label,

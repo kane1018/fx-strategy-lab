@@ -20,12 +20,17 @@ from app.private_api.order_builders import (
     REQUEST_KIND_ENTRY,
     build_gmo_fx_official_settlement_request_plan,
 )
+from app.services.gmo_live_approved_entry_order_profile import (
+    build_approved_entry_order_profile,
+    build_approved_entry_order_profile_not_configured,
+)
 from app.services.gmo_live_entry_request_plan_binding import (
     OPERATOR_SIGNAL_TO_ORDER_KIND_SAFE_LABEL,
     EntryRequestPlanBindingInput,
     GmoEntryRequestPlanBindingError,
     GmoEntryRequestPlanStatus,
     bind_entry_request_plan_current_turn,
+    binding_input_from_approved_profile,
     build_actual_entry_gate_sanitized_preview,
     build_bound_entry_request_plan,
     build_entry_request_plan_safe_preview,
@@ -46,6 +51,7 @@ def _bindable_input(**overrides: object) -> EntryRequestPlanBindingInput:
         approved_symbol_source_present=True,
         approved_size_source_present=True,
         approved_execution_type_source_present=True,
+        internal_raw_value_source_present=True,
     )
     kwargs = asdict(base)
     kwargs.update(overrides)
@@ -135,6 +141,29 @@ class TestNotBoundBlockers:
         )
         assert expected_reason in result.blocked_reasons
         assert result.request_plan_current_turn_binding is False
+
+    def test_internal_raw_value_source_missing_needs_internal_value_source(
+        self,
+    ) -> None:
+        result = bind_entry_request_plan_current_turn(
+            _bindable_input(internal_raw_value_source_present=False)
+        )
+        assert result.status is (
+            GmoEntryRequestPlanStatus
+            .ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_INTERNAL_VALUE_SOURCE
+        )
+        assert (
+            "INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE"
+            in result.blocked_reasons
+        )
+        assert result.request_plan_current_turn_binding is False
+        assert result.actual_entry_POST_allowed is False
+        with pytest.raises(GmoEntryRequestPlanBindingError):
+            build_bound_entry_request_plan(
+                binding_result=result,
+                approved_symbol="USD_JPY",
+                approved_size="1",
+            )
 
     def test_unconfirmed_current_turn_needs_fresh_actual_gate(self) -> None:
         result = bind_entry_request_plan_current_turn(
@@ -268,6 +297,7 @@ class TestSafePreviews:
         gate_preview = build_actual_entry_gate_sanitized_preview(
             operator_signal_type_safe_label="ENTRY_BUY",
             binding_preview=build_entry_request_plan_safe_preview(result),
+            approved_profile=build_approved_entry_order_profile(),
             market_status_safe_label="MARKET_OPEN_SAFE",
             ticker_freshness_safe_label="TICKER_FRESH_SAFE",
             spread_status_safe_label="SPREAD_WITHIN_LIMIT_SAFE",
@@ -282,6 +312,17 @@ class TestSafePreviews:
         assert gate_preview.request_plan_status_safe_label == (
             "ENTRY_REQUEST_PLAN_BOUND_SAFE"
         )
+        assert gate_preview.approved_profile_status_safe_label == (
+            "APPROVED_ENTRY_ORDER_PROFILE_SAFE_LABELS_READY"
+        )
+        assert gate_preview.approved_symbol_safe_label == "USD_JPY"
+        assert gate_preview.approved_size_profile_safe_label == (
+            "GMO_MINIMUM_ALLOWED_SIZE"
+        )
+        assert gate_preview.approved_execution_type_safe_label == "MARKET"
+        assert gate_preview.internal_raw_value_source_status_safe_label == (
+            "INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE"
+        )
         assert gate_preview.entry_post_max_count == 1
         assert gate_preview.retry is False
         assert gate_preview.repost is False
@@ -292,8 +333,92 @@ class TestSafePreviews:
         assert gate_preview.credential_value_exposed is False
         assert not gate_preview
         rendered = repr(gate_preview)
-        assert "USD_JPY" not in rendered
+        # approved_symbol_safe_label=USD_JPY is an allowed safe label; raw
+        # numeric size, credentials, and body content must stay absent.
+        assert "body_json" not in rendered
         assert "api_key" not in rendered
+        assert "api_secret" not in rendered
+        assert "signature" not in rendered
+
+
+class TestApprovedProfileIntegration:
+    def test_approved_profile_resolves_symbol_and_size_sources(self) -> None:
+        binding_input = binding_input_from_approved_profile(
+            profile=build_approved_entry_order_profile(),
+            operator_signal_type_safe_label="ENTRY_BUY",
+            current_turn_binding_confirmed=True,
+        )
+        result = bind_entry_request_plan_current_turn(binding_input)
+        assert "APPROVED_SYMBOL_SOURCE_MISSING" not in result.blocked_reasons
+        assert "APPROVED_SIZE_SOURCE_MISSING" not in result.blocked_reasons
+        assert "AI_INFERENCE_REQUIRED_BLOCKED" not in result.blocked_reasons
+
+    def test_entry_buy_with_profile_maps_open_buy_but_needs_internal_source(
+        self,
+    ) -> None:
+        binding_input = binding_input_from_approved_profile(
+            profile=build_approved_entry_order_profile(),
+            operator_signal_type_safe_label="ENTRY_BUY",
+            current_turn_binding_confirmed=True,
+        )
+        result = bind_entry_request_plan_current_turn(binding_input)
+        # The repo profile has no reviewed internal raw value source yet, so
+        # binding stops safe-side before BOUND_SAFE.
+        assert result.status is (
+            GmoEntryRequestPlanStatus
+            .ENTRY_REQUEST_PLAN_PRESENT_BUT_NEEDS_INTERNAL_VALUE_SOURCE
+        )
+        assert result.order_kind_safe_label == "ENTRY_OPEN_BUY"
+        assert result.actual_entry_POST_allowed is False
+
+    def test_entry_sell_with_profile_maps_open_sell(self) -> None:
+        binding_input = binding_input_from_approved_profile(
+            profile=build_approved_entry_order_profile(),
+            operator_signal_type_safe_label="ENTRY_SELL",
+            current_turn_binding_confirmed=True,
+        )
+        result = bind_entry_request_plan_current_turn(binding_input)
+        assert result.order_kind_safe_label == "ENTRY_OPEN_SELL"
+
+    def test_hold_with_profile_stays_not_bound(self) -> None:
+        binding_input = binding_input_from_approved_profile(
+            profile=build_approved_entry_order_profile(),
+            operator_signal_type_safe_label="HOLD",
+            current_turn_binding_confirmed=True,
+        )
+        result = bind_entry_request_plan_current_turn(binding_input)
+        assert result.status is (
+            GmoEntryRequestPlanStatus.ENTRY_REQUEST_PLAN_NOT_BOUND_NO_POST
+        )
+        assert (
+            "OPERATOR_SIGNAL_NOT_EXECUTABLE_FOR_ENTRY_PLAN" in result.blocked_reasons
+        )
+
+    def test_not_configured_profile_stays_not_bound(self) -> None:
+        binding_input = binding_input_from_approved_profile(
+            profile=build_approved_entry_order_profile_not_configured(),
+            operator_signal_type_safe_label="ENTRY_BUY",
+            current_turn_binding_confirmed=True,
+        )
+        result = bind_entry_request_plan_current_turn(binding_input)
+        assert result.status is (
+            GmoEntryRequestPlanStatus.ENTRY_REQUEST_PLAN_NOT_BOUND_NO_POST
+        )
+        assert "APPROVED_SYMBOL_SOURCE_MISSING" in result.blocked_reasons
+        assert "APPROVED_SIZE_SOURCE_MISSING" in result.blocked_reasons
+        assert "AI_INFERENCE_REQUIRED_BLOCKED" in result.blocked_reasons
+
+    def test_profile_result_exposes_no_raw_values(self) -> None:
+        binding_input = binding_input_from_approved_profile(
+            profile=build_approved_entry_order_profile(),
+            operator_signal_type_safe_label="ENTRY_BUY",
+            current_turn_binding_confirmed=True,
+        )
+        result = bind_entry_request_plan_current_turn(binding_input)
+        assert result.request_plan_raw_body_exposed is False
+        assert result.request_plan_ids_exposed is False
+        assert result.request_plan_price_size_pnl_exposed is False
+        assert result.request_plan_credentials_exposed is False
 
 
 class TestSourceScan:

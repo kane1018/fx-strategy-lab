@@ -56,6 +56,8 @@ def _all_safe_input(**overrides: object) -> GmoEntryFinalPreflightInput:
         entry_post_gate_separate_step_design_ready=True,
         production_entry_boundary_implemented_fail_closed=True,
         operator_actual_entry_signoff_recorded=True,
+        approved_entry_order_profile_present=True,
+        approved_entry_internal_value_source_present=True,
         entry_request_plan_bound_safe=True,
         market_open_safe_label_confirmed=True,
         ticker_fresh_safe_label_confirmed=True,
@@ -299,6 +301,46 @@ def test_execution_boundary_implemented_advances_to_entry_post_gate_ready() -> N
     assert package.actual_entry_POST_allowed is False
     assert package.actual_settlement_POST_allowed is False
     assert package.operator_signal_still_required_in_separate_step is True
+    assert not package
+
+
+def test_missing_approved_profile_waits_for_profile() -> None:
+    package = build_gmo_entry_final_preflight_package(
+        _all_safe_input(
+            actual_entry_execution_boundary_implemented=True,
+            approved_entry_order_profile_present=False,
+        )
+    )
+    assert package.status is (
+        GmoEntryFinalPreflightStatus.WAITING_FOR_APPROVED_ENTRY_ORDER_PROFILE
+    )
+    assert "APPROVED_ENTRY_ORDER_PROFILE_MISSING" in package.blocked_reasons
+    assert package.next_required_operator_input is (
+        GmoEntryFinalPreflightNextOperatorInput.PROVIDE_APPROVED_ENTRY_ORDER_PROFILE
+    )
+    assert package.package_assembled_no_post is False
+    assert package.actual_entry_POST_allowed is False
+    assert not package
+
+
+def test_missing_internal_value_source_waits_and_blocks_actual_gate() -> None:
+    package = build_gmo_entry_final_preflight_package(
+        _all_safe_input(
+            actual_entry_execution_boundary_implemented=True,
+            approved_entry_internal_value_source_present=False,
+        )
+    )
+    assert package.status is (
+        GmoEntryFinalPreflightStatus
+        .WAITING_FOR_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE
+    )
+    assert "APPROVED_ENTRY_INTERNAL_VALUE_SOURCE_MISSING" in package.blocked_reasons
+    assert package.next_required_operator_input is (
+        GmoEntryFinalPreflightNextOperatorInput
+        .PROVIDE_APPROVED_ENTRY_INTERNAL_VALUE_SOURCE
+    )
+    assert package.package_assembled_no_post is False
+    assert package.actual_entry_POST_allowed is False
     assert not package
 
 
