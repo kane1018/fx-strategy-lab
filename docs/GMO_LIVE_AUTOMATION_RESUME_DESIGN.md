@@ -438,16 +438,35 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - operator_approves_sealed_credential_provider_design_no_value_exposure: `true`
 - operator_approves_controlled_hard_guard_permit_design_no_allow_bridge: `true`
 - no-post objective evidence audit:
-  - paper trade evidence: `PAPER_TRADE_EVIDENCE_UNKNOWN`
-    - `paper_trade_evidence_status` は repository 内で safe summary として成立条件が
-      定義されていないため、現時点は `NOT_PROVIDED` の安全表示のみ。
+  - paper trade evidence: `PAPER_TRADE_EVIDENCE_NOT_READY`
+    - paper evidence criteria status: `PAPER_TRADE_EVIDENCE_NOT_READY`
+    - `paper_trade_evidence_criteria` は no-POST で safe label のみで判定可能な条件を明文化済み（本Step）
+      - evidence source exists
+      - evidence location safe label exists
+      - period / run count / result category safe label exists
+      - reproducible or checked-in report / deterministic test / documented runbook
+      - no raw P/L / trade ID / order ID / position ID / price/size exposure
+      - relevance to GMO live entry readiness and no implication to actual POST permission
     - `paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`
-    - 次手順（no-POST）: paper/shadow safe report（期間・件数・結果カテゴリ・保管場所）を
-      安全 summary で追記可能な形で作成し、`CONFIRMED_SAFE_SUMMARY` 判定条件を明文化する。
+    - `raw_profit_loss_values_exposed=false`, `raw_trade_ids_exposed=false`, `raw_order_ids_exposed=false`, `raw_position_ids_exposed=false`, `raw_price_or_size_values_exposed=false`
+    - 次手順（no-POST）: 上記安全 summary の充足条件を満たす `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY` エビデンスに更新
   - kill switch / settlement anomaly audit: `SYNTHETIC_ONLY_NOT_SUFFICIENT`
-    - 既存のテストは synthetic fixture を中心としており、実運用級の非synth実証連携が未実装。
-    - 次手順（no-POST）: synthetic外の非実取引 anomaly scenario を定義し、`KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED`
-      到達条件を明文化する。
+    - kill switch and anomaly evidence criteria status: `SYNTHETIC_ONLY_NOT_SUFFICIENT`
+    - criteriaは以下を no-POST で満たすことを定義:
+      - kill switch failure modes safe label
+      - settlement reconciliation failure modes safe label
+      - retry / repost / second POST block coverage
+      - raw/ID/value exposure block
+      - settlement POST-in-entry block
+      - generic close / active-pending conflict block
+      - position count nonzero block
+      - stale / unknown runtime read block
+      - missing credential boundary block
+      - unknown / rejected / timeout result no-retry block
+      - synthetic only coverage indicator
+      - real_broker_write_used=false, raw_response_exposed=false, raw_ids_exposed=false
+    - `kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`
+    - 次手順（no-POST）: synthetic外の evidence / テストを追加し `KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED` を更新
 - actual_post_permission_this_step: `false`（本Stepは actual POST 許可ではない）
 - entry_post_permission_this_step: `false`（本Stepは entry POST 許可ではない）
 - settlement_post_permission_this_step: `false`（本Stepは settlement POST 許可ではない）
