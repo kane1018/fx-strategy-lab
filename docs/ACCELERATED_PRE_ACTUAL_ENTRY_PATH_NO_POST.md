@@ -92,3 +92,90 @@ broker write=false / real broker HTTP write=false / runtime private GET=false /
 credential exposure=false / env_read=false / raw・ID・value exposure=false /
 retry・repost・second POST=false / generic close=false / ledger update=false /
 receipt handoff=false / Level 5 full auto cycle completed=false
+
+---
+
+## 9. Continuation記録: Phase B/C/E 実行（2026-07-07・operator current-turn confirmation受領後）
+
+本セクションは §2・§3・§5・§6 の「未実行/未取得」記録を**上書きする continuation 記録**である。
+引き続き no-POST であり、actual POST / entry POST / settlement POST の許可ではない。
+
+### 9.1 operator input block 判定
+
+- 5項目すべて current-turn で明示提示され、要求値と**完全一致**（流用・typo・空欄なし）
+- 判定: Phase B（read-only runtime safe confirmation）実行許可
+
+### 9.2 Phase B: read-only runtime safe confirmation 実行結果
+
+- 実行経路: 既存監査済み `backend/scripts/check_private_readonly_connection.py`
+  （GET専用・`assert_readonly_endpoint` ガード・sanitized出力のみ・retryなし）
+- 実行回数: **1回のみ**（retry/second read なし。`retry_attempted=false`）
+- 事前確認: credential presence = `PRESENT`（PRESENT/MISSING のみ・値/長さ非接触）、
+  public status GET = reachable / market `OPEN`
+- safe result:
+  - credential_presence_safe_boolean: `true`
+  - credential_source_safe_label: `PROCESS_ENVIRONMENT_PRESENCE_ONLY`
+  - account_assets_check: `success`（pass flagのみ）
+  - runtime_position_safe_status: `NO_POSITION`
+  - position_count_safe: `0`
+  - active_pending_order_safe_status: `NO_ACTIVE_PENDING_ORDERS`
+  - active_pending_order_count_safe: `0`
+  - runtime_read_result_category: `READ_CONFIRMED_SAFE`
+  - raw_response_exposed=false / raw_ids_exposed=false /
+    raw_price_or_size_values_exposed=false / raw_profit_loss_values_exposed=false /
+    broker_response_exposed=false / credentials_printed=false /
+    headers_saved=false / raw_response_saved=false
+  - actual_post_permission_implied=false
+- 停止条件（multiple positions / active-pending present / unknown / timeout / failed）は
+  いずれも非該当
+
+### 9.3 Phase C: anomaly evidence 再評価結果
+
+- 再評価条件（read-only runtime confirmation executed / safe labels only / no POST /
+  failure modes test coverage / current-turn operator confirmation）をすべて充足
+- `evaluate_gmo_kill_switch_and_settlement_anomaly_criteria` による判定:
+  - kill_switch_anomaly_test_status: **`KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED`**
+  - kill_switch_test_scope_safe_label: `NON_SYNTHETIC_SCOPE`
+  - settlement_reconciliation_test_scope_safe_label: `NON_SYNTHETIC_SCOPE`
+  - synthetic_only: `false`（解除根拠: 本Stepの実 read-only runtime safe confirmation。
+    synthetic failure-mode test 網は従来どおり全維持）
+  - real_broker_write_used=false / raw exposure すべて false
+  - evidence_does_not_imply_actual_post_permission: `true`
+- anomaly confirmed は **actual POST 許可ではない**
+
+### 9.4 Phase E: final preflight package 再評価結果
+
+- `build_gmo_entry_final_preflight_package` による判定:
+  - final_preflight_status: **`READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION`**
+  - blocked_reasons: なし
+  - package_assembled_no_post: `true`
+  - next_required_operator_input: `PROVIDE_ENTRY_SIGNAL_AND_EXACT_INPUTS_IN_SEPARATE_STEP`
+  - actual_entry_POST_allowed: **`false`（不変）**
+  - actual_settlement_POST_allowed: `false`
+  - entry_post_execution_gate_is_separate_step: `true`
+
+### 9.5 残 blocker（continuation後）
+
+operator blocker:
+
+- actual entry POST 用 current-turn 入力（`operator_signal_type` =
+  ENTRY_BUY / ENTRY_SELL / HOLD、および RESUME_DESIGN §15.1 の exact confirmation 群）
+  — **本Stepでは要求・代入しない。別Stepで再入力必須**
+- RESUME_DESIGN §1 の運営者書面 sign-off（actual POST 解禁宣言）
+
+code blocker（実装未解消。設計スケルトンは fail-closed で整備済み）:
+
+- production real entry transport の実装
+- credential sealed provider real operation
+- runtime safe read real connection（本Stepの script 経路は confirmation 専用であり、
+  entry gate への実配線は未実施）
+- hard guard allow controlled 実供給（allow bridge は作らない）
+
+### 9.6 禁止事項の遵守記録（continuation）
+
+actual POST=false / entry POST=false / settlement POST=false / POST count=0 /
+broker write=false / real broker HTTP write=false /
+runtime private GET=1回のみ・operator current-turn confirmation下・read-only /
+credential exposure=false / env値表示=false / raw・ID・value exposure=false /
+retry・repost・second POST=false / second read=false / generic close=false /
+ledger update=false / receipt handoff=false / Level 5 full auto cycle completed=false

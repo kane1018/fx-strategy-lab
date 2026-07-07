@@ -2583,3 +2583,28 @@ POST不能・値露出不能・allow解決不能）、
 次に必要なのは operator の read-only runtime confirmation 5項目
 （`docs/ACCELERATED_PRE_ACTUAL_ENTRY_PATH_NO_POST.md` §7。actual POST許可入力ではない）。
 actual entry POST は別Stepでのみ、current-turn exact confirmation 下で最大1回。
+
+### Continuation: read-only runtime safe confirmation executed (no-POST)
+
+同Step内で operator が read-only 用5項目を current-turn 完全一致で提示したため、
+Phase B/C/E を実行した（実POST許可ではない）:
+
+```text
+runtime_private_GET_executed=true_read_only_once_operator_confirmed
+runtime_read_result_category=READ_CONFIRMED_SAFE
+credential_presence_safe_boolean=true
+runtime_position_safe_status=NO_POSITION
+position_count_safe=0
+active_pending_order_safe_status=NO_ACTIVE_PENDING_ORDERS
+active_pending_order_count_safe=0
+raw_id_value_credential_exposure=false
+anomaly_evidence_status=KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED
+final_preflight_status=READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION
+actual_entry_POST_allowed=false
+level5_full_auto_cycle_completed=false
+```
+
+次は別Stepでの actual entry POST 用 current-turn 入力
+（RESUME_DESIGN §15.1: operator_signal_type ほか exact confirmation 群）と、
+残 code blocker（production real entry transport 実装等）の解消。
+詳細: `docs/ACCELERATED_PRE_ACTUAL_ENTRY_PATH_NO_POST.md` §9。
