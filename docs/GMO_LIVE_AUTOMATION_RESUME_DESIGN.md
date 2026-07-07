@@ -425,6 +425,33 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - no-POST基盤状況: 運用側条件を除き整備済み。`actual_entry_POST_allowed` は既定 `false` 維持
 - Level 5 full auto cycle completed: `false`
 - RESUME_DESIGN §1 operator condition status: `NOT_COMPLETE`
+- operator_actual_post_intent_status: `OPERATOR_INTENDS_TO_PROCEED_TO_ACTUAL_ENTRY_POST_AFTER_ALL_REQUIRED_GATES`
+- operator_acknowledges_actual_broker_write_risk: `true`
+- operator_acknowledges_one_post_max_no_retry_no_repost: `true`
+- operator_acknowledges_raw_id_value_credential_non_exposure: `true`
+- operator_acknowledges_no_generic_close: `true`
+- operator_acknowledges_no_settlement_post_in_entry_step: `true`
+- operator_acknowledges_incident_history: `true`
+- operator_acknowledges_resume_conditions_not_equal_actual_post_permission: `true`
+- operator_approves_objective_paper_and_anomaly_audit: `true`
+- operator_approves_no_post_safe_infra_work: `true`
+- operator_approves_sealed_credential_provider_design_no_value_exposure: `true`
+- operator_approves_controlled_hard_guard_permit_design_no_allow_bridge: `true`
+- no-post objective evidence audit:
+  - paper trade evidence: `PAPER_TRADE_EVIDENCE_UNKNOWN`
+    - `paper_trade_evidence_status` は repository 内で safe summary として成立条件が
+      定義されていないため、現時点は `NOT_PROVIDED` の安全表示のみ。
+    - `paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`
+    - 次手順（no-POST）: paper/shadow safe report（期間・件数・結果カテゴリ・保管場所）を
+      安全 summary で追記可能な形で作成し、`CONFIRMED_SAFE_SUMMARY` 判定条件を明文化する。
+  - kill switch / settlement anomaly audit: `SYNTHETIC_ONLY_NOT_SUFFICIENT`
+    - 既存のテストは synthetic fixture を中心としており、実運用級の非synth実証連携が未実装。
+    - 次手順（no-POST）: synthetic外の非実取引 anomaly scenario を定義し、`KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED`
+      到達条件を明文化する。
+- actual_post_permission_this_step: `false`（本Stepは actual POST 許可ではない）
+- entry_post_permission_this_step: `false`（本Stepは entry POST 許可ではない）
+- settlement_post_permission_this_step: `false`（本Stepは settlement POST 許可ではない）
+- current-turn entry POST exact confirmation: `false`（別ターンで operator_signal_type と exact confirmation を再入力）
 - paper trade evidence status: `PAPER_TRADE_EVIDENCE_UNKNOWN`（`paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`）
 - kill switch / settlement anomaly tests: `SYNTHETIC_ONLY_NOT_SUFFICIENT`（`kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`）
 - operator sign-off: `OPERATOR_SIGNOFF_RECORDED_FOR_NO_POST_NEXT_GATE_DESIGN`
