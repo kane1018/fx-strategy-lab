@@ -151,8 +151,9 @@ GMO live専用として以下のフィールドを新設する。数値は次の
    settlement side（決済方向）は`entry_side_safe_label`（`ENTRY_BUY`/`ENTRY_SELL`のみ）から
    `derive_settlement_side_from_entry_side_safe_label`で機械的に導出し、side provenanceが
    ready でない限りrequest planを作らずに停止する。導出ルール（entryの反対sideで決済）自体は
-   GMO公式closeOrder docsとの整合を人手でまだ確認していないため、
-   `settlement_side_official_docs_semantics_confirmed=false`のまま。実送信直前で
+   このStep完了時点ではGMO公式closeOrder docsとの整合を人手で未確認だったため
+   `settlement_side_official_docs_semantics_confirmed=false`だった（その後、§9.1の
+   2026-07-07公式docs確認により現在は`true`。冒頭「現在のステータス」参照）。実送信直前で
    `real_broker_post_hard_guard`を必ず呼び、production側で許可配線はなく、実HTTP transportも
    未実装のため常に例外で停止する（`test_gmo_fx_broker_official_settlement_no_post.py`）。
    position-specific settlement・risk_service接続・kill switch・paper実績チェックは未実装。

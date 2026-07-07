@@ -376,6 +376,18 @@ def test_no_production_allow_true_wiring_in_module() -> None:
     assert "allow_live_http_post=True" not in text
 
 
+def test_module_keeps_actual_post_fail_closed_fields_hardcoded_false() -> None:
+    text = MODULE_PATH.read_text(encoding="utf-8").replace(" ", "")
+    assert "actual_settlement_POST_allowed=False" in text
+    assert "actual_settlement_POST_allowed=True" not in text
+    assert "position_specific_actual_path_enabled=False" in text
+    assert "position_specific_actual_path_enabled=True" not in text
+    assert "full_cycle_actual_ready=False" in text
+    assert "full_cycle_actual_ready=True" not in text
+    assert "entry_only_actual_post_recommended=False" in text
+    assert "entry_only_actual_post_recommended=True" not in text
+
+
 def test_blocker_classifier_includes_side_and_support_rules() -> None:
     reasons = classify_gmo_live_pre_actual_blockers(
         GmoPreActualReadinessInput(
