@@ -427,13 +427,16 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - RESUME_DESIGN §1 operator condition status: `NOT_COMPLETE`
 - paper trade evidence status: `PAPER_TRADE_EVIDENCE_UNKNOWN`（`paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`）
 - kill switch / settlement anomaly tests: `SYNTHETIC_ONLY_NOT_SUFFICIENT`（`kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`）
-- operator sign-off: `OPERATOR_SIGNOFF_NOT_RECORDED`
-- incident remediation: `INCIDENT_REMEDIATION_NOT_DECLARED`
-- operator UI no-position/no-active-pending check: `OPERATOR_UI_NOT_CONFIRMED`
-- credential actual use policy: `CREDENTIAL_ACTUAL_USE_NOT_APPROVED`
+- operator sign-off: `OPERATOR_SIGNOFF_RECORDED_FOR_NO_POST_NEXT_GATE_DESIGN`
+- incident remediation: `OPERATOR_DECLARES_2026_07_06_INCIDENT_REMEDIATED_FOR_NO_POST_RESUME_DESIGN`
+- operator UI no-position/no-active-pending check: `OPERATOR_UI_CONFIRMED_NO_POSITION_AND_NO_ACTIVE_PENDING_ORDER`
+- UI check time safe label: `CURRENT_OPERATOR_UI_CHECK_COMPLETED`
+- position status safe label: `NO_POSITION_CONFIRMED_BY_OPERATOR_UI`
+- active/pending order safe label: `NO_ACTIVE_PENDING_ORDER_CONFIRMED_BY_OPERATOR_UI`
+- credential actual use policy: `OPERATOR_APPROVES_DESIGN_OF_SEALED_CREDENTIAL_PROVIDER_NO_VALUE_EXPOSURE`
 - raw/ID/value exposure: `false`（raw報告/生報告/credential/値の実露出なし）
-- operator_acknowledges_actual_broker_write_risk: `false`
-- operator_acknowledges_one_post_max_no_retry_no_repost: `false`
+- operator_acknowledges_actual_broker_write_risk: `true`
+- operator_acknowledges_one_post_max_no_retry_no_repost: `true`
 - operator_acknowledges_raw_id_value_credential_non_exposure: `true`
 - operator_acknowledges_no_generic_close: `true`
 - operator_acknowledges_no_settlement_post_in_entry_step: `true`
@@ -442,10 +445,7 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - remaining operator blockers:
   - paper trade evidence
   - kill switch / settlement anomaly tests beyond synthetic-only
-  - written sign-off
-  - incident remediation declaration
   - GMO管理画面での建玉ゼロ/有効注文ゼロ確認
-  - credential actual use policy approval
 - remaining code blockers:
   - production real entry transport
   - credential sealed provider real operation
@@ -477,10 +477,7 @@ no-POST境界を明示し、実行可否ではなく**設計状態**を記録す
 - remaining operator blockers:
   - paper trade evidence
   - kill switch / settlement anomaly tests beyond synthetic-only
-  - written sign-off
-  - incident remediation declaration
   - GMO管理画面確認（建玉ゼロ/有効注文ゼロ）
-  - credential actual use policy approval
 - remaining code blockers:
   - production real entry transport actual 実装
   - credential sealed provider real operation
