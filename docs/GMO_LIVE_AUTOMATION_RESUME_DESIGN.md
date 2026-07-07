@@ -471,6 +471,10 @@ repo側の実POST基盤が未整備だったためである。判明した一次
     - `anomaly_deterministic_or_replay_coverage_safe_label=DETERMINISTIC_REPLAY_FIXTURES_BASED`
     - `anomaly_evidence_sources= test_gmo_kill_switch_no_post.py, test_gmo_settlement_reconciliation_no_post.py, test_gmo_level5_fake_cycle_no_post.py, test_gmo_level5_integrated_fake_cycle_no_post.py`
     - `anomaly_replay_evidence_source=backend/app/tests/fixtures/no_post_evidence/anomaly_replay_safe_evidence_no_post.json`
+    - `anomaly_non_synthetic_evidence_status=NOT_AVAILABLE_IN_REPO`
+    - `repo内non-synthetic_safe_artifact_available=false`
+    - `next_required_input=OPERATOR_PROVIDED_PRE_SANITIZED_ANOMALY_EVIDENCE_ARTIFACT / READ_ONLY_RUNTIME_SAFE_CONFIRMATION_GATE_DESIGN`
+    - `synthetic_only解除可否=false`
     - 次手順（no-POST）: synthetic外の evidence / テストを追加し `KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED` を更新
 - actual_post_permission_this_step: `false`（本Stepは actual POST 許可ではない）
 - entry_post_permission_this_step: `false`（本Stepは entry POST 許可ではない）
@@ -478,6 +482,9 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - current-turn entry POST exact confirmation: `false`（別ターンで operator_signal_type と exact confirmation を再入力）
 - paper trade evidence status: `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY`（`paper_trade_source_exists=true`, `paper_trade_period_safe_label=LEVEL5_FAKE_CYCLE_SYNTHETIC_WINDOW_V1`, `paper_trade_run_count_safe_label=RUN_COUNT_SAFE_FIXTURE_SCENARIOS`, `paper_trade_result_category=NO_POST_ENTRY_EXECUTION_PATH`, `performance_report_location_safe_label=docs/REPRODUCIBLE_NO_POST_PAPER_SHADOW_EVIDENCE_SUMMARY.md`）
 - kill switch / settlement anomaly tests: `SYNTHETIC_ONLY_NOT_SUFFICIENT`（`kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`）
+- anomaly_non_synthetic_evidence_status: `NOT_AVAILABLE_IN_REPO`（`repo内non-synthetic_safe_artifact_available=false`）
+- synthetic-only解除可否: `false`
+- next_required_input: `OPERATOR_PROVIDED_PRE_SANITIZED_ANOMALY_EVIDENCE_ARTIFACT` / `READ_ONLY_RUNTIME_SAFE_CONFIRMATION_GATE_DESIGN`
 - operator sign-off: `OPERATOR_SIGNOFF_RECORDED_FOR_NO_POST_NEXT_GATE_DESIGN`
 - incident remediation: `OPERATOR_DECLARES_2026_07_06_INCIDENT_REMEDIATED_FOR_NO_POST_RESUME_DESIGN`
 - operator UI no-position/no-active-pending check: `OPERATOR_UI_CONFIRMED_NO_POSITION_AND_NO_ACTIVE_PENDING_ORDER`

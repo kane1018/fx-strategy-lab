@@ -52,6 +52,12 @@ No-POST範囲で、paper/shadow evidence と kill switch / settlement anomaly ev
 - fake runtime safe read evidence sources: `test_gmo_kill_switch_no_post.py`, `test_gmo_settlement_reconciliation_no_post.py`, `test_gmo_level5_fake_cycle_no_post.py`, `test_gmo_level5_integrated_fake_cycle_no_post.py`
 - missing evidence before synthetic-only to confirm: `NON_SYNTHETIC_REALISTIC_REPLAY` / `additional non-synthetic replay evidence`
 - remaining no-POST next step: `synthetic再現を超えるチェック（no-POSTで記録可能な追加）` を追加し、条件を満たしたときのみ `KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED` を更新
+- anomaly_non_synthetic_evidence_status: `NOT_AVAILABLE_IN_REPO`
+- repo内non-synthetic safe artifact available: `false`
+- synthetic-only解除可否: `false`
+- next_required_input:
+  - `OPERATOR_PROVIDED_PRE_SANITIZED_ANOMALY_EVIDENCE_ARTIFACT`
+  - `READ_ONLY_RUNTIME_SAFE_CONFIRMATION_GATE_DESIGN`
 
 ## code-side readiness check snapshot
 - actual_entry_POST_allowed: `false`
