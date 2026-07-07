@@ -2962,3 +2962,33 @@ post_count=0
 実 HTTP 送信・credential unseal・auth header は injected sender 内部のみ。既定 refusing
 sender は送信不能。retry/repost/second POST 分岐なし。settlement/close/generic 分離維持。
 詳細: [ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md](ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md)
+
+## Step 6G Real Entry Sender Injection Implementation (no-POST)
+
+STEP_6G_PC_OX_R_REAL_ENTRY_SENDER_INJECTION_IMPLEMENTATION_NO_POST_C (2026-07-07) added
+the concrete actual sender implementation for injected one-shot entry posting in no-POST form:
+
+```text
+actual_sender_module=backend/app/services/gmo_live_actual_entry_sender.py
+entry_order_intent_binding_status=ENTRY_ORDER_INTENT_BOUND_SAFE
+real_sender_status=IMPLEMENTABLE_NO_POST_WITH_FAKE_HTTP_CLIENT_TESTS
+hard_guard_status=DEFAULT_DENY_SUPPLY_NO_ALLOW_BRIDGE
+permit_status=PERMIT_GRANTED_EPHEMERAL_ENTRY_ONE_SHOT
+activation_status=ONE_USE_ENTRY_ONLY
+actual_entry_POST_allowed=false
+entry_POST=false
+actual_POST=false
+settlement_POST=false
+retry_repost_second_post=false
+raw_ID_value_exposure=false
+credential_value_exposed=false
+env_read=false
+post_count=0
+```
+
+追加: `backend/app/services/gmo_live_actual_entry_sender.py`,
+`backend/app/tests/test_gmo_live_actual_entry_sender_no_post.py`。
+`GmoActualEntryOneShotHttpSender` は one-attempt、署名/credential は内部に閉じる、
+safe category だけを返す。次 actual entry gate はコード追加なしで sender
+注入前提の実行準備に入れる（fresh gate 条件前提）。
+`actual_entry_POST_allowed` はこの Step でも `false`。

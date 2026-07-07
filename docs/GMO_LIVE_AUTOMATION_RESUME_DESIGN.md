@@ -755,3 +755,21 @@ actual POST 用 current-turn confirmation として banking できない。**
   「no code change next step」= 実 sender の injection と operator 入力のみで実行可能な状態にした
 - actual POST / entry POST / settlement POST: `false`、POST count: `0`、
   Level 5 full auto cycle completed: `false`
+
+### 17.5 STEP_6G_PC_OX_R_REAL_ENTRY_SENDER_INJECTION_IMPLEMENTATION_NO_POST_C（2026-07-07）
+
+実送信 sender の concrete 実装を追加し、entry-only one-shot 送信の注入経路を
+no-POST で実装。`GmoActualEntryOneShotHttpSender` を追加し、実送信時のみ 1 回呼び出し、
+raw/ID/value/credential/signature/header の外部露出と retry/repost/second POST を排した。
+
+- 実装ファイル: `backend/app/services/gmo_live_actual_entry_sender.py`
+- テストファイル: `backend/app/tests/test_gmo_live_actual_entry_sender_no_post.py`
+- 適用結果:
+  - 実 POST / entry POST / settlement POST / close POST: `false`
+  - retry / repost / second POST: `false`
+  - runtime private GET: `false`
+  - credential read / `.env` read: `false`
+  - `actual_entry_POST_allowed=false` は維持
+  - next actual gate の blocker（実 sender 未接続）はこのStepで解消
+- 次: fresh runtime safe read + fresh final preflight + operator input + permit/activation +
+  hard guard + sender injection で actual entry POST gate へ移行（本Stepは実行なし）。

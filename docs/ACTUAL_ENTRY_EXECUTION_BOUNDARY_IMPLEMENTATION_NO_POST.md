@@ -58,7 +58,30 @@ injected 署名部品）(2) entry-only dedicated plan を直接使用し `GmoFxB
 1回のみ送信で再送なし・raw/ID/value/credential 非露出・source-scan で
 live_verification/closeOrder/settlePosition/httpx/os.environ 不在と allow literal 恒久化なしを固定）。
 
-## 3. final preflight 接続
+## 3. 追加実装: Real Sender no-POST 対応（本Step）
+
+STEP: `STEP_6G_PC_OX_R_REAL_ENTRY_SENDER_INJECTION_IMPLEMENTATION_NO_POST_C`
+本Stepで `backend/app/services/gmo_live_actual_entry_sender.py` を追加し、`ActualEntryOneShotSender`
+向けの実運用 sender を no-POST で実装した。既定で実 HTTP は走らず、呼び出し元が
+`ActualEntrySenderHttpClient` / sealed credential を注入した場合のみ、entry plan を1回のみ
+送信できる構造になっている（実際の送信タイミングは次の actual gate）。
+
+- `GmoActualEntryOneShotHttpSender`
+  - one-shot one-attempt（2回目送信は boundary error）
+  - `build_auth_headers` を内部でのみ利用、ヘッダ/署名/資格情報を境界外に保持しない
+  - 状態は `EntryPostSafeOutcome` の safe category のみ
+- `map_entry_post_response_to_safe_outcome` / `map_entry_post_exception_to_safe_outcome`
+  の追加
+  - status と exception を safe outcome に即時変換
+  - raw body / error body / ID の外部露出なし
+- no-POST tests: `backend/app/tests/test_gmo_live_actual_entry_sender_no_post.py`
+  - status/例外 mapping
+  - one-shot / no retry / no repost / no second send
+  - `live_order_once` / `closeOrder` / `settlePosition` / `httpx` source-scan
+
+この Step 後、次 actual entry gate は "実 sender 注入 + fresh gates" でコード変更なし進行可とする。
+
+## 4. final preflight 接続
 
 `gmo_live_entry_final_preflight.py` 最小更新:
 
@@ -68,7 +91,7 @@ live_verification/closeOrder/settlePosition/httpx/os.environ 不在と allow lit
   - **「READY」は実行許可ではない**。`actual_entry_POST_allowed=false`・`__bool__=false`・
     entry signal / exact confirmation 入力field不在（banking 不能）は不変
 
-## 4. 本Step後の状態
+## 5. 本Step後の状態
 
 - activation_boundary_status: `IMPLEMENTED_FAIL_CLOSED_ONE_USE_ENTRY_ONLY`
 - sealed_credential_actual_boundary_status:
@@ -82,7 +105,7 @@ live_verification/closeOrder/settlePosition/httpx/os.environ 不在と allow lit
 - retry / repost / second POST: 構造的に不可能
 - settlement / close / generic route: 分離維持（本 boundary は entry-only）
 
-## 5. 次回 actual gate で必要なもの（本Stepでは扱わない）
+## 6. 次回 actual gate で必要なもの（本Stepでは扱わない）
 
 1. fresh workspace / HEAD==remote main / clean
 2. fresh read-only runtime safe read（NO_POSITION / count 0 / active-pending clear / credential presence）

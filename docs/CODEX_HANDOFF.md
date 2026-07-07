@@ -2694,3 +2694,28 @@ level5_full_auto_cycle_completed=false
 本モジュールは network/credential/raw に触れない。既定 refusing sender は送信不能。
 次 actual gate は「実 sender の injection + operator current-turn 入力 + fresh gate 全通過」で
 entry POST 最大1回（no retry / no repost / no second POST）。コード変更なしで gate 実行に進める。
+
+## Step 6G Real Entry Sender Injection Implementation (no-POST)
+
+STEP_6G_PC_OX_R_REAL_ENTRY_SENDER_INJECTION_IMPLEMENTATION_NO_POST_C
+(2026-07-07) で実送信 sender の concrete 実装を追加し、no-POST の sender injection
+blocker を解消。
+
+```text
+actual_post=false
+entry_post=false
+post_count=0
+runtime_private_GET_execution=false
+credential_value_read=false
+actual_entry_POST_allowed=false
+entry_order_intent_binding_status=ENTRY_ORDER_INTENT_BOUND_SAFE
+real_sender_status=IMPLEMENTABLE_NO_POST_WITH_FAKE_HTTP_CLIENT_TESTS
+auth_signature_boundary_status=NO_EXPOSURE
+response_safe_outcome_status=ENTRY_POST_SAFE_OUTCOME_ONLY
+retry_repost_second_post=false
+raw_ID_value_exposure=false
+```
+
+追加: `backend/app/services/gmo_live_actual_entry_sender.py`、`backend/app/tests/test_gmo_live_actual_entry_sender_no_post.py`。
+実際のPOSTは行わず、fake credential/http client で safe mapping と one-shot/非再送を検証。
+対応文書: `docs/REAL_ENTRY_SENDER_INJECTION_NO_POST.md`、`docs/ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md`。
