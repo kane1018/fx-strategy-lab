@@ -52,6 +52,11 @@ credential 実値読取・.env 読取は一切行っていない。
 - runtime safe result: 過去Step取得済み（READ_CONFIRMED_SAFE）。**actual Step では
   fresh 再確認必須**（stale result は gate が block）
 
+> **追記（2026-07-07・STEP_6G_PC_OX_R_ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST_C）**:
+> 下記条件1の operator 書面 sign-off は記録済み
+> （`docs/ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md`）。final_preflight_status は
+> `READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST` へ更新。actual POST 許可ではない。
+
 ## 4. actual Step へ持ち越す解除条件（本Stepでは扱わない）
 
 1. operator 書面 sign-off（`WAITING_FOR_ACTUAL_ENTRY_SIGNOFF` の解除）

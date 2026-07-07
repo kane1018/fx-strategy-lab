@@ -191,3 +191,16 @@ Step: `STEP_6G_PC_OX_R_PRODUCTION_ENTRY_CODE_BLOCKERS_REVIEW_FIRST_IMPLEMENTATIO
 final preflight status は `WAITING_FOR_ACTUAL_ENTRY_SIGNOFF` に更新。
 `actual_entry_POST_allowed=false` 不変。詳細:
 `docs/PRODUCTION_ENTRY_CODE_BLOCKERS_NO_POST_REVIEW.md`
+
+---
+
+## 11. 後続Step記録: actual entry 書面 sign-off 記録（no-POST・2026-07-07）
+
+Step: `STEP_6G_PC_OX_R_ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST_C`
+
+operator 書面 sign-off（5項目 current-turn 完全一致）を no-POST で記録し、
+final preflight status は `READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST` に到達。
+**sign-off は actual POST 許可ではなく、entry signal でもなく、banking 不可。**
+`actual_entry_POST_allowed=false` 不変。actual entry POST は別Stepで
+fresh final preflight + current-turn 入力（§15.1）が揃った場合のみ最大1回。
+詳細: `docs/ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md`

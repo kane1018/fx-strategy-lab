@@ -66,7 +66,9 @@ exact confirmation と、そのStep固有の fresh gate 通過によってのみ
 - [ ] runtime safe read connection adapter present（sanitized summary → snapshot
       純関数。unknown/stale/非0 は block）
 - [ ] `HardGuardAllowControlledSupply` default-deny（truthy 構築は例外・allow bridge なし）
-- [ ] operator 書面 sign-off recorded（未記録なら `WAITING_FOR_ACTUAL_ENTRY_SIGNOFF`）
+- [x] operator 書面 sign-off recorded（2026-07-07 記録済み:
+      `docs/ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md`。sign-off は actual POST 許可では
+      なく、actual Step では fresh final preflight + current-turn 入力が別途必須）
 
 ## 6. status 分類
 

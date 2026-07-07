@@ -2638,3 +2638,28 @@ level5_full_auto_cycle_completed=false
 次に必要なのは operator の actual entry 書面 sign-off。その後、別Stepで
 fresh final preflight + operator current-turn 入力（RESUME_DESIGN §15.1）が揃った
 場合のみ actual entry POST を最大1回（no retry / no repost / no second POST）。
+
+## Step 6G Actual Entry Sign-off Record (no-POST)
+
+STEP_6G_PC_OX_R_ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST_C (2026-07-07) は
+operator 書面 sign-off を no-POST で記録した（docs-only・コード変更なし）:
+
+```text
+operator_actual_entry_written_signoff_status=RECORDED_NO_POST
+signoff_is_actual_post_permission=false
+signoff_banks_entry_signal=false
+signoff_banks_actual_post_confirmation=false
+final_preflight_status=READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST
+actual_entry_POST_allowed=false
+actual_post=false
+entry_post=false
+settlement_post=false
+post_count=0
+level5_full_auto_cycle_completed=false
+```
+
+「READY」は実行許可ではない。actual entry POST Step では fresh workspace /
+fresh runtime read / fresh final preflight / operator current-turn 入力
+（RESUME_DESIGN §15.1）/ activation の reviewed 構築 / hard guard への明示 literal
+供給がすべて別途必須で、最大1回・no retry / no repost / no second POST。
+詳細: `docs/ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md`

@@ -2920,3 +2920,24 @@ post_count=0
 実送信 activation・unseal・fresh runtime read 実行・hard guard への明示 literal
 供給は actual Step 専用として残置（allow bridge 禁止は不変）。
 詳細: [PRODUCTION_ENTRY_CODE_BLOCKERS_NO_POST_REVIEW.md](PRODUCTION_ENTRY_CODE_BLOCKERS_NO_POST_REVIEW.md)。
+
+## Step 6G Actual Entry Sign-off Record (no-POST)
+
+STEP_6G_PC_OX_R_ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST_C (2026-07-07) recorded the
+operator written sign-off (docs-only, no code change, no POST):
+
+```text
+operator_actual_entry_written_signoff_status=RECORDED_NO_POST
+signoff_is_actual_post_permission=false
+final_preflight_status=READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST
+actual_entry_POST_allowed=false
+actual_post=false
+entry_post=false
+settlement_post=false
+post_count=0
+```
+
+READY は実行許可ではない。actual entry POST は別Stepでのみ、fresh final
+preflight と operator current-turn 入力（signal + exact confirmation）が揃った
+場合に最大1回（no retry / no repost / no second POST）。
+詳細: [ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md](ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md)
