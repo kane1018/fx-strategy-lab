@@ -21,9 +21,11 @@ from app.private_api.order_builders import (
     REQUEST_KIND_ENTRY,
 )
 from app.services.gmo_live_approved_entry_internal_value_source import (
+    OPERATOR_LOCAL_VALUE_FILE_NAME,
     GmoApprovedEntryInternalValueSourceError,
     SealedApprovedEntryInternalValueSource,
     build_approved_entry_internal_value_source_not_configured,
+    load_sealed_approved_entry_internal_value_source_from_operator_local_file,
 )
 from app.services.gmo_live_approved_entry_order_profile import (
     GmoApprovedEntryInternalRawValueSourceStatus,
@@ -201,6 +203,85 @@ class TestFullChainInternalOnly:
         )
         with pytest.raises(GmoEntryRequestPlanBindingError):
             source.build_bound_entry_request_plan_internal(binding_result=result)
+
+
+class TestOperatorLocalFileChannel:
+    def test_missing_file_returns_not_configured_source(self, tmp_path) -> None:
+        source = (
+            load_sealed_approved_entry_internal_value_source_from_operator_local_file(
+                tmp_path / OPERATOR_LOCAL_VALUE_FILE_NAME
+            )
+        )
+        assert source.present_safe_boolean() is False
+        assert source.status is (
+            GmoApprovedEntryInternalRawValueSourceStatus
+            .INTERNAL_RAW_VALUE_SOURCE_MISSING_BLOCK_ACTUAL_GATE
+        )
+
+    def test_valid_local_file_seals_values_without_exposure(self, tmp_path) -> None:
+        value_file = tmp_path / OPERATOR_LOCAL_VALUE_FILE_NAME
+        value_file.write_text(
+            f'{{"symbol": "{_TEST_SYMBOL}", "size": "{_TEST_SIZE}"}}',
+            encoding="utf-8",
+        )
+        source = (
+            load_sealed_approved_entry_internal_value_source_from_operator_local_file(
+                value_file
+            )
+        )
+        assert source.present_safe_boolean() is True
+        assert source.status is (
+            GmoApprovedEntryInternalRawValueSourceStatus
+            .INTERNAL_RAW_VALUE_SOURCE_PRESENT_NOT_EXPOSED
+        )
+        assert _TEST_SIZE not in repr(source)
+        assert not source
+
+    def test_malformed_json_raises_without_echoing_contents(self, tmp_path) -> None:
+        value_file = tmp_path / OPERATOR_LOCAL_VALUE_FILE_NAME
+        value_file.write_text('{"symbol": "USD_JPY", "size": ', encoding="utf-8")
+        with pytest.raises(GmoApprovedEntryInternalValueSourceError) as excinfo:
+            load_sealed_approved_entry_internal_value_source_from_operator_local_file(
+                value_file
+            )
+        assert "USD_JPY" not in str(excinfo.value)
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "[]",
+            '{"symbol": "USD_JPY"}',
+            '{"symbol": "USD_JPY", "size": "9", "extra": "x"}',
+            '{"symbol": "USD_JPY", "size": 9}',
+        ],
+    )
+    def test_wrong_shape_raises_without_echoing_contents(
+        self, tmp_path, content: str
+    ) -> None:
+        value_file = tmp_path / OPERATOR_LOCAL_VALUE_FILE_NAME
+        value_file.write_text(content, encoding="utf-8")
+        with pytest.raises(GmoApprovedEntryInternalValueSourceError) as excinfo:
+            load_sealed_approved_entry_internal_value_source_from_operator_local_file(
+                value_file
+            )
+        assert "9" not in str(excinfo.value)
+
+    def test_local_file_with_wrong_symbol_is_rejected(self, tmp_path) -> None:
+        value_file = tmp_path / OPERATOR_LOCAL_VALUE_FILE_NAME
+        value_file.write_text(
+            f'{{"symbol": "EUR_JPY", "size": "{_TEST_SIZE}"}}', encoding="utf-8"
+        )
+        with pytest.raises(GmoApprovedEntryInternalValueSourceError) as excinfo:
+            load_sealed_approved_entry_internal_value_source_from_operator_local_file(
+                value_file
+            )
+        assert "EUR_JPY" not in str(excinfo.value)
+
+    def test_local_value_file_name_is_gitignored(self) -> None:
+        gitignore = (
+            pathlib.Path(__file__).resolve().parents[3] / ".gitignore"
+        ).read_text(encoding="utf-8")
+        assert OPERATOR_LOCAL_VALUE_FILE_NAME in gitignore
 
 
 class TestSourceScan:

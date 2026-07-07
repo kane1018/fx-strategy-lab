@@ -32,6 +32,9 @@ Hard rules enforced by construction:
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from app.private_api.order_builders import GmoFxPrivateRequestPlan
 from app.services.gmo_live_approved_entry_order_profile import (
     APPROVED_ENTRY_SYMBOL_SAFE_LABEL,
@@ -166,3 +169,55 @@ def build_approved_entry_internal_value_source_not_configured() -> (
     """Default fail-closed source: not configured, blocks the actual gate."""
 
     return SealedApprovedEntryInternalValueSource()
+
+
+# The one sanctioned operator supply channel that never puts the value into
+# chat, docs, reports, or logs: an operator-created LOCAL file with this
+# name, gitignored so it can never be committed. The gate runner loads and
+# seals it without printing its contents.
+OPERATOR_LOCAL_VALUE_FILE_NAME = ".approved_entry_internal_value.local.json"
+_LOCAL_FILE_REQUIRED_KEYS = frozenset({"symbol", "size"})
+
+
+def load_sealed_approved_entry_internal_value_source_from_operator_local_file(
+    file_path: str | Path,
+) -> SealedApprovedEntryInternalValueSource:
+    """Load the operator-managed local value file and seal its values.
+
+    Fail-closed and non-echoing by construction:
+
+    - A missing file returns the NOT CONFIGURED source, so the actual gate
+      blocks instead of erroring.
+    - The file must be a JSON object with exactly the string keys ``symbol``
+      and ``size``; anything else raises a sanitized error that never echoes
+      the file contents.
+    - The parsed values go straight into the sealed holder (which validates
+      the symbol against the approved safe label and the size shape) and are
+      never returned, printed, or logged by this function.
+    """
+
+    path = Path(file_path)
+    if not path.exists():
+        return SealedApprovedEntryInternalValueSource()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise GmoApprovedEntryInternalValueSourceError(
+            "operator local value file could not be read or parsed; its "
+            "contents are never echoed"
+        ) from error
+    if not isinstance(payload, dict) or set(payload) != _LOCAL_FILE_REQUIRED_KEYS:
+        raise GmoApprovedEntryInternalValueSourceError(
+            "operator local value file must be a JSON object with exactly "
+            "the keys symbol and size"
+        )
+    symbol_value = payload["symbol"]
+    size_value = payload["size"]
+    if not isinstance(symbol_value, str) or not isinstance(size_value, str):
+        raise GmoApprovedEntryInternalValueSourceError(
+            "operator local value file values must be JSON strings"
+        )
+    return SealedApprovedEntryInternalValueSource(
+        operator_supplied_symbol_value=symbol_value,
+        operator_supplied_size_value=size_value,
+    )
