@@ -84,7 +84,8 @@ exact confirmation と、そのStep固有の fresh gate 通過によってのみ
   evaluator の終端は下記3statusに移行）
 - `WAITING_FOR_PRODUCTION_ENTRY_CODE_BLOCKERS`（2026-07-07 追加）
 - `WAITING_FOR_ACTUAL_ENTRY_SIGNOFF`（同）
-- `READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST`（同・終端 ready）
+- `READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST`（同）
+- `READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION`（2026-07-07 追加・終端 ready・実行許可ではない）
 
 いずれの status でも `actual_entry_POST_allowed=false` は不変。
 `READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST` は「次の operator 入力

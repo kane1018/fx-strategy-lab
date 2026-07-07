@@ -2941,3 +2941,24 @@ READY は実行許可ではない。actual entry POST は別Stepでのみ、fres
 preflight と operator current-turn 入力（signal + exact confirmation）が揃った
 場合に最大1回（no retry / no repost / no second POST）。
 詳細: [ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md](ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md)
+
+## Step 6G Actual Entry Execution Boundary Implementation (no-POST)
+
+STEP_6G_PC_OX_R_ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST_C
+(2026-07-07) implemented the actual entry execution boundary in a no-POST,
+injection-gated, fail-closed form (no POST performed):
+
+```text
+activation_boundary_status=IMPLEMENTED_FAIL_CLOSED_ONE_USE_ENTRY_ONLY
+production_entry_transport_status=SINGLE_REVIEWED_CALL_SITE_IMPLEMENTED_SENDER_INJECTION_REQUIRED_NO_NETWORK_THIS_STEP
+hard_guard_controlled_supply_status=ALLOW_DERIVED_FROM_GRANTED_ACTIVATION_SINGLE_CALL_SITE_DEFAULT_DENY_NO_BRIDGE
+final_preflight_status=READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION
+actual_entry_POST_allowed=false
+actual_post=false
+entry_post=false
+post_count=0
+```
+
+実 HTTP 送信・credential unseal・auth header は injected sender 内部のみ。既定 refusing
+sender は送信不能。retry/repost/second POST 分岐なし。settlement/close/generic 分離維持。
+詳細: [ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md](ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md)

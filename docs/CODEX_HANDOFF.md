@@ -2663,3 +2663,34 @@ fresh runtime read / fresh final preflight / operator current-turn 入力
 （RESUME_DESIGN §15.1）/ activation の reviewed 構築 / hard guard への明示 literal
 供給がすべて別途必須で、最大1回・no retry / no repost / no second POST。
 詳細: `docs/ACTUAL_ENTRY_SIGNOFF_RECORD_NO_POST.md`
+
+## Step 6G Actual Entry Execution Boundary Implementation (no-POST)
+
+STEP_6G_PC_OX_R_ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST_C
+(2026-07-07) は、直前 actual gate の BLOCKED_BEFORE_POST（送信経路ゼロ）を受け、
+実送信境界を no-POST・injection-gated・fail-closed で実装した（POST 未実行）:
+
+```text
+actual_post=false
+entry_post=false
+post_count=0
+runtime_private_GET_execution=false
+credential_value_read=false
+activation_boundary_status=IMPLEMENTED_FAIL_CLOSED_ONE_USE_ENTRY_ONLY
+sealed_credential_actual_boundary_status=UNSEAL_INSIDE_INJECTED_SENDER_ONLY_NO_VALUE_EXPOSURE_THIS_STEP
+production_entry_transport_status=SINGLE_REVIEWED_CALL_SITE_IMPLEMENTED_SENDER_INJECTION_REQUIRED_NO_NETWORK_THIS_STEP
+hard_guard_controlled_supply_status=ALLOW_DERIVED_FROM_GRANTED_ACTIVATION_SINGLE_CALL_SITE_DEFAULT_DENY_NO_BRIDGE
+final_preflight_status=READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION
+actual_entry_POST_allowed=false
+level5_full_auto_cycle_completed=false
+```
+
+追加: `backend/app/services/gmo_live_actual_entry_execution_boundary.py`、
+`backend/app/tests/test_gmo_live_actual_entry_execution_boundary_no_post.py`、
+`docs/ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md`。
+`gmo_live_entry_final_preflight.py` は入力1件と status 1件を追加する最小更新。
+
+実 HTTP 送信 / credential unseal / auth header はすべて injected sender 内部に閉じ、
+本モジュールは network/credential/raw に触れない。既定 refusing sender は送信不能。
+次 actual gate は「実 sender の injection + operator current-turn 入力 + fresh gate 全通過」で
+entry POST 最大1回（no retry / no repost / no second POST）。コード変更なしで gate 実行に進める。

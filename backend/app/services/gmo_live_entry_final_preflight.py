@@ -120,6 +120,9 @@ class GmoEntryFinalPreflightStatus(str, Enum):
     READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST = (
         "READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST"
     )
+    READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION = (
+        "READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION"
+    )
 
 
 class GmoEntryFinalPreflightNextOperatorInput(str, Enum):
@@ -188,6 +191,11 @@ class GmoEntryFinalPreflightInput:
     # operator written sign-off gate (recorded per RESUME_DESIGN §1; never a
     # POST permission by itself)
     operator_actual_entry_signoff_recorded: bool = False
+
+    # actual entry execution boundary gate (the injection-gated single
+    # reviewed call site is implemented and fail-closed; still never a POST
+    # permission by itself)
+    actual_entry_execution_boundary_implemented: bool = False
 
     # violations (any true blocks hard)
     raw_response_exposed: bool = False
@@ -384,10 +392,22 @@ def build_gmo_entry_final_preflight_package(
             GmoEntryFinalPreflightNextOperatorInput
             .PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF
         )
-    else:
+    elif not preflight_input.actual_entry_execution_boundary_implemented:
+        # Sign-off is in; the injection-gated execution boundary is the last
+        # no-POST code item before an actual entry step could run without any
+        # code change. This "ready" status is still not a POST permission.
         status = (
             GmoEntryFinalPreflightStatus
             .READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST
+        )
+        next_input = (
+            GmoEntryFinalPreflightNextOperatorInput
+            .PROVIDE_ENTRY_SIGNAL_AND_EXACT_INPUTS_IN_SEPARATE_STEP
+        )
+    else:
+        status = (
+            GmoEntryFinalPreflightStatus
+            .READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION
         )
         next_input = (
             GmoEntryFinalPreflightNextOperatorInput
@@ -397,6 +417,7 @@ def build_gmo_entry_final_preflight_package(
     package_assembled_no_post = status in (
         GmoEntryFinalPreflightStatus.READY_FOR_FINAL_PREFLIGHT_NO_POST,
         GmoEntryFinalPreflightStatus.READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST,
+        GmoEntryFinalPreflightStatus.READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION,
     )
 
     return GmoEntryFinalPreflightPackage(

@@ -730,3 +730,28 @@ actual POST 用 current-turn confirmation として banking できない。**
   hard guard への明示 literal 供給（allow bridge 禁止のまま）/ 最大1回・no retry
 - actual POST / entry POST / settlement POST: `false`、POST count: `0`、
   Level 5 full auto cycle completed: `false`
+
+### 17.4 STEP_6G_PC_OX_R_ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST_C（2026-07-07）
+
+直前の actual gate が `BLOCKED_BEFORE_POST_NO_POST`（実送信経路がゼロ）だったため、
+実送信境界を no-POST・injection-gated・fail-closed で実装した。詳細は
+[`ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md`](ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md)。
+**本Stepで POST は行っていない。実POST許可ではない。**
+
+- 追加: `backend/app/services/gmo_live_actual_entry_execution_boundary.py`
+  （`build_actual_entry_execution_activation`＝9 gate fail-closed・one-use・entry-only /
+  `send_actual_entry_post_once`＝単一 reviewed call site・hard guard 1回・sender 1回・retry分岐なし /
+  `ActualEntryOneShotSender` Protocol＝実送信/unseal/署名は actual step で injection /
+  `FakeActualEntryOneShotSender`・`RefusingActualEntryOneShotSender`）＋ no-POST テスト
+- 設計選択: 実 HTTP 送信・credential unseal・auth header は**すべて injected sender 内部**に閉じ、
+  本モジュールは network/credential/raw に一切触れない。既定は refusing sender で送信不能。
+  `market_order`/`live_order_once`/`closeOrder`/`settlePosition` は不使用（source-scan で固定）
+- hard guard `allow` は `activation.granted` から導出（literal True・allow bridge なし・単一 call site）
+- `gmo_live_entry_final_preflight.py`: 入力 `actual_entry_execution_boundary_implemented` と
+  status `READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION` を追加。
+  現状評価 = 同 status（実行許可ではない・`actual_entry_POST_allowed=false` 不変）
+- 次 actual gate は、上記境界に実 sender を injection し operator current-turn 入力と
+  fresh gate 全通過で entry POST 最大1回（no retry / no repost / no second POST）。
+  「no code change next step」= 実 sender の injection と operator 入力のみで実行可能な状態にした
+- actual POST / entry POST / settlement POST: `false`、POST count: `0`、
+  Level 5 full auto cycle completed: `false`

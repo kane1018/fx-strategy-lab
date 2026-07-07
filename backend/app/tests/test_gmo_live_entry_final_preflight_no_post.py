@@ -281,6 +281,23 @@ def test_ready_for_actual_entry_final_preflight_is_still_not_a_permission() -> N
     assert not package
 
 
+def test_execution_boundary_implemented_advances_to_entry_post_gate_ready() -> None:
+    package = build_gmo_entry_final_preflight_package(
+        _all_safe_input(actual_entry_execution_boundary_implemented=True)
+    )
+    assert package.status is (
+        GmoEntryFinalPreflightStatus
+        .READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION
+    )
+    assert package.blocked_reasons == ()
+    assert package.package_assembled_no_post is True
+    # "Ready for the entry post gate" is still never a POST permission.
+    assert package.actual_entry_POST_allowed is False
+    assert package.actual_settlement_POST_allowed is False
+    assert package.operator_signal_still_required_in_separate_step is True
+    assert not package
+
+
 def test_input_has_no_entry_signal_or_confirmation_field_to_bank() -> None:
     field_names = {field.name for field in fields(GmoEntryFinalPreflightInput)}
     assert not any("confirmation" in name for name in field_names)
