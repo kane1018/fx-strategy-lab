@@ -2553,3 +2553,33 @@ Recommended next step:
 ```text
 Step 6G-PC-OX-R-GMO-OFFICIAL-SETTLEMENT-ROUTE-REVIEW-C
 ```
+
+## Step 6G Fable5 Accelerated Pre-Actual Entry Self-Drive (no-POST)
+
+STEP_6G_PC_OX_R_FABLE5_ACCELERATED_PRE_ACTUAL_ENTRY_SELF_DRIVE_NO_POST_C
+(2026-07-07) は no-POST 準備Stepであり、実POST許可ではない:
+
+```text
+actual_post=false
+entry_post=false
+settlement_post=false
+post_count=0
+runtime_private_GET_executed=false
+read_only_runtime_confirmation_status=WAITING_FOR_OPERATOR_CURRENT_TURN_CONFIRMATION
+paper_trade_evidence_status=PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY
+anomaly_evidence_status=SYNTHETIC_ONLY_NOT_SUFFICIENT
+local_tracking_sync_status=SYNCED_AFTER_NO_WRITE_FETCH_HEAD
+actual_entry_POST_allowed=false
+level5_full_auto_cycle_completed=false
+```
+
+追加: `backend/app/services/gmo_live_entry_final_preflight.py`（final preflight
+package model と、残code blocker 4件の fail-closed design skeleton。default-deny・
+POST不能・値露出不能・allow解決不能）、
+`backend/app/tests/test_gmo_live_entry_final_preflight_no_post.py`、
+`docs/ENTRY_ACTUAL_FINAL_PREFLIGHT_NO_POST_CHECKLIST.md`、
+`docs/ACCELERATED_PRE_ACTUAL_ENTRY_PATH_NO_POST.md`。
+
+次に必要なのは operator の read-only runtime confirmation 5項目
+（`docs/ACCELERATED_PRE_ACTUAL_ENTRY_PATH_NO_POST.md` §7。actual POST許可入力ではない）。
+actual entry POST は別Stepでのみ、current-turn exact confirmation 下で最大1回。

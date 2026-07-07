@@ -2847,3 +2847,29 @@ Recommended next step:
 ```text
 Step 6G-PC-OX-R-MANUAL-FLATTEN-THEN-RUNTIME-FLAT-RECONCILIATION-C
 ```
+
+## Step 6G Fable5 Accelerated Pre-Actual Entry Self-Drive (no-POST)
+
+STEP_6G_PC_OX_R_FABLE5_ACCELERATED_PRE_ACTUAL_ENTRY_SELF_DRIVE_NO_POST_C
+(2026-07-07) completed the no-POST entry-actual foundation consolidation:
+
+```text
+actual_post=false
+entry_post=false
+settlement_post=false
+post_count=0
+runtime_private_GET_executed=false
+paper_trade_evidence_status=PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY
+anomaly_evidence_status=SYNTHETIC_ONLY_NOT_SUFFICIENT
+final_preflight_status=WAITING_FOR_READ_ONLY_RUNTIME_OPERATOR_CONFIRMATION
+actual_entry_POST_allowed=false
+level5_full_auto_cycle_completed=false
+```
+
+`gmo_live_entry_final_preflight.py` が final preflight package（default-deny・
+POST許可化不能）と、残code blocker 4件（production real entry transport /
+sealed credential real operation / runtime safe read real connection /
+hard guard allow controlled supply）の fail-closed design skeleton を固定した。
+read-only runtime safe confirmation は operator input block 未提示のため未実行。
+詳細: [ACCELERATED_PRE_ACTUAL_ENTRY_PATH_NO_POST.md](ACCELERATED_PRE_ACTUAL_ENTRY_PATH_NO_POST.md) /
+[ENTRY_ACTUAL_FINAL_PREFLIGHT_NO_POST_CHECKLIST.md](ENTRY_ACTUAL_FINAL_PREFLIGHT_NO_POST_CHECKLIST.md)。
