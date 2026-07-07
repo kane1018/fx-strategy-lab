@@ -120,6 +120,12 @@ class GmoEntryFinalPreflightStatus(str, Enum):
     READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST = (
         "READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST"
     )
+    WAITING_FOR_ENTRY_REQUEST_PLAN_BINDING = (
+        "WAITING_FOR_ENTRY_REQUEST_PLAN_BINDING"
+    )
+    WAITING_FOR_MARKET_TICKER_SPREAD_SAFE_LABELS = (
+        "WAITING_FOR_MARKET_TICKER_SPREAD_SAFE_LABELS"
+    )
     READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION = (
         "READY_FOR_ENTRY_POST_GATE_WITH_CURRENT_TURN_CONFIRMATION"
     )
@@ -144,6 +150,12 @@ class GmoEntryFinalPreflightNextOperatorInput(str, Enum):
         "RESOLVE_PRODUCTION_ENTRY_CODE_BLOCKERS"
     )
     PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF = "PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF"
+    BIND_ENTRY_REQUEST_PLAN_AT_ACTUAL_GATE = (
+        "BIND_ENTRY_REQUEST_PLAN_AT_ACTUAL_GATE"
+    )
+    PROVIDE_FRESH_MARKET_TICKER_SPREAD_SAFE_LABELS = (
+        "PROVIDE_FRESH_MARKET_TICKER_SPREAD_SAFE_LABELS"
+    )
 
 
 @dataclass(frozen=True)
@@ -196,6 +208,19 @@ class GmoEntryFinalPreflightInput:
     # reviewed call site is implemented and fail-closed; still never a POST
     # permission by itself)
     actual_entry_execution_boundary_implemented: bool = False
+
+    # entry request plan binding gate (current-turn binding classified by
+    # ``gmo_live_entry_request_plan_binding``; the safe boolean here means the
+    # binding result of THIS gate evaluation is BOUND_SAFE. It is never banked
+    # across steps and never carries a body, size, price, ID, or credential.)
+    entry_request_plan_bound_safe: bool = False
+
+    # market/ticker/spread safe label gate (fresh labels from THIS gate's own
+    # runtime read via ``gmo_live_market_ticker_safe_labels``; safe labels
+    # only, never raw bid/ask/spread/timestamp values)
+    market_open_safe_label_confirmed: bool = False
+    ticker_fresh_safe_label_confirmed: bool = False
+    spread_within_limit_safe_label_confirmed: bool = False
 
     # violations (any true blocks hard)
     raw_response_exposed: bool = False
@@ -284,6 +309,21 @@ _RUNTIME_RESULT_REASONS: tuple[tuple[str, str], ...] = (
     ("active_pending_clear_confirmed", "ACTIVE_PENDING_CLEAR_NOT_CONFIRMED"),
 )
 
+_MARKET_LABEL_REASONS: tuple[tuple[str, str], ...] = (
+    (
+        "market_open_safe_label_confirmed",
+        "MARKET_OPEN_SAFE_LABEL_NOT_CONFIRMED",
+    ),
+    (
+        "ticker_fresh_safe_label_confirmed",
+        "TICKER_FRESH_SAFE_LABEL_NOT_CONFIRMED",
+    ),
+    (
+        "spread_within_limit_safe_label_confirmed",
+        "SPREAD_WITHIN_LIMIT_SAFE_LABEL_NOT_CONFIRMED",
+    ),
+)
+
 
 def build_gmo_entry_final_preflight_package(
     preflight_input: GmoEntryFinalPreflightInput,
@@ -335,6 +375,17 @@ def build_gmo_entry_final_preflight_package(
     signoff_recorded = preflight_input.operator_actual_entry_signoff_recorded
     if not signoff_recorded:
         blockers.append("ACTUAL_ENTRY_WRITTEN_SIGNOFF_NOT_RECORDED")
+
+    request_plan_bound = preflight_input.entry_request_plan_bound_safe
+    if not request_plan_bound:
+        blockers.append("ENTRY_REQUEST_PLAN_NOT_BOUND")
+
+    market_label_blockers = [
+        reason
+        for field_name, reason in _MARKET_LABEL_REASONS
+        if not getattr(preflight_input, field_name)
+    ]
+    blockers.extend(market_label_blockers)
 
     if hard_blocked:
         status = GmoEntryFinalPreflightStatus.BLOCKED_SAFE
@@ -403,6 +454,21 @@ def build_gmo_entry_final_preflight_package(
         next_input = (
             GmoEntryFinalPreflightNextOperatorInput
             .PROVIDE_ENTRY_SIGNAL_AND_EXACT_INPUTS_IN_SEPARATE_STEP
+        )
+    elif not request_plan_bound:
+        status = GmoEntryFinalPreflightStatus.WAITING_FOR_ENTRY_REQUEST_PLAN_BINDING
+        next_input = (
+            GmoEntryFinalPreflightNextOperatorInput
+            .BIND_ENTRY_REQUEST_PLAN_AT_ACTUAL_GATE
+        )
+    elif market_label_blockers:
+        status = (
+            GmoEntryFinalPreflightStatus
+            .WAITING_FOR_MARKET_TICKER_SPREAD_SAFE_LABELS
+        )
+        next_input = (
+            GmoEntryFinalPreflightNextOperatorInput
+            .PROVIDE_FRESH_MARKET_TICKER_SPREAD_SAFE_LABELS
         )
     else:
         status = (

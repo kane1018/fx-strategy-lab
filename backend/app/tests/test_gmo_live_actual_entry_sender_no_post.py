@@ -92,6 +92,10 @@ def _granted_activation() -> object:
         hard_guard_controlled_supply_default_deny_present=True,
         sanitized_preview_ready=True,
         credential_presence_safe_boolean=True,
+        entry_request_plan_bound_safe=True,
+        market_open_safe_label_confirmed=True,
+        ticker_fresh_safe_label_confirmed=True,
+        spread_within_limit_safe_label_confirmed=True,
     )
     return build_actual_entry_execution_activation(**base)  # type: ignore[arg-type]
 

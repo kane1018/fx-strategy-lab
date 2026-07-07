@@ -52,6 +52,14 @@ REQUIRED_ENTRY_EXACT_CONFIRMATION = (
 )
 REQUIRED_ENTRY_READINESS = "OPERATOR_READY_FOR_ONE_ENTRY_POST_MAX_NO_RETRY_NO_REPOST"
 REQUIRED_ENTRY_UNDERSTANDS_RISK = "OPERATOR_ACKNOWLEDGES_ACTUAL_BROKER_WRITE_RISK"
+# Canonical acknowledgement that the injected real sender may use credentials
+# internally with zero value exposure. This exact spelling is the only valid
+# value; historical misspelled variants of the final word must never be
+# requested or accepted at any actual gate.
+REQUIRED_ENTRY_CREDENTIAL_INTERNAL_USE_ACK = (
+    "OPERATOR_ACKNOWLEDGES_SENDER_MAY_USE_CREDENTIALS_INTERNALLY"
+    "_WITH_NO_VALUE_EXPOSURE"
+)
 
 # HOLD is intentionally absent: it is never executable.
 _EXECUTABLE_SIGNAL_TO_ACTION = {
@@ -156,6 +164,10 @@ def build_actual_entry_execution_activation(
     hard_guard_controlled_supply_default_deny_present: bool,
     sanitized_preview_ready: bool,
     credential_presence_safe_boolean: bool,
+    entry_request_plan_bound_safe: bool,
+    market_open_safe_label_confirmed: bool,
+    ticker_fresh_safe_label_confirmed: bool,
+    spread_within_limit_safe_label_confirmed: bool,
 ) -> ActualEntryExecutionActivation:
     """Build a fail-closed one-use activation for exactly one entry POST.
 
@@ -181,6 +193,13 @@ def build_actual_entry_execution_activation(
         ),
         (sanitized_preview_ready, "SANITIZED_PREVIEW_NOT_READY"),
         (credential_presence_safe_boolean, "CREDENTIAL_PRESENCE_NOT_CONFIRMED"),
+        (entry_request_plan_bound_safe, "ENTRY_REQUEST_PLAN_NOT_BOUND_SAFE"),
+        (market_open_safe_label_confirmed, "MARKET_OPEN_SAFE_LABEL_NOT_CONFIRMED"),
+        (ticker_fresh_safe_label_confirmed, "TICKER_FRESH_SAFE_LABEL_NOT_CONFIRMED"),
+        (
+            spread_within_limit_safe_label_confirmed,
+            "SPREAD_WITHIN_LIMIT_SAFE_LABEL_NOT_CONFIRMED",
+        ),
     ]
     for satisfied, deny_reason in gate_reasons:
         if not satisfied:

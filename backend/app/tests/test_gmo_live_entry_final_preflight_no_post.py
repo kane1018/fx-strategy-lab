@@ -56,6 +56,10 @@ def _all_safe_input(**overrides: object) -> GmoEntryFinalPreflightInput:
         entry_post_gate_separate_step_design_ready=True,
         production_entry_boundary_implemented_fail_closed=True,
         operator_actual_entry_signoff_recorded=True,
+        entry_request_plan_bound_safe=True,
+        market_open_safe_label_confirmed=True,
+        ticker_fresh_safe_label_confirmed=True,
+        spread_within_limit_safe_label_confirmed=True,
     )
     return replace(base, **overrides)  # type: ignore[arg-type]
 
@@ -295,6 +299,63 @@ def test_execution_boundary_implemented_advances_to_entry_post_gate_ready() -> N
     assert package.actual_entry_POST_allowed is False
     assert package.actual_settlement_POST_allowed is False
     assert package.operator_signal_still_required_in_separate_step is True
+    assert not package
+
+
+def test_request_plan_not_bound_waits_for_binding_at_actual_gate() -> None:
+    package = build_gmo_entry_final_preflight_package(
+        _all_safe_input(
+            actual_entry_execution_boundary_implemented=True,
+            entry_request_plan_bound_safe=False,
+        )
+    )
+    assert package.status is (
+        GmoEntryFinalPreflightStatus.WAITING_FOR_ENTRY_REQUEST_PLAN_BINDING
+    )
+    assert "ENTRY_REQUEST_PLAN_NOT_BOUND" in package.blocked_reasons
+    assert package.next_required_operator_input is (
+        GmoEntryFinalPreflightNextOperatorInput.BIND_ENTRY_REQUEST_PLAN_AT_ACTUAL_GATE
+    )
+    assert package.package_assembled_no_post is False
+    assert package.actual_entry_POST_allowed is False
+    assert not package
+
+
+@pytest.mark.parametrize(
+    ("override", "expected_reason"),
+    [
+        (
+            {"market_open_safe_label_confirmed": False},
+            "MARKET_OPEN_SAFE_LABEL_NOT_CONFIRMED",
+        ),
+        (
+            {"ticker_fresh_safe_label_confirmed": False},
+            "TICKER_FRESH_SAFE_LABEL_NOT_CONFIRMED",
+        ),
+        (
+            {"spread_within_limit_safe_label_confirmed": False},
+            "SPREAD_WITHIN_LIMIT_SAFE_LABEL_NOT_CONFIRMED",
+        ),
+    ],
+)
+def test_missing_market_label_waits_for_fresh_labels(
+    override: dict, expected_reason: str
+) -> None:
+    package = build_gmo_entry_final_preflight_package(
+        _all_safe_input(
+            actual_entry_execution_boundary_implemented=True, **override
+        )
+    )
+    assert package.status is (
+        GmoEntryFinalPreflightStatus.WAITING_FOR_MARKET_TICKER_SPREAD_SAFE_LABELS
+    )
+    assert expected_reason in package.blocked_reasons
+    assert package.next_required_operator_input is (
+        GmoEntryFinalPreflightNextOperatorInput
+        .PROVIDE_FRESH_MARKET_TICKER_SPREAD_SAFE_LABELS
+    )
+    assert package.package_assembled_no_post is False
+    assert package.actual_entry_POST_allowed is False
     assert not package
 
 

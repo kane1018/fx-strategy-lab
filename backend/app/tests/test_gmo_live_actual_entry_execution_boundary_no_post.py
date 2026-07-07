@@ -20,6 +20,7 @@ from app.private_api.order_builders import (
     build_gmo_fx_official_settlement_request_plan,
 )
 from app.services.gmo_live_actual_entry_execution_boundary import (
+    REQUIRED_ENTRY_CREDENTIAL_INTERNAL_USE_ACK,
     REQUIRED_ENTRY_EXACT_CONFIRMATION,
     REQUIRED_ENTRY_READINESS,
     REQUIRED_ENTRY_UNDERSTANDS_RISK,
@@ -63,6 +64,10 @@ def _granted_activation(**overrides: object):
         hard_guard_controlled_supply_default_deny_present=True,
         sanitized_preview_ready=True,
         credential_presence_safe_boolean=True,
+        entry_request_plan_bound_safe=True,
+        market_open_safe_label_confirmed=True,
+        ticker_fresh_safe_label_confirmed=True,
+        spread_within_limit_safe_label_confirmed=True,
     )
     kwargs.update(overrides)
     return build_actual_entry_execution_activation(**kwargs)  # type: ignore[arg-type]
@@ -143,6 +148,22 @@ class TestActivationFactory:
             (
                 {"credential_presence_safe_boolean": False},
                 "CREDENTIAL_PRESENCE_NOT_CONFIRMED",
+            ),
+            (
+                {"entry_request_plan_bound_safe": False},
+                "ENTRY_REQUEST_PLAN_NOT_BOUND_SAFE",
+            ),
+            (
+                {"market_open_safe_label_confirmed": False},
+                "MARKET_OPEN_SAFE_LABEL_NOT_CONFIRMED",
+            ),
+            (
+                {"ticker_fresh_safe_label_confirmed": False},
+                "TICKER_FRESH_SAFE_LABEL_NOT_CONFIRMED",
+            ),
+            (
+                {"spread_within_limit_safe_label_confirmed": False},
+                "SPREAD_WITHIN_LIMIT_SAFE_LABEL_NOT_CONFIRMED",
             ),
         ],
     )
@@ -289,6 +310,16 @@ class TestSourceScan:
         assert "load_dotenv" not in text
         assert "httpx" not in text
         assert "requests" not in text
+
+    def test_canonical_credential_internal_use_ack_spelling(self) -> None:
+        # Canonical value ends in "_EXPOSURE"; the misspelled "_EXPOSATION"
+        # variant seen in old step logs must never appear in the module.
+        assert REQUIRED_ENTRY_CREDENTIAL_INTERNAL_USE_ACK == (
+            "OPERATOR_ACKNOWLEDGES_SENDER_MAY_USE_CREDENTIALS_INTERNALLY"
+            "_WITH_NO_VALUE_EXPOSURE"
+        )
+        text = MODULE_PATH.read_text(encoding="utf-8")
+        assert "EXPOSATION" not in text
 
     def test_module_has_no_persistent_allow_literals(self) -> None:
         text = MODULE_PATH.read_text(encoding="utf-8").replace(" ", "")
