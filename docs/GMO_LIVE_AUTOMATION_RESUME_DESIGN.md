@@ -456,7 +456,41 @@ repo側の実POST基盤が未整備だったためである。判明した一次
   - code 側で進める場合は、real HTTPなしの production signed POST interface no-POST設計に限定
   - actual POST gate へは進まない
 
-### 16.5 Level 5 full auto cycle
+### 16.5 STEP_6G_PC_OX_R_ENTRY_SIGNED_POST_INTERFACE_NO_POST_C
+
+このセクションは、`signed`インターフェースを含む entry actual POST 進入口の
+no-POST境界を明示し、実行可否ではなく**設計状態**を記録する。
+
+- no-POSTステータス: `NOT_COMPLETE`（運営者条件は未完）
+- 本Stepの結論: `actual_post_permission_this_step=false`、`entry_post_permission_this_step=false`、`settlement_post_permission_this_step=false`
+- production signed POST transport（entry専用）は未実装（`real transport`未接続）
+- `app/private_api/auth.py` / `app/private_api/order_builders.py` の署名部品は設計準拠で既に存在
+  - 実シグネチャ送出は行わない（`raw signature / header / credential`は送出・保持しない）
+  - request planは `method/path/body_json` のsafe modelで保持（実値非露出）
+- `backend/app/services/gmo_live_entry_transport.py` は引き続き no-POST専用:
+  - fake transportは `entry_only / one-post / no-retry / no-repost / no-second-post`
+  - real transportは `ProductionEntryTransportNotImplemented` で `fail-closed`
+  - 結果カテゴリは sanitized のみ
+- `backend/app/services/gmo_live_entry_actual_post_gate_readiness.py` と no-POST test群は
+  `actual_entry_POST_allowed=false` を固定し、allow直書きを許容しない
+- `entry` と `official settlement` の境界は維持（closeOrder / settlePosition / generic close へは流用不可）
+- remaining operator blockers:
+  - paper trade evidence
+  - kill switch / settlement anomaly tests beyond synthetic-only
+  - written sign-off
+  - incident remediation declaration
+  - GMO管理画面確認（建玉ゼロ/有効注文ゼロ）
+  - credential actual use policy approval
+- remaining code blockers:
+  - production real entry transport actual 実装
+  - credential sealed provider real operation
+  - runtime safe read real 接続
+  - hard guard allow-controlled供給
+- 次 step 推奨:
+  - RESUME_DESIGN §1 を実行条件として未完扱いのまま維持し、実POSTに進まず運営者条件の提示を待つ
+  - production signed POST境界は引き続き no-POST（fake / fail-closed）で固定
+
+### 16.6 Level 5 full auto cycle
 
 `Level_5_full_auto_cycle_completed=false`（不変）。entry POST自体が未到達のため、
 post-entry read-only confirmation・settlement・full cycle はいずれも未着手。
