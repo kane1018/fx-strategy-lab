@@ -445,7 +445,6 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - remaining operator blockers:
   - paper trade evidence
   - kill switch / settlement anomaly tests beyond synthetic-only
-  - GMO管理画面での建玉ゼロ/有効注文ゼロ確認
 - remaining code blockers:
   - production real entry transport
   - credential sealed provider real operation
@@ -477,7 +476,6 @@ no-POST境界を明示し、実行可否ではなく**設計状態**を記録す
 - remaining operator blockers:
   - paper trade evidence
   - kill switch / settlement anomaly tests beyond synthetic-only
-  - GMO管理画面確認（建玉ゼロ/有効注文ゼロ）
 - remaining code blockers:
   - production real entry transport actual 実装
   - credential sealed provider real operation
