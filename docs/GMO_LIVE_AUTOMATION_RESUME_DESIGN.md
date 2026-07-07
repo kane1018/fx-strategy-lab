@@ -440,6 +440,7 @@ repo側の実POST基盤が未整備だったためである。判明した一次
 - no-post objective evidence audit:
   - paper trade evidence: `PAPER_TRADE_EVIDENCE_NOT_READY`
     - paper evidence criteria status: `PAPER_TRADE_EVIDENCE_NOT_READY`
+    - paper trade evidence safe summary: `docs/STEP6G_PC_OX_R_PAPER_SHADOW_SAFE_REPORT_AND_ANOMALY_EVIDENCE_EXPANSION_NO_POST_C.md`
     - `paper_trade_evidence_criteria` は no-POST で safe label のみで判定可能な条件を明文化済み（本Step）
       - evidence source exists
       - evidence location safe label exists
@@ -447,7 +448,7 @@ repo側の実POST基盤が未整備だったためである。判明した一次
       - reproducible or checked-in report / deterministic test / documented runbook
       - no raw P/L / trade ID / order ID / position ID / price/size exposure
       - relevance to GMO live entry readiness and no implication to actual POST permission
-    - `paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`
+    - `paper_trade_source_exists=false`, `paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`
     - `raw_profit_loss_values_exposed=false`, `raw_trade_ids_exposed=false`, `raw_order_ids_exposed=false`, `raw_position_ids_exposed=false`, `raw_price_or_size_values_exposed=false`
     - 次手順（no-POST）: 上記安全 summary の充足条件を満たす `PAPER_TRADE_EVIDENCE_CONFIRMED_SAFE_SUMMARY` エビデンスに更新
   - kill switch / settlement anomaly audit: `SYNTHETIC_ONLY_NOT_SUFFICIENT`
@@ -464,14 +465,17 @@ repo側の実POST基盤が未整備だったためである。判明した一次
       - missing credential boundary block
       - unknown / rejected / timeout result no-retry block
       - synthetic only coverage indicator
+      - deterministic replay / fake runtime evidence indicator
       - real_broker_write_used=false, raw_response_exposed=false, raw_ids_exposed=false
     - `kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`
+    - `anomaly_deterministic_or_replay_coverage_safe_label=DETERMINISTIC_REPLAY_FIXTURES_BASED`
+    - `anomaly_evidence_sources= test_gmo_kill_switch_no_post.py, test_gmo_settlement_reconciliation_no_post.py, test_gmo_level5_fake_cycle_no_post.py, test_gmo_level5_integrated_fake_cycle_no_post.py`
     - 次手順（no-POST）: synthetic外の evidence / テストを追加し `KILL_SWITCH_AND_SETTLEMENT_ANOMALY_TESTS_CONFIRMED` を更新
 - actual_post_permission_this_step: `false`（本Stepは actual POST 許可ではない）
 - entry_post_permission_this_step: `false`（本Stepは entry POST 許可ではない）
 - settlement_post_permission_this_step: `false`（本Stepは settlement POST 許可ではない）
 - current-turn entry POST exact confirmation: `false`（別ターンで operator_signal_type と exact confirmation を再入力）
-- paper trade evidence status: `PAPER_TRADE_EVIDENCE_UNKNOWN`（`paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`）
+- paper trade evidence status: `PAPER_TRADE_EVIDENCE_NOT_READY`（`paper_trade_source_exists=false`, `paper_trade_period_safe_label=NOT_PROVIDED`, `paper_trade_run_count_safe_label=NOT_PROVIDED`, `paper_trade_result_category=NOT_PROVIDED`, `performance_report_location_safe_label=NOT_PROVIDED`）
 - kill switch / settlement anomaly tests: `SYNTHETIC_ONLY_NOT_SUFFICIENT`（`kill_switch_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `settlement_reconciliation_test_scope_safe_label=SYNTHETIC_TESTS_ONLY`, `tested_failure_modes_safe_labels=SYNTHETIC_ONLY_SCOPE_NOT_SUFFICIENT_FOR_ACTUAL_POST_RESUME`, `synthetic_only=true`, `real_broker_write_used=false`）
 - operator sign-off: `OPERATOR_SIGNOFF_RECORDED_FOR_NO_POST_NEXT_GATE_DESIGN`
 - incident remediation: `OPERATOR_DECLARES_2026_07_06_INCIDENT_REMEDIATED_FOR_NO_POST_RESUME_DESIGN`
