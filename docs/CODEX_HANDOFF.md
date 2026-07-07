@@ -2608,3 +2608,33 @@ level5_full_auto_cycle_completed=false
 （RESUME_DESIGN §15.1: operator_signal_type ほか exact confirmation 群）と、
 残 code blocker（production real entry transport 実装等）の解消。
 詳細: `docs/ACCELERATED_PRE_ACTUAL_ENTRY_PATH_NO_POST.md` §9。
+
+## Step 6G Production Entry Code Blockers Review-First Implementation (no-POST)
+
+STEP_6G_PC_OX_R_PRODUCTION_ENTRY_CODE_BLOCKERS_REVIEW_FIRST_IMPLEMENTATION_NO_POST_C
+(2026-07-07) は、残っていた4つの code blocker を review-first で分類し、
+no-POST 範囲を fail-closed で実装した（実POST許可ではない）:
+
+```text
+actual_post=false
+entry_post=false
+settlement_post=false
+post_count=0
+runtime_private_GET_execution=false
+production_real_entry_transport_status=IMPLEMENTED_DISABLED_FAIL_CLOSED_NO_SEND_PATH
+sealed_credential_real_operation_status=BOUNDARY_IMPLEMENTED_NO_VALUE_EXPOSURE_UNSEAL_FORBIDDEN
+runtime_safe_read_real_connection_status=ADAPTER_WIRED_NO_NETWORK_FRESH_READ_REQUIRES_OPERATOR_GATE
+hard_guard_allow_controlled_supply_status=DEFAULT_DENY_SUPPLY_IMPLEMENTED_NO_ALLOW_BRIDGE
+final_preflight_status=WAITING_FOR_ACTUAL_ENTRY_SIGNOFF
+actual_entry_POST_allowed=false
+level5_full_auto_cycle_completed=false
+```
+
+追加: `backend/app/services/gmo_live_production_entry_boundary.py`、
+`backend/app/tests/test_gmo_live_production_entry_boundary_no_post.py`、
+`docs/PRODUCTION_ENTRY_CODE_BLOCKERS_NO_POST_REVIEW.md`。
+`gmo_live_entry_final_preflight.py` は status 3種を追加する最小更新。
+
+次に必要なのは operator の actual entry 書面 sign-off。その後、別Stepで
+fresh final preflight + operator current-turn 入力（RESUME_DESIGN §15.1）が揃った
+場合のみ actual entry POST を最大1回（no retry / no repost / no second POST）。

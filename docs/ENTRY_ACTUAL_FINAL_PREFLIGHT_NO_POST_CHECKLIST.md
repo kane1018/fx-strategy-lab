@@ -58,6 +58,16 @@ exact confirmation と、そのStep固有の fresh gate 通過によってのみ
 - [ ] no settlement POST in entry step / no generic close
 - [ ] result は sanitized category のみ（raw/ID/value/credential 非露出）
 
+## 4b. production entry boundary gate（2026-07-07 追加・fail-closed 実装済み）
+
+- [ ] `DisabledProductionEntryTransport` present（entry-only・activation 構築不能・
+      send 常時 raise。`gmo_live_production_entry_boundary.py`）
+- [ ] `SealedSecretBox` present（repr/str 非露出・unseal 常時 raise）
+- [ ] runtime safe read connection adapter present（sanitized summary → snapshot
+      純関数。unknown/stale/非0 は block）
+- [ ] `HardGuardAllowControlledSupply` default-deny（truthy 構築は例外・allow bridge なし）
+- [ ] operator 書面 sign-off recorded（未記録なら `WAITING_FOR_ACTUAL_ENTRY_SIGNOFF`）
+
 ## 6. status 分類
 
 `GmoEntryFinalPreflightStatus`:
@@ -68,8 +78,13 @@ exact confirmation と、そのStep固有の fresh gate 通過によってのみ
 - `WAITING_FOR_SAFE_RUNTIME_RESULT`
 - `WAITING_FOR_ANOMALY_EVIDENCE_CONFIRMATION`
 - `READY_FOR_FINAL_PREFLIGHT_NO_POST`
-- `READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION`
+- `READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION`（record 互換のため残置。
+  evaluator の終端は下記3statusに移行）
+- `WAITING_FOR_PRODUCTION_ENTRY_CODE_BLOCKERS`（2026-07-07 追加）
+- `WAITING_FOR_ACTUAL_ENTRY_SIGNOFF`（同）
+- `READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST`（同・終端 ready）
 
 いずれの status でも `actual_entry_POST_allowed=false` は不変。
-`READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION` は「次の operator 入力を
-別Stepで求められる状態」を意味するだけで、POST実行状態ではない。
+`READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST` は「次の operator 入力
+（entry signal / exact confirmation）を別Stepで求められる状態」を意味するだけで、
+POST実行状態ではない。

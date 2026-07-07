@@ -2897,3 +2897,26 @@ post_count=0
 
 actual entry POST は引き続き別Stepでのみ（operator current-turn exact confirmation・
 最大1回・no retry）。詳細: `docs/ACCELERATED_PRE_ACTUAL_ENTRY_PATH_NO_POST.md` §9。
+
+## Step 6G Production Entry Code Blockers Review-First Implementation (no-POST)
+
+STEP_6G_PC_OX_R_PRODUCTION_ENTRY_CODE_BLOCKERS_REVIEW_FIRST_IMPLEMENTATION_NO_POST_C
+(2026-07-07) resolved the four production entry code blockers in their no-POST
+structural form (fail-closed; no send path exists):
+
+```text
+production_real_entry_transport_status=IMPLEMENTED_DISABLED_FAIL_CLOSED_NO_SEND_PATH
+sealed_credential_real_operation_status=BOUNDARY_IMPLEMENTED_NO_VALUE_EXPOSURE_UNSEAL_FORBIDDEN
+runtime_safe_read_real_connection_status=ADAPTER_WIRED_NO_NETWORK_FRESH_READ_REQUIRES_OPERATOR_GATE
+hard_guard_allow_controlled_supply_status=DEFAULT_DENY_SUPPLY_IMPLEMENTED_NO_ALLOW_BRIDGE
+final_preflight_status=WAITING_FOR_ACTUAL_ENTRY_SIGNOFF
+actual_entry_POST_allowed=false
+actual_post=false
+entry_post=false
+settlement_post=false
+post_count=0
+```
+
+実送信 activation・unseal・fresh runtime read 実行・hard guard への明示 literal
+供給は actual Step 専用として残置（allow bridge 禁止は不変）。
+詳細: [PRODUCTION_ENTRY_CODE_BLOCKERS_NO_POST_REVIEW.md](PRODUCTION_ENTRY_CODE_BLOCKERS_NO_POST_REVIEW.md)。

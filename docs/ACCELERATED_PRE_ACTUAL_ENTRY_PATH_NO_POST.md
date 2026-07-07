@@ -179,3 +179,15 @@ runtime private GET=1回のみ・operator current-turn confirmation下・read-on
 credential exposure=false / env値表示=false / raw・ID・value exposure=false /
 retry・repost・second POST=false / second read=false / generic close=false /
 ledger update=false / receipt handoff=false / Level 5 full auto cycle completed=false
+
+---
+
+## 10. 後続Step記録: production entry code blockers 解消（no-POST・2026-07-07）
+
+Step: `STEP_6G_PC_OX_R_PRODUCTION_ENTRY_CODE_BLOCKERS_REVIEW_FIRST_IMPLEMENTATION_NO_POST_C`
+
+§9.5 の code blocker 4件は、no-POST 構造としては解消された
+（fail-closed 実装。実送信・unseal・fresh GET 実行・allow 供給は actual Step へ残置）。
+final preflight status は `WAITING_FOR_ACTUAL_ENTRY_SIGNOFF` に更新。
+`actual_entry_POST_allowed=false` 不変。詳細:
+`docs/PRODUCTION_ENTRY_CODE_BLOCKERS_NO_POST_REVIEW.md`

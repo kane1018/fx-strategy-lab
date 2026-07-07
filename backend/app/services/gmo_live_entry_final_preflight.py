@@ -108,8 +108,17 @@ class GmoEntryFinalPreflightStatus(str, Enum):
         "WAITING_FOR_ANOMALY_EVIDENCE_CONFIRMATION"
     )
     READY_FOR_FINAL_PREFLIGHT_NO_POST = "READY_FOR_FINAL_PREFLIGHT_NO_POST"
+    # Superseded terminal status kept for record compatibility with earlier
+    # step reports; the evaluator now ends in the three statuses below it.
     READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION = (
         "READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION"
+    )
+    WAITING_FOR_PRODUCTION_ENTRY_CODE_BLOCKERS = (
+        "WAITING_FOR_PRODUCTION_ENTRY_CODE_BLOCKERS"
+    )
+    WAITING_FOR_ACTUAL_ENTRY_SIGNOFF = "WAITING_FOR_ACTUAL_ENTRY_SIGNOFF"
+    READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST = (
+        "READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST"
     )
 
 
@@ -128,6 +137,10 @@ class GmoEntryFinalPreflightNextOperatorInput(str, Enum):
     PROVIDE_ENTRY_SIGNAL_AND_EXACT_INPUTS_IN_SEPARATE_STEP = (
         "PROVIDE_ENTRY_SIGNAL_AND_EXACT_INPUTS_IN_SEPARATE_STEP"
     )
+    RESOLVE_PRODUCTION_ENTRY_CODE_BLOCKERS = (
+        "RESOLVE_PRODUCTION_ENTRY_CODE_BLOCKERS"
+    )
+    PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF = "PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF"
 
 
 @dataclass(frozen=True)
@@ -165,6 +178,16 @@ class GmoEntryFinalPreflightInput:
 
     # separate-step design gate
     entry_post_gate_separate_step_design_ready: bool = False
+
+    # production entry boundary gate (fail-closed no-POST implementation of
+    # the four code blockers: disabled transport / sealed credential real
+    # operation boundary / runtime safe read connection adapter / hard guard
+    # default-deny controlled supply)
+    production_entry_boundary_implemented_fail_closed: bool = False
+
+    # operator written sign-off gate (recorded per RESUME_DESIGN §1; never a
+    # POST permission by itself)
+    operator_actual_entry_signoff_recorded: bool = False
 
     # violations (any true blocks hard)
     raw_response_exposed: bool = False
@@ -295,6 +318,16 @@ def build_gmo_entry_final_preflight_package(
     if not anomaly_confirmed:
         blockers.append("ANOMALY_EVIDENCE_NOT_CONFIRMED_BEYOND_SYNTHETIC")
 
+    boundary_implemented = (
+        preflight_input.production_entry_boundary_implemented_fail_closed
+    )
+    if not boundary_implemented:
+        blockers.append("PRODUCTION_ENTRY_CODE_BLOCKERS_NOT_RESOLVED")
+
+    signoff_recorded = preflight_input.operator_actual_entry_signoff_recorded
+    if not signoff_recorded:
+        blockers.append("ACTUAL_ENTRY_WRITTEN_SIGNOFF_NOT_RECORDED")
+
     if hard_blocked:
         status = GmoEntryFinalPreflightStatus.BLOCKED_SAFE
         next_input = (
@@ -337,10 +370,24 @@ def build_gmo_entry_final_preflight_package(
             GmoEntryFinalPreflightNextOperatorInput
             .PROVIDE_ENTRY_SIGNAL_AND_EXACT_INPUTS_IN_SEPARATE_STEP
         )
+    elif not boundary_implemented:
+        status = (
+            GmoEntryFinalPreflightStatus.WAITING_FOR_PRODUCTION_ENTRY_CODE_BLOCKERS
+        )
+        next_input = (
+            GmoEntryFinalPreflightNextOperatorInput
+            .RESOLVE_PRODUCTION_ENTRY_CODE_BLOCKERS
+        )
+    elif not signoff_recorded:
+        status = GmoEntryFinalPreflightStatus.WAITING_FOR_ACTUAL_ENTRY_SIGNOFF
+        next_input = (
+            GmoEntryFinalPreflightNextOperatorInput
+            .PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF
+        )
     else:
         status = (
             GmoEntryFinalPreflightStatus
-            .READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION
+            .READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST
         )
         next_input = (
             GmoEntryFinalPreflightNextOperatorInput
@@ -349,7 +396,7 @@ def build_gmo_entry_final_preflight_package(
 
     package_assembled_no_post = status in (
         GmoEntryFinalPreflightStatus.READY_FOR_FINAL_PREFLIGHT_NO_POST,
-        GmoEntryFinalPreflightStatus.READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION,
+        GmoEntryFinalPreflightStatus.READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST,
     )
 
     return GmoEntryFinalPreflightPackage(

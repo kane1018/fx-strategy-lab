@@ -54,6 +54,8 @@ def _all_safe_input(**overrides: object) -> GmoEntryFinalPreflightInput:
         sanitized_preview_ready=True,
         no_order_guard_tests_present=True,
         entry_post_gate_separate_step_design_ready=True,
+        production_entry_boundary_implemented_fail_closed=True,
+        operator_actual_entry_signoff_recorded=True,
     )
     return replace(base, **overrides)  # type: ignore[arg-type]
 
@@ -77,7 +79,7 @@ def test_default_package_is_fail_closed_and_falsey() -> None:
 def test_all_safe_input_is_ready_but_still_not_a_post_permission() -> None:
     package = build_gmo_entry_final_preflight_package(_all_safe_input())
     assert package.status is (
-        GmoEntryFinalPreflightStatus.READY_FOR_OPERATOR_ENTRY_CURRENT_TURN_CONFIRMATION
+        GmoEntryFinalPreflightStatus.READY_FOR_ACTUAL_ENTRY_FINAL_PREFLIGHT_NO_POST
     )
     assert package.blocked_reasons == ()
     assert package.package_assembled_no_post is True
@@ -238,6 +240,45 @@ def test_separate_step_design_pending_is_ready_for_final_preflight() -> None:
     )
     assert package.package_assembled_no_post is True
     assert package.actual_entry_POST_allowed is False
+
+
+def test_production_boundary_missing_waits_for_code_blockers() -> None:
+    package = build_gmo_entry_final_preflight_package(
+        _all_safe_input(production_entry_boundary_implemented_fail_closed=False)
+    )
+    assert package.status is (
+        GmoEntryFinalPreflightStatus.WAITING_FOR_PRODUCTION_ENTRY_CODE_BLOCKERS
+    )
+    assert "PRODUCTION_ENTRY_CODE_BLOCKERS_NOT_RESOLVED" in package.blocked_reasons
+    assert package.next_required_operator_input is (
+        GmoEntryFinalPreflightNextOperatorInput.RESOLVE_PRODUCTION_ENTRY_CODE_BLOCKERS
+    )
+    assert package.package_assembled_no_post is False
+    assert package.actual_entry_POST_allowed is False
+
+
+def test_signoff_missing_waits_for_actual_entry_signoff() -> None:
+    package = build_gmo_entry_final_preflight_package(
+        _all_safe_input(operator_actual_entry_signoff_recorded=False)
+    )
+    assert package.status is (
+        GmoEntryFinalPreflightStatus.WAITING_FOR_ACTUAL_ENTRY_SIGNOFF
+    )
+    assert "ACTUAL_ENTRY_WRITTEN_SIGNOFF_NOT_RECORDED" in package.blocked_reasons
+    assert package.next_required_operator_input is (
+        GmoEntryFinalPreflightNextOperatorInput.PROVIDE_ACTUAL_ENTRY_WRITTEN_SIGNOFF
+    )
+    assert package.package_assembled_no_post is False
+    assert package.actual_entry_POST_allowed is False
+
+
+def test_ready_for_actual_entry_final_preflight_is_still_not_a_permission() -> None:
+    package = build_gmo_entry_final_preflight_package(_all_safe_input())
+    assert package.actual_entry_POST_allowed is False
+    assert package.actual_settlement_POST_allowed is False
+    assert package.entry_post_execution_gate_is_separate_step is True
+    assert package.operator_signal_still_required_in_separate_step is True
+    assert not package
 
 
 def test_input_has_no_entry_signal_or_confirmation_field_to_bank() -> None:
