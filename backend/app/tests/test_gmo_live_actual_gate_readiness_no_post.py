@@ -166,6 +166,7 @@ def test_entry_gate_readiness_ready_when_all_inputs_safe() -> None:
     assert summary.runner_boundary_ready is True
     assert summary.credential_boundary_ready is True
     assert summary.max_consecutive_losses_selected == 2
+    assert summary.actual_entry_POST_allowed is False
 
 
 def test_entry_gate_readiness_blocked_when_credential_boundary_not_ready() -> None:
@@ -453,6 +454,8 @@ def test_module_keeps_actual_post_fail_closed_fields_hardcoded_false() -> None:
     text = MODULE_PATH.read_text(encoding="utf-8").replace(" ", "")
     assert "actual_settlement_POST_allowed=False" in text
     assert "actual_settlement_POST_allowed=True" not in text
+    assert "actual_entry_POST_allowed=False" in text
+    assert "actual_entry_POST_allowed=True" not in text
     assert "position_specific_actual_path_enabled=False" in text
     assert "position_specific_actual_path_enabled=True" not in text
     assert "entry_only_actual_post_recommended=False" in text

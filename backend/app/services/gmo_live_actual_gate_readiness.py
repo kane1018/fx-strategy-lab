@@ -575,6 +575,7 @@ class GmoLiveActualEntryGateReadinessSummary:
     credential_boundary_ready: bool
     max_consecutive_losses_selected: int | None
     gmo_live_enable_policy_ready: bool
+    actual_entry_POST_allowed: bool = False
 
 
 @dataclass(frozen=True)
@@ -662,6 +663,7 @@ def build_gmo_live_actual_entry_gate_readiness_summary(
         credential_boundary_ready=credential_boundary.credential_boundary_ready,
         max_consecutive_losses_selected=max_consecutive_losses_selected,
         gmo_live_enable_policy_ready=gmo_live_enable_policy_ready,
+        actual_entry_POST_allowed=False,
     )
 
 

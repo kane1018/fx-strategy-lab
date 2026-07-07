@@ -276,9 +276,43 @@ GMO live専用として以下のフィールドを新設する。数値は次の
 
 - no-POST hook配線は完了。次Stepは entry/settlement actual gate 前提の分離Stepへ進む。
   - 推奨: `NEXT_STEP_ENTRY_ACTUAL_GATE_PRECHECK_NO_POST_OR_OPERATOR_CONFIRMATION_DESIGN`
+    （§14でno-POST precheck実装済み。次は `ENTRY_POST_GATE_WITH_OPERATOR_CURRENT_TURN_CONFIRMATION`
+    の指示設計へ進めるが、これは実POST許可ではない）
   - credential不足時のみ: `NEXT_STEP_CREDENTIAL_ACTUAL_USE_POLICY_DECISION`
 - 実POST系 (`allow_bridge`, `allow_real_broker_post=True`, `allow_live_http_post=True`,
   `GmoFxBroker.market_order`/`official_settlement_order` 直接起動) は次Step以降。
+
+## 14. entry actual gate precheck（no-POST・実装済み）
+
+- `backend/app/services/gmo_live_entry_actual_gate_precheck.py` を追加。
+  entry実POST直前のprecheckを、safe boolean / safe count / safe labelのみで
+  fail-closed分類する（default入力はすべてblocked）。
+- precheck結果は**実行許可ではない**ことを構造で固定:
+  - `actual_entry_POST_allowed=False` ハードコード（source-scanテストで`=True`不在も固定）
+  - summaryの`__bool__`は常にFalse（allow-bridge化防止）
+  - `entry_post_execution_gate_is_separate_step=True`
+  - readyでも status は `ENTRY_PRECHECK_READY_NO_POST_OPERATOR_CURRENT_TURN_GATE_REQUIRED`
+- operator current-turn exact confirmation は**入力fieldとして存在しない**
+  （precheckで取得・保存・再利用（banking）できない設計。
+  `operator_current_turn_exact_confirmation_still_required=True`固定）。
+  confirmationの取り扱いは別Step `ENTRY_POST_GATE_WITH_OPERATOR_CURRENT_TURN_CONFIRMATION` 専用。
+- 売買判断はAIが行わない: entry sideは operator safe label
+  （`ENTRY_BUY`/`ENTRY_SELL`/`HOLD`）のみ。`HOLD`は候補化せずblock、
+  未知テキストは `OPERATOR_SIGNAL_UNSAFE_RAW_TEXT_PROVIDED` としてblock。
+  `ai_trade_decision_performed=False`固定。
+- precheck gate項目: HEAD==origin/main / working tree clean / credential presence safe boolean /
+  credential boundary ready / credential actual use operator承認 / runtime safe read実施・fresh /
+  open_positions_count==0（None含む不明はblock）/ active-pending conflict==0（同）/
+  fresh entry signal存在・fresh / operator readiness / one entry POST max（1以外block）/
+  retry・repost・second POST要求のblock / settlement POST・generic close混入のblock。
+- テスト: `backend/app/tests/test_gmo_live_entry_actual_gate_precheck_no_post.py`
+  （default fail-closed、全gate個別block、HOLD非候補化、raw text拒否、
+  next step分類、confirmation field不在のdataclassスキャン、env/network/live_verification不在、
+  fail-closedフィールドのsource-scan固定）。
+- 併せて `GmoLiveActualEntryGateReadinessSummary` に `actual_entry_POST_allowed=False`
+  ハードコードfieldを追加（settlement summaryの`actual_settlement_POST_allowed=False`との対称化）。
+- このStepは実POST許可Stepではない。credential実運用承認・operator confirmationは
+  引き続き未成立のblockerとして残る。
 
 ## 9. 運営者向け公式docs確認チェックリスト（no-POST）
 
