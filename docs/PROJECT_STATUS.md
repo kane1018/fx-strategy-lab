@@ -107,6 +107,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   **BLOCKED**。解決=**operator が公開無認証の3 CSV(FRED DGS10/DEXJPUS・MOF JGB 10y)を自分でDLし repo外に配置**
   → local を1回採点、または closeout 維持。
   [daily preregistration](STRATEGY_RATE_DIFFERENTIAL_DAILY_PREREGISTRATION_NO_POST_20260709.md)。
+  **→ operator は closeout 維持を選択。** 日次契約は **FROZEN_UNEXECUTED**（未採点・将来データ提供時のみ
+  契約通り1回採点可）。**研究フェーズ CLOSED_OUT 維持**・全 status flag 不変
+  （NO_ROBUST_EDGE_FOUND_IN_TESTED_SCOPE / performance_proof_status=false / live_ready=false）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
