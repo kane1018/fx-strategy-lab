@@ -84,6 +84,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   **いずれもPF<1・符号置換に届かず・2.0×コスト非生存**で edge に届かない。多重検定台帳の
   **null #1/3**（あと2件連続NOT_ROBUSTで RESEARCH_PLATFORM_CLOSEOUT へ移行・operator判断で前倒し可）。
   [STRATEGY_VOL_REGIME_CONDITIONAL_BREAKOUT_RETEST_NO_POST_20260708.md](STRATEGY_VOL_REGIME_CONDITIONAL_BREAKOUT_RETEST_NO_POST_20260708.md)）。
+  **戦略探索は operator 判断で CLOSED_OUT**（5仮説を厳密gateで棄却→`NO_ROBUST_EDGE_FOUND_IN_TESTED_SCOPE`
+  を正式確定。performance_proof_status=false / live_ready=false / unattended_live_supported=false 不変）。
+  rejected ledger・標準gate・安全不変則・データ在庫を正式記録し、再開用 runbook を整備。
+  本当の成果物は「偽陽性を再現的に却下できる評価基盤」。再開は新規事前登録→operator承認データ→
+  標準gateで1回採点、の順のみ。
+  [closeout](RESEARCH_PLATFORM_CLOSEOUT_AND_STATUS_RECORD_NO_POST_20260709.md) /
+  [runbook](RESEARCH_RUNBOOK_NO_POST.md)。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
