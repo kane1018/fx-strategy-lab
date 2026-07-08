@@ -28,8 +28,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   データソース選定済み（Primary=GMO Public klines BID+ASK→local CSV・取得は
   operator承認の別Step。
   [HISTORICAL_DATA_SOURCE_SELECTION_NO_POST.md](HISTORICAL_DATA_SOURCE_SELECTION_NO_POST.md)）。
-  local CSV import adapterも実装済み（local fileのみ・fail-closed・実データ未読。
+  local CSV import adapterも実装済み（local fileのみ・fail-closed。
   [HISTORICAL_DATA_IMPORT_ADAPTER_NO_POST.md](HISTORICAL_DATA_IMPORT_ADAPTER_NO_POST.md)）。
+  operator CSV（USD_JPY M5・19,992 bars）でdry-run合格→初回real-data backtest実施済み
+  （profit factor≈0.83・**edge根拠なし・性能未証明**。
+  [STRATEGY_BACKTEST_WITH_OPERATOR_CSV_INITIAL_NO_POST_20260708.md](STRATEGY_BACKTEST_WITH_OPERATOR_CSV_INITIAL_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
