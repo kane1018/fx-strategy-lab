@@ -86,9 +86,11 @@ _JP_BANK_HOLIDAYS: frozenset[date] = frozenset(
     }
 )
 
-# Days whose date ends in 5 or 0 ("go-to-bi" = 5/10 days). For a month without
-# a 30th (February), the last calendar day stands in for the "30" slot.
-_GOTOBI_BASE_DAYS = (5, 10, 15, 20, 25, 30)
+# "go-to-bi" settlement days: dates ending in 5 (5/15/25) plus the 0-ending
+# days. Per the frozen pre-registration the "0"/30 slot is the true MONTH-END
+# (末日 = the last calendar day), so a 31-day month uses the 31st (its real
+# bank settlement day), not the 30th, and February uses the 28th/29th.
+_GOTOBI_FIXED_DAYS = (5, 10, 15, 20, 25)
 
 
 def is_jp_bank_business_day(day: date) -> bool:
@@ -118,8 +120,7 @@ def effective_gotobi_dates(start: date, end: date) -> frozenset[date]:
     year, month = start.year, start.month
     while (year, month) <= (end.year, end.month):
         last_day = _calendar.monthrange(year, month)[1]
-        for base in _GOTOBI_BASE_DAYS:
-            day_num = min(base, last_day)
+        for day_num in (*_GOTOBI_FIXED_DAYS, last_day):  # 5/10/15/20/25 + 末日
             base_date = date(year, month, day_num)
             effective = (
                 base_date
@@ -252,15 +253,21 @@ def _trade_pnl(
     spread_cost_multiplier: float,
     slippage_price_per_side: float,
 ) -> tuple[float, float]:
-    """Return ``(pnl, spread_cost)`` for one day trade. Candles are BID: a long
-    buys at ASK (charged via one spread) and sells at BID; a short is the
-    mirror. Slippage is charged on both fills."""
+    """Return ``(pnl, spread_cost)`` for one day trade. Candles are BID.
+
+    Spread is charged on the leg that CROSSES it (leg-level, per the frozen
+    pre-registration): a long buys at ASK on entry (charge the entry-bar
+    spread) and sells at BID on exit (no extra); a short sells at BID on entry
+    (no extra) and buys at ASK on exit (charge the exit-bar spread). Slippage
+    is charged on both fills.
+    """
 
     direction = 1.0 if long else -1.0
     entry_close = dataset.candles[day_trade.entry_index].close_value
     exit_close = dataset.candles[day_trade.exit_index].close_value
+    crossing_index = day_trade.entry_index if long else day_trade.exit_index
     spread = (
-        (dataset.spreads[day_trade.entry_index].spread_value or 0.0)
+        (dataset.spreads[crossing_index].spread_value or 0.0)
         if spread_included
         else 0.0
     )
@@ -342,7 +349,16 @@ DEFAULT_STANDARD_SLIPPAGE_PRICE_PER_SIDE = 0.005  # 0.5 pip USD/JPY
 DEFAULT_COST_MULTIPLIERS = (1.0, 1.5, 2.0)
 DEFAULT_PERMUTATION_SEED_COUNT = 500
 _BENCHMARK_PERCENTILE = 0.90
-_MIN_TRADES_FOR_VERDICT = 30
+# Frozen pre-registration min-sample: gotobi >= 90 trades, split into >= 3
+# chronological blocks each with >= 25 trades; below this the outcome is
+# INSUFFICIENT (never a pass).
+_MIN_GOTOBI_TRADES = 90
+_STABILITY_BLOCKS = 3
+_MIN_TRADES_PER_BLOCK = 25
+
+VERDICT_PASSED = "RETEST_PASSED_CANDIDATE_FOR_PAPER_FORWARD"
+VERDICT_NOT_ROBUST = "GOTOBI_EFFECT_NOT_ROBUST_REJECT"
+VERDICT_INSUFFICIENT = "INSUFFICIENT_GOTOBI_SAMPLE"
 
 
 def _profit_factor(pnls: list[float]) -> float:
@@ -408,15 +424,17 @@ class GotobiEvaluationReport:
     gotobi: GotobiLegSafe
     non_gotobi: GotobiLegSafe
     gotobi_cost_stressed: GotobiLegSafe
-    label_permutation_p90_pf: float
+    label_permutation_p90_pf: float  # plain (secondary reference)
+    weekday_stratified_label_permutation_p90_pf: float  # primary control
     sign_permutation_p90_pf: float
-    first_half_pf_rounded: float
-    second_half_pf_rounded: float
+    block_pf_rounded: tuple[float, ...]
+    block_trade_counts: tuple[int, ...]
     beats_non_gotobi_control: bool
-    beats_label_permutation: bool
+    beats_label_permutation: bool  # plain (secondary reference)
+    beats_weekday_stratified_label: bool  # primary control
     beats_sign_permutation: bool
     survives_cost_stress: bool
-    stable_across_halves: bool
+    stable_across_blocks: bool
     robust_verdict_safe_label: str
     performance_proof_status: bool = False
     live_ready: bool = False
@@ -488,61 +506,93 @@ def evaluate_gotobi_effect(
     stressed_leg = _leg("GOTOBI_COST_STRESSED", gotobi_long_stress)
 
     gotobi_pf = gotobi_leg.profit_factor_rounded
-
-    # Day-label permutation: random same-size subsets of ALL valid days.
     n_goto = len(gotobi_trades)
+
+    # (secondary) plain day-label permutation: random same-size subsets.
     label_pfs: list[float] = []
     if all_long_base and n_goto:
         for seed in range(permutation_seed_count):
             order = _lcg_order(len(all_long_base), _LCG_SEED + seed * 100003 + 11)
-            subset = [all_long_base[i] for i in order[:n_goto]]
-            label_pfs.append(_profit_factor(subset))
+            label_pfs.append(_profit_factor([all_long_base[i] for i in order[:n_goto]]))
     label_p90 = round(_percentile(label_pfs, _BENCHMARK_PERCENTILE), 4)
+
+    # (primary) weekday-stratified label permutation: sample same per-weekday
+    # counts as gotobi, from all valid days -> controls gotobi's weekday skew.
+    all_long_ordered = long_pnls(all_trades, base_cost)
+    by_weekday: dict[int, list[float]] = {}
+    for trade, pnl in zip(all_trades, all_long_ordered, strict=True):
+        by_weekday.setdefault(trade.day.weekday(), []).append(pnl)
+    gotobi_weekday_counts: dict[int, int] = {}
+    for trade in gotobi_trades:
+        wd = trade.day.weekday()
+        gotobi_weekday_counts[wd] = gotobi_weekday_counts.get(wd, 0) + 1
+    strat_pfs: list[float] = []
+    if n_goto:
+        for seed in range(permutation_seed_count):
+            sample: list[float] = []
+            for wd, cnt in sorted(gotobi_weekday_counts.items()):
+                pool = by_weekday.get(wd, [])
+                if not pool:
+                    continue
+                if len(pool) <= cnt:
+                    sample.extend(pool)
+                else:
+                    order = _lcg_order(len(pool), _LCG_SEED + seed * 100003 + wd * 7 + 3)
+                    sample.extend(pool[i] for i in order[:cnt])
+            strat_pfs.append(_profit_factor(sample))
+    strat_p90 = round(_percentile(strat_pfs, _BENCHMARK_PERCENTILE), 4)
 
     # Sign-permutation: same gotobi days, randomized direction.
     sign_pfs: list[float] = []
     for seed in range(permutation_seed_count):
         state = (_LCG_SEED + seed * 100003 + 7) & 0x7FFFFFFF
         pnls: list[float] = []
-        for k in range(len(gotobi_trades)):
+        for k in range(n_goto):
             state = (state * 1103515245 + 12345) & 0x7FFFFFFF
             long = bool((state >> 16) & 1)
             pnls.append(gotobi_long_base[k] if long else gotobi_short_base[k])
         sign_pfs.append(_profit_factor(pnls))
     sign_p90 = round(_percentile(sign_pfs, _BENCHMARK_PERCENTILE), 4)
 
-    # Temporal stability: chronological halves.
-    ordered = sorted(range(len(gotobi_trades)), key=lambda k: gotobi_trades[k].day)
-    mid = len(ordered) // 2
-    first_half = [gotobi_long_base[k] for k in ordered[:mid]]
-    second_half = [gotobi_long_base[k] for k in ordered[mid:]]
-    first_pf = round(_profit_factor(first_half), 4)
-    second_pf = round(_profit_factor(second_half), 4)
+    # Temporal stability: N chronological blocks, each must have PF > 1.
+    ordered = sorted(range(n_goto), key=lambda k: gotobi_trades[k].day)
+    block_pfs: list[float] = []
+    block_counts: list[int] = []
+    for b in range(_STABILITY_BLOCKS):
+        lo = b * n_goto // _STABILITY_BLOCKS
+        hi = (b + 1) * n_goto // _STABILITY_BLOCKS
+        block = [gotobi_long_base[k] for k in ordered[lo:hi]]
+        block_pfs.append(round(_profit_factor(block), 4))
+        block_counts.append(len(block))
 
     beats_control = gotobi_pf > max(1.0, non_gotobi_leg.profit_factor_rounded)
-    beats_label = gotobi_pf > label_p90
+    beats_label = gotobi_pf > label_p90  # secondary
+    beats_stratified = gotobi_pf > strat_p90  # primary
     beats_sign = gotobi_pf > sign_p90
     survives_cost = (
         stressed_leg.profit_factor_rounded > 1.0
         and stressed_leg.expectancy_sign == "NON_NEGATIVE"
     )
-    stable = first_pf > 1.0 and second_pf > 1.0
+    stable = all(pf > 1.0 for pf in block_pfs)
 
-    enough = len(gotobi_trades) >= _MIN_TRADES_FOR_VERDICT
+    enough = (
+        n_goto >= _MIN_GOTOBI_TRADES
+        and all(c >= _MIN_TRADES_PER_BLOCK for c in block_counts)
+    )
     robust = (
         enough
         and beats_control
-        and beats_label
+        and beats_stratified
         and beats_sign
         and survives_cost
         and stable
     )
     if not enough:
-        verdict = "INSUFFICIENT_GOTOBI_SAMPLE"
+        verdict = VERDICT_INSUFFICIENT
     elif robust:
-        verdict = "GOTOBI_EFFECT_ROBUST_UNDER_ALL_CONTROLS"
+        verdict = VERDICT_PASSED
     else:
-        verdict = "GOTOBI_EFFECT_NOT_ROBUST_REJECT"
+        verdict = VERDICT_NOT_ROBUST
 
     return GotobiEvaluationReport(
         timeframe_safe_label=dataset.timeframe_safe_label,
@@ -550,20 +600,22 @@ def evaluate_gotobi_effect(
         exit_jst_hhmm=f"{exit_jst_minute // 60:02d}:{exit_jst_minute % 60:02d}",
         slippage_price_per_side=slippage_price_per_side,
         stress_cost_multiplier=stress_cost,
-        effective_gotobi_trade_count=len(gotobi_trades),
+        effective_gotobi_trade_count=n_goto,
         skipped_gotobi_day_count=skipped,
         gotobi=gotobi_leg,
         non_gotobi=non_gotobi_leg,
         gotobi_cost_stressed=stressed_leg,
         label_permutation_p90_pf=label_p90,
+        weekday_stratified_label_permutation_p90_pf=strat_p90,
         sign_permutation_p90_pf=sign_p90,
-        first_half_pf_rounded=first_pf,
-        second_half_pf_rounded=second_pf,
+        block_pf_rounded=tuple(block_pfs),
+        block_trade_counts=tuple(block_counts),
         beats_non_gotobi_control=beats_control,
         beats_label_permutation=beats_label,
+        beats_weekday_stratified_label=beats_stratified,
         beats_sign_permutation=beats_sign,
         survives_cost_stress=survives_cost,
-        stable_across_halves=stable,
+        stable_across_blocks=stable,
         robust_verdict_safe_label=verdict,
         real_data_used=not dataset.synthetic_fixture,
     )

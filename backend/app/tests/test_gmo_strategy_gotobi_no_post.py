@@ -108,10 +108,17 @@ class TestGotobiCalendar:
 
     def test_february_thirty_slot_uses_last_day(self) -> None:
         feb = effective_gotobi_dates(date(2026, 2, 1), date(2026, 2, 28))
-        # Feb has no 30th; the "30" slot falls back to the last day (28th, Sat)
+        # Feb has no 30th; the month-end slot is the last day (28th, Sat)
         # -> preceding business day 27th (Fri).
         assert date(2026, 2, 27) in feb
         assert all(d.month == 2 for d in feb)
+
+    def test_month_end_uses_31st_when_business_day(self) -> None:
+        # July 2025: the 31st is a Thursday (bank business day), so the
+        # month-end slot is the 31st, NOT the 30th.
+        july = effective_gotobi_dates(date(2025, 7, 1), date(2025, 7, 31))
+        assert date(2025, 7, 31) in july
+        assert date(2025, 7, 30) not in july
 
 
 class TestGotobiRunner:
@@ -139,6 +146,52 @@ class TestGotobiRunner:
         assert [t.side_safe_label for t in a.trades] == [
             t.side_safe_label for t in b.trades
         ]
+
+    def test_leg_level_spread_charges_the_crossing_side(self) -> None:
+        # entry-bar spread 0.002, exit-bar spread 0.010: a long crosses on
+        # entry (0.002), a short crosses on exit (0.010).
+        candles, spreads, sessions = [], [], []
+        for i, sp in enumerate((0.002, 0.010)):
+            candles.append(
+                BacktestCandleRecord(
+                    timestamp=int(_EPOCH_2025.timestamp() * 1000) + i,
+                    symbol_safe_label="USD_JPY", timeframe_safe_label="M5",
+                    open_value=_BASE, high_value=_BASE, low_value=_BASE,
+                    close_value=_BASE,
+                )
+            )
+            spreads.append(
+                BacktestSpreadRecord(
+                    timestamp=int(_EPOCH_2025.timestamp() * 1000) + i,
+                    symbol_safe_label="USD_JPY",
+                    spread_category=SpreadCategorySafeLabel.SPREAD_CATEGORY_NORMAL,
+                    spread_value=sp,
+                )
+            )
+            sessions.append(
+                BacktestSessionRecord(
+                    timestamp=int(_EPOCH_2025.timestamp() * 1000) + i,
+                    session_safe_label=SessionAllowedSafeLabel.SESSION_ALLOWED,
+                )
+            )
+        ds = BacktestDataset(
+            symbol_safe_label="USD_JPY", timeframe_safe_label="M5",
+            candles=tuple(candles), spreads=tuple(spreads),
+            sessions=tuple(sessions), synthetic_fixture=False,
+        )
+        dt = module._DayTrade(
+            day=date(2025, 1, 6), is_gotobi=True, entry_index=0, exit_index=1
+        )
+        _, long_cost = module._trade_pnl(
+            ds, dt, long=True, spread_included=True,
+            spread_cost_multiplier=1.0, slippage_price_per_side=0.0,
+        )
+        _, short_cost = module._trade_pnl(
+            ds, dt, long=False, spread_included=True,
+            spread_cost_multiplier=1.0, slippage_price_per_side=0.0,
+        )
+        assert round(long_cost, 6) == 0.002  # entry-bar spread
+        assert round(short_cost, 6) == 0.010  # exit-bar spread
 
     def test_missing_0300_bar_day_is_skipped_not_fabricated(self) -> None:
         # One Monday gotobi date (2025-06-30) with bars only from 07:00 JST on.
@@ -182,28 +235,31 @@ class TestGotobiRunner:
 
 class TestGotobiEvaluation:
     def test_engineered_effect_is_robust_under_all_controls(self) -> None:
-        report = evaluate_gotobi_effect(_synthetic_year())
-        assert report.effective_gotobi_trade_count >= 30
+        report = evaluate_gotobi_effect(_synthetic_year(months=20))
+        assert report.effective_gotobi_trade_count >= 90
         assert report.gotobi.profit_factor_rounded > report.non_gotobi.profit_factor_rounded
         assert report.beats_non_gotobi_control is True
-        assert report.beats_label_permutation is True
+        assert report.beats_label_permutation is True  # secondary
+        assert report.beats_weekday_stratified_label is True  # primary
         assert report.beats_sign_permutation is True
         assert report.survives_cost_stress is True
-        assert report.stable_across_halves is True
+        assert report.stable_across_blocks is True
+        assert len(report.block_pf_rounded) == 3
+        assert all(c >= 25 for c in report.block_trade_counts)
         assert report.robust_verdict_safe_label == (
-            "GOTOBI_EFFECT_ROBUST_UNDER_ALL_CONTROLS"
+            "RETEST_PASSED_CANDIDATE_FOR_PAPER_FORWARD"
         )
         assert report.performance_proof_status is False
         assert report.live_ready is False
         assert bool(report) is False
 
     def test_is_deterministic(self) -> None:
-        ds = _synthetic_year(months=6)
+        ds = _synthetic_year(months=8)
         assert evaluate_gotobi_effect(ds) == evaluate_gotobi_effect(ds)
 
     def test_small_sample_is_withheld_not_endorsed(self) -> None:
-        report = evaluate_gotobi_effect(_synthetic_year(months=1))
-        assert report.effective_gotobi_trade_count < 30
+        report = evaluate_gotobi_effect(_synthetic_year(months=2))
+        assert report.effective_gotobi_trade_count < 90
         assert report.robust_verdict_safe_label == "INSUFFICIENT_GOTOBI_SAMPLE"
 
     def test_exit_defaults_are_the_tokyo_fix(self) -> None:
