@@ -38,6 +38,9 @@ class GmoOverfittingStatus(str, Enum):
     OVERFITTING_RISK_UNKNOWN_NO_REAL_DATA = (
         "OVERFITTING_RISK_UNKNOWN_NO_REAL_DATA"
     )
+    OVERFITTING_RISK_UNKNOWN_SINGLE_SAMPLE_REAL_DATA = (
+        "OVERFITTING_RISK_UNKNOWN_SINGLE_SAMPLE_REAL_DATA"
+    )
 
 
 class GmoOosStatus(str, Enum):
@@ -127,8 +130,15 @@ def _exit_count(
 
 def compute_backtest_metrics(
     run_result: BacktestRunResult,
+    *,
+    real_data_single_sample: bool = False,
 ) -> BacktestMetricsSummary:
-    """Compute the metric pipeline over one synthetic run result."""
+    """Compute the metric pipeline over one run result.
+
+    ``real_data_single_sample=True`` only refines the (still conservative)
+    overfitting label for a validated real-data run over a single sample; it
+    never turns any result into a performance proof.
+    """
 
     trades = run_result.trades
     pnls = [trade.synthetic_pnl_value for trade in trades]
@@ -154,8 +164,14 @@ def compute_backtest_metrics(
     else:
         status = GmoBacktestMetricsStatus.METRICS_COMPUTED_SYNTHETIC
 
+    overfitting_status = (
+        GmoOverfittingStatus.OVERFITTING_RISK_UNKNOWN_SINGLE_SAMPLE_REAL_DATA
+        if real_data_single_sample
+        else GmoOverfittingStatus.OVERFITTING_RISK_UNKNOWN_NO_REAL_DATA
+    )
     return BacktestMetricsSummary(
         status=status,
+        overfitting_status=overfitting_status,
         trade_count=len(trades),
         win_rate=(len(wins) / len(trades)) if trades else 0.0,
         profit_factor=(

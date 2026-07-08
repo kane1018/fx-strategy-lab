@@ -347,13 +347,27 @@ def run_synthetic_backtest(
     exit_policy: ExitPolicyCandidate,
     spread_included: bool = True,
     environment: BacktestEnvironmentAssumption | None = None,
+    entry_momentum_strict: bool = False,
+    opposite_signal_debounce_bars: int = 1,
 ) -> BacktestRunResult:
-    """Run the skeleton once over one synthetic dataset. No retry paths.
+    """Run the skeleton once over one dataset. No retry paths.
 
     ``spread_included=False`` is allowed only as a reference run; the report
     layer refuses to mark such a run as official.
+
+    Backtest-level candidate knobs (defaults reproduce the baseline behavior
+    exactly, so existing runs/tests are unchanged):
+
+    - ``entry_momentum_strict``: when True, only open a trade when the bar's
+      momentum strictly aligns with the side (BUY requires MOMENTUM_UP, SELL
+      requires MOMENTUM_DOWN); neutral-momentum entries are skipped. This is
+      a backtest-level filter and never mutates the deterministic engine.
+    - ``opposite_signal_debounce_bars``: require this many consecutive
+      opposite-trend bars before an opposite-signal exit (1 = exit on the
+      first opposite bar, the baseline).
     """
 
+    debounce = max(1, opposite_signal_debounce_bars)
     env = environment if environment is not None else BacktestEnvironmentAssumption()
     validation = validate_backtest_dataset(dataset)
     if validation.status not in DATASET_VALID_STATUSES:
@@ -370,6 +384,7 @@ def run_synthetic_backtest(
 
     trades: list[BacktestTradeEvent] = []
     open_trade: _OpenPaperTrade | None = None
+    opposite_streak = 0
     signal_labels: list[str] = []
     category_labels: list[str] = []
     block_reasons: list[str] = []
@@ -431,12 +446,12 @@ def run_synthetic_backtest(
             trend, _ = derive_trend_momentum_labels(
                 tuple(c.close_value for c in dataset.candles[: bar_index + 1])
             )
+            is_opposite_bar = (direction > 0 and trend is TrendSafeLabel.DOWNTREND) or (
+                direction < 0 and trend is TrendSafeLabel.UPTREND
+            )
+            opposite_streak = opposite_streak + 1 if is_opposite_bar else 0
             opposite = (
-                exit_policy.exit_on_opposite_signal
-                and (
-                    (direction > 0 and trend is TrendSafeLabel.DOWNTREND)
-                    or (direction < 0 and trend is TrendSafeLabel.UPTREND)
-                )
+                exit_policy.exit_on_opposite_signal and opposite_streak >= debounce
             )
             if hit_sl:
                 _close_trade(
@@ -476,16 +491,23 @@ def run_synthetic_backtest(
             decision.strategy_decision_category
             is StrategyDecisionCategory.ENTRY_PREVIEW_PROPOSED
         ):
+            is_buy = (
+                decision.auto_preview_signal
+                is AutoPreviewSignal.AUTO_PREVIEW_SIGNAL_BUY
+            )
+            momentum_aligned = (
+                signal_input.momentum_safe_label is MomentumSafeLabel.MOMENTUM_UP
+                if is_buy
+                else signal_input.momentum_safe_label
+                is MomentumSafeLabel.MOMENTUM_DOWN
+            )
+            if entry_momentum_strict and not momentum_aligned:
+                continue
             spread_record = dataset.spreads[bar_index]
             spread_cost = (
                 (spread_record.spread_value or 0.0) if spread_included else 0.0
             )
-            side = (
-                "PAPER_LONG"
-                if decision.auto_preview_signal
-                is AutoPreviewSignal.AUTO_PREVIEW_SIGNAL_BUY
-                else "PAPER_SHORT"
-            )
+            side = "PAPER_LONG" if is_buy else "PAPER_SHORT"
             open_trade = _OpenPaperTrade(
                 side=side,
                 entry_signal=decision.auto_preview_signal.value,
@@ -493,6 +515,7 @@ def run_synthetic_backtest(
                 entry_bar=bar_index,
                 spread_cost=spread_cost,
             )
+            opposite_streak = 0
 
     if open_trade is not None and exit_policy.exit_on_end_of_window:
         _close_trade(
@@ -510,4 +533,6 @@ def run_synthetic_backtest(
         category_distribution=_distribution(category_labels),
         block_reason_distribution=_distribution(block_reasons),
         spread_included=spread_included,
+        synthetic_fixture_only=dataset.synthetic_fixture,
+        real_data_used=not dataset.synthetic_fixture,
     )

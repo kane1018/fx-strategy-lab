@@ -41,6 +41,12 @@ FORBIDDEN_REPORT_CLAIM_FRAGMENTS: tuple[str, ...] = (
 class GmoBacktestReportStatus(str, Enum):
     REPORT_SYNTHETIC_REFERENCE_ONLY = "REPORT_SYNTHETIC_REFERENCE_ONLY"
     REPORT_SYNTHETIC_SPREAD_INCLUDED = "REPORT_SYNTHETIC_SPREAD_INCLUDED"
+    REPORT_OPERATOR_LOCAL_CSV_SPREAD_INCLUDED = (
+        "REPORT_OPERATOR_LOCAL_CSV_SPREAD_INCLUDED"
+    )
+    REPORT_OPERATOR_LOCAL_CSV_REFERENCE_ONLY = (
+        "REPORT_OPERATOR_LOCAL_CSV_REFERENCE_ONLY"
+    )
     REPORT_BLOCKED_UNSAFE = "REPORT_BLOCKED_UNSAFE"
 
 
@@ -134,11 +140,18 @@ def build_backtest_report(
         raise GmoBacktestReportError(
             "OOS cannot be marked evaluated in the synthetic-only phase"
         )
-    status = (
-        GmoBacktestReportStatus.REPORT_SYNTHETIC_SPREAD_INCLUDED
-        if run_result.spread_included
-        else GmoBacktestReportStatus.REPORT_SYNTHETIC_REFERENCE_ONLY
-    )
+    if dataset.validated_operator_local_csv:
+        status = (
+            GmoBacktestReportStatus.REPORT_OPERATOR_LOCAL_CSV_SPREAD_INCLUDED
+            if run_result.spread_included
+            else GmoBacktestReportStatus.REPORT_OPERATOR_LOCAL_CSV_REFERENCE_ONLY
+        )
+    else:
+        status = (
+            GmoBacktestReportStatus.REPORT_SYNTHETIC_SPREAD_INCLUDED
+            if run_result.spread_included
+            else GmoBacktestReportStatus.REPORT_SYNTHETIC_REFERENCE_ONLY
+        )
     return BacktestReport(
         report_status=status,
         dataset_symbol_safe_label=dataset.symbol_safe_label,

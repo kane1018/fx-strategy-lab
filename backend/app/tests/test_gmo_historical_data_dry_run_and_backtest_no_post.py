@@ -197,7 +197,7 @@ class TestRealDataBacktest:
             exit_policy=policy,
         )
         assert report.report_status is (
-            GmoBacktestReportStatus.REPORT_SYNTHETIC_SPREAD_INCLUDED
+            GmoBacktestReportStatus.REPORT_OPERATOR_LOCAL_CSV_SPREAD_INCLUDED
         )
         assert report.performance_proof_status is False
         assert report.live_ready is False
