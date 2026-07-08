@@ -117,6 +117,10 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   （validated edge＋operator承認まで作らない）。status 全不変。
   [productization](RESEARCH_PLATFORM_PRODUCTIZATION_NO_POST_20260709.md) /
   [registry](HYPOTHESIS_REGISTRY_NO_POST.md)。
+  その後「売買判断は operator・AI は判断材料のみ」方針を採用し **operator pre-trade caution briefing** を
+  設計凍結（docs のみ・warning-first・PULL式・NO_ACTION default・no-flag≠permission・**方向/confidence/推奨を出さない**・
+  tested-scope & rejected-ledger 照合・実 POST は別 Step・SERE 非起動・AUTO_PREVIEW/confidence/live は DEFER）。
+  status 全不変。[caution briefing design](OPERATOR_PRE_TRADE_CAUTION_BRIEFING_DESIGN_NO_POST_20260709.md)。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
