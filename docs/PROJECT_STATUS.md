@@ -67,6 +67,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   合格でも perf_proof/live=false)。既存M5/H1の窓は**API制約でなく運用選択**（export側ハードコード窓）で
   GMO public FX klinesの真の履歴深度は未確認 → retest前に取得可能最古日をoperator確認。
   [STRATEGY_GOTOBI_FIX_DRIFT_PREREGISTRATION_NO_POST_20260708.md](STRATEGY_GOTOBI_FIX_DRIFT_PREREGISTRATION_NO_POST_20260708.md)）。
+  operator承認でM5履歴をboundedプローブ確認（**~2023-11開始**）し、**USD_JPY M5 BID+ASKを
+  2023-11-01〜2026-07-07（≈2.7年・198,129 bars・0異常）取得**→凍結ルールで**1回採点**。
+  **gotobi 166件で PF≈1.00（2.0×コスト0.977）・符号置換に負け（方向優位なし）・3ブロック非持続
+  → `GOTOBI_EFFECT_NOT_ROBUST_REJECT`**。前回16件PF5.38は小標本の偶然と判明（最小標本gateが偽陽性却下）。
+  取得CSVはrepo外・未commit。
+  [STRATEGY_GOTOBI_MULTI_YEAR_M5_RETEST_NO_POST_20260708.md](STRATEGY_GOTOBI_MULTI_YEAR_M5_RETEST_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
