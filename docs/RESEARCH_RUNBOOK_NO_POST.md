@@ -83,6 +83,15 @@ rep = evaluate_under_standard_gate(
 - **さらに K=3 連続 NOT_ROBUST** で `RESEARCH_PLATFORM_CLOSEOUT` へ（operator 判断で前倒し可＝今回発動）。
 - 単一 benchmark 超えでは合格にしない（常に unanimous 多対照 × multi-resolution）。
 
+## 6b. Mechanism-first 原則（data-dredging 禁止・最重要）
+
+- **仮説はデータを見る前に「機構の強さ」で選ぶ**。「取れるデータで何が試せるか」を列挙して回るのは禁止
+  （＝data-dredging / HARKing。多重検定で偽edgeを生む）。
+- 正しい順序: **機構＋発動条件を凍結 → その機構が"要求する"データを取りに行く**（逆順禁止）。
+- **要求データが no-credential で入手不能なら、弱機構×易データの代替に流れず closeout を維持する**
+  （安易なデータに合わせて仮説を作り替えない）。
+- 判定は常に mechanism-first pre-registration に対する **1回採点**（gate 通過は paper-forward 検討のみ）。
+
 ## 6. live へ進む条件（現状すべて未達）
 
 robust edge（本 gate 合格）→ paper-forward soak → operator review → 明示承認、の**全て**が揃うまで

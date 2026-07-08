@@ -91,6 +91,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   標準gateで1回採点、の順のみ。
   [closeout](RESEARCH_PLATFORM_CLOSEOUT_AND_STATUS_RECORD_NO_POST_20260709.md) /
   [runbook](RESEARCH_RUNBOOK_NO_POST.md)。
+  その後 **mechanism-first 原則**（data-dredging 禁止・"取れるデータで探す"を明示的に排除）を runbook に明文化し、
+  最強の a-priori 機構 **CROSS_ASSET_RATES_LEADLAG**（米金利→USD/JPY 先行）を**データを見る前に事前登録**
+  （機構が要求するデータを明示）。現 status=**BLOCKED_PENDING_OPERATOR_PROVIDED_RATE_DATA**
+  （operator が US金利日中CSVを no-credential で提供/承認できれば1回採点、不可なら弱機構代替に流れず closeout 維持）。
+  [cross-asset preregistration](STRATEGY_CROSS_ASSET_RATES_LEADLAG_PREREGISTRATION_NO_POST_20260709.md)。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
