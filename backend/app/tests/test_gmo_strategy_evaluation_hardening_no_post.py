@@ -202,6 +202,61 @@ class TestRobustnessReport:
         assert report.any_robust_candidate is False
 
 
+class TestSlippageAndUpgradedVerdict:
+    def test_slippage_never_increases_total_pnl(self) -> None:
+        from app.services.gmo_strategy_redesign import run_redesign_backtest
+
+        dataset = _oscillating()
+        candidate = _candidate()
+        no_slip = run_redesign_backtest(
+            dataset=dataset, candidate=candidate, slippage_price_per_side=0.0
+        )
+        with_slip = run_redesign_backtest(
+            dataset=dataset, candidate=candidate, slippage_price_per_side=0.01
+        )
+        # Slippage never changes decisions, so the same trades pay more.
+        assert len(no_slip.trades) == len(with_slip.trades)
+        if no_slip.trades:
+            assert sum(t.synthetic_pnl_value for t in with_slip.trades) < sum(
+                t.synthetic_pnl_value for t in no_slip.trades
+            )
+
+    def test_report_uses_max_cost_as_stress_and_records_slippage(self) -> None:
+        dataset = _oscillating()
+        report = evaluate_candidate_robustness(
+            dataset,
+            window_bars=150,
+            max_windows=8,
+            cost_multipliers=(1.0, 1.5, 2.0),
+            slippage_price_per_side=0.004,
+            random_seed_count=5,
+        )
+        assert report.stress_cost_multiplier == 2.0
+        assert report.slippage_price_per_side == 0.004
+        assert report.random_seed_count == 5
+        for v in report.verdicts:
+            assert v.stress_cost_multiplier == 2.0
+            assert v.random_benchmark_p90_pf >= 0.0
+
+    def test_random_percentile_helper_is_deterministic(self) -> None:
+        from app.services.gmo_strategy_evaluation_hardening import (
+            random_benchmark_median_pf_percentile,
+        )
+
+        dataset = _oscillating()
+        windows = build_walk_forward_windows(
+            len(dataset.candles), window_bars=150, lead=40, max_windows=6
+        )
+        a = random_benchmark_median_pf_percentile(
+            dataset, windows, EXIT_RIDE, seed_count=8
+        )
+        b = random_benchmark_median_pf_percentile(
+            dataset, windows, EXIT_RIDE, seed_count=8
+        )
+        assert a == b
+        assert isinstance(a, float)
+
+
 class TestModuleIsolation:
     def test_module_has_no_network_broker_env_or_random_module(self) -> None:
         source = inspect.getsource(module)

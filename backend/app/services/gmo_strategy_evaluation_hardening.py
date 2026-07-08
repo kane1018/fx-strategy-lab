@@ -56,10 +56,13 @@ DEFAULT_WALK_FORWARD_WINDOW_BARS = 2000
 DEFAULT_MAX_WINDOWS = 12
 DEFAULT_MIN_TRADES_PER_WINDOW = 15
 # A candidate is walk-forward robust only if it clears this share of the
-# qualifying windows, and cost-robust if it still does at 1.5x cost.
+# qualifying windows, and cost-robust if it still does at the HARSHEST cost
+# multiplier supplied (not just 1.5x). ``beats_random`` compares the
+# candidate's median profit factor against a high percentile of a MULTI-SEED
+# random-entry distribution (not a single random path).
 _ROBUST_PASS_RATE = 0.60
-_COST_ROBUST_MULTIPLIER = 1.5
-_BEATS_RANDOM_MARGIN = 0.05
+_RANDOM_BENCHMARK_PERCENTILE = 0.90
+DEFAULT_RANDOM_SEED_COUNT = 30
 _LCG_SEED = 2_463_534_242
 
 
@@ -152,6 +155,7 @@ def run_random_entry_backtest(
     exit_config: RedesignExitConfig,
     spread_included: bool = True,
     spread_cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
     seed: int = _LCG_SEED,
 ) -> BacktestRunResult:
     """Same ATR exits, but entry side chosen by a fixed deterministic LCG.
@@ -181,7 +185,11 @@ def run_random_entry_backtest(
         nonlocal open_trade
         assert open_trade is not None
         direction = 1.0 if open_trade.side == "PAPER_LONG" else -1.0
-        pnl = (exit_price - open_trade.entry_close) * direction - open_trade.spread_cost
+        pnl = (
+            (exit_price - open_trade.entry_close) * direction
+            - open_trade.spread_cost
+            - 2.0 * slippage_price_per_side
+        )
         trades.append(
             BacktestTradeEvent(
                 trade_index=len(trades),
@@ -334,6 +342,7 @@ def run_walk_forward_for_candidate(
     windows: tuple[WalkForwardWindow, ...],
     *,
     cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
     lead: int = REDESIGN_SLICE_LEAD_IN_BARS,
     min_trades_per_window: int = DEFAULT_MIN_TRADES_PER_WINDOW,
 ) -> WalkForwardSummary:
@@ -347,6 +356,7 @@ def run_walk_forward_for_candidate(
             dataset=_window_slice(dataset, window, lead=lead),
             candidate=candidate,
             spread_cost_multiplier=cost_multiplier,
+            slippage_price_per_side=slippage_price_per_side,
         )
         metrics = _metrics(run_result, real)
         qualified = metrics.trade_count >= min_trades_per_window
@@ -385,6 +395,7 @@ def run_walk_forward_for_baseline(
     windows: tuple[WalkForwardWindow, ...],
     *,
     cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
     lead: int = REDESIGN_SLICE_LEAD_IN_BARS,
     min_trades_per_window: int = DEFAULT_MIN_TRADES_PER_WINDOW,
 ) -> WalkForwardSummary:
@@ -400,6 +411,7 @@ def run_walk_forward_for_baseline(
             exit_policy=policy,
             spread_included=True,
             spread_cost_multiplier=cost_multiplier,
+            slippage_price_per_side=slippage_price_per_side,
         )
         metrics = _metrics(run_result, real)
         qualified = metrics.trade_count >= min_trades_per_window
@@ -439,6 +451,8 @@ def run_walk_forward_for_random_benchmark(
     exit_config: RedesignExitConfig,
     *,
     cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
+    seed_base: int = _LCG_SEED,
     lead: int = REDESIGN_SLICE_LEAD_IN_BARS,
     min_trades_per_window: int = DEFAULT_MIN_TRADES_PER_WINDOW,
 ) -> WalkForwardSummary:
@@ -452,7 +466,8 @@ def run_walk_forward_for_random_benchmark(
             dataset=_window_slice(dataset, window, lead=lead),
             exit_config=exit_config,
             spread_cost_multiplier=cost_multiplier,
-            seed=_LCG_SEED + window.index,
+            slippage_price_per_side=slippage_price_per_side,
+            seed=seed_base + window.index,
         )
         metrics = _metrics(run_result, real)
         qualified = metrics.trade_count >= min_trades_per_window
@@ -504,6 +519,8 @@ class CandidateRobustnessVerdict:
     base_cost_pass_rate: float
     base_cost_median_pf: float
     stressed_cost_pass_rate: float
+    stress_cost_multiplier: float
+    random_benchmark_p90_pf: float
     robust_across_walk_forward: bool
     robust_to_cost: bool
     beats_random: bool
@@ -519,6 +536,9 @@ class EvaluationHardeningReport:
     window_count: int
     window_bars: int
     cost_multipliers: tuple[float, ...]
+    stress_cost_multiplier: float
+    slippage_price_per_side: float
+    random_seed_count: int
     baseline_base_cost_pass_rate: float
     random_base_cost_pass_rate: float
     verdicts: tuple[CandidateRobustnessVerdict, ...]
@@ -532,6 +552,42 @@ class EvaluationHardeningReport:
         return False
 
 
+def random_benchmark_median_pf_percentile(
+    dataset: BacktestDataset,
+    windows: tuple[WalkForwardWindow, ...],
+    exit_config: RedesignExitConfig,
+    *,
+    cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
+    seed_count: int = DEFAULT_RANDOM_SEED_COUNT,
+    percentile: float = _RANDOM_BENCHMARK_PERCENTILE,
+    lead: int = REDESIGN_SLICE_LEAD_IN_BARS,
+) -> float:
+    """High-percentile of per-seed median PF across many random-entry paths.
+
+    Runs ``seed_count`` independent deterministic random paths through the
+    same exits/windows and returns the ``percentile`` of their per-seed
+    median profit factors -- a far stronger benchmark than a single path.
+    """
+
+    per_seed_medians: list[float] = []
+    for seed in range(seed_count):
+        summary = run_walk_forward_for_random_benchmark(
+            dataset, windows, exit_config,
+            cost_multiplier=cost_multiplier,
+            slippage_price_per_side=slippage_price_per_side,
+            seed_base=_LCG_SEED + seed * 100003,
+            lead=lead,
+        )
+        if summary.qualified_window_count:
+            per_seed_medians.append(summary.median_profit_factor_rounded)
+    if not per_seed_medians:
+        return 0.0
+    per_seed_medians.sort()
+    idx = int(percentile * (len(per_seed_medians) - 1))
+    return round(per_seed_medians[idx], 4)
+
+
 def evaluate_candidate_robustness(
     dataset: BacktestDataset,
     *,
@@ -539,9 +595,17 @@ def evaluate_candidate_robustness(
     window_bars: int = DEFAULT_WALK_FORWARD_WINDOW_BARS,
     max_windows: int = DEFAULT_MAX_WINDOWS,
     cost_multipliers: tuple[float, ...] = DEFAULT_COST_MULTIPLIERS,
+    slippage_price_per_side: float = 0.0,
+    random_seed_count: int = DEFAULT_RANDOM_SEED_COUNT,
     lead: int = REDESIGN_SLICE_LEAD_IN_BARS,
 ) -> EvaluationHardeningReport:
-    """Full robustness battery over all candidates. Aggregate-only, no-POST."""
+    """Full robustness battery over all candidates. Aggregate-only, no-POST.
+
+    A candidate is only ROBUST when it clears the pass-rate bar at base cost
+    AND at the HARSHEST supplied cost multiplier (with the given slippage),
+    AND its median profit factor exceeds the ``p90`` of a multi-seed
+    random-entry distribution using the same exits.
+    """
 
     candidate_set = candidates or build_default_redesign_candidates()
     windows = build_walk_forward_windows(
@@ -549,48 +613,44 @@ def evaluate_candidate_robustness(
         max_windows=max_windows,
     )
     base_cost = cost_multipliers[0] if cost_multipliers else 1.0
-    stress_cost = next(
-        (c for c in cost_multipliers if c >= _COST_ROBUST_MULTIPLIER), base_cost
-    )
+    stress_cost = max(cost_multipliers) if cost_multipliers else base_cost
 
     baseline_base = run_walk_forward_for_baseline(
-        dataset, windows, cost_multiplier=base_cost, lead=lead
+        dataset, windows, cost_multiplier=base_cost,
+        slippage_price_per_side=slippage_price_per_side, lead=lead,
     )
-    # Random benchmark uses each candidate's own exit config; summarize the
-    # random pass rate with a representative exit config (the first candidate's).
-    representative_exit = candidate_set[0].exit_config if candidate_set else None
-    random_base = (
-        run_walk_forward_for_random_benchmark(
-            dataset, windows, representative_exit, cost_multiplier=base_cost, lead=lead
-        )
-        if representative_exit is not None
-        else None
-    )
-    random_base_median = (
-        random_base.median_profit_factor_rounded if random_base is not None else 0.0
+    # Multi-seed random p90 per distinct exit config (cache to avoid rework).
+    random_p90_by_exit: dict[str, float] = {}
+    for candidate in candidate_set:
+        key = candidate.exit_config.name
+        if key not in random_p90_by_exit:
+            random_p90_by_exit[key] = random_benchmark_median_pf_percentile(
+                dataset, windows, candidate.exit_config,
+                cost_multiplier=base_cost,
+                slippage_price_per_side=slippage_price_per_side,
+                seed_count=random_seed_count, lead=lead,
+            )
+    representative_random_p90 = (
+        next(iter(random_p90_by_exit.values())) if random_p90_by_exit else 0.0
     )
 
     verdicts: list[CandidateRobustnessVerdict] = []
     for candidate in candidate_set:
         base = run_walk_forward_for_candidate(
-            dataset, candidate, windows, cost_multiplier=base_cost, lead=lead
+            dataset, candidate, windows, cost_multiplier=base_cost,
+            slippage_price_per_side=slippage_price_per_side, lead=lead,
         )
         stressed = run_walk_forward_for_candidate(
-            dataset, candidate, windows, cost_multiplier=stress_cost, lead=lead
+            dataset, candidate, windows, cost_multiplier=stress_cost,
+            slippage_price_per_side=slippage_price_per_side, lead=lead,
         )
-        random_for_exit = run_walk_forward_for_random_benchmark(
-            dataset, windows, candidate.exit_config, cost_multiplier=base_cost,
-            lead=lead,
-        )
+        random_p90 = random_p90_by_exit[candidate.exit_config.name]
         robust_wf = (
             base.qualified_window_count >= 3
             and base.pass_rate_rounded >= _ROBUST_PASS_RATE
         )
         robust_cost = stressed.pass_rate_rounded >= _ROBUST_PASS_RATE
-        beats_random = (
-            base.median_profit_factor_rounded
-            > random_for_exit.median_profit_factor_rounded + _BEATS_RANDOM_MARGIN
-        )
+        beats_random = base.median_profit_factor_rounded > random_p90
         if base.qualified_window_count < 3:
             verdict = RobustnessVerdictCategory.INSUFFICIENT_WINDOWS
         elif robust_wf and robust_cost and beats_random:
@@ -604,6 +664,8 @@ def evaluate_candidate_robustness(
                 base_cost_pass_rate=base.pass_rate_rounded,
                 base_cost_median_pf=base.median_profit_factor_rounded,
                 stressed_cost_pass_rate=stressed.pass_rate_rounded,
+                stress_cost_multiplier=stress_cost,
+                random_benchmark_p90_pf=random_p90,
                 robust_across_walk_forward=robust_wf,
                 robust_to_cost=robust_cost,
                 beats_random=beats_random,
@@ -623,8 +685,11 @@ def evaluate_candidate_robustness(
         window_count=len(windows),
         window_bars=window_bars,
         cost_multipliers=cost_multipliers,
+        stress_cost_multiplier=stress_cost,
+        slippage_price_per_side=slippage_price_per_side,
+        random_seed_count=random_seed_count,
         baseline_base_cost_pass_rate=baseline_base.pass_rate_rounded,
-        random_base_cost_pass_rate=random_base_median,
+        random_base_cost_pass_rate=representative_random_p90,
         verdicts=tuple(verdicts),
         any_robust_candidate=any_robust,
         overall_conclusion_safe_label=conclusion,

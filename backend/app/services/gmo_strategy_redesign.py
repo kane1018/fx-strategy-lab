@@ -419,11 +419,14 @@ def run_redesign_backtest(
     candidate: RedesignCandidate,
     spread_included: bool = True,
     spread_cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
 ) -> BacktestRunResult:
     """Run one redesign candidate over one (sub-)dataset. No retry paths.
 
     ``spread_cost_multiplier`` (default 1.0) scales the per-trade spread cost
-    for cost-sensitivity stress tests; it never changes entry/exit logic.
+    for cost-sensitivity stress tests; ``slippage_price_per_side`` (default
+    0.0) charges an additional adverse fill on entry and exit (latency /
+    market impact / stop gap-through). Neither changes entry/exit decisions.
     """
 
     candles = dataset.candles
@@ -441,7 +444,11 @@ def run_redesign_backtest(
         nonlocal open_trade
         assert open_trade is not None
         direction = 1.0 if open_trade.side == "PAPER_LONG" else -1.0
-        pnl = (exit_price - open_trade.entry_close) * direction - open_trade.spread_cost
+        pnl = (
+            (exit_price - open_trade.entry_close) * direction
+            - open_trade.spread_cost
+            - 2.0 * slippage_price_per_side
+        )
         trades.append(
             BacktestTradeEvent(
                 trade_index=len(trades),

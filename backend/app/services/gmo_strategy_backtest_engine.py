@@ -350,6 +350,7 @@ def run_synthetic_backtest(
     entry_momentum_strict: bool = False,
     opposite_signal_debounce_bars: int = 1,
     spread_cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
 ) -> BacktestRunResult:
     """Run the skeleton once over one dataset. No retry paths.
 
@@ -397,7 +398,9 @@ def run_synthetic_backtest(
         assert open_trade is not None
         direction = 1.0 if open_trade.side == "PAPER_LONG" else -1.0
         gross = (exit_price - open_trade.entry_close) * direction
-        pnl = gross - open_trade.spread_cost
+        # Adverse slippage on entry and exit (2 sides), beyond the quoted
+        # spread; approximates latency/market-impact and stop gap-through.
+        pnl = gross - open_trade.spread_cost - 2.0 * slippage_price_per_side
         trades.append(
             BacktestTradeEvent(
                 trade_index=len(trades),
