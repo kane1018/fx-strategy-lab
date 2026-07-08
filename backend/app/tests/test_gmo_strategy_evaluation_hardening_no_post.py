@@ -14,11 +14,17 @@ from app.services.gmo_strategy_backtest_dataset import (
     SpreadCategorySafeLabel,
 )
 from app.services.gmo_strategy_evaluation_hardening import (
+    DEFAULT_STANDARD_SLIPPAGE_PRICE_PER_SIDE,
+    SIGN_PERMUTATION_RUNNER_NAME,
+    STANDARD_EVALUATION_GATE,
     RobustnessVerdictCategory,
     build_walk_forward_windows,
     evaluate_candidate_robustness,
+    evaluate_under_standard_gate,
     run_random_entry_backtest,
     run_walk_forward_for_candidate,
+    run_walk_forward_for_sign_permutation,
+    sign_permutation_median_pf_percentile,
 )
 from app.services.gmo_strategy_redesign import (
     EXIT_RIDE,
@@ -255,6 +261,86 @@ class TestSlippageAndUpgradedVerdict:
         )
         assert a == b
         assert isinstance(a, float)
+
+
+class TestSignPermutationBenchmark:
+    def test_walk_forward_runs_and_is_labelled(self) -> None:
+        dataset = _oscillating()
+        windows = build_walk_forward_windows(
+            len(dataset.candles), window_bars=150, lead=40, max_windows=4
+        )
+        summary = run_walk_forward_for_sign_permutation(
+            dataset, _candidate(), windows, seed=99,
+        )
+        assert summary.runner_name == SIGN_PERMUTATION_RUNNER_NAME
+        assert summary.window_count == len(windows)
+        assert bool(summary) is False
+
+    def test_percentile_is_deterministic(self) -> None:
+        dataset = _oscillating()
+        windows = build_walk_forward_windows(
+            len(dataset.candles), window_bars=150, lead=40, max_windows=4
+        )
+        a = sign_permutation_median_pf_percentile(
+            dataset, windows, _candidate(), seed_count=5,
+        )
+        b = sign_permutation_median_pf_percentile(
+            dataset, windows, _candidate(), seed_count=5,
+        )
+        assert a == b
+        assert isinstance(a, float)
+
+    def test_verdict_uses_sign_permutation_for_beats_random(self) -> None:
+        dataset = _oscillating()
+        report = evaluate_candidate_robustness(
+            dataset,
+            candidates=(_candidate(),),
+            window_bars=150,
+            cost_multipliers=(1.0, 2.0),
+            random_seed_count=4,
+        )
+        verdict = report.verdicts[0]
+        # beats_random is driven by the sign-permutation p90, not the
+        # fixed-cadence random p90 (both are reported).
+        assert verdict.beats_random is (
+            verdict.base_cost_median_pf > verdict.sign_permutation_p90_pf
+        )
+        assert isinstance(verdict.random_benchmark_p90_pf, float)
+
+
+class TestStandardEvaluationGate:
+    def test_gate_constants_are_the_mandatory_floor(self) -> None:
+        gate = STANDARD_EVALUATION_GATE
+        assert gate.slippage_price_per_side == DEFAULT_STANDARD_SLIPPAGE_PRICE_PER_SIDE
+        assert gate.slippage_price_per_side == 0.005  # 0.5 pip USD/JPY
+        assert max(gate.cost_multipliers) == 2.0
+        assert gate.robust_pass_rate == 0.60
+        assert gate.benchmark_percentile == 0.90
+        assert gate.directional_benchmark == SIGN_PERMUTATION_RUNNER_NAME
+        assert gate.no_post_oos_retuning is True
+        # Multi-resolution: more than one window granularity is mandatory.
+        assert len(gate.window_bars_resolutions) >= 2
+        assert gate.min_qualified_windows >= 4
+        assert bool(gate) is False
+
+    def test_evaluate_under_standard_gate_is_multi_resolution(self) -> None:
+        dataset = _oscillating()
+        report = evaluate_under_standard_gate(
+            dataset, candidates=(_candidate(),)
+        )
+        assert report.slippage_price_per_side == 0.005
+        assert report.stress_cost_multiplier == 2.0
+        assert report.resolutions == STANDARD_EVALUATION_GATE.window_bars_resolutions
+        verdict = report.verdicts[0]
+        # One sub-verdict per resolution; overall robustness is unanimous.
+        assert len(verdict.per_resolution) == len(report.resolutions)
+        assert verdict.robust_all_resolutions is (
+            all(r.robust_here for r in verdict.per_resolution)
+        )
+        assert report.performance_proof_status is False
+        assert report.live_ready is False
+        assert bool(report) is False
+        assert bool(verdict) is False
 
 
 class TestModuleIsolation:

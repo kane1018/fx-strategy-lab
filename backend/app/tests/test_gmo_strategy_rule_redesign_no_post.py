@@ -430,6 +430,145 @@ class TestFreezeAndOos:
         }
 
 
+_H1_MS = 3_600_000
+_BASE_EPOCH_MS = 1_609_459_200_000  # 2021-01-01 00:00:00 UTC
+
+
+def _short_exit_helper(bar_spread: float, high: float, low: float) -> tuple:
+    return module._exit_touch(
+        is_long=False,
+        candle_high=high,
+        candle_low=low,
+        entry_close=100.0,
+        sl_distance=0.10,
+        tp_distance=0.10,
+        bar_spread=bar_spread,
+    )
+
+
+class TestShortExitAskModel:
+    def test_short_stop_uses_ask_not_bid(self) -> None:
+        # BID high sits just below the stop (100.10); with no spread the
+        # short is NOT stopped, but a 0.03 spread lifts the ASK over it.
+        hit_sl_bid, _ = _short_exit_helper(0.0, high=100.08, low=99.9)
+        hit_sl_ask, _ = _short_exit_helper(0.03, high=100.08, low=99.9)
+        assert hit_sl_bid is False
+        assert hit_sl_ask is True
+
+    def test_short_target_uses_ask_not_bid(self) -> None:
+        # Short TP is a buy at ASK = BID + spread; a spread makes the target
+        # harder (later) to reach, never easier.
+        _, hit_tp_bid = _short_exit_helper(0.0, high=100.1, low=99.90)
+        _, hit_tp_ask = _short_exit_helper(0.03, high=100.1, low=99.90)
+        assert hit_tp_bid is True
+        assert hit_tp_ask is False
+
+    def test_long_touch_unaffected_by_spread(self) -> None:
+        # LONG closes by selling at the BID; the ASK shift must not apply.
+        for spread in (0.0, 0.05):
+            hit_sl, hit_tp = module._exit_touch(
+                is_long=True, candle_high=100.2, candle_low=99.85,
+                entry_close=100.0, sl_distance=0.10, tp_distance=0.10,
+                bar_spread=spread,
+            )
+            assert hit_sl is True and hit_tp is True
+
+
+class TestSessionMomentumHypothesis:
+    def test_bar_jst_hour_none_for_synthetic_ticks(self) -> None:
+        assert module._bar_jst_hour(5) is None
+        assert module._bar_jst_hour(_BASE_EPOCH_MS + 7 * _H1_MS) == 16
+        assert module._bar_jst_hour(_BASE_EPOCH_MS) == 9  # 00:00 UTC -> 09 JST
+
+    def test_session_momentum_only_enters_on_session_open_bar(self) -> None:
+        up = _ready_features(momentum=RedesignMomentum.UP)
+        blocked = redesign_entry_decision(
+            family=RedesignEntryFamily.SESSION_MOMENTUM, features=up,
+            spread_within_limit=True, session_allowed=True,
+            is_session_open_bar=False,
+        )
+        assert blocked.entry_side is RedesignEntrySide.REDESIGN_NO_ENTRY
+        assert blocked.block_reason_safe_label == "REDESIGN_NOT_SESSION_OPEN_BAR"
+        opened = redesign_entry_decision(
+            family=RedesignEntryFamily.SESSION_MOMENTUM, features=up,
+            spread_within_limit=True, session_allowed=True,
+            is_session_open_bar=True,
+        )
+        assert opened.entry_side is RedesignEntrySide.REDESIGN_ENTRY_LONG
+
+    def test_session_momentum_direction_follows_momentum(self) -> None:
+        down = _ready_features(momentum=RedesignMomentum.DOWN)
+        short = redesign_entry_decision(
+            family=RedesignEntryFamily.SESSION_MOMENTUM, features=down,
+            spread_within_limit=True, session_allowed=True,
+            is_session_open_bar=True,
+        )
+        assert short.entry_side is RedesignEntrySide.REDESIGN_ENTRY_SHORT
+        flat = _ready_features(momentum=RedesignMomentum.FLAT)
+        none = redesign_entry_decision(
+            family=RedesignEntryFamily.SESSION_MOMENTUM, features=flat,
+            spread_within_limit=True, session_allowed=True,
+            is_session_open_bar=True,
+        )
+        assert none.entry_side is RedesignEntrySide.REDESIGN_NO_ENTRY
+        assert none.block_reason_safe_label == "REDESIGN_NO_SESSION_MOMENTUM_DIRECTION"
+
+    def test_session_momentum_never_a_permission(self) -> None:
+        decision = redesign_entry_decision(
+            family=RedesignEntryFamily.SESSION_MOMENTUM,
+            features=_ready_features(), spread_within_limit=True,
+            session_allowed=True, is_session_open_bar=True,
+        )
+        assert bool(decision) is False
+        assert decision.actual_entry_POST_allowed is False
+        assert decision.actual_settlement_POST_allowed is False
+
+    def test_session_candidates_are_a_separate_battery(self) -> None:
+        default = build_default_redesign_candidates()
+        session = module.build_session_structural_candidates()
+        assert len(default) == 8
+        assert len(session) == 2
+        assert all(
+            c.family is RedesignEntryFamily.SESSION_MOMENTUM for c in session
+        )
+        assert all(
+            c.family is not RedesignEntryFamily.SESSION_MOMENTUM for c in default
+        )
+
+
+class TestSignPermutationOverride:
+    def test_sign_permutation_is_deterministic_and_trades(self) -> None:
+        dataset = _oscillating()
+        candidate = RedesignCandidate(
+            candidate_name="T",
+            family=RedesignEntryFamily.TREND_CONTINUATION,
+            exit_config=EXIT_TIGHT,
+        )
+        base = run_redesign_backtest(dataset=dataset, candidate=candidate)
+        r1 = run_redesign_backtest(
+            dataset=dataset, candidate=candidate, randomize_side_seed=123
+        )
+        r2 = run_redesign_backtest(
+            dataset=dataset, candidate=candidate, randomize_side_seed=123
+        )
+        assert len(base.trades) > 0
+        assert len(r1.trades) > 0
+        assert len(r1.trades) == len(r2.trades)
+        assert r1.status is GmoBacktestRunStatus.BACKTEST_SYNTHETIC_COMPLETED
+
+    def test_sign_permutation_never_a_performance_proof(self) -> None:
+        dataset = _oscillating()
+        candidate = RedesignCandidate(
+            candidate_name="T",
+            family=RedesignEntryFamily.TREND_CONTINUATION,
+            exit_config=EXIT_TIGHT,
+        )
+        result = run_redesign_backtest(
+            dataset=dataset, candidate=candidate, randomize_side_seed=7
+        )
+        assert bool(result) is False
+
+
 class TestModuleIsolation:
     def test_module_has_no_network_broker_or_env_surface(self) -> None:
         source = inspect.getsource(module)

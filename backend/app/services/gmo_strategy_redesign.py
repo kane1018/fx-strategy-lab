@@ -24,6 +24,7 @@ safe counts, and aggregate metrics only.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
 
 from app.services.gmo_strategy_backtest_dataset import (
@@ -97,6 +98,11 @@ class RedesignFeatureConfig:
     atr_lookback: int = 14
     overext_atr_mult: float = 1.5
     trend_margin_ratio: float = 0.0005
+    # SESSION_MOMENTUM only: JST hour of the bar to treat as the session open.
+    # 16 JST == 07:00 UTC ~ the London open, the highest-liquidity intraday
+    # transition for USD/JPY. Chosen a priori (single anchor) to respect the
+    # multiple-testing budget.
+    session_open_jst_hour: int = 16
 
 
 @dataclass(frozen=True)
@@ -108,6 +114,21 @@ class RedesignFeatures:
     # Internal only: never reported. Used to size ATR-relative exits.
     atr_like: float
     ready: bool
+
+
+# Below this a candle ``timestamp`` is a synthetic monotonic tick index
+# (see BacktestCandleRecord), not a real epoch-ms wall clock; session-of-day
+# logic must fail closed on those so synthetic fixtures never fabricate a
+# session-open entry.
+_EPOCH_MS_MIN = 1_000_000_000_000  # ~2001-09 in epoch milliseconds
+
+
+def _bar_jst_hour(timestamp_ms: int) -> int | None:
+    """JST hour (0-23) for a real epoch-ms bar; None for synthetic ticks."""
+
+    if timestamp_ms < _EPOCH_MS_MIN:
+        return None
+    return (datetime.fromtimestamp(timestamp_ms / 1000, UTC).hour + 9) % 24
 
 
 def _mean(values: list[float]) -> float:
@@ -203,6 +224,10 @@ class RedesignEntryFamily(str, Enum):
     BREAKOUT = "BREAKOUT"
     MEAN_REVERSION_RANGE = "MEAN_REVERSION_RANGE"
     DUAL_CONFIRMATION = "DUAL_CONFIRMATION"
+    # New (non-technical-indicator) hypothesis class: a structural
+    # time-of-day effect. Enters ONLY on the session-open bar, in the
+    # direction of the prior intraday drift (session-open continuation).
+    SESSION_MOMENTUM = "SESSION_MOMENTUM"
 
 
 class RedesignEntrySide(str, Enum):
@@ -238,6 +263,7 @@ def redesign_entry_decision(
     features: RedesignFeatures,
     spread_within_limit: bool,
     session_allowed: bool,
+    is_session_open_bar: bool = False,
 ) -> RedesignEntryDecision:
     """Deterministic entry rule per family. Fail-closed on unknown/unsafe.
 
@@ -291,6 +317,17 @@ def redesign_entry_decision(
         if features.overextension is RedesignOverextension.UP:
             return RedesignEntryDecision(short_side, "")
         return _no_entry("REDESIGN_NO_OVEREXTENSION")
+
+    if family is RedesignEntryFamily.SESSION_MOMENTUM:
+        # Structural time-of-day hypothesis: only the session-open bar is a
+        # candidate; direction follows the prior intraday drift (momentum).
+        if not is_session_open_bar:
+            return _no_entry("REDESIGN_NOT_SESSION_OPEN_BAR")
+        if features.momentum is RedesignMomentum.UP:
+            return RedesignEntryDecision(long_side, "")
+        if features.momentum is RedesignMomentum.DOWN:
+            return RedesignEntryDecision(short_side, "")
+        return _no_entry("REDESIGN_NO_SESSION_MOMENTUM_DIRECTION")
 
     # DUAL_CONFIRMATION
     if (
@@ -371,11 +408,19 @@ class RedesignCandidate:
         return False
 
 
-def build_default_redesign_candidates() -> tuple[RedesignCandidate, ...]:
-    """Four entry families x two ATR exit configs (8 candidates)."""
+_DEFAULT_ENTRY_FAMILIES = (
+    RedesignEntryFamily.TREND_CONTINUATION,
+    RedesignEntryFamily.BREAKOUT,
+    RedesignEntryFamily.MEAN_REVERSION_RANGE,
+    RedesignEntryFamily.DUAL_CONFIRMATION,
+)
 
+
+def _candidates_for_families(
+    families: tuple[RedesignEntryFamily, ...],
+) -> tuple[RedesignCandidate, ...]:
     candidates: list[RedesignCandidate] = []
-    for family in RedesignEntryFamily:
+    for family in families:
         for exit_config in (EXIT_TIGHT, EXIT_RIDE):
             candidates.append(
                 RedesignCandidate(
@@ -385,6 +430,23 @@ def build_default_redesign_candidates() -> tuple[RedesignCandidate, ...]:
                 )
             )
     return tuple(candidates)
+
+
+def build_default_redesign_candidates() -> tuple[RedesignCandidate, ...]:
+    """Four technical entry families x two ATR exit configs (8 candidates)."""
+
+    return _candidates_for_families(_DEFAULT_ENTRY_FAMILIES)
+
+
+def build_session_structural_candidates() -> tuple[RedesignCandidate, ...]:
+    """New structural (non-indicator) hypothesis: session-open continuation.
+
+    One entry family (SESSION_MOMENTUM) x two ATR exit configs (2 candidates).
+    Kept as a SEPARATE battery so it is evaluated through the same hardened
+    gate without inflating the default multiple-testing set.
+    """
+
+    return _candidates_for_families((RedesignEntryFamily.SESSION_MOMENTUM,))
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +468,35 @@ def _spread_within(category: SpreadCategorySafeLabel) -> bool:
     return category is SpreadCategorySafeLabel.SPREAD_CATEGORY_NORMAL
 
 
+def _exit_touch(
+    *,
+    is_long: bool,
+    candle_high: float,
+    candle_low: float,
+    entry_close: float,
+    sl_distance: float,
+    tp_distance: float,
+    bar_spread: float,
+) -> tuple[bool, bool]:
+    """Whether a bar touches the stop-loss / take-profit for an open trade.
+
+    Candles are BID prices. A LONG is closed by SELLING at the BID, so its
+    touches are evaluated on the BID candle directly. A SHORT is closed by
+    BUYING at the ASK = BID + spread, so its touches are evaluated on
+    ASK = BID + ``bar_spread`` (both a rising stop and a falling target).
+    This removes the earlier BID-only optimism where a short's stop triggered
+    one spread late. Returns ``(hit_sl, hit_tp)``.
+    """
+
+    if is_long:
+        hit_sl = candle_low <= entry_close - sl_distance
+        hit_tp = candle_high >= entry_close + tp_distance
+    else:
+        hit_sl = candle_high + bar_spread >= entry_close + sl_distance
+        hit_tp = candle_low + bar_spread <= entry_close - tp_distance
+    return hit_sl, hit_tp
+
+
 def _distribution(labels: list[str]) -> tuple[tuple[str, int], ...]:
     counts: dict[str, int] = {}
     for label in labels:
@@ -420,14 +511,33 @@ def run_redesign_backtest(
     spread_included: bool = True,
     spread_cost_multiplier: float = 1.0,
     slippage_price_per_side: float = 0.0,
+    randomize_side_seed: int | None = None,
 ) -> BacktestRunResult:
     """Run one redesign candidate over one (sub-)dataset. No retry paths.
 
-    ``spread_cost_multiplier`` (default 1.0) scales the per-trade spread cost
-    for cost-sensitivity stress tests; ``slippage_price_per_side`` (default
-    0.0) charges an additional adverse fill on entry and exit (latency /
-    market impact / stop gap-through). Neither changes entry/exit decisions.
+    ``spread_cost_multiplier`` (default 1.0) scales the per-trade spread cost;
+    ``slippage_price_per_side`` (default 0.0) charges an additional adverse
+    fill on entry and exit. SHORT take-profit/stop-loss touches are evaluated
+    on ASK levels (BID candle +/- the bar spread), since a short is covered
+    by buying at the ask -- removing the earlier BID-only asymmetry.
+
+    ``randomize_side_seed`` (default None): when set, the entry DECISION
+    (whether/when to consider a trade, and all gating) is unchanged, but the
+    side is replaced by a deterministic LCG coin flip. This yields a
+    sign-permutation benchmark that shares the candidate's exact entry gate,
+    cadence, and exit configs -- isolating directional skill. Realized fills
+    can desync slightly from the candidate because direction-dependent exits
+    change when the book is flat, but the entry OPPORTUNITY set is identical,
+    so (unlike a fixed-cadence random path) the benchmark is not inflated by
+    a different entry frequency or schedule.
     """
+
+    _side_state = (randomize_side_seed or 0) & 0x7FFFFFFF
+
+    def _next_side_is_long() -> bool:
+        nonlocal _side_state
+        _side_state = (_side_state * 1103515245 + 12345) & 0x7FFFFFFF
+        return bool((_side_state >> 16) & 1)
 
     candles = dataset.candles
     closes = [c.close_value for c in candles]
@@ -482,17 +592,15 @@ def run_redesign_backtest(
 
         if open_trade is not None:
             direction = 1.0 if open_trade.side == "PAPER_LONG" else -1.0
-            hit_sl = (
-                candle.low_value <= open_trade.entry_close - open_trade.sl_distance
-                if direction > 0
-                else candle.high_value
-                >= open_trade.entry_close + open_trade.sl_distance
-            )
-            hit_tp = (
-                candle.high_value >= open_trade.entry_close + open_trade.tp_distance
-                if direction > 0
-                else candle.low_value
-                <= open_trade.entry_close - open_trade.tp_distance
+            bar_spread = dataset.spreads[bar_index].spread_value or 0.0
+            hit_sl, hit_tp = _exit_touch(
+                is_long=direction > 0,
+                candle_high=candle.high_value,
+                candle_low=candle.low_value,
+                entry_close=open_trade.entry_close,
+                sl_distance=open_trade.sl_distance,
+                tp_distance=open_trade.tp_distance,
+                bar_spread=bar_spread,
             )
             held = bar_index - open_trade.entry_bar
             is_opposite = (
@@ -527,6 +635,11 @@ def run_redesign_backtest(
                 )
             continue
 
+        bar_hour = _bar_jst_hour(candle.timestamp)
+        is_session_open_bar = (
+            bar_hour is not None
+            and bar_hour == candidate.feature_config.session_open_jst_hour
+        )
         decision = redesign_entry_decision(
             family=candidate.family,
             features=features,
@@ -537,6 +650,7 @@ def run_redesign_backtest(
                 dataset.sessions[bar_index].session_safe_label
                 is SessionAllowedSafeLabel.SESSION_ALLOWED
             ),
+            is_session_open_bar=is_session_open_bar,
         )
         entry_side_labels.append(decision.entry_side.value)
         if decision.block_reason_safe_label:
@@ -550,11 +664,16 @@ def run_redesign_backtest(
             if spread_included
             else 0.0
         )
-        side = (
-            "PAPER_LONG"
-            if decision.entry_side is RedesignEntrySide.REDESIGN_ENTRY_LONG
-            else "PAPER_SHORT"
-        )
+        if randomize_side_seed is not None:
+            # Sign-permutation benchmark: keep the strategy's exact entry bar
+            # and gating, randomize only the direction.
+            side = "PAPER_LONG" if _next_side_is_long() else "PAPER_SHORT"
+        else:
+            side = (
+                "PAPER_LONG"
+                if decision.entry_side is RedesignEntrySide.REDESIGN_ENTRY_LONG
+                else "PAPER_SHORT"
+            )
         open_trade = _OpenRedesignTrade(
             side=side,
             entry_close=candle.close_value,

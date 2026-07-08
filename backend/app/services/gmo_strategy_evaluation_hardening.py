@@ -10,10 +10,17 @@ much stronger battery, all read-only over the operator's local CSV dataset:
    not whether it worked once.
 2. Cost sensitivity: repeat the walk-forward at several spread-cost
    multipliers; a real edge must survive higher assumed costs.
-3. Random-entry benchmark: run a deterministic pseudo-random entry through
-   the SAME exits, so we can tell whether the entry rule adds information or
-   whether the result is explained by the exit/position structure alone.
-4. Combined robustness verdict per candidate.
+3. Directional benchmark: the PRIMARY test is a sign-permutation -- reuse
+   the candidate's EXACT entry bars and gating, randomize only the trade
+   direction, over many seeds, and require the candidate's median profit
+   factor to beat the p90 of that distribution. Because trade count and
+   gating match window-for-window, this isolates directional skill from the
+   entry-frequency / exit-shape artefacts a fixed-cadence random path can
+   carry. A fixed-cadence random-entry path is retained only as a secondary
+   reference.
+4. Combined robustness verdict per candidate, all judged together under a
+   codified mandatory standard gate (0.5 pip/side slippage, 2.0x cost stress,
+   sign-permutation p90, multi-window walk-forward, no post-OOS retuning).
 
 Everything is deterministic (a fixed LCG, never the `random` module), never
 touches a broker/network/credential surface, and reports only safe labels,
@@ -51,6 +58,7 @@ from app.services.gmo_strategy_redesign import (
 
 BASELINE_RUNNER_NAME = "BASELINE"
 RANDOM_BENCHMARK_RUNNER_NAME = "RANDOM_ENTRY_BENCHMARK"
+SIGN_PERMUTATION_RUNNER_NAME = "SIGN_PERMUTATION_BENCHMARK"
 DEFAULT_COST_MULTIPLIERS = (1.0, 1.5, 2.0)
 DEFAULT_WALK_FORWARD_WINDOW_BARS = 2000
 DEFAULT_MAX_WINDOWS = 12
@@ -64,6 +72,11 @@ _ROBUST_PASS_RATE = 0.60
 _RANDOM_BENCHMARK_PERCENTILE = 0.90
 DEFAULT_RANDOM_SEED_COUNT = 30
 _LCG_SEED = 2_463_534_242
+
+# Standard mandatory execution friction: 0.5 pip per side on USD/JPY
+# (1 pip = 0.01), charged on both entry and exit. This is the retail-realistic
+# floor at which every candidate must be judged -- lower is optimistic.
+DEFAULT_STANDARD_SLIPPAGE_PRICE_PER_SIDE = 0.005
 
 
 # ---------------------------------------------------------------------------
@@ -518,9 +531,11 @@ class CandidateRobustnessVerdict:
     verdict: RobustnessVerdictCategory
     base_cost_pass_rate: float
     base_cost_median_pf: float
+    base_cost_qualified_window_count: int
     stressed_cost_pass_rate: float
     stress_cost_multiplier: float
     random_benchmark_p90_pf: float
+    sign_permutation_p90_pf: float
     robust_across_walk_forward: bool
     robust_to_cost: bool
     beats_random: bool
@@ -588,6 +603,109 @@ def random_benchmark_median_pf_percentile(
     return round(per_seed_medians[idx], 4)
 
 
+def run_walk_forward_for_sign_permutation(
+    dataset: BacktestDataset,
+    candidate: RedesignCandidate,
+    windows: tuple[WalkForwardWindow, ...],
+    *,
+    seed: int,
+    cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
+    lead: int = REDESIGN_SLICE_LEAD_IN_BARS,
+    min_trades_per_window: int = DEFAULT_MIN_TRADES_PER_WINDOW,
+) -> WalkForwardSummary:
+    """Rolling-OOS summary for one sign-permutation of a candidate.
+
+    Reuses the candidate's EXACT entry gate, cadence, and exits; only the
+    trade direction is randomized (per ``seed``). The entry OPPORTUNITY set
+    is identical to the candidate window-for-window (realized fills desync
+    only through direction-dependent exits), isolating directional skill
+    from the entry-frequency / exit-shape artefacts a fixed-cadence random
+    path can carry.
+    """
+
+    real = not dataset.synthetic_fixture
+    results: list[WindowResultSafe] = []
+    qualified_pfs: list[float] = []
+    for window in windows:
+        run_result = run_redesign_backtest(
+            dataset=_window_slice(dataset, window, lead=lead),
+            candidate=candidate,
+            spread_cost_multiplier=cost_multiplier,
+            slippage_price_per_side=slippage_price_per_side,
+            randomize_side_seed=seed + window.index,
+        )
+        metrics = _metrics(run_result, real)
+        qualified = metrics.trade_count >= min_trades_per_window
+        passed = qualified and metrics.profit_factor > 1.0 and metrics.expectancy >= 0
+        if qualified:
+            qualified_pfs.append(metrics.profit_factor)
+        results.append(
+            WindowResultSafe(
+                window_index=window.index,
+                trade_count=metrics.trade_count,
+                profit_factor_rounded=round(metrics.profit_factor, 4),
+                expectancy_sign=(
+                    "NEGATIVE" if metrics.expectancy < 0 else "NON_NEGATIVE"
+                ),
+                qualified=qualified,
+                passed=passed,
+            )
+        )
+    qualified_count = sum(1 for r in results if r.qualified)
+    passed_count = sum(1 for r in results if r.passed)
+    pass_rate = passed_count / qualified_count if qualified_count else 0.0
+    return WalkForwardSummary(
+        runner_name=SIGN_PERMUTATION_RUNNER_NAME,
+        cost_multiplier=cost_multiplier,
+        window_count=len(results),
+        qualified_window_count=qualified_count,
+        passed_window_count=passed_count,
+        pass_rate_rounded=round(pass_rate, 4),
+        median_profit_factor_rounded=round(_median(qualified_pfs), 4),
+        window_results=tuple(results),
+    )
+
+
+def sign_permutation_median_pf_percentile(
+    dataset: BacktestDataset,
+    windows: tuple[WalkForwardWindow, ...],
+    candidate: RedesignCandidate,
+    *,
+    cost_multiplier: float = 1.0,
+    slippage_price_per_side: float = 0.0,
+    seed_count: int = DEFAULT_RANDOM_SEED_COUNT,
+    percentile: float = _RANDOM_BENCHMARK_PERCENTILE,
+    lead: int = REDESIGN_SLICE_LEAD_IN_BARS,
+) -> float:
+    """High-percentile of per-seed median PF across sign-permutations.
+
+    This is the PRIMARY directional benchmark: because each permutation
+    reuses the candidate's exact entry gate/cadence and only flips
+    direction, the entry OPPORTUNITY set matches the candidate
+    window-for-window (realized fills desync only through direction-dependent
+    exits). A candidate must beat the ``percentile`` of this distribution to
+    claim directional skill (not just a lucky exit shape or entry frequency).
+    """
+
+    per_seed_medians: list[float] = []
+    for seed in range(seed_count):
+        summary = run_walk_forward_for_sign_permutation(
+            dataset, candidate, windows,
+            seed=_LCG_SEED + seed * 100003 + 7,
+            cost_multiplier=cost_multiplier,
+            slippage_price_per_side=slippage_price_per_side,
+            lead=lead,
+        )
+        if summary.qualified_window_count:
+            per_seed_medians.append(summary.median_profit_factor_rounded)
+    if not per_seed_medians:
+        return 0.0
+    per_seed_medians.sort()
+    idx = int(percentile * (len(per_seed_medians) - 1))
+    return round(per_seed_medians[idx], 4)
+
+
 def evaluate_candidate_robustness(
     dataset: BacktestDataset,
     *,
@@ -604,7 +722,9 @@ def evaluate_candidate_robustness(
     A candidate is only ROBUST when it clears the pass-rate bar at base cost
     AND at the HARSHEST supplied cost multiplier (with the given slippage),
     AND its median profit factor exceeds the ``p90`` of a multi-seed
-    random-entry distribution using the same exits.
+    SIGN-PERMUTATION distribution (its own entries, direction randomized).
+    The fixed-cadence random-entry p90 is also computed as a secondary
+    reference but does not gate the verdict.
     """
 
     candidate_set = candidates or build_default_redesign_candidates()
@@ -645,12 +765,19 @@ def evaluate_candidate_robustness(
             slippage_price_per_side=slippage_price_per_side, lead=lead,
         )
         random_p90 = random_p90_by_exit[candidate.exit_config.name]
+        # Primary directional benchmark: sign-permutation of THIS candidate's
+        # own entries (matched trade count / gating), direction randomized.
+        sign_perm_p90 = sign_permutation_median_pf_percentile(
+            dataset, windows, candidate, cost_multiplier=base_cost,
+            slippage_price_per_side=slippage_price_per_side,
+            seed_count=random_seed_count, lead=lead,
+        )
         robust_wf = (
             base.qualified_window_count >= 3
             and base.pass_rate_rounded >= _ROBUST_PASS_RATE
         )
         robust_cost = stressed.pass_rate_rounded >= _ROBUST_PASS_RATE
-        beats_random = base.median_profit_factor_rounded > random_p90
+        beats_random = base.median_profit_factor_rounded > sign_perm_p90
         if base.qualified_window_count < 3:
             verdict = RobustnessVerdictCategory.INSUFFICIENT_WINDOWS
         elif robust_wf and robust_cost and beats_random:
@@ -663,9 +790,11 @@ def evaluate_candidate_robustness(
                 verdict=verdict,
                 base_cost_pass_rate=base.pass_rate_rounded,
                 base_cost_median_pf=base.median_profit_factor_rounded,
+                base_cost_qualified_window_count=base.qualified_window_count,
                 stressed_cost_pass_rate=stressed.pass_rate_rounded,
                 stress_cost_multiplier=stress_cost,
                 random_benchmark_p90_pf=random_p90,
+                sign_permutation_p90_pf=sign_perm_p90,
                 robust_across_walk_forward=robust_wf,
                 robust_to_cost=robust_cost,
                 beats_random=beats_random,
@@ -690,6 +819,191 @@ def evaluate_candidate_robustness(
         random_seed_count=random_seed_count,
         baseline_base_cost_pass_rate=baseline_base.pass_rate_rounded,
         random_base_cost_pass_rate=representative_random_p90,
+        verdicts=tuple(verdicts),
+        any_robust_candidate=any_robust,
+        overall_conclusion_safe_label=conclusion,
+        real_data_used=not dataset.synthetic_fixture,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Mandatory standard evaluation gate (codified)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class StandardEvaluationGate:
+    """The fixed, mandatory bar every candidate must clear before it may be
+    considered for paper-forward. Codified so no candidate is ever judged
+    under optimistic assumptions (zero slippage, single window granularity,
+    a single random path, or a benchmark with a mismatched trade count).
+
+    Rules, all enforced together:
+      * slippage: 0.5 pip/side charged on entry AND exit (never 0),
+      * cost stress: judged at the HARSHEST multiplier (2.0x), not 1.5x,
+      * directional benchmark: SIGN-PERMUTATION p90 (the candidate's own
+        entries, direction randomized -- matched entry gate and cadence),
+      * MULTI-RESOLUTION walk-forward: robust at EVERY window granularity in
+        ``window_bars_resolutions`` (unanimous), each with at least
+        ``min_qualified_windows`` qualifying windows and pass rate >= 0.60.
+        This kills the window-count sensitivity where a candidate looks
+        robust at a few coarse windows but fails at more, finer ones,
+      * min trades/window so thin windows cannot pass on noise,
+      * NO post-OOS retuning within a step (tune on train/validation only;
+        the rolling-OOS windows are scored once).
+    """
+
+    slippage_price_per_side: float = DEFAULT_STANDARD_SLIPPAGE_PRICE_PER_SIDE
+    cost_multipliers: tuple[float, ...] = DEFAULT_COST_MULTIPLIERS
+    random_seed_count: int = DEFAULT_RANDOM_SEED_COUNT
+    # A real edge must survive at every granularity, not a lucky partition.
+    window_bars_resolutions: tuple[int, ...] = (1000, 1400)
+    min_qualified_windows: int = 4
+    min_trades_per_window: int = DEFAULT_MIN_TRADES_PER_WINDOW
+    robust_pass_rate: float = _ROBUST_PASS_RATE
+    benchmark_percentile: float = _RANDOM_BENCHMARK_PERCENTILE
+    directional_benchmark: str = SIGN_PERMUTATION_RUNNER_NAME
+    no_post_oos_retuning: bool = True
+    # Retained single-resolution default for the plain battery API.
+    window_bars: int = DEFAULT_WALK_FORWARD_WINDOW_BARS
+
+    def __bool__(self) -> bool:  # never a permission/pass flag
+        return False
+
+
+@dataclass(frozen=True)
+class ResolutionVerdictSafe:
+    """One candidate's verdict at one window granularity (safe aggregates)."""
+
+    window_bars: int
+    window_count: int
+    qualified_window_count: int
+    verdict: RobustnessVerdictCategory
+    base_cost_pass_rate: float
+    base_cost_median_pf: float
+    stressed_cost_pass_rate: float
+    sign_permutation_p90_pf: float
+    beats_random: bool
+    robust_here: bool
+
+    def __bool__(self) -> bool:
+        return False
+
+
+@dataclass(frozen=True)
+class MultiResolutionCandidateVerdict:
+    candidate_name: str
+    robust_all_resolutions: bool
+    per_resolution: tuple[ResolutionVerdictSafe, ...]
+    performance_proof_status: bool = False
+    live_ready: bool = False
+
+    def __bool__(self) -> bool:
+        return False
+
+
+@dataclass(frozen=True)
+class MultiResolutionGateReport:
+    resolutions: tuple[int, ...]
+    slippage_price_per_side: float
+    stress_cost_multiplier: float
+    random_seed_count: int
+    min_qualified_windows: int
+    verdicts: tuple[MultiResolutionCandidateVerdict, ...]
+    any_robust_candidate: bool
+    overall_conclusion_safe_label: str
+    performance_proof_status: bool = False
+    live_ready: bool = False
+    real_data_used: bool = True
+
+    def __bool__(self) -> bool:
+        return False
+
+
+STANDARD_EVALUATION_GATE = StandardEvaluationGate()
+
+
+def evaluate_under_standard_gate(
+    dataset: BacktestDataset,
+    *,
+    candidates: tuple[RedesignCandidate, ...] | None = None,
+    max_windows: int = DEFAULT_MAX_WINDOWS,
+) -> MultiResolutionGateReport:
+    """Run the full robustness battery under the codified standard gate.
+
+    Any new candidate set (including new hypotheses) MUST be judged with this
+    helper so the friction/benchmark/walk-forward assumptions are identical.
+    A candidate is ROBUST only if it clears the battery at EVERY window
+    granularity in the gate (unanimous), each with enough qualifying windows.
+    """
+
+    gate = STANDARD_EVALUATION_GATE
+    candidate_set = candidates or build_default_redesign_candidates()
+    stress_cost = max(gate.cost_multipliers) if gate.cost_multipliers else 1.0
+
+    per_res_reports: dict[int, EvaluationHardeningReport] = {}
+    for window_bars in gate.window_bars_resolutions:
+        per_res_reports[window_bars] = evaluate_candidate_robustness(
+            dataset,
+            candidates=candidate_set,
+            window_bars=window_bars,
+            max_windows=max_windows,
+            cost_multipliers=gate.cost_multipliers,
+            slippage_price_per_side=gate.slippage_price_per_side,
+            random_seed_count=gate.random_seed_count,
+        )
+
+    verdicts: list[MultiResolutionCandidateVerdict] = []
+    for candidate in candidate_set:
+        per_resolution: list[ResolutionVerdictSafe] = []
+        robust_all = True
+        for window_bars in gate.window_bars_resolutions:
+            report = per_res_reports[window_bars]
+            match = next(
+                v for v in report.verdicts
+                if v.candidate_name == candidate.candidate_name
+            )
+            robust_here = (
+                match.verdict
+                is RobustnessVerdictCategory.ROBUST_CANDIDATE_FOR_PAPER_FORWARD
+                and match.base_cost_qualified_window_count
+                >= gate.min_qualified_windows
+            )
+            robust_all = robust_all and robust_here
+            per_resolution.append(
+                ResolutionVerdictSafe(
+                    window_bars=window_bars,
+                    window_count=report.window_count,
+                    qualified_window_count=match.base_cost_qualified_window_count,
+                    verdict=match.verdict,
+                    base_cost_pass_rate=match.base_cost_pass_rate,
+                    base_cost_median_pf=match.base_cost_median_pf,
+                    stressed_cost_pass_rate=match.stressed_cost_pass_rate,
+                    sign_permutation_p90_pf=match.sign_permutation_p90_pf,
+                    beats_random=match.beats_random,
+                    robust_here=robust_here,
+                )
+            )
+        verdicts.append(
+            MultiResolutionCandidateVerdict(
+                candidate_name=candidate.candidate_name,
+                robust_all_resolutions=robust_all,
+                per_resolution=tuple(per_resolution),
+            )
+        )
+
+    any_robust = any(v.robust_all_resolutions for v in verdicts)
+    conclusion = (
+        "ROBUST_CANDIDATE_FOUND_ACROSS_ALL_RESOLUTIONS_PAPER_FORWARD_NEXT"
+        if any_robust
+        else "NO_ROBUST_EDGE_ACROSS_RESOLUTIONS_COST_STRESS_AND_SIGN_PERMUTATION"
+    )
+    return MultiResolutionGateReport(
+        resolutions=gate.window_bars_resolutions,
+        slippage_price_per_side=gate.slippage_price_per_side,
+        stress_cost_multiplier=stress_cost,
+        random_seed_count=gate.random_seed_count,
+        min_qualified_windows=gate.min_qualified_windows,
         verdicts=tuple(verdicts),
         any_robust_candidate=any_robust,
         overall_conclusion_safe_label=conclusion,
