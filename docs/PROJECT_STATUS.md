@@ -58,9 +58,15 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   Webディープリサーチで機構ベース仮説を選定し、**GOTOBI_FIX_DRIFT(仲値ドリフト)**
   を事前登録・実装(`gmo_strategy_gotobi.py`・ゴトー日暦+03:00→09:55 JST窓+4対照)。
   **現データでは確認できず**（H1=標本十分だが粒度不適でどの出口も優位なし / M5=粒度は
-  正しく4対照全通過だが3ヶ月16件で INSUFFICIENT_SAMPLE）。適正検定には**複数年M5/M1**
+  正しく4対照全通過だが3ヶ月16件で INSUFFICIENT_SAMPLE）。適正検定には**長期M5**
   (operator承認public GET)が必要。
   [STRATEGY_GOTOBI_FIX_DRIFT_HYPOTHESIS_NO_POST_20260708.md](STRATEGY_GOTOBI_FIX_DRIFT_HYPOTHESIS_NO_POST_20260708.md)）。
+  取得前に**評価ルールを凍結する事前登録(pre-registration)contract**を作成済み
+  (entry03:00/exit09:55固定・ゴトー日=末日+銀行営業日前倒し・leg別spread+0.5pip/side+2.0×・
+  4対照unanimous〈曜日層化置換含む〉・最小標本≥90/3ブロック・多重検定台帳・post-OOS retuning禁止・
+  合格でも perf_proof/live=false)。既存M5/H1の窓は**API制約でなく運用選択**（export側ハードコード窓）で
+  GMO public FX klinesの真の履歴深度は未確認 → retest前に取得可能最古日をoperator確認。
+  [STRATEGY_GOTOBI_FIX_DRIFT_PREREGISTRATION_NO_POST_20260708.md](STRATEGY_GOTOBI_FIX_DRIFT_PREREGISTRATION_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
