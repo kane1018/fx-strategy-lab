@@ -73,6 +73,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   → `GOTOBI_EFFECT_NOT_ROBUST_REJECT`**。前回16件PF5.38は小標本の偶然と判明（最小標本gateが偽陽性却下）。
   取得CSVはrepo外・未commit。
   [STRATEGY_GOTOBI_MULTI_YEAR_M5_RETEST_NO_POST_20260708.md](STRATEGY_GOTOBI_MULTI_YEAR_M5_RETEST_NO_POST_20260708.md)）。
+  4連続棄却を受け**仮説インベントリ＋事前登録**を作成（棄却台帳・候補longlist・program多重検定台帳
+  ~20 trial・K=3連続NULLで closeout へエスカレーション則）。research反映で三角RVは prior 低に降格
+  （文献: 小口三角裁定は"mirage"）、**vol-regime条件付けbreakoutを唯一の近接actionable候補として
+  事前登録**（既存M5 2.7年で無取得検証可・regime定義=ATR>trailing-median-200を a priori 固定・
+  単一variant・スキャン禁止）。次step候補=`VOL_REGIME_CONDITIONAL_BREAKOUT_RETEST_NO_POST`（承認不要）。
+  [STRATEGY_HYPOTHESIS_INVENTORY_AND_PREREGISTRATION_NO_POST_20260708.md](STRATEGY_HYPOTHESIS_INVENTORY_AND_PREREGISTRATION_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
