@@ -101,6 +101,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   強機構は教科書的・裁定済で **edge prior 低**。推奨: intraday金利への即取得は非推奨、**日次・公開・無認証で
   金利差/carryを mechanism-first で新規事前登録→承認public GET→1回採点**（清潔だが低prior）。代替=closeout維持。
   [feasibility map](STRATEGY_MECHANISM_TIMESCALE_DATA_FEASIBILITY_NO_POST_20260709.md)。
+  operator が(1)採用 → **日次 rate-differential 単一仮説を凍結事前登録**（US-JP 10y差の変化→USD/JPY・
+  k=5/h=5・2005-2026・single variant・commit `44647f8` push済＝データ接触前に確定）。ただし採点データ取得で
+  **環境ブロッカー**（当sandboxは GMO host のみ到達可・FRED/MOF不達）→ 契約§2に従い sandbox無効化/代替せず
+  **BLOCKED**。解決=**operator が公開無認証の3 CSV(FRED DGS10/DEXJPUS・MOF JGB 10y)を自分でDLし repo外に配置**
+  → local を1回採点、または closeout 維持。
+  [daily preregistration](STRATEGY_RATE_DIFFERENTIAL_DAILY_PREREGISTRATION_NO_POST_20260709.md)。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
