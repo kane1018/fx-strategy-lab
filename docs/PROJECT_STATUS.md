@@ -19,6 +19,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   limited unattended paper soak も実行済み（`LIMITED_PAPER_SOAK_PASSED`
   55 synthetic cycles・invariant全成立・real POST=0。
   [LIMITED_UNATTENDED_PAPER_SOAK_NO_POST_20260708.md](LIMITED_UNATTENDED_PAPER_SOAK_NO_POST_20260708.md)）。
+  strategy signal engine も明文化・挙動評価済み（deterministic rule-based・
+  BEHAVIOR_PASSED・**品質/収益性は未証明**。
+  [STRATEGY_SIGNAL_ENGINE_RULEBOOK_NO_POST.md](STRATEGY_SIGNAL_ENGINE_RULEBOOK_NO_POST.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
