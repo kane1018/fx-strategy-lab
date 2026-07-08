@@ -79,6 +79,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   事前登録**（既存M5 2.7年で無取得検証可・regime定義=ATR>trailing-median-200を a priori 固定・
   単一variant・スキャン禁止）。次step候補=`VOL_REGIME_CONDITIONAL_BREAKOUT_RETEST_NO_POST`（承認不要）。
   [STRATEGY_HYPOTHESIS_INVENTORY_AND_PREREGISTRATION_NO_POST_20260708.md](STRATEGY_HYPOTHESIS_INVENTORY_AND_PREREGISTRATION_NO_POST_20260708.md)）。
+  その VOL_REGIME を実装・**既存M5 2.7年(primary)+H1(参照)で1回採点 → NOT_ROBUST（棄却）**。
+  高volレジーム条件付けは breakout PF を改善する方向は確認(H1: 0.80→0.94・M5: 0.70→0.71)だが、
+  **いずれもPF<1・符号置換に届かず・2.0×コスト非生存**で edge に届かない。多重検定台帳の
+  **null #1/3**（あと2件連続NOT_ROBUSTで RESEARCH_PLATFORM_CLOSEOUT へ移行・operator判断で前倒し可）。
+  [STRATEGY_VOL_REGIME_CONDITIONAL_BREAKOUT_RETEST_NO_POST_20260708.md](STRATEGY_VOL_REGIME_CONDITIONAL_BREAKOUT_RETEST_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
