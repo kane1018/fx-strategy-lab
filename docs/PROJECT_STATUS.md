@@ -7,6 +7,19 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0. 現在フェーズ（2026-07-08 時点・safe summary）
+
+- operator-gated live 1サイクル完了済み（entry POST 1回 accepted → ONE_POSITION_OPEN →
+  official settlement POST 1回 accepted → NO_POSITION。各POSTは operator current-turn
+  confirmation 必須・retry/repost/raw露出ゼロ）。詳細:
+  [LIVE_OPERATOR_GATED_CYCLE_CLOSEOUT_20260708_NO_POST.md](LIVE_OPERATOR_GATED_CYCLE_CLOSEOUT_20260708_NO_POST.md)
+- no-POST自動化検証層: paper auto cycle runner / supervised auto live preview /
+  unattended monitoring guard / paper cycle state machine / fake notifier /
+  paper soak readiness runner（`PAPER_SOAK_READINESS_PASSED`）実装済み。
+  最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
+- **unattended full auto completed=false / unattended live unsupported（不変）**。
+  actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
+
 ## 1. メタ情報
 
 - リポジトリ: `https://github.com/kane1018/fx-strategy-lab.git`
