@@ -16,6 +16,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 - no-POST自動化検証層: paper auto cycle runner / supervised auto live preview /
   unattended monitoring guard / paper cycle state machine / fake notifier /
   paper soak readiness runner（`PAPER_SOAK_READINESS_PASSED`）実装済み。
+  limited unattended paper soak も実行済み（`LIMITED_PAPER_SOAK_PASSED`
+  55 synthetic cycles・invariant全成立・real POST=0。
+  [LIMITED_UNATTENDED_PAPER_SOAK_NO_POST_20260708.md](LIMITED_UNATTENDED_PAPER_SOAK_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
