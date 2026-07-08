@@ -43,9 +43,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   NOT_ROBUST・単発OOSの偽陽性を却下。
   [STRATEGY_EVALUATION_HARDENING_NO_POST_20260708.md](STRATEGY_EVALUATION_HARDENING_NO_POST_20260708.md)）。
   データ拡張済み（USD_JPY **H1・~15ヶ月**をpublic GETで取得し hardening 再適用。
-  **trend-continuation×ride exit が唯一 robust 候補**として surface＝paper-forward候補。
-  ただし多重検定・marginalのため edge 未証明。
   [STRATEGY_TIMEFRAME_EXPANSION_H1_HARDENING_NO_POST_20260708.md](STRATEGY_TIMEFRAME_EXPANSION_H1_HARDENING_NO_POST_20260708.md)）。
+  ただし約定厳格化（slippage・2.0×コスト実使用・多seed random p90）で再判定すると
+  **H1候補は現実的slippage(~0.5pip/side)で robust バーを割り REJECTED**。全候補 NOT_ROBUST・
+  持続edge不在（評価の過小評価を是正して偽edgeを却下）。
+  [STRATEGY_EXECUTION_REALISM_HARDENING_NO_POST_20260708.md](STRATEGY_EXECUTION_REALISM_HARDENING_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
