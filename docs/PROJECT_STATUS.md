@@ -36,6 +36,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   改善候補のtrain/validation再検証も実施済み（**NO_CANDIDATE_SELECTED**・OOS未実行・
   再設計が必要。
   [STRATEGY_RULE_IMPROVEMENT_AND_REVALIDATION_NO_POST_20260708.md](STRATEGY_RULE_IMPROVEMENT_AND_REVALIDATION_NO_POST_20260708.md)）。
+  strategy rule redesign（ATR相対exit・4 entry family）も実施済み。validationで1候補が
+  PF>1.0を満たし freeze したが **OOSで劣化・却下**（持続edgeなし・要仮説再構築。
+  [STRATEGY_RULE_REDESIGN_NO_POST_20260708.md](STRATEGY_RULE_REDESIGN_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
