@@ -39,6 +39,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   strategy rule redesign（ATR相対exit・4 entry family）も実施済み。validationで1候補が
   PF>1.0を満たし freeze したが **OOSで劣化・却下**（持続edgeなし・要仮説再構築。
   [STRATEGY_RULE_REDESIGN_NO_POST_20260708.md](STRATEGY_RULE_REDESIGN_NO_POST_20260708.md)）。
+  評価基盤も強化済み（walk-forward＋コスト感度＋ランダムベンチマーク。全候補
+  NOT_ROBUST・**M5テクニカルは持続edgeなしを再現性を持って確認**。単発OOSの偽陽性を却下。
+  [STRATEGY_EVALUATION_HARDENING_NO_POST_20260708.md](STRATEGY_EVALUATION_HARDENING_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
