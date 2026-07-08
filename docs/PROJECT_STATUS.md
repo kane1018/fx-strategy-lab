@@ -33,6 +33,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   operator CSV（USD_JPY M5・19,992 bars）でdry-run合格→初回real-data backtest実施済み
   （profit factor≈0.83・**edge根拠なし・性能未証明**。
   [STRATEGY_BACKTEST_WITH_OPERATOR_CSV_INITIAL_NO_POST_20260708.md](STRATEGY_BACKTEST_WITH_OPERATOR_CSV_INITIAL_NO_POST_20260708.md)）。
+  改善候補のtrain/validation再検証も実施済み（**NO_CANDIDATE_SELECTED**・OOS未実行・
+  再設計が必要。
+  [STRATEGY_RULE_IMPROVEMENT_AND_REVALIDATION_NO_POST_20260708.md](STRATEGY_RULE_IMPROVEMENT_AND_REVALIDATION_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
