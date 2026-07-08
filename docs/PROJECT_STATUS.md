@@ -25,6 +25,9 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   backtest readiness も整備済み（dataset schema / engine skeleton / metrics /
   report・synthetic fixtureのみ・実データ取得ゼロ。
   [STRATEGY_BACKTEST_DATASET_REQUIREMENTS_NO_POST.md](STRATEGY_BACKTEST_DATASET_REQUIREMENTS_NO_POST.md)）。
+  データソース選定済み（Primary=GMO Public klines BID+ASK→local CSV・取得は
+  operator承認の別Step。
+  [HISTORICAL_DATA_SOURCE_SELECTION_NO_POST.md](HISTORICAL_DATA_SOURCE_SELECTION_NO_POST.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
