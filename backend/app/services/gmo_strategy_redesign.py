@@ -418,8 +418,13 @@ def run_redesign_backtest(
     dataset: BacktestDataset,
     candidate: RedesignCandidate,
     spread_included: bool = True,
+    spread_cost_multiplier: float = 1.0,
 ) -> BacktestRunResult:
-    """Run one redesign candidate over one (sub-)dataset. No retry paths."""
+    """Run one redesign candidate over one (sub-)dataset. No retry paths.
+
+    ``spread_cost_multiplier`` (default 1.0) scales the per-trade spread cost
+    for cost-sensitivity stress tests; it never changes entry/exit logic.
+    """
 
     candles = dataset.candles
     closes = [c.close_value for c in candles]
@@ -534,7 +539,9 @@ def run_redesign_backtest(
 
         spread_record = dataset.spreads[bar_index]
         spread_cost = (
-            (spread_record.spread_value or 0.0) if spread_included else 0.0
+            (spread_record.spread_value or 0.0) * spread_cost_multiplier
+            if spread_included
+            else 0.0
         )
         side = (
             "PAPER_LONG"

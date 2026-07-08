@@ -349,6 +349,7 @@ def run_synthetic_backtest(
     environment: BacktestEnvironmentAssumption | None = None,
     entry_momentum_strict: bool = False,
     opposite_signal_debounce_bars: int = 1,
+    spread_cost_multiplier: float = 1.0,
 ) -> BacktestRunResult:
     """Run the skeleton once over one dataset. No retry paths.
 
@@ -505,7 +506,9 @@ def run_synthetic_backtest(
                 continue
             spread_record = dataset.spreads[bar_index]
             spread_cost = (
-                (spread_record.spread_value or 0.0) if spread_included else 0.0
+                (spread_record.spread_value or 0.0) * spread_cost_multiplier
+                if spread_included
+                else 0.0
             )
             side = "PAPER_LONG" if is_buy else "PAPER_SHORT"
             open_trade = _OpenPaperTrade(
