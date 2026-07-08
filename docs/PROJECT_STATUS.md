@@ -55,6 +55,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   **テクニカル/新仮説とも NO_ROBUST_EDGE**（session仮説は sign-permutation が
   「方向優位の不在」を検出し棄却）。
   [STRATEGY_GATE_CORRECTION_AND_SESSION_HYPOTHESIS_NO_POST_20260708.md](STRATEGY_GATE_CORRECTION_AND_SESSION_HYPOTHESIS_NO_POST_20260708.md)）。
+  Webディープリサーチで機構ベース仮説を選定し、**GOTOBI_FIX_DRIFT(仲値ドリフト)**
+  を事前登録・実装(`gmo_strategy_gotobi.py`・ゴトー日暦+03:00→09:55 JST窓+4対照)。
+  **現データでは確認できず**（H1=標本十分だが粒度不適でどの出口も優位なし / M5=粒度は
+  正しく4対照全通過だが3ヶ月16件で INSUFFICIENT_SAMPLE）。適正検定には**複数年M5/M1**
+  (operator承認public GET)が必要。
+  [STRATEGY_GOTOBI_FIX_DRIFT_HYPOTHESIS_NO_POST_20260708.md](STRATEGY_GOTOBI_FIX_DRIFT_HYPOTHESIS_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
