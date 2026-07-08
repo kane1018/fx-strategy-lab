@@ -323,6 +323,16 @@ class TestStandardEvaluationGate:
         assert gate.min_qualified_windows >= 4
         assert bool(gate) is False
 
+    def test_resolution_and_lead_overrides_are_honoured(self) -> None:
+        dataset = _oscillating()
+        report = evaluate_under_standard_gate(
+            dataset, candidates=(_candidate(),),
+            window_bars_resolutions=(150, 200), lead=60,
+        )
+        assert report.resolutions == (150, 200)
+        assert len(report.verdicts[0].per_resolution) == 2
+        assert bool(report) is False
+
     def test_evaluate_under_standard_gate_is_multi_resolution(self) -> None:
         dataset = _oscillating()
         report = evaluate_under_standard_gate(

@@ -389,6 +389,11 @@ class RedesignCandidate:
     family: RedesignEntryFamily
     exit_config: RedesignExitConfig
     feature_config: RedesignFeatureConfig = RedesignFeatureConfig()
+    # Volatility-regime gate (pre-registered): "OFF" (default, unconditional),
+    # "HIGH" (enter only when ATR is above its trailing-median baseline), or
+    # "LOW" (the complement, used only as a control). Never tuned per-run.
+    vol_regime_mode: str = "OFF"
+    vol_regime_lookback: int = 200
     rule_version: str = REDESIGN_RULE_VERSION
     candidate_only: bool = True
     officially_adopted: bool = False
@@ -436,6 +441,26 @@ def build_default_redesign_candidates() -> tuple[RedesignCandidate, ...]:
     """Four technical entry families x two ATR exit configs (8 candidates)."""
 
     return _candidates_for_families(_DEFAULT_ENTRY_FAMILIES)
+
+
+def build_vol_regime_conditional_candidate(
+    *, vol_regime_mode: str = "HIGH", vol_regime_lookback: int = 200
+) -> RedesignCandidate:
+    """Pre-registered VOL_REGIME_CONDITIONAL_BREAKOUT candidate: the frozen
+    BREAKOUT family x EXIT_RIDE, entered only in the given volatility regime.
+    A single a-priori variant (no family/exit/threshold scanning). ``LOW`` is
+    used only as the regime control."""
+
+    suffix = {"HIGH": "HIGH_VOL", "LOW": "LOW_VOL", "OFF": "UNCONDITIONAL"}[
+        vol_regime_mode
+    ]
+    return RedesignCandidate(
+        candidate_name=f"BREAKOUT__EXIT_RIDE__{suffix}",
+        family=RedesignEntryFamily.BREAKOUT,
+        exit_config=EXIT_RIDE,
+        vol_regime_mode=vol_regime_mode,
+        vol_regime_lookback=vol_regime_lookback,
+    )
 
 
 def build_session_structural_candidates() -> tuple[RedesignCandidate, ...]:
@@ -504,6 +529,38 @@ def _distribution(labels: list[str]) -> tuple[tuple[str, int], ...]:
     return tuple(sorted(counts.items()))
 
 
+def _high_vol_regime_flags(
+    *,
+    highs: list[float],
+    lows: list[float],
+    atr_lookback: int,
+    regime_lookback: int,
+) -> list[bool]:
+    """Per-bar high-volatility flag: ATR(atr_lookback) above the median ATR of
+    the STRICTLY PRIOR ``regime_lookback`` bars (no lookahead). Bars without a
+    full regime history are False (fail-closed)."""
+
+    n = len(highs)
+    ranges = [highs[i] - lows[i] for i in range(n)]
+    atr = [0.0] * n
+    window_sum = 0.0
+    for i in range(n):
+        window_sum += ranges[i]
+        if i >= atr_lookback:
+            window_sum -= ranges[i - atr_lookback]
+        if i >= atr_lookback - 1:
+            atr[i] = window_sum / atr_lookback
+    flags = [False] * n
+    for i in range(regime_lookback, n):
+        prior = sorted(atr[i - regime_lookback : i])
+        m = len(prior)
+        median = (
+            prior[m // 2] if m % 2 else (prior[m // 2 - 1] + prior[m // 2]) / 2.0
+        )
+        flags[i] = atr[i] > median
+    return flags
+
+
 def run_redesign_backtest(
     *,
     dataset: BacktestDataset,
@@ -543,6 +600,15 @@ def run_redesign_backtest(
     closes = [c.close_value for c in candles]
     highs = [c.high_value for c in candles]
     lows = [c.low_value for c in candles]
+    regime_flags = (
+        _high_vol_regime_flags(
+            highs=highs, lows=lows,
+            atr_lookback=candidate.feature_config.atr_lookback,
+            regime_lookback=candidate.vol_regime_lookback,
+        )
+        if candidate.vol_regime_mode != "OFF"
+        else None
+    )
 
     trades: list[BacktestTradeEvent] = []
     open_trade: _OpenRedesignTrade | None = None
@@ -657,6 +723,13 @@ def run_redesign_backtest(
             block_reasons.append(decision.block_reason_safe_label)
         if decision.entry_side is RedesignEntrySide.REDESIGN_NO_ENTRY:
             continue
+        if regime_flags is not None:
+            is_high_vol = regime_flags[bar_index]
+            if (candidate.vol_regime_mode == "HIGH" and not is_high_vol) or (
+                candidate.vol_regime_mode == "LOW" and is_high_vol
+            ):
+                block_reasons.append("REDESIGN_BLOCK_VOL_REGIME")
+                continue
 
         spread_record = dataset.spreads[bar_index]
         spread_cost = (

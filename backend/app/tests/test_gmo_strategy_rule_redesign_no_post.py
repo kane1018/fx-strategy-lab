@@ -569,6 +569,96 @@ class TestSignPermutationOverride:
         assert bool(result) is False
 
 
+def _varying_vol_dataset() -> BacktestDataset:
+    """Alternating 60-bar blocks: high-vol blocks rise fast (breakouts fire in
+    high vol), low-vol blocks drift slowly. Lets the regime gate select a
+    non-empty subset of breakout entries."""
+
+    candles, spreads, sessions = [], [], []
+    value = 100.0
+    for i in range(600):
+        high_block = (i // 60) % 2 == 1
+        step = 0.5 if high_block else 0.03
+        rng = 0.30 if high_block else 0.03
+        value += step
+        candles.append(
+            BacktestCandleRecord(
+                timestamp=i, symbol_safe_label="USD_JPY",
+                timeframe_safe_label="M5", open_value=value - step,
+                high_value=value + rng, low_value=value - rng,
+                close_value=value,
+            )
+        )
+        spreads.append(
+            BacktestSpreadRecord(
+                timestamp=i, symbol_safe_label="USD_JPY",
+                spread_category=SpreadCategorySafeLabel.SPREAD_CATEGORY_NORMAL,
+                spread_value=0.002,
+            )
+        )
+        sessions.append(
+            BacktestSessionRecord(
+                timestamp=i,
+                session_safe_label=SessionAllowedSafeLabel.SESSION_ALLOWED,
+            )
+        )
+    return BacktestDataset(
+        symbol_safe_label="USD_JPY", timeframe_safe_label="M5",
+        candles=tuple(candles), spreads=tuple(spreads), sessions=tuple(sessions),
+    )
+
+
+class TestVolRegimeConditional:
+    def test_high_vol_flags_detect_rising_volatility(self) -> None:
+        highs = [1.0] * 250 + [10.0] * 12
+        lows = [0.9] * 250 + [0.0] * 12
+        flags = module._high_vol_regime_flags(
+            highs=highs, lows=lows, atr_lookback=14, regime_lookback=200
+        )
+        assert all(f is False for f in flags[:200])  # fail-closed pre-history
+        assert flags[258] is True  # high vol after the jump
+        f2 = module._high_vol_regime_flags(
+            highs=highs, lows=lows, atr_lookback=14, regime_lookback=200
+        )
+        assert flags == f2  # deterministic
+
+    def test_regime_gate_only_removes_entries(self) -> None:
+        ds = _varying_vol_dataset()
+        off = run_redesign_backtest(
+            dataset=ds,
+            candidate=module.build_vol_regime_conditional_candidate(
+                vol_regime_mode="OFF"
+            ),
+        )
+        high = run_redesign_backtest(
+            dataset=ds, candidate=module.build_vol_regime_conditional_candidate()
+        )
+        low = run_redesign_backtest(
+            dataset=ds,
+            candidate=module.build_vol_regime_conditional_candidate(
+                vol_regime_mode="LOW"
+            ),
+        )
+        assert len(high.trades) <= len(off.trades)
+        assert len(low.trades) <= len(off.trades)
+        assert len(off.trades) > 0
+        assert len(high.trades) > 0  # some breakouts fall in the high-vol regime
+        # deterministic
+        high2 = run_redesign_backtest(
+            dataset=ds, candidate=module.build_vol_regime_conditional_candidate()
+        )
+        assert len(high.trades) == len(high2.trades)
+
+    def test_candidate_builder_is_frozen_breakout_ride(self) -> None:
+        c = module.build_vol_regime_conditional_candidate()
+        assert c.family is RedesignEntryFamily.BREAKOUT
+        assert c.exit_config is EXIT_RIDE
+        assert c.vol_regime_mode == "HIGH"
+        assert c.vol_regime_lookback == 200
+        assert c.candidate_name == "BREAKOUT__EXIT_RIDE__HIGH_VOL"
+        assert bool(c) is False
+
+
 class TestModuleIsolation:
     def test_module_has_no_network_broker_or_env_surface(self) -> None:
         source = inspect.getsource(module)

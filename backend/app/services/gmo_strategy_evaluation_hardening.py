@@ -928,21 +928,29 @@ def evaluate_under_standard_gate(
     *,
     candidates: tuple[RedesignCandidate, ...] | None = None,
     max_windows: int = DEFAULT_MAX_WINDOWS,
+    window_bars_resolutions: tuple[int, ...] | None = None,
+    lead: int = REDESIGN_SLICE_LEAD_IN_BARS,
 ) -> MultiResolutionGateReport:
     """Run the full robustness battery under the codified standard gate.
 
     Any new candidate set (including new hypotheses) MUST be judged with this
     helper so the friction/benchmark/walk-forward assumptions are identical.
     A candidate is ROBUST only if it clears the battery at EVERY window
-    granularity in the gate (unanimous), each with enough qualifying windows.
+    granularity (unanimous), each with enough qualifying windows.
+
+    ``window_bars_resolutions`` / ``lead`` may be overridden for a different
+    timeframe (e.g. larger M5 windows and a longer indicator/regime lead-in);
+    the methodology (multi-resolution, cost stress, sign-permutation, min
+    qualifying windows) is unchanged.
     """
 
     gate = STANDARD_EVALUATION_GATE
+    resolutions = window_bars_resolutions or gate.window_bars_resolutions
     candidate_set = candidates or build_default_redesign_candidates()
     stress_cost = max(gate.cost_multipliers) if gate.cost_multipliers else 1.0
 
     per_res_reports: dict[int, EvaluationHardeningReport] = {}
-    for window_bars in gate.window_bars_resolutions:
+    for window_bars in resolutions:
         per_res_reports[window_bars] = evaluate_candidate_robustness(
             dataset,
             candidates=candidate_set,
@@ -951,13 +959,14 @@ def evaluate_under_standard_gate(
             cost_multipliers=gate.cost_multipliers,
             slippage_price_per_side=gate.slippage_price_per_side,
             random_seed_count=gate.random_seed_count,
+            lead=lead,
         )
 
     verdicts: list[MultiResolutionCandidateVerdict] = []
     for candidate in candidate_set:
         per_resolution: list[ResolutionVerdictSafe] = []
         robust_all = True
-        for window_bars in gate.window_bars_resolutions:
+        for window_bars in resolutions:
             report = per_res_reports[window_bars]
             match = next(
                 v for v in report.verdicts
@@ -999,7 +1008,7 @@ def evaluate_under_standard_gate(
         else "NO_ROBUST_EDGE_ACROSS_RESOLUTIONS_COST_STRESS_AND_SIGN_PERMUTATION"
     )
     return MultiResolutionGateReport(
-        resolutions=gate.window_bars_resolutions,
+        resolutions=resolutions,
         slippage_price_per_side=gate.slippage_price_per_side,
         stress_cost_multiplier=stress_cost,
         random_seed_count=gate.random_seed_count,
