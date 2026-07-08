@@ -48,6 +48,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   **H1候補は現実的slippage(~0.5pip/side)で robust バーを割り REJECTED**。全候補 NOT_ROBUST・
   持続edge不在（評価の過小評価を是正して偽edgeを却下）。
   [STRATEGY_EXECUTION_REALISM_HARDENING_NO_POST_20260708.md](STRATEGY_EXECUTION_REALISM_HARDENING_NO_POST_20260708.md)）。
+  さらに残課題を是正済み（(a) SHORT側ASK約定モデル化・(b) sign-permutation directional
+  benchmark へ置換・標準gate明文化）。再確認で **window-count 依存の偽robust** を発見し
+  **多解像度(1000/1400 bars)unanimous要件**を追加。新仮説 **SESSION_MOMENTUM**
+  （session-open continuation・テクニカル非依存）も構築し同一gateで評価 →
+  **テクニカル/新仮説とも NO_ROBUST_EDGE**（session仮説は sign-permutation が
+  「方向優位の不在」を検出し棄却）。
+  [STRATEGY_GATE_CORRECTION_AND_SESSION_HYPOTHESIS_NO_POST_20260708.md](STRATEGY_GATE_CORRECTION_AND_SESSION_HYPOTHESIS_NO_POST_20260708.md)）。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
