@@ -110,6 +110,13 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   **→ operator は closeout 維持を選択。** 日次契約は **FROZEN_UNEXECUTED**（未採点・将来データ提供時のみ
   契約通り1回採点可）。**研究フェーズ CLOSED_OUT 維持**・全 status flag 不変
   （NO_ROBUST_EDGE_FOUND_IN_TESTED_SCOPE / performance_proof_status=false / live_ready=false）。
+  その後 operator が Fable5案を採用し **research platform productization** を実施（docs のみ）。評価gate/
+  false-positive rejection/backtest基盤/data取込/safe execution template/governance/reporting/
+  **記述的market-state observer（BUY/SELL出さず）** を再利用可能 platform として索引化＋**hypothesis registry
+  （H-01..H-10・多重検定台帳）**を新設。**prescriptive preview・confidence・live budget・auto-trade は明示 DEFER**
+  （validated edge＋operator承認まで作らない）。status 全不変。
+  [productization](RESEARCH_PLATFORM_PRODUCTIZATION_NO_POST_20260709.md) /
+  [registry](HYPOTHESIS_REGISTRY_NO_POST.md)。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
