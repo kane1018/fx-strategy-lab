@@ -121,6 +121,10 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   設計凍結（docs のみ・warning-first・PULL式・NO_ACTION default・no-flag≠permission・**方向/confidence/推奨を出さない**・
   tested-scope & rejected-ledger 照合・実 POST は別 Step・SERE 非起動・AUTO_PREVIEW/confidence/live は DEFER）。
   status 全不変。[caution briefing design](OPERATOR_PRE_TRADE_CAUTION_BRIEFING_DESIGN_NO_POST_20260709.md)。
+  その後、凍結設計を基準に **caution briefing generator を read-only 実装**
+  （`operator_pre_trade_caution_briefing.py`＋16 tests・純粋関数・safe-aggregate・**no-private-GET/no-POST**・
+  warning-first・NO_ACTION default・方向/確信度/推奨なし・rejected-ledger 照合は caution のみ・never truthy・
+  ENTRY 非生成・SERE 非起動）。full suite 7250 passed / ruff clean・status 全不変。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
