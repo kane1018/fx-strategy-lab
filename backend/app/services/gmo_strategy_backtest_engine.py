@@ -24,8 +24,8 @@ from enum import Enum
 
 from app.services.gmo_paper_auto_cycle_runner import AutoPreviewSignal
 from app.services.gmo_strategy_backtest_dataset import (
+    DATASET_VALID_STATUSES,
     BacktestDataset,
-    GmoBacktestDatasetStatus,
     SessionAllowedSafeLabel,
     SpreadCategorySafeLabel,
     validate_backtest_dataset,
@@ -356,7 +356,7 @@ def run_synthetic_backtest(
 
     env = environment if environment is not None else BacktestEnvironmentAssumption()
     validation = validate_backtest_dataset(dataset)
-    if validation.status is not GmoBacktestDatasetStatus.DATASET_VALID_SYNTHETIC:
+    if validation.status not in DATASET_VALID_STATUSES:
         return BacktestRunResult(
             status=GmoBacktestRunStatus.BACKTEST_SYNTHETIC_INVALID_DATASET,
             blocked_reasons=validation.blocked_reasons,

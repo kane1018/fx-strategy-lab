@@ -508,6 +508,7 @@ def _build_dataset(
         )
         for row in rows
     )
+    is_real_data = not request.treat_as_synthetic_fixture
     dataset = BacktestDataset(
         symbol_safe_label=request.symbol_safe_label,
         timeframe_safe_label=request.timeframe_safe_label,
@@ -515,6 +516,10 @@ def _build_dataset(
         spreads=spreads,
         sessions=sessions,
         synthetic_fixture=request.treat_as_synthetic_fixture,
+        # Only a dataset that reached here has passed this adapter's own
+        # fail-closed validation; that is the sole grant for a non-synthetic
+        # dataset to pass ``validate_backtest_dataset``.
+        validated_operator_local_csv=is_real_data,
     )
 
     if spread_included:
@@ -537,6 +542,7 @@ def _build_dataset(
         session_derivation_label=rows[0].session_derivation,
         bar_count=len(rows),
         source_route_label=request.source_route_label,
+        real_data_used=is_real_data,
         synthetic_fixture_only=request.treat_as_synthetic_fixture,
     )
     return HistoricalCsvImportResult(

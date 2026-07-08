@@ -78,8 +78,21 @@ class BacktestSessionRecord:
 
 class GmoBacktestDatasetStatus(str, Enum):
     DATASET_VALID_SYNTHETIC = "DATASET_VALID_SYNTHETIC"
+    DATASET_VALID_OPERATOR_LOCAL_CSV = "DATASET_VALID_OPERATOR_LOCAL_CSV"
     DATASET_INVALID_BLOCKED = "DATASET_INVALID_BLOCKED"
     DATASET_NOT_CONFIGURED = "DATASET_NOT_CONFIGURED"
+
+
+# A dataset passes structural validation when it is either a synthetic
+# fixture, or a real dataset that arrived through the reviewed local CSV
+# import adapter (``validated_operator_local_csv=True``). Any other
+# non-synthetic dataset stays fail-closed.
+DATASET_VALID_STATUSES = frozenset(
+    {
+        GmoBacktestDatasetStatus.DATASET_VALID_SYNTHETIC,
+        GmoBacktestDatasetStatus.DATASET_VALID_OPERATOR_LOCAL_CSV,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -93,6 +106,10 @@ class BacktestDataset:
     sessions: tuple[BacktestSessionRecord, ...]
     warmup_bars: int = 3
     synthetic_fixture: bool = True
+    # Set True only by the reviewed local CSV import adapter after its own
+    # fail-closed validation. It is the ONLY way a non-synthetic dataset can
+    # pass validation; it never loosens the synthetic-only rule globally.
+    validated_operator_local_csv: bool = False
 
     def __bool__(self) -> bool:
         return False
@@ -111,9 +128,10 @@ def validate_backtest_dataset(dataset: BacktestDataset) -> BacktestDatasetValida
     """Fail-closed dataset validation. Reasons are safe labels only."""
 
     reasons: list[str] = []
-    if not dataset.synthetic_fixture:
-        # Real data enters only through a future, explicitly reviewed
-        # adapter step; in this phase a non-synthetic dataset is blocked.
+    real_data_ok = dataset.validated_operator_local_csv
+    if not dataset.synthetic_fixture and not real_data_ok:
+        # Real data enters only through the reviewed local CSV import
+        # adapter; any other non-synthetic dataset is blocked.
         reasons.append("DATASET_REAL_DATA_NOT_SUPPORTED_THIS_PHASE")
     if dataset.symbol_safe_label not in SUPPORTED_SYMBOL_SAFE_LABELS:
         reasons.append("DATASET_SYMBOL_NOT_SUPPORTED")
@@ -128,7 +146,7 @@ def validate_backtest_dataset(dataset: BacktestDataset) -> BacktestDatasetValida
 
     previous_ts: int | None = None
     for candle in dataset.candles:
-        if not candle.synthetic_fixture:
+        if not candle.synthetic_fixture and not real_data_ok:
             reasons.append("DATASET_CANDLE_NOT_SYNTHETIC")
             break
         for field_value in (
@@ -171,12 +189,14 @@ def validate_backtest_dataset(dataset: BacktestDataset) -> BacktestDatasetValida
             break
 
     unique_reasons = tuple(dict.fromkeys(reasons))
+    if unique_reasons:
+        valid_status = GmoBacktestDatasetStatus.DATASET_INVALID_BLOCKED
+    elif real_data_ok and not dataset.synthetic_fixture:
+        valid_status = GmoBacktestDatasetStatus.DATASET_VALID_OPERATOR_LOCAL_CSV
+    else:
+        valid_status = GmoBacktestDatasetStatus.DATASET_VALID_SYNTHETIC
     return BacktestDatasetValidation(
-        status=(
-            GmoBacktestDatasetStatus.DATASET_VALID_SYNTHETIC
-            if not unique_reasons
-            else GmoBacktestDatasetStatus.DATASET_INVALID_BLOCKED
-        ),
+        status=valid_status,
         blocked_reasons=unique_reasons,
     )
 
