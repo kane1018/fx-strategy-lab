@@ -96,6 +96,11 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   （機構が要求するデータを明示）。現 status=**BLOCKED_PENDING_OPERATOR_PROVIDED_RATE_DATA**
   （operator が US金利日中CSVを no-credential で提供/承認できれば1回採点、不可なら弱機構代替に流れず closeout 維持）。
   [cross-asset preregistration](STRATEGY_CROSS_ASSET_RATES_LEADLAG_PREREGISTRATION_NO_POST_20260709.md)。
+  「取得前にまず整理」を実施（**機構×時間軸×データ 実現可能性マップ**）。**日次(EOD)に落とせば no-credential
+  の壁がほぼ消える**（US/JP利回り・USD/JPY・equity/VIX・暦は公開無認証で数十年＝十分検定力）が、日次で試せる
+  強機構は教科書的・裁定済で **edge prior 低**。推奨: intraday金利への即取得は非推奨、**日次・公開・無認証で
+  金利差/carryを mechanism-first で新規事前登録→承認public GET→1回採点**（清潔だが低prior）。代替=closeout維持。
+  [feasibility map](STRATEGY_MECHANISM_TIMESCALE_DATA_FEASIBILITY_NO_POST_20260709.md)。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
