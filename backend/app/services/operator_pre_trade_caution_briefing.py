@@ -244,10 +244,16 @@ def _hard_stops(inputs: BriefingInputs) -> tuple[str, ...]:
         reasons.append("HARD_STOP_SPREAD_ABNORMAL")
     if inputs.event_proximity is EventProximitySafeLabel.NEAR_SCHEDULED_EVENT:
         reasons.append("HARD_STOP_EVENT_PROXIMITY")
+    if inputs.event_proximity is EventProximitySafeLabel.EVENT_PROXIMITY_UNKNOWN:
+        # fail-closed: cannot confirm we are clear of a scheduled event
+        reasons.append("HARD_STOP_EVENT_PROXIMITY_UNKNOWN")
     if inputs.uncertainty_high:
         reasons.append("HARD_STOP_HIGH_UNCERTAINTY")
     if inputs.risk_budget is RiskBudgetSafeStatus.BUDGET_EXCEEDED:
         reasons.append("HARD_STOP_RISK_BUDGET_EXCEEDED")
+    if inputs.risk_budget is RiskBudgetSafeStatus.BUDGET_UNKNOWN:
+        # fail-closed: cannot confirm we are within the risk budget
+        reasons.append("HARD_STOP_RISK_BUDGET_UNKNOWN")
     if inputs.exposure is ExposureSafeLabel.EXPOSURE_UNKNOWN:
         reasons.append("HARD_STOP_INTERNAL_STATE_UNKNOWN")
     if inputs.safe_execution_readiness is SafeExecutionReadiness.NOT_READY:

@@ -86,6 +86,27 @@ class TestHardStops:
         )
         assert "HARD_STOP_RISK_BUDGET_EXCEEDED" in generate_caution_briefing(inp).hard_stop_reasons
 
+    def test_budget_unknown_is_fail_closed_hard_stop(self) -> None:
+        inp = BriefingInputs(
+            **{
+                **_all_clear_inputs().__dict__,
+                "risk_budget": RiskBudgetSafeStatus.BUDGET_UNKNOWN,
+            }
+        )
+        b = generate_caution_briefing(inp)
+        assert "HARD_STOP_RISK_BUDGET_UNKNOWN" in b.hard_stop_reasons
+        assert b.no_action_status is NoActionStatus.NO_ACTION_STRONGLY_INDICATED
+
+    def test_event_proximity_unknown_is_fail_closed_hard_stop(self) -> None:
+        inp = BriefingInputs(
+            **{
+                **_all_clear_inputs().__dict__,
+                "event_proximity": EventProximitySafeLabel.EVENT_PROXIMITY_UNKNOWN,
+            }
+        )
+        b = generate_caution_briefing(inp)
+        assert "HARD_STOP_EVENT_PROXIMITY_UNKNOWN" in b.hard_stop_reasons
+
 
 class TestRejectedLedgerMatching:
     def test_resembles_rejected_is_caution_only(self) -> None:
