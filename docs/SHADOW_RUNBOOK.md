@@ -5,6 +5,22 @@ GMO Public（または mock）の相場データで **注文なし**の shadow r
 **コミット禁止**（gitignore 済み）。設計は [PHASE2_SHADOW_TRADING_PLAN.md](PHASE2_SHADOW_TRADING_PLAN.md)、
 Public API 仕様は [GMO_PUBLIC_API_PLAN.md](GMO_PUBLIC_API_PLAN.md)。
 
+## 0. E1 runbook との境界（2026-07-10）
+
+本書は既存の Phase 2C〜2D-2 手動 shadow run の履歴・手順であり、引き続き有効である。
+新しい `E1_SHADOW_FULL_AUTO_ENGINE_NO_POST` は別レーンの有限 offline engine で、
+**実装済みだが E1→E2 ゲートは未通過**である。本書の「自動実行を行わない」はこの旧manual laneに
+適用し、E1 の bounded test/run だけを狭い例外として扱う。
+
+E1 でも Public / Private API、broker、network、credential、env / `.env`、actual POST は使わない。
+仮説は E1 / E2 に留まり、live に接続しない。E1 の journal / virtual state / audit / evidence は
+ignore 済み `backend/shadow_exports/e1/` 配下だけに置き、commit しない。過去の Step 6G / live 記録は
+E1 の実装証拠・ゲート証拠ではない。
+
+E1 を扱う場合は本書のCLI手順ではなく、[E1設計契約](E1_SHADOW_FULL_AUTO_ENGINE_NO_POST.md) と
+[E1 runbook](E1_SHADOW_FULL_AUTO_ENGINE_RUNBOOK_NO_POST.md) に従う。将来のE2→E3 review用仕様表は
+[sanitized API capability sheet](API_CAPABILITY_SHEET_SANITIZED_NO_POST.md) を使う。
+
 ## 1. 対象範囲
 
 - local shadow run CLI（mock / gmo-public）、最小 SignalFn、shadow log 保存、summary 集計、offline テスト。

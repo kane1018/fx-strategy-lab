@@ -8,6 +8,24 @@ Step: `RESEARCH_PLATFORM_PRODUCTIZATION_NO_POST`
 raw price/spread/PnL/CSV row/ID/credential は扱わない。
 performance_proof_status=false / live_ready=false / unattended_live_supported=false（維持）。**
 
+## 2026-07-10 追記: E1 infrastructure automation の狭い例外
+
+本書の 2026-07-09 時点の DEFER 宣言は履歴として維持する。特に、validated edge のない
+**hypothesis-driven live execution / auto-trade / unattended live** は現在も DEFER であり、
+`performance_proof_status=false` / `live_ready=false` / `unattended_live_supported=false` は不変である。
+
+その後、二軌道モデルのインフラ軌道として `E1_SHADOW_FULL_AUTO_ENGINE_NO_POST` を実装した。
+これは明示起動された1回の有限 offline run 内だけで virtual execution infrastructure を自動検証する
+狭い例外であり、仮説のlive執行、常駐運転、API / broker / network / credential / env / `.env` 利用、
+actual POST を一切許可しない。仮説軌道は E1 / E2 に留める。生成物は ignore 済み
+`backend/shadow_exports/e1/` 配下だけに置き、commit しない。
+
+現在 status は `E1_IMPLEMENTED_NOT_GATE_PASSED` で、E1→E2ゲート証拠は未充足である。
+過去の Step 6G / live 記録は E1 証拠に算入しない。詳細は
+[E1設計契約](E1_SHADOW_FULL_AUTO_ENGINE_NO_POST.md) /
+[E1 runbook](E1_SHADOW_FULL_AUTO_ENGINE_RUNBOOK_NO_POST.md) /
+[sanitized API capability sheet](API_CAPABILITY_SHEET_SANITIZED_NO_POST.md)。
+
 ## 0. スコープと DEFER 宣言（最重要）
 
 - **本 Step で整理する（productization 対象）**: 評価 gate / false-positive rejection / backtest 基盤 /

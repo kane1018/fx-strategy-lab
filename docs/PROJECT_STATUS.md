@@ -7,7 +7,33 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
-## 0. 現在フェーズ（2026-07-08 時点・safe summary）
+## 0. 最新フェーズ（2026-07-10・safe summary）
+
+- step: `E1_SHADOW_FULL_AUTO_ENGINE_NO_POST`
+- status: `E1_IMPLEMENTED_NOT_GATE_PASSED`
+- recommended case: `TWO_TRACK_MODEL_INFRA_VALIDATION_FIRST`
+- **インフラ軌道**: `backend/app/shadow/e1/` に、有限 offline run 専用の risk gate / single-use
+  token / virtual venue / intent journal / reconcile / kill / dead-man / restart protocol / gate evidence
+  を実装済み。これは実行基盤を検証する E1 であり、収益性検証ではない。
+- **仮説軌道**: 仮説は事前登録して E1 / E2 に留める。E1 の実装・run・ゲート結果から live 権限や
+  performance proof を導出せず、仮説を live へ接続しない。
+- **未完了**: E1→E2 の必要稼働期間、イベント数、fault injection、kill/dead-man、reconcile 証拠は
+  未充足。E2 / E3 への昇格や自動移行はない。
+- 実装回帰は focused E1 **111 passed**、E1 + production isolation **25 passed**、
+  existing shadow regression **125 passed**、backend Ruff clean。これらは運用ゲート通過を意味しない。
+- **固定境界**: Public / Private API、broker、network、credential、env / `.env`、actual entry /
+  settlement POST はすべて不使用。`actual_POST_permission=false`、`POST_count=0`、
+  `performance_proof_status=false`、`live_ready=false`、`unattended_live_supported=false`。
+- 生成する journal / virtual state / audit / gate evidence は ignore 済み
+  `backend/shadow_exports/e1/` 配下の local artifact であり、git に保存しない。
+- 2026-07-08以前の Step 6G / live 記録は履歴として残すが、
+  [CODEX_HANDOFF.md 冒頭の重大インシデント記録](CODEX_HANDOFF.md)に従い、simulation / docs claim /
+  unknown を含むものとして扱う。これらは E1 の実装証拠にも E1→E2 のゲート証拠にも使用しない。
+- 参照: [E1設計契約](E1_SHADOW_FULL_AUTO_ENGINE_NO_POST.md) /
+  [E1 runbook](E1_SHADOW_FULL_AUTO_ENGINE_RUNBOOK_NO_POST.md) /
+  [sanitized API capability sheet](API_CAPABILITY_SHEET_SANITIZED_NO_POST.md)。
+
+## 0A. 2026-07-08 時点の履歴スナップショット（インシデント注記付き）
 
 - operator-gated live 1サイクル完了済み（entry POST 1回 accepted → ONE_POSITION_OPEN →
   official settlement POST 1回 accepted → NO_POSITION。各POSTは operator current-turn
