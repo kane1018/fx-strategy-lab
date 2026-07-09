@@ -127,7 +127,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   ENTRY 非生成・SERE 非起動）。続けて **SAFE ラベル供給層を read-only 実装**
   （`operator_briefing_safe_label_supply.py`＋19 tests・caller の SAFE ラベルのみ→fail-closed 正規化→`BriefingInputs`・
   unknown/未検証/非棄却は caution で "permission でない"・briefing に event/budget 不明の fail-closed hard-stop も追加）。
-  full suite 7271 passed / ruff clean・status 全不変。
+  さらに operator 承認のもと **read-only decision-support briefing を"完成"まで自走**：orchestration façade
+  `operator_pre_trade_briefing_service.py`（+9 tests・supply→generate→render を1呼び出し・combined warning-first・
+  never truthy・direction/confidence なし）＋ read-only 使い方 runbook
+  [briefing usage](OPERATOR_PRE_TRADE_BRIEFING_READONLY_USAGE_NO_POST.md)。
+  **完成範囲=read-only decision-support のみ**（実口座反映/live/POST/SERE/preview/confidence/auto/収益edge は対象外・
+  operator-gate/DEFER/前提未達）。full suite 7280 passed / ruff clean・status 全不変。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
