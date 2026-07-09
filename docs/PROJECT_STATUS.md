@@ -138,6 +138,10 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   PENDING/空理由 fail-closed）＋運用手順 doc
   [manual support](OPERATOR_MANUAL_TRADING_SUPPORT_PROCEDURE_NO_POST.md)。実弾は operator の外部環境 or 別 operator-gated
   one-POST、system は自律で broker/credential/POST に触れない。full suite 7294 passed / ruff clean・status 全不変。
+  さらに operator 承認のもと **最小 read-only CLI を自走実装**（`app/cli/operator_briefing_cli.py`＋8 tests・
+  `python -m app.cli.operator_briefing_cli`・argparse で SAFE ラベル引数→warning-first テキスト表示・
+  `--decision/--reason` は operator の記録用・ローカル I/O のみ・no network/broker/fetch/credential/POST）。
+  ※ "UI" と呼べるのは**端末 CLI まで**（GUI/Web は defer・PULL/warning-first 維持）。full suite 7302 passed / ruff clean・status 全不変。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要

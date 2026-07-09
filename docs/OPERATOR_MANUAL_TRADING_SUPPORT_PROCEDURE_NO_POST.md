@@ -60,6 +60,23 @@ session = record_operator_decision(
 print(render_operator_briefing_session(session))       # session log（監査用）
 ```
 
+### CLI で実行（コードを書かずに参照・read-only）
+
+`backend/` で（`PYTHONPATH=.`）:
+```
+python -m app.cli.operator_briefing_cli \
+  --exposure FLAT --risk-budget WITHIN_BUDGET --execution-readiness READY \
+  --trend RANGING --volatility NORMAL --spread NORMAL --liquidity NORMAL \
+  --time-of-day TOKYO --event NONE --uncertainty NORMAL --pending-count 0 \
+  --context VOL_REGIME_CONDITIONAL_BREAKOUT --session-label 2026-07-09-am
+```
+→ warning-first briefing テキストを表示。あなたの判断を記録するなら（**あなた自身の決定**）:
+```
+  ... 上と同じフラグ ... --decision HOLD --reason "spread 拡大・様子見"
+```
+（`--decision` は BUY/SELL/HOLD/NO_ACTION から**あなたが選ぶ記録用**。system は決めない。`--reason` 必須。
+未指定/不明フラグは fail-closed で caution 化。**PULL 式＝使いたい時だけ実行**。ローカル出力のみ・no-POST・no broker・no fetch。）
+
 ## 3. あなたが見るべき点（チェックリスト）
 
 - disclaimer（no edge / not advice / no-flag != permission）を読んだ。
