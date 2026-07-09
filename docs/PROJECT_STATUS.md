@@ -132,7 +132,12 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   never truthy・direction/confidence なし）＋ read-only 使い方 runbook
   [briefing usage](OPERATOR_PRE_TRADE_BRIEFING_READONLY_USAGE_NO_POST.md)。
   **完成範囲=read-only decision-support のみ**（実口座反映/live/POST/SERE/preview/confidence/auto/収益edge は対象外・
-  operator-gate/DEFER/前提未達）。full suite 7280 passed / ruff clean・status 全不変。
+  operator-gate/DEFER/前提未達）。
+  さらに operator 承認(A)のもと **read-only の"手動運用支援"を自走で完成**：session helper
+  `operator_briefing_session.py`（+14 tests・start/record/render・**operator の決定は記録のみで system は生成しない**・
+  PENDING/空理由 fail-closed）＋運用手順 doc
+  [manual support](OPERATOR_MANUAL_TRADING_SUPPORT_PROCEDURE_NO_POST.md)。実弾は operator の外部環境 or 別 operator-gated
+  one-POST、system は自律で broker/credential/POST に触れない。full suite 7294 passed / ruff clean・status 全不変。
   最新は [CODEX_HANDOFF.md](CODEX_HANDOFF.md) 冒頭の現在フェーズを参照
 - **unattended full auto completed=false / unattended live unsupported（不変）**。
   actual POSTには常に fresh gate 一式と operator current-turn confirmation が必要
