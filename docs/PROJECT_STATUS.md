@@ -57,10 +57,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   experts、5 axes以内、1 low-capacity soft router、primary Brier / confirmatory Log loss、
   primary comparison dynamic vs equal-weight、同一eligible timestamp分母を定める。NO_TRADEでprimary
   scoringをfilterしない。既存期間はdevelopment-only、formal testは未予約。
-- 2026-07-11 spec freeze 完了（[freeze doc](STRATEGY_H11_SPEC_FREEZE_DRAFT_NO_POST_20260711.md)）:
-  `frozen_spec=true` / `config_hash=sha256:7bff1ee4b8427a67111f289211bca5d654f1ae38bc3670bd1592a3ba9790e4a1` /
-  `formal_test=RESERVED_FORWARD_FROM_2026-07-11_NOT_COLLECTED` / `current_stage=SPEC_FROZEN_PRE_STAGE1`。
-  Stage 1 配線（no-POST・fake-transport-only）は operator 授権済み。Stage 1 実稼働開始・Stage 2/3・liveは未許可。
+- 2026-07-11 v1 spec freeze（config_hash=sha256:7bff1ee4…）→ development validation で
+  router 追加価値なしと判定し **v2（TREND単独expert）へ移行**（operator推奨(b)採択・
+  [v2 freeze](STRATEGY_H11_V2_TREND_SINGLE_EXPERT_SPEC_FREEZE_NO_POST_20260711.md)・
+  config_hash=sha256:483fa9e4…）。v1はDISCONTINUED_DEVELOPMENT・formal test未消費。
+- v2はoperator授権public GETでdevelopment学習済み（baseline比+3.69%・formal test未実施・
+  edge証拠ではない）。**Stage 1配線完了・発火テスト11件パス**
+  （[配線記録](H11_STAGE1_PAPER_WIRING_NO_POST_20260711.md)）。
+  Stage 1実稼働はoperator開始確認待ち。Stage 2/3・liveは未許可。
 - [staged-live policy draft](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)は
   `DRAFT_INACTIVE` / `future_live_intent=CONDITIONAL_STAGE2_SUPERVISED_LIVE`。H-11を将来liveの
   予定前提とするが、frozen spec→別授権Stage 1→2週間以上かつ20 paper trades以上と方針条件→
