@@ -96,3 +96,20 @@ rep = evaluate_under_standard_gate(
 
 robust edge（本 gate 合格）→ paper-forward soak → operator review → 明示承認、の**全て**が揃うまで
 live 不可。現状 `live_ready=false` / `unattended_live_supported=false`。
+
+## 2026-07-10 追記: H-11 operator-selected trackの狭いprecedence
+
+研究トラックの`CLOSED_OUT`、REJECTだけを数える多重検定台帳、K=3 escalation、mechanism-first、
+one-run、post-OOS retuning禁止は変更しない。H-11のoperator選定は研究再開ではなく、nullを増減せず、
+H-01/H-02/H-03/H-05の棄却を再開・上書きしない。
+
+ACTIVEな[operator-selected policy](OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md)は、
+`H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY`についてのみ、validated-edge-firstを将来Stage 2の
+必須条件から外す狭い例外を定める。ただし現状は`SELECTED_SPEC_PENDING` / `PRE_STAGE1_SPEC_INCOMPLETE`であり、
+[H-11 preregistration draft](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md)も未凍結である。
+
+H-11 staged pathは、frozen spec+`config_hash`→別授権Stage 1→2週間以上・20 paper trades以上とpolicy条件→
+operator review→別Stage 2 procedure→別major-incident resume policy→per-trade Step 6G confirmationの順を要求する。
+それまでは本節以前のlive DEFERが有効で、automatic/unattended liveは対象外である。
+競合時はAGENTS.md→ACTIVE policy §7→[H-11 staged policy](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)
+の順に適用し、不明点はno-executionとしてfail-closedする。

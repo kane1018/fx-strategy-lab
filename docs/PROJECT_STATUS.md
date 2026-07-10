@@ -48,6 +48,35 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 - `actual_post=false` / `entry_post=false` / `settlement_post=false` / `post_count=0` /
   `performance_proof_status=false` / `live_ready=false` / `unattended_live_supported=false`。
 
+## 0C. H-11選定と条件付きstaged-live方針（2026-07-10・docs-only・no-POST）
+
+- operatorは`H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY`を選定した。registry statusは
+  `OPERATOR_SELECTED_UNPROVEN`、spec substatusは`SELECTED_SPEC_PENDING`、
+  `selected_despite_rejected=false`。related rejected evidenceはH-01/H-02/H-03/H-05。
+- [事前登録draft](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md)は、exactly 3 directional
+  experts、5 axes以内、1 low-capacity soft router、primary Brier / confirmatory Log loss、
+  primary comparison dynamic vs equal-weight、同一eligible timestamp分母を定める。NO_TRADEでprimary
+  scoringをfilterしない。既存期間はdevelopment-only、formal testは未予約。
+- 現在は`frozen_spec=false` / `config_hash=NOT_ASSIGNED` / `formal_test=NOT_RESERVED` /
+  `current_stage=PRE_STAGE1_SPEC_INCOMPLETE`。Stage 1 wiring/execution、paper、Stage 2/3、liveは全て未許可。
+- [staged-live policy draft](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)は
+  `DRAFT_INACTIVE` / `future_live_intent=CONDITIONAL_STAGE2_SUPERVISED_LIVE`。H-11を将来liveの
+  予定前提とするが、frozen spec→別授権Stage 1→2週間以上かつ20 paper trades以上と方針条件→
+  operator review→別Stage 2 procedure→別major-incident resume policy→各Step 6G fresh confirmationを要求する。
+- prediction-to-POST直結なし。将来の別授権adapterも既存`AUTO_PREVIEW_SIGNAL_*`までで、operator専有
+  `ENTRY_*`を生成しない。caution briefingはwarning-onlyのままH-11出力を取り込まない。
+- entry/settlementは別task・別fresh confirmation・各最大1attempt。retry/repost/second POST、generic/opposite
+  close、opposite prediction settlementは禁止。unknown/timeoutはattempt消費、再送なし、new entry block。
+  kill/dead-manは自動close/POSTしない。
+- research phaseは`CLOSED_OUT`、多重検定台帳・escalation則は不変。E1 formal statusも
+  `E1_IMPLEMENTED_NOT_GATE_PASSED`のまま。
+- `actual_post=false` / `entry_post=false` / `settlement_post=false` / `post_count=0` /
+  `broker_read=false` / `broker_write=false` / `private_api=false` / `public_get=false` /
+  `public_api=false` / `data_fetch=false` / `credential_read=false` / `env_read=false` /
+  `raw_request_response_access=false` / `raw_id_value_exposure=false` /
+  `performance_proof_status=false` / `live_ready=false` / `unattended_live_supported=false` /
+  `automatic_trade_authority=false`。
+
 ## 0A. 2026-07-08 時点の履歴スナップショット（インシデント注記付き）
 
 - operator-gated live 1サイクル完了済み（entry POST 1回 accepted → ONE_POSITION_OPEN →

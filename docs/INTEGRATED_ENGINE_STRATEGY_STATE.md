@@ -47,12 +47,31 @@ the research-track multiple-testing ledger and escalation rule are unchanged. Th
 now distinguishes `OPERATOR_SELECTED_UNPROVEN` from validated research and records terminal
 `EXHAUSTED` experiments without counting either state as a multiple-testing null.
 
-The selected hypothesis remains `PENDING_OPERATOR_SELECTION`, so Stage 1 paper wiring has not
-started and is not authorized by this policy-activation Step. The E1 gate is re-scoped to
+The operator selected `H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY` on 2026-07-10 with
+registry status `OPERATOR_SELECTED_UNPROVEN` and specification substatus `SELECTED_SPEC_PENDING`.
+The spec is not frozen, `config_hash=NOT_ASSIGNED`, and `formal_test=NOT_RESERVED`, so Stage 1
+paper wiring has not started and is not authorized. The E1 gate is re-scoped to
 Stage 3+ unattended-automation qualification only; Stage 1 and Stage 2 do not require E1 gate
 passage. This scope change does not change the formal E1 status:
 `E1_IMPLEMENTED_NOT_GATE_PASSED`. It grants no E2, E3, live, broker, credential, data-fetch,
 or POST permission.
+
+## H-11 selected premise and conditional staged-live direction
+
+- Selected premise: [H-11 preregistration draft](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md)
+- Future policy draft: [H-11 staged live policy](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)
+- Current stage: `PRE_STAGE1_SPEC_INCOMPLETE`; both documents grant no execution permission.
+- Initial model boundary: exactly three directional experts, no more than five regime axes, one
+  low-capacity soft router, no online update/HMM/LightGBM/LLM, and no prediction-to-POST path.
+- Existing periods are development-only. Formal test is not reserved and may not be reconstructed
+  from previously inspected data.
+- Future live intent is only `CONDITIONAL_STAGE2_SUPERVISED_LIVE`: frozen spec and config hash,
+  separately authorized Stage 1 wiring and execution, at least two weeks and 20 paper trades plus
+  policy conditions, operator review, separate Stage 2 procedure, separate major-incident resume
+  policy, and per-trade Step 6G current-turn confirmation are all required in order.
+- Research remains `CLOSED_OUT`; H-11 selection does not alter the research null ledger or escalation rule.
+- Source conflicts fail closed under AGENTS.md and ACTIVE policy §7. The warning-only caution briefing
+  remains direction/confidence-free and does not ingest H-11 output.
 
 ## Confirmed safety and stage boundaries
 

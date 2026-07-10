@@ -212,3 +212,14 @@ runtime private GET なし（内部 safe 状態を使用）。
 行っていない。max one POST / no retry / no repost / official settlement route 分離 / generic close 禁止 /
 default-deny hard guard は不変。performance_proof_status=false / live_ready=false /
 unattended_live_supported=false。
+
+## 2026-07-10 追記: H-11との非接続境界
+
+`H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY`のoperator選定と将来の条件付きstaged-live方針は、
+本briefing generatorの契約を変更しない。本generatorは引き続きwarning-only、PULL式、direction-free、
+confidence-freeであり、H-11の確率、expert weight、不確実性、prediction statusを取り込まない。
+
+将来H-11用adapterが別途授権されても、本briefingから分離し、既存`AUTO_PREVIEW_SIGNAL_*`までのinactive境界とする。
+本briefingは`ENTRY_BUY` / `ENTRY_SELL` / `HOLD`を生成せず、H-11から実POSTへの動線にもならない。
+現在はH-11 spec未凍結、Stage 1/2未許可、live/POST未許可であり、本書のDEFERはそのまま有効である。
+競合はAGENTS.mdとACTIVE policy §7を優先し、厳しいno-action側へfail-closedする。

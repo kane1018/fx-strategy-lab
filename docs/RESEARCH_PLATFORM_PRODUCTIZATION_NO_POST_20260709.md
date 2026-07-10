@@ -125,3 +125,19 @@ safe-aggregate のみ**。
 - 仮説状況: `HYPOTHESIS_REGISTRY_NO_POST.md`。
 - 現在地: `PROJECT_STATUS.md` / `CODEX_HANDOFF.md` 冒頭。
 - **DEFER 層を有効化する場合**: validated edge（gate 合格）＋operator 承認の両方を先に満たすこと。
+
+## 2026-07-10 追記: H-11 staged pathの狭いprecedence
+
+本書のvalidated-edge-first / DEFER本文は履歴・一般既定として維持する。ACTIVEな
+[operator-selected policy](OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md)は、operatorが選定した
+`H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY`だけについて、validated edgeをStage 2の事前条件とせず、
+UNPROVENのまま段階的に検討できる狭い例外を定める。
+
+この例外は[H-11 staged live policy](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)の全前提を満たした後にのみ
+適用し、現在は`DRAFT_INACTIVE` / `PRE_STAGE1_SPEC_INCOMPLETE`である。frozen spec、`config_hash`、別授権Stage 1、
+2週間以上・20 paper trades以上とpolicy条件、operator review、別Stage 2 procedure、別major-incident resume policy、
+各Step 6G confirmationが未完了の間は、preview/confidence/live層のDEFERが有効である。
+
+H-11選定はautomatic/unattended liveを許可せず、prediction-to-POST経路も許可しない。
+競合時はAGENTS.md→ACTIVE policy（特に§7）→H-11 staged policyの順でfail-closedに解決する。
+`performance_proof_status=false` / `live_ready=false` / `unattended_live_supported=false`は不変。

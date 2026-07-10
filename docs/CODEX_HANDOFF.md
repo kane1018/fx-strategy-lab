@@ -3370,3 +3370,65 @@ performance_proof_status=false / live_ready=false / unattended_live_supported=fa
   sealed credential / operator 専有ラベル / AGENTS.md Step 6G 限定例外の適用範囲）
 - `performance_proof_status` / `live_ready` / `unattended_live_supported` の true 化
 - stash の drop（退避した Evidence Charter 実装の完全消去は別途 operator 判断）
+
+## H-11 Operator Selection and Conditional Staged-Live Handoff (no-POST)
+
+H11_REGIME_ADAPTIVE_MOE_SELECTION_HANDOFF (2026-07-10) — operatorは
+`H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY`を、将来の条件付き監督liveの予定前提として選定した。
+これは現在のlive許可ではない。
+
+```text
+registry_status=OPERATOR_SELECTED_UNPROVEN
+specification_substatus=SELECTED_SPEC_PENDING
+selected_despite_rejected=false
+frozen_spec=false
+config_hash=NOT_ASSIGNED
+formal_test=NOT_RESERVED
+current_stage=PRE_STAGE1_SPEC_INCOMPLETE
+staged_live_policy_status=DRAFT_INACTIVE
+future_live_intent=CONDITIONAL_STAGE2_SUPERVISED_LIVE
+research_phase=CLOSED_OUT
+E1_status=E1_IMPLEMENTED_NOT_GATE_PASSED
+```
+
+Source documents:
+
+- [H-11 preregistration draft](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md)
+- [H-11 staged live policy draft](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)
+- [ACTIVE operator-selected policy](OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md)
+
+初期境界はexactly 3 experts（trend continuation / mean reversion / breakout continuation）、
+5 axes以内、1 low-capacity soft router。online update、HMM、LightGBM、LLMは初期対象外。
+主比較はdynamic vs equal-weight、primary Brier、confirmatory Log loss。同じeligible timestamp分母で採点し、
+NO_TRADEでprimary scoringをfilterしない。既存期間はdevelopment-onlyで、formal testは未予約。
+
+次に可能なのはoperator未決定項目を埋める**別docs-only spec-freeze Step**。その後も、完成frozen specと
+`config_hash`→別授権Stage 1 wiring→別授権paper実行（2週間以上・20 trades以上とpolicy条件）→operator review→
+別Stage 2 procedure→別major-incident resume policy→各Step 6G current-turn confirmationを順に要求する。
+本handoffはStage 1実装・実行、paper、Stage 2/3、live、API/broker、data fetch、credential/env、POSTを許可しない。
+
+将来もentryとsettlementは別Step 6G task・別fresh confirmation・各最大1attempt。retry/repost/second POSTなし。
+settlementはofficial dedicated routeのみ。generic/opposite close、opposite prediction settlementは禁止。
+unknown/timeoutはattemptを消費し、再送せず、新規entryをblockしてoperatorへescalateする。
+kill/dead-manは自動close/POSTしない。prediction-to-POST直結なし。既存caution briefingはH-11を取り込まない。
+
+```text
+actual_post=false
+entry_post=false
+settlement_post=false
+post_count=0
+broker_read=false
+broker_write=false
+private_api=false
+public_api=false
+public_get=false
+data_fetch=false
+credential_read=false
+env_read=false
+raw_request_response_access=false
+raw_id_value_exposure=false
+performance_proof_status=false
+live_ready=false
+unattended_live_supported=false
+automatic_trade_authority=false
+```
