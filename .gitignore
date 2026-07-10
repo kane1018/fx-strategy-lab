@@ -30,3 +30,6 @@ shadow_exports/
 backend/shadow_exports/
 # Operator-managed sealed entry internal value file (never committed, never printed)
 .approved_entry_internal_value.local.json
+
+# H-11 development market data cache (operator-authorized public GET; never commit)
+backend/market_data/
