@@ -73,3 +73,17 @@ def test_adapter_never_emits_operator_labels():
     source = open(module.__file__, encoding="utf-8").read()
     for forbidden in ('"ENTRY_BUY"', '"ENTRY_SELL"'):
         assert forbidden not in source
+
+
+def test_adapter_version_pinning():
+    from app.strategies.h11_regime_moe import H11_V2_CONFIG_HASH
+
+    v2_pred = _prediction(0.60, probs=(0.60,), config_hash=H11_V2_CONFIG_HASH)
+    v2_pred = H11Prediction(**{**v2_pred.__dict__, "expert_weights": (1.0,)})
+
+    pinned_v2 = map_h11_prediction_to_preview(v2_pred, expected_config_hash=H11_V2_CONFIG_HASH)
+    assert pinned_v2.signal is AutoPreviewSignal.AUTO_PREVIEW_SIGNAL_BUY
+
+    default_pin_v1 = map_h11_prediction_to_preview(v2_pred)
+    assert default_pin_v1.signal is AutoPreviewSignal.AUTO_PREVIEW_SIGNAL_UNKNOWN_BLOCKED
+    assert default_pin_v1.reason is H11AdapterReason.CONFIG_HASH_MISMATCH

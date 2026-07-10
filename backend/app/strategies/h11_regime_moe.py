@@ -21,6 +21,8 @@ import numpy as np
 import pandas as pd
 
 H11_CONFIG_HASH = "sha256:7bff1ee4b8427a67111f289211bca5d654f1ae38bc3670bd1592a3ba9790e4a1"
+# v2 (single TREND expert, no router) — docs/STRATEGY_H11_V2_TREND_SINGLE_EXPERT_...
+H11_V2_CONFIG_HASH = "sha256:483fa9e4cc094251c3b3bfc5daaa007242a3385ba41c57caa95e5106fa4c4af3"
 
 # Frozen spec constants (spec freeze doc §1-§5). Not runtime-configurable.
 PREDICTION_HORIZON_BARS = 24
@@ -320,6 +322,67 @@ def train_h11_model(features: H11FeatureMatrix, labels: np.ndarray) -> H11ModelP
     return H11ModelParameters(
         expert_weights=tuple(tuple(map(float, w)) for w in expert_w),
         router_weights=tuple(tuple(map(float, w)) for w in router),
+    )
+
+
+@dataclass(frozen=True)
+class H11V2Parameters:
+    """v2 trained parameters: single TREND expert logistic (weights + bias)."""
+
+    trend_weights: tuple[float, ...]
+    config_hash: str = H11_V2_CONFIG_HASH
+
+
+def train_h11_v2(features: H11FeatureMatrix, labels: np.ndarray) -> H11V2Parameters:
+    """Fit the single TREND expert on training rows only (v2 frozen spec)."""
+
+    usable = features.eligible & np.isfinite(labels)
+    idx_train, _ = chronological_split(len(labels))
+    rows = idx_train[usable[idx_train]]
+    if len(rows) < ZSCORE_WINDOW_BARS:
+        raise ValueError("insufficient eligible training rows")
+    w = _fit_logistic(features.expert_features[rows, 0, :], labels[rows])
+    return H11V2Parameters(trend_weights=tuple(map(float, w)))
+
+
+def predict_h11_v2(
+    parameters: H11V2Parameters | None,
+    expert_features_row: np.ndarray,
+    regime_axes_row: np.ndarray,
+) -> H11Prediction:
+    """v2 inference: single expert, weights=(1.0,), uncertainty fixed 0.0.
+
+    Regime axes are retained for out-of-domain gating only (v2 spec §2), so the
+    fail-closed eligibility surface is identical to v1.
+    """
+
+    if parameters is None:
+        return _blocked(H11BlockReason.MODEL_NOT_TRAINED)
+    if expert_features_row.shape != (N_EXPERTS, N_EXPERT_FEATURES) or regime_axes_row.shape != (
+        N_REGIME_AXES,
+    ):
+        return _blocked(H11BlockReason.INVALID_INPUT_SHAPE)
+    if not np.isfinite(expert_features_row).all():
+        return _blocked(H11BlockReason.NON_FINITE_FEATURE)
+    if not np.isfinite(regime_axes_row).all() or np.abs(regime_axes_row).max() > ZSCORE_CLIP:
+        return _blocked(H11BlockReason.OUT_OF_DOMAIN_REGIME_AXIS)
+
+    w = np.asarray(parameters.trend_weights)
+    xb = np.append(expert_features_row[0], 1.0)
+    p_up = float(_sigmoid(np.array([xb @ w]))[0])
+    p_down = 1.0 - p_up
+    if not (math.isfinite(p_up) and 0.0 <= p_up <= 1.0):
+        return _blocked(H11BlockReason.PROBABILITY_OUT_OF_RANGE)
+    if abs(p_up + p_down - 1.0) > PROBABILITY_NORMALIZATION_TOLERANCE:
+        return _blocked(H11BlockReason.NORMALIZATION_FAILURE)
+    return H11Prediction(
+        p_up=p_up,
+        p_down=p_down,
+        expert_probabilities=(p_up,),
+        expert_weights=(1.0,),
+        model_uncertainty=0.0,
+        prediction_status=H11PredictionStatus.OK,
+        config_hash=H11_V2_CONFIG_HASH,
     )
 
 

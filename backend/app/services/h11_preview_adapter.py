@@ -41,8 +41,14 @@ class H11PreviewDecision:
     reason: H11AdapterReason
 
 
-def map_h11_prediction_to_preview(prediction: H11Prediction) -> H11PreviewDecision:
-    """Priority order is frozen: safety block -> abstention -> threshold."""
+def map_h11_prediction_to_preview(
+    prediction: H11Prediction, expected_config_hash: str = H11_CONFIG_HASH
+) -> H11PreviewDecision:
+    """Priority order is frozen: safety block -> abstention -> threshold.
+
+    ``expected_config_hash`` pins the adapter to one frozen spec version; a
+    prediction from any other version is blocked, never silently accepted.
+    """
 
     if (
         prediction.prediction_status is not H11PredictionStatus.OK
@@ -54,7 +60,7 @@ def map_h11_prediction_to_preview(prediction: H11Prediction) -> H11PreviewDecisi
             AutoPreviewSignal.AUTO_PREVIEW_SIGNAL_UNKNOWN_BLOCKED,
             H11AdapterReason.PREDICTION_BLOCKED,
         )
-    if prediction.config_hash != H11_CONFIG_HASH:
+    if prediction.config_hash != expected_config_hash:
         return H11PreviewDecision(
             AutoPreviewSignal.AUTO_PREVIEW_SIGNAL_UNKNOWN_BLOCKED,
             H11AdapterReason.CONFIG_HASH_MISMATCH,

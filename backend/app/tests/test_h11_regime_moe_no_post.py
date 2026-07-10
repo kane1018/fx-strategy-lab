@@ -148,3 +148,38 @@ def test_mixture_beats_coin_flip_on_synthetic_validation():
             errors.append((pred.p_up - labels[row]) ** 2)
     assert len(errors) > 100
     assert float(np.mean(errors)) <= 0.26
+
+
+def test_v2_contract_and_determinism():
+    from app.strategies.h11_regime_moe import (
+        H11_V2_CONFIG_HASH,
+        predict_h11_v2,
+        train_h11_v2,
+    )
+
+    open_, high, low, close, hour, wide = _synthetic_market()
+    features = compute_features(open_, high, low, close, hour, wide)
+    labels = directional_labels(close)
+    params_a = train_h11_v2(features, labels)
+    params_b = train_h11_v2(features, labels)
+    assert params_a.trend_weights == params_b.trend_weights
+
+    row = int(np.flatnonzero(features.eligible)[-1])
+    pred = predict_h11_v2(params_a, features.expert_features[row], features.regime_axes[row])
+    assert pred.prediction_status is H11PredictionStatus.OK
+    assert pred.expert_weights == (1.0,)
+    assert pred.model_uncertainty == 0.0
+    assert pred.config_hash == H11_V2_CONFIG_HASH
+    assert abs(pred.p_up + pred.p_down - 1.0) <= 1e-6
+
+    assert (
+        predict_h11_v2(None, features.expert_features[row], features.regime_axes[row])
+        .prediction_status
+        is H11PredictionStatus.BLOCKED
+    )
+    out_axes = features.regime_axes[row].copy()
+    out_axes[0] = 9.0
+    assert (
+        predict_h11_v2(params_a, features.expert_features[row], out_axes).prediction_status
+        is H11PredictionStatus.BLOCKED
+    )

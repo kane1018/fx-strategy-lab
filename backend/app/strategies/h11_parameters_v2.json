@@ -1,0 +1,12 @@
+{
+  "config_hash": "sha256:483fa9e4cc094251c3b3bfc5daaa007242a3385ba41c57caa95e5106fa4c4af3",
+  "trained_at_utc": "2026-07-10T21:02:54+00:00",
+  "development_cutoff_utc": "2026-07-10T15:00:00+00:00",
+  "scope": "DEVELOPMENT_VALIDATION_ONLY_NOT_FORMAL_TEST_NOT_EDGE_EVIDENCE",
+  "trend_weights": [
+    -0.08562892495753631,
+    -0.11495953983740025,
+    0.09517122518805923,
+    0.15467102485974374
+  ]
+}
