@@ -9,7 +9,9 @@ raw price/spread/PnL/CSV row/ID/credential は載せない。performance_proof_s
 - **FROZEN_UNEXECUTED**: 事前登録は凍結済だが未採点（データ未入手等）。将来データがあれば契約通り1回採点可。
 - **DEFERRED**: 事前登録前。データ/prior 上 near-term 非推奨。
 - **BLOCKED_DATA**: 要求データが no-credential で入手困難。
-- ※ **REJECTED のみ多重検定 null にカウント**。FROZEN/DEFERRED/BLOCKED は未カウント。
+- **OPERATOR_SELECTED_UNPROVEN**: operator が自らの判断とリスク所有の下で実践投入を選定した未証明仮説。標準 gate 合格や実行権限を意味せず、`VALIDATED` とは相互変換しない。
+- **EXHAUSTED**: 停止基準3（予算再装填累計3回で改善傾向なし）到達により強制終了。同一 `config_hash` での再選定は永久不可。
+- ※ **REJECTED のみ多重検定 null にカウント**。FROZEN/DEFERRED/BLOCKED/OPERATOR_SELECTED_UNPROVEN/EXHAUSTED は未カウント。
 
 ## 台帳
 

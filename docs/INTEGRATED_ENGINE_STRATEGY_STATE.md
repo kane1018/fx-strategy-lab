@@ -39,6 +39,21 @@ that a later task still shares the same HEAD.
 Implementation readiness, E1 evidence, and strategy edge are separate claims. No one may
 infer strategy validity from the existence or correctness of the E1 engine.
 
+## Active operator-selected hypothesis policy
+
+[`OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md`](OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md)
+is `ACTIVE`. The evaluation framework remains the research scorekeeper and risk enforcer;
+the research-track multiple-testing ledger and escalation rule are unchanged. The registry
+now distinguishes `OPERATOR_SELECTED_UNPROVEN` from validated research and records terminal
+`EXHAUSTED` experiments without counting either state as a multiple-testing null.
+
+The selected hypothesis remains `PENDING_OPERATOR_SELECTION`, so Stage 1 paper wiring has not
+started and is not authorized by this policy-activation Step. The E1 gate is re-scoped to
+Stage 3+ unattended-automation qualification only; Stage 1 and Stage 2 do not require E1 gate
+passage. This scope change does not change the formal E1 status:
+`E1_IMPLEMENTED_NOT_GATE_PASSED`. It grants no E2, E3, live, broker, credential, data-fetch,
+or POST permission.
+
 ## Confirmed safety and stage boundaries
 
 - actual POST permission: false

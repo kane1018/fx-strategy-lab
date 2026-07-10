@@ -3308,3 +3308,65 @@ raw_ID_value_exposure=false
 追加: `backend/app/services/gmo_live_actual_entry_sender.py`、`backend/app/tests/test_gmo_live_actual_entry_sender_no_post.py`。
 実際のPOSTは行わず、fake credential/http client で safe mapping と one-shot/非再送を検証。
 対応文書: `docs/REAL_ENTRY_SENDER_INJECTION_NO_POST.md`、`docs/ACTUAL_ENTRY_EXECUTION_BOUNDARY_IMPLEMENTATION_NO_POST.md`。
+
+## Operator-Selected Hypothesis Policy Activation Handoff (no-POST)
+
+OPERATOR_SELECTED_HYPOTHESIS_POLICY_ACTIVATION_HANDOFF (2026-07-10) —
+operator は `docs/OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md` §8 を確定
+（②選定仮説のみ PENDING_OPERATOR_SELECTION として保留）し、`POLICY_ACTIVATION_STEP` の
+実装を Codex に引き継ぐ。**operator は本 Step に限り、Evidence Charter 破棄
+（作業ツリーの HEAD 復帰）と commit の実行権限を Codex に明示的に付与した（選択肢 (a)）。**
+
+```text
+policy_doc=docs/OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md
+operator_approval_status=CONFIRMED_2026-07-10_JST
+selected_hypothesis=PENDING_OPERATOR_SELECTION
+evidence_charter_disposition=(b)_DISCARD
+codex_discard_and_commit_authority=GRANTED_THIS_STEP_ONLY
+actual_post=false / entry_post=false / settlement_post=false / post_count=0
+performance_proof_status=false / live_ready=false / unattended_live_supported=false
+```
+
+### Codex 実行スコープ（POLICY_ACTIVATION_STEP）
+
+1. **監査用スナップショット（最初に実行）**: `git status` を確認のうえ、
+   `git stash push -u` → 直後に `git stash apply` で、作業ツリー全体（本方針 doc・
+   本 handoff エントリ含む）を stash に複製したまま作業を継続する。
+   stash は監査用に残置し drop しない。
+2. **Evidence Charter 破棄（hunk 単位。ファイル一括 checkout 不可のファイルあり）**:
+   - **ファイル単位で HEAD に戻してよいもの**（差分が Charter のみ）:
+     `backend/app/shadow/e1/__init__.py` / `contracts.py` / `persistence.py` /
+     `qualification.py`、`backend/app/tests/test_e1_shadow_isolation_no_post.py` /
+     `test_e1_shadow_kill_qualification_no_post.py` / `test_e1_shadow_recovery_faults_no_post.py`、
+     `docs/E1_SHADOW_FULL_AUTO_ENGINE_NO_POST.md` / `docs/E1_SHADOW_FULL_AUTO_ENGINE_RUNBOOK_NO_POST.md`
+   - **untracked で削除してよいもの**: `backend/app/shadow/e1/evidence_snapshot.py`、
+     `backend/app/tests/test_e1_shadow_evidence_acceptance_no_post.py`、
+     `backend/app/tests/test_e1_shadow_evidence_snapshot_no_post.py`、
+     `docs/E1_EVIDENCE_ACCEPTANCE_CHARTER_NO_POST.md`
+   - **一括 checkout 禁止（Charter 差分と保持対象が混在）**: 次の3ファイルは
+     Charter 関連の追記段落のみを編集で除去する。
+     `docs/CODEX_HANDOFF.md`（冒頭付近の Charter 参照 6行段落のみ除去。
+     **本 handoff セクションは保持**）、`docs/INTEGRATED_ENGINE_STRATEGY_STATE.md`
+     （"The E1 Evidence Acceptance Charter corrective code..." 段落のみ除去）、
+     `docs/PROJECT_STATUS.md`（"E1 Evidence Acceptance Charter corrective implementation..."
+     箇条書きのみ除去）
+   - **破棄対象外**: `docs/OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md`
+     （本方針doc・untracked）。作業後 `git status` と `git diff` で、残差分が
+     「本方針doc＋本 handoff＋後続手順3〜5の編集」のみであることを確認すること。
+3. 本方針 doc の Status を `DRAFT_PENDING_OPERATOR_APPROVAL` → `ACTIVE` に更新。
+4. `docs/HYPOTHESIS_REGISTRY_NO_POST.md` の状態凡例に `OPERATOR_SELECTED_UNPROVEN` と
+   `EXHAUSTED`（停止基準3到達で終了・同一 config_hash 再選定不可）を追加。
+   多重検定台帳・escalation 則は不変（両状態とも null カウント外）。
+5. `docs/INTEGRATED_ENGINE_STRATEGY_STATE.md` / `docs/PROJECT_STATUS.md` に本改定の反映を
+   1節追記（E1 gate の Stage 3+ 専用への再スコープを含む。
+   `E1_IMPLEMENTED_NOT_GATE_PASSED` 表記は変更しない）。
+6. 以上を **commit**（push は本引き継ぎの授権範囲外）。
+
+### Codex が本 Step で行ってはならないこと
+
+- `STAGE1_PAPER_WIRING_STEP` への着手（selected_hypothesis 確定まで着手不可・§4）
+- 実 POST / broker read / credential read / Private API / public GET / データ取得 / backtest 再実行
+- §7 安全不変条件のいかなる変更（one-shot / no retry / 公式 settlement route のみ /
+  sealed credential / operator 専有ラベル / AGENTS.md Step 6G 限定例外の適用範囲）
+- `performance_proof_status` / `live_ready` / `unattended_live_supported` の true 化
+- stash の drop（退避した Evidence Charter 実装の完全消去は別途 operator 判断）

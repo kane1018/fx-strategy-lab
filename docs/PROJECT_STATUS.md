@@ -33,6 +33,21 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   [E1 runbook](E1_SHADOW_FULL_AUTO_ENGINE_RUNBOOK_NO_POST.md) /
   [sanitized API capability sheet](API_CAPABILITY_SHEET_SANITIZED_NO_POST.md)。
 
+## 0B. Operator-Selected Hypothesis Policy 有効化（2026-07-10・no-POST）
+
+- [方針改定](OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md) は `ACTIVE`。
+  evaluation framework は research の scorekeeper + risk enforcer として維持し、研究トラックの
+  多重検定台帳・escalation 則は変更しない。
+- registry に `OPERATOR_SELECTED_UNPROVEN` と `EXHAUSTED` を追加。どちらも多重検定 null の
+  カウント外であり、標準 gate 合格・`VALIDATED`・実行権限を意味しない。
+- selected hypothesis は `PENDING_OPERATOR_SELECTION` のまま。`STAGE1_PAPER_WIRING_STEP`、
+  仮説選定・凍結登録、paper実行には未着手。
+- E1 gate は Stage 3+ の無人自動化資格専用へ再スコープ。Stage 1 / Stage 2 はE1 gate通過を
+  前提にしないが、本StepはどのStageの実行も許可しない。formal statusは引き続き
+  `E1_IMPLEMENTED_NOT_GATE_PASSED`。
+- `actual_post=false` / `entry_post=false` / `settlement_post=false` / `post_count=0` /
+  `performance_proof_status=false` / `live_ready=false` / `unattended_live_supported=false`。
+
 ## 0A. 2026-07-08 時点の履歴スナップショット（インシデント注記付き）
 
 - operator-gated live 1サイクル完了済み（entry POST 1回 accepted → ONE_POSITION_OPEN →
