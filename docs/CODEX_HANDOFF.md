@@ -3432,3 +3432,57 @@ live_ready=false
 unattended_live_supported=false
 automatic_trade_authority=false
 ```
+
+## H-11 v2 Stage 1 Operation and Follow-on Implementation Handoff (no-POST)
+
+H11_V2_STAGE1_OPERATION_HANDOFF (2026-07-11) — operator は Stage 1 実稼働開始後の
+運用と後続実装を Codex に引き継ぐ。
+
+```text
+selected=H-11 v2（TREND単独expert）
+config_hash=sha256:483fa9e4cc094251c3b3bfc5daaa007242a3385ba41c57caa95e5106fa4c4af3
+stage1_execution=RUNNING（開始 2026-07-10T21:19:18Z・初回run記録済み）
+promotion_target=連続2週間以上 AND 20 paper trades AND 規律違反0 → operator review
+actual_post=false / entry_post=false / settlement_post=false / post_count=0
+performance_proof_status=false / live_ready=false / unattended_live_supported=false
+```
+
+正となる文書: [v2 spec freeze](STRATEGY_H11_V2_TREND_SINGLE_EXPERT_SPEC_FREEZE_NO_POST_20260711.md) /
+[Stage 1配線・実稼働記録](H11_STAGE1_PAPER_WIRING_NO_POST_20260711.md) /
+[staged live policy](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md) /
+ACTIVE policy（OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md）
+
+### 1. 日次運用（Codexが主担当・平日1回）
+
+- `cd backend && python -m scripts.h11_stage1_daily_run`（venv使用）。
+  public GET（klines・read-only）は operator 授権済み。常駐・cron は禁止（手動起動のみ）。
+- 状態・journal: `backend/market_data/h11_stage1_state.json` / `h11_stage1_journal.jsonl`
+  （gitignore・ローカルのみ。コミットしない）。
+- 同日二重実行は entry 側は `MAX_TRADES_PER_DAY` で、決済側は冪等性で安全だが、
+  記録の明瞭さのため 1日1回とする。
+- **停止基準発火時**（daily/monthly/consecutive）: 稼働を止め operator へ報告。
+  月次・連敗停止の解除は `operator_reload` のみ（同月内・冷却14日未満はコードが拒否）。
+  post-mortem と review window 承認は運用手続きとして必須。
+- 週次で journal の safe aggregate（trades数・違反数・停止событий・簡易成績）を
+  docs に転記（raw price/journal生データは載せない）。
+
+### 2. 後続実装キュー（授権境界つき）
+
+1. **（許可済み・docs+read-onlyコード）** Stage 1 レビュー用 safe-aggregate レポート
+   生成スクリプト（journal→集計のみ。予測・執行ロジックに触れない）。
+2. **（docs草案のみ許可）** `STAGE2_SUPERVISED_LIVE_PROCEDURE_STEP` の手順書草案。
+   実装・有効化は次の3条件が揃い operator が別途授権するまで禁止:
+   (a) Stage 1 完走＋operator review 合格、(b) API能力表の記入完了
+   （特に server-side SL/TP 付帯可否）、(c) major-incident resume policy Step 承認。
+3. **（operator専任・Codexは催促のみ可）** API能力表記入 / resume policy /
+   Stage 3 方針 Step。
+
+### 3. 禁止事項（変更なし・再掲）
+
+- 実POST / broker read / credential / Private API（Stage 2 の各 POST は将来も
+  Step 6G 限定例外の operator current-turn confirmation 経由のみ）
+- 常駐プロセス・cron（Stage 3 方針 Step まで）
+- 同一 config_hash での spec・予算・停止基準・threshold の変更（変更 = v3 として再登録）
+- 稼働成績を理由とするサイズ・予算の増額、良績の `VALIDATED` 昇格、
+  `performance_proof_status` / `live_ready` / `unattended_live_supported` の true 化
+- stash@{0}（Evidence Charter監査退避）の drop
