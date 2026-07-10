@@ -48,9 +48,12 @@ now distinguishes `OPERATOR_SELECTED_UNPROVEN` from validated research and recor
 `EXHAUSTED` experiments without counting either state as a multiple-testing null.
 
 The operator selected `H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY` on 2026-07-10 with
-registry status `OPERATOR_SELECTED_UNPROVEN` and specification substatus `SELECTED_SPEC_PENDING`.
-The spec is not frozen, `config_hash=NOT_ASSIGNED`, and `formal_test=NOT_RESERVED`, so Stage 1
-paper wiring has not started and is not authorized. The E1 gate is re-scoped to
+registry status `OPERATOR_SELECTED_UNPROVEN`. The spec was frozen on 2026-07-11 per
+[the freeze doc](STRATEGY_H11_SPEC_FREEZE_DRAFT_NO_POST_20260711.md)
+(`config_hash=sha256:7bff1ee4b8427a67111f289211bca5d654f1ae38bc3670bd1592a3ba9790e4a1`,
+formal test reserved forward-from-freeze, not collected). Stage 1 paper wiring
+(no-POST, fake-transport-only) is operator-authorized; Stage 1 execution start still
+requires operator confirmation after wiring and firing tests. The E1 gate is re-scoped to
 Stage 3+ unattended-automation qualification only; Stage 1 and Stage 2 do not require E1 gate
 passage. This scope change does not change the formal E1 status:
 `E1_IMPLEMENTED_NOT_GATE_PASSED`. It grants no E2, E3, live, broker, credential, data-fetch,
@@ -60,7 +63,7 @@ or POST permission.
 
 - Selected premise: [H-11 preregistration draft](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md)
 - Future policy draft: [H-11 staged live policy](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)
-- Current stage: `PRE_STAGE1_SPEC_INCOMPLETE`; both documents grant no execution permission.
+- Current stage: `SPEC_FROZEN_PRE_STAGE1` (frozen 2026-07-11); the staged-live policy still grants no live/POST permission.
 - Initial model boundary: exactly three directional experts, no more than five regime axes, one
   low-capacity soft router, no online update/HMM/LightGBM/LLM, and no prediction-to-POST path.
 - Existing periods are development-only. Formal test is not reserved and may not be reconstructed

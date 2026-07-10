@@ -29,13 +29,13 @@ raw price/spread/PnL/CSV row/ID/credential は載せない。performance_proof_s
 | H-08 | CROSS_ASSET_RATES_LEADLAG（intraday 金利→USD/JPY） | intraday（M5 整合金利） | BLOCKED_DATA | — | 無認証で清潔な分足金利が困難 | [cross-asset preregistration](STRATEGY_CROSS_ASSET_RATES_LEADLAG_PREREGISTRATION_NO_POST_20260709.md) |
 | H-09 | MONTH_END_FIX_REBALANCING | 月次イベント | DEFERRED | — | 標本過少（≈12/年）＋方向に株式データ要 | [feasibility](STRATEGY_MECHANISM_TIMESCALE_DATA_FEASIBILITY_NO_POST_20260709.md) |
 | H-10 | EVENT_DRIFT（BOJ/FOMC/NFP/CPI） | イベント前後 | DEFERRED | — | 方向 drift は 2015 後減衰・確実なのは非方向 vol・外部カレンダー要 | [feasibility](STRATEGY_MECHANISM_TIMESCALE_DATA_FEASIBILITY_NO_POST_20260709.md) |
-| H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY | regime-adaptive 3-expert directional probability MoE | scope/data `PENDING_OPERATOR_DECISION` | OPERATOR_SELECTED_UNPROVEN | SELECTED_SPEC_PENDING / 未採点 | operator選定 2026-07-10。`selected_despite_rejected=false`。仕様未凍結・formal test未予約・実行権限なし。related rejected: H-01/H-02/H-03/H-05 | [preregistration draft](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md) / [staged live policy](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md) |
+| H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY | regime-adaptive 3-expert directional probability MoE | USD/JPY H1・horizon 24バー | OPERATOR_SELECTED_UNPROVEN | SPEC_FROZEN / 未採点 | operator選定 2026-07-10・spec freeze 2026-07-11（config_hash=sha256:7bff1ee4…）。`selected_despite_rejected=false`。formal test=forward予約・未収集。Stage 1配線授権済み・実稼働未開始。related rejected: H-01/H-02/H-03/H-05 | [preregistration](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md) / [spec freeze](STRATEGY_H11_SPEC_FREEZE_DRAFT_NO_POST_20260711.md) / [staged live policy](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md) |
 
 ## 多重検定台帳（cumulative trial budget）
 
 - 採点済み candidate-config: 概数 ~20（M5 technical ~8・H1 technical ~8・SESSION ~2・GOTOBI primary+secondary ~2）＝**全 REJECT**。
 - **pre-registered null カウント: #1/3**（H-05 VOL_REGIME）。H-06 は FROZEN_UNEXECUTED のため**未カウント**。
-- H-11はoperator-selected trackの未採点・仕様未凍結であり、null countと連続REJECT escalationの対象外。
+- H-11はoperator-selected trackの未採点（spec freeze済み・formal test未実施）であり、null countと連続REJECT escalationの対象外。
 - **escalation 則**: pre-registered 新仮説が **さらに K=3 連続 REJECT** で `RESEARCH_PLATFORM_CLOSEOUT` へ
   （operator 判断で前倒し可。今回発動済み）。
 - 合格は常に **unanimous 多対照 × multi-resolution**（単一指標超えでは合格にしない）。**post-OOS retuning 禁止**。
@@ -45,7 +45,7 @@ raw price/spread/PnL/CSV row/ID/credential は載せない。performance_proof_s
 - current_strategy_status: **NO_ROBUST_EDGE_FOUND_IN_TESTED_SCOPE**
 - research_phase: **CLOSED_OUT**（operator 判断で再開可）
 - operator_selected_hypothesis: **H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY**
-- operator_selection_status: **OPERATOR_SELECTED_UNPROVEN / SELECTED_SPEC_PENDING**（実行権限なし）
+- operator_selection_status: **OPERATOR_SELECTED_UNPROVEN / SPEC_FROZEN**（config_hash発行済み。Stage 1配線授権済み・実稼働未開始・live/POST権限なし）
 - performance_proof_status=false / live_ready=false / unattended_live_supported=false（不変）
 
 ## 新仮説の追加手順（要約）

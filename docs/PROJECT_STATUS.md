@@ -57,8 +57,10 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   experts、5 axes以内、1 low-capacity soft router、primary Brier / confirmatory Log loss、
   primary comparison dynamic vs equal-weight、同一eligible timestamp分母を定める。NO_TRADEでprimary
   scoringをfilterしない。既存期間はdevelopment-only、formal testは未予約。
-- 現在は`frozen_spec=false` / `config_hash=NOT_ASSIGNED` / `formal_test=NOT_RESERVED` /
-  `current_stage=PRE_STAGE1_SPEC_INCOMPLETE`。Stage 1 wiring/execution、paper、Stage 2/3、liveは全て未許可。
+- 2026-07-11 spec freeze 完了（[freeze doc](STRATEGY_H11_SPEC_FREEZE_DRAFT_NO_POST_20260711.md)）:
+  `frozen_spec=true` / `config_hash=sha256:7bff1ee4b8427a67111f289211bca5d654f1ae38bc3670bd1592a3ba9790e4a1` /
+  `formal_test=RESERVED_FORWARD_FROM_2026-07-11_NOT_COLLECTED` / `current_stage=SPEC_FROZEN_PRE_STAGE1`。
+  Stage 1 配線（no-POST・fake-transport-only）は operator 授権済み。Stage 1 実稼働開始・Stage 2/3・liveは未許可。
 - [staged-live policy draft](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)は
   `DRAFT_INACTIVE` / `future_live_intent=CONDITIONAL_STAGE2_SUPERVISED_LIVE`。H-11を将来liveの
   予定前提とするが、frozen spec→別授権Stage 1→2週間以上かつ20 paper trades以上と方針条件→

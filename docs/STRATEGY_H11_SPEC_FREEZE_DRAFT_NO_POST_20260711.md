@@ -2,22 +2,27 @@
 
 Date: 2026-07-11
 Applies to: `H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY`
-Status: **DRAFT_PENDING_OPERATOR_APPROVAL**
+Status: **FROZEN**（operator 承認: 2026-07-11 05:30 JST）
 
 本書は [H-11 preregistration draft §8](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md)
-の全 `PENDING_OPERATOR_DECISION` 項目に対するエージェント提案のドラフト値である。
-operator が全項目を確認・修正・承認した時点で初めて別 Step にて `frozen_spec=true` とし、
-`config_hash` を発行する。**本書自体は spec freeze ではない。**
+の全 `PENDING_OPERATOR_DECISION` 項目の凍結値である。operator は 2026-07-11 に全項目を
+無修正で承認した（`H11_SPEC_FREEZE_STEP`）。
 
 ```text
-frozen_spec=false
-config_hash=NOT_ASSIGNED
-formal_test=NOT_RESERVED
-current_stage=PRE_STAGE1_SPEC_INCOMPLETE
+frozen_spec=true
+config_hash=sha256:7bff1ee4b8427a67111f289211bca5d654f1ae38bc3670bd1592a3ba9790e4a1
+config_hash_basis=git blob at commit d7cf8c3 (docs/STRATEGY_H11_SPEC_FREEZE_DRAFT_NO_POST_20260711.md)
+formal_test=RESERVED_FORWARD_FROM_2026-07-11_NOT_COLLECTED
+current_stage=SPEC_FROZEN_PRE_STAGE1
 actual_post=false / entry_post=false / settlement_post=false / post_count=0
 data_fetch=false / broker_read=false / credential_read=false
 performance_proof_status=false / live_ready=false / unattended_live_supported=false
 ```
+
+**変更禁止**: 本書の §1〜§5 の値の変更は禁止する。変更は review window でのみ可能で、
+新 version・新 `config_hash` としての再登録（=別実験）を要する（ACTIVE policy §4）。
+`config_hash` は commit `d7cf8c3` 時点の本書全文の SHA-256 であり、本 freeze 追記自体は
+hash 対象に含まれない（承認前ドラフト全文が凍結対象）。
 
 数値はすべて sanitized（円建て上限・pip 基準・バー数）。raw price/spread/PnL/ID は含まない。
 
@@ -99,11 +104,15 @@ LIQUIDITY_COST_STATE=時間帯別スプレッド階級（sanitized 2値: 通常/
 
 ---
 
-## 6. 承認手順
+## 6. 承認記録
 
-1. operator が本書の全項目を確認し、修正があれば本書を更新する。
-2. 承認後、別 Step（`H11_SPEC_FREEZE_STEP`）で Status を `FROZEN` に変更し、
-   `config_hash` を発行、preregistration draft と registry を更新する。
+1. operator は 2026-07-11 に本書の全項目を無修正で承認した。
+2. `H11_SPEC_FREEZE_STEP` により Status を `FROZEN` に変更し、`config_hash`
+   （commit `d7cf8c3` 時点の本書 SHA-256）を発行、preregistration draft と registry を更新した。
 3. freeze 後の変更は新 version・新 `config_hash` としてのみ可能（ACTIVE policy §4）。
+4. operator は同承認で `STAGE1_PAPER_WIRING_STEP`（モデル実装＋paper 配線、no-POST・
+   fake-transport-only）への着手を授権した。Stage 1 の**実稼働開始**は配線・発火テスト完了後の
+   operator 確認を別途要する。
 
-本書は Stage 1 配線・実行、データ取得、backtest、paper、live、POST のいずれも許可しない。
+本書は live、broker/API、credential、POST のいずれも許可しない。formal test 用 forward データの
+取得は別授権 Step を要する。
