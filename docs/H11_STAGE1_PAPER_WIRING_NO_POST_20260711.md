@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 Step: `STAGE1_PAPER_WIRING_STEP`（2026-07-11 operator授権済み）
-Status: **WIRING_COMPLETE_AWAITING_OPERATOR_START_CONFIRMATION**
+Status: **STAGE1_EXECUTION_STARTED**（operator開始確認 2026-07-11・初回run実行済み）
 
 ```text
 config_hash=sha256:483fa9e4cc094251c3b3bfc5daaa007242a3385ba41c57caa95e5106fa4c4af3（v2）
@@ -44,8 +44,19 @@ performance_proof_status=false / live_ready=false / unattended_live_supported=fa
 | version pinning | v1 hashの予測はUNKNOWN_BLOCKED |
 | 凍結定数 | §8承認予算と一致することを機械検証 |
 
-## 3. 現在の停止点
+## 3. Stage 1 実稼働（2026-07-11 開始）
 
-Stage 1の**実稼働開始**（2週間・20 paper trades・違反0の実績づくり）は、
-本配線の operator 確認後に開始する（v2 spec freeze doc §6-4）。実稼働は
-paper のみであり、Stage 2 以降・live・POST の許可ではない。
+- operator は 2026-07-11 に実稼働開始を確認した。開始時刻（UTC）:
+  `2026-07-10T21:19:18+00:00`（昇格条件「連続2週間以上」の起点）。
+- **運用形態**: 常駐プロセス・cron は Stage 3 方針 Step まで禁止のため、
+  `python -m scripts.h11_stage1_daily_run` の**手動日次バッチ**で運用する。
+  1回の起動 = キャッシュ更新（operator授権 public GET・read-only）→
+  建玉あれば凍結exit契約（SL/TP/24h timeout のみ）で決済判定 →
+  フラットかつ全ゲート通過なら最大1 paper entry → journal追記。
+- 状態・journal は `backend/market_data/`（gitignore・ローカルのみ）。
+  レビュー時に safe aggregate を docs に転記する。
+- 初回run（2026-07-11 06:19 JST・土曜）: `WEEKEND_BLOCKED` +
+  `OUTSIDE_TRADING_HOURS` で正しく block — カレンダーゲートの実データ発火を確認。
+- 昇格判定（→Stage 2）は 2週間以上 かつ 20 paper trades 以上 かつ 違反0 を
+  満たした後の operator review でのみ行う。実稼働は paper のみであり、
+  Stage 2 以降・live・POST の許可ではない。

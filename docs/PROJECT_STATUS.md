@@ -62,9 +62,10 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   [v2 freeze](STRATEGY_H11_V2_TREND_SINGLE_EXPERT_SPEC_FREEZE_NO_POST_20260711.md)・
   config_hash=sha256:483fa9e4…）。v1はDISCONTINUED_DEVELOPMENT・formal test未消費。
 - v2はoperator授権public GETでdevelopment学習済み（baseline比+3.69%・formal test未実施・
-  edge証拠ではない）。**Stage 1配線完了・発火テスト11件パス**
-  （[配線記録](H11_STAGE1_PAPER_WIRING_NO_POST_20260711.md)）。
-  Stage 1実稼働はoperator開始確認待ち。Stage 2/3・liveは未許可。
+  edge証拠ではない）。Stage 1配線完了・発火テスト11件パス。
+  **Stage 1 paper実稼働を2026-07-11に開始**（手動日次バッチ
+  `scripts/h11_stage1_daily_run`・[記録](H11_STAGE1_PAPER_WIRING_NO_POST_20260711.md)）。
+  昇格には2週間以上＋20 paper trades＋違反0＋operator review。Stage 2/3・liveは未許可。
 - [staged-live policy draft](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md)は
   `DRAFT_INACTIVE` / `future_live_intent=CONDITIONAL_STAGE2_SUPERVISED_LIVE`。H-11を将来liveの
   予定前提とするが、frozen spec→別授権Stage 1→2週間以上かつ20 paper trades以上と方針条件→
