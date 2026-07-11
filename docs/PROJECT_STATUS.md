@@ -3230,3 +3230,15 @@ post_count=0
 safe category だけを返す。次 actual entry gate はコード追加なしで sender
 注入前提の実行準備に入れる（fresh gate 条件前提）。
 `actual_entry_POST_allowed` はこの Step でも `false`。
+
+## H-11 v3 Disabled Bindings / 24h Fake Soak（2026-07-11）
+
+- sender protocol/injection point、default refusing sender、fake credential/http clientを実装。
+- actual permissionはconstructorから変更不能で、production senderは未実装。
+- Private WS token/reconnect/notifierのprotocolとfake heartbeat/dead-man/entry/settlement通知を実装。
+- AGENTS.md例外・major-incident resumeは別文書の未発効草案のみ。`AGENTS.md`本体は未変更。
+- new focused 19、H-11 v3 related 82、backend full 7522 passed、Ruff/diff/danger scan成功。
+- 24h fake soakは2026-07-11 13:45:56 JST開始、2026-07-12 13:45:56 JST完了予定。
+  status/logはgitignore済み`backend/market_data/h11_v3_wall_clock_soak_20260711.*`。
+- actual POST / credential read / broker write / resident service / cronはすべてfalse。
+- actual activationはoperator/actual account専任残件と別current-turn授権までblock。

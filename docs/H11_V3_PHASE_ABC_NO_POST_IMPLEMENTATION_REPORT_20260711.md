@@ -145,3 +145,72 @@ performance_proof_status=false
 live_ready=false
 unattended_live_supported=false
 ```
+
+## 7. Phase B disabled bindings / 24h soak extension（2026-07-11）
+
+Section 5のうち、Private WS/reconnect設計、actual sender注入点のno-POST設計、AGENTS.md
+例外草案、major-incident resume草案、24h soak launcherは実装済みへ更新する。ただしproduction
+sender、actual WebSocket/notification、resume発効、AGENTS.md本体変更、activation tokenは存在しない。
+
+### 実装
+
+- production sender protocolと注入点、default refusing sender
+- fake sealed credential marker＋fake httpx-shaped clientによるno-network test binding
+- `actual_post_allowed=false`をconstructorから変更不能とするdisabled binding
+- Private WS token/reconnect/notifier protocolsとfake bindings
+- heartbeat / dead-man / entry / settlement / unknown eventのfail-closed通知テスト
+- AGENTS.md H-11 v3自動執行限定例外の未発効草案
+- H-11 v3限定major-incident resume宣言の未発効草案
+- 実時刻比較で24時間後に自己終了するwall-clock fake soak
+
+### 検証
+
+```text
+new focused tests=19 passed
+h11_v3 related tests=82 passed
+backend full regression=7522 passed
+backend Ruff=passed
+git diff --check=passed
+danger scan real transport/credential/allow references=0 matches
+```
+
+### 24h wall-clock fake soak
+
+```text
+state=RUNNING
+started_at_jst=2026-07-11T13:45:56+09:00
+expected_complete_at_jst=2026-07-12T13:45:56+09:00
+status_path=backend/market_data/h11_v3_wall_clock_soak_20260711.status.json
+log_path=backend/market_data/h11_v3_wall_clock_soak_20260711.log
+initial_soak_status=PASSED_SYNTHETIC_NO_POST
+initial_soak_runs_completed=1
+actual_post_count=0
+resident_process=false
+cron=false
+```
+
+完了判定:
+
+```bash
+cd backend
+.venv/bin/python -m scripts.h11_v3_fault_soak --status-only \
+  --status-path market_data/h11_v3_wall_clock_soak_20260711.status.json
+```
+
+`state=COMPLETED`かつ`wall_clock_24h_soak_completed=true`で完了。`FAILED_SAFE`またはstatus
+欠損はclearとして扱わない。
+
+### 残るblocker
+
+残件はoperator/actual account専任へ限定した。broker-native pending expiry、actual account
+capability/partial-fill、ToS/fee、実通知先、execution host/観測時間、actual運用プロセス権限、
+sealed credential提供方式、operator記名resume発効、別current-turn actual activationである。
+
+```text
+actual_post=false
+credential_read=false
+broker_write=false
+performance_proof_status=false
+live_ready=false
+unattended_live_supported=false
+```

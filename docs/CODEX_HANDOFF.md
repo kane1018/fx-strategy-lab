@@ -3548,3 +3548,40 @@ persistent safe journal/risk/stop/boot reconcile、disabled actual boundary、10
 fault soakまで完了。soakは100/100一致、journal/notification failure 0、entry/settlement各最大1、
 actual POST 0。pending expiry規則、partial fill、actual account、通知、host、sealed credential、
 24h wall-clock soak、actual sender bindingは未解決で、actual activationは引き続きblock。
+
+## H-11 v3 Disabled Bindings and 24h Fake Soak Handoff (no-POST)
+
+`H11_V3_DISABLED_BINDINGS_24H_SOAK_HANDOFF` (2026-07-11) — production sender contractと
+注入点、default refusing sender、fake credential/http client、Private WS token/reconnect/notifier
+protocolとfake bindingを追加した。production sender、actual WebSocket、外部送信、credential
+source、hard-guard allow、activation tokenは追加していない。
+
+AGENTS.md v3例外とmajor-incident resume宣言は別docsの`DRAFT_NOT_EFFECTIVE`であり、
+`AGENTS.md`本体とresume状態は未変更。decision sheetはoperator/actual account専任残件だけへ
+絞り込んだ。
+
+```text
+new_focused=19 passed
+h11_v3_related=82 passed
+backend_full=7522 passed
+backend_ruff=passed
+git_diff_check=passed
+danger_scan_real_transport_credential_allow=0 matches
+wall_clock_soak_state=RUNNING
+wall_clock_soak_started_jst=2026-07-11T13:45:56+09:00
+wall_clock_soak_expected_complete_jst=2026-07-12T13:45:56+09:00
+wall_clock_soak_status=backend/market_data/h11_v3_wall_clock_soak_20260711.status.json
+wall_clock_soak_log=backend/market_data/h11_v3_wall_clock_soak_20260711.log
+initial_soak=PASSED_SYNTHETIC_NO_POST
+actual_post=false / credential_read=false / broker_write=false
+resident_process=false / cron=false
+```
+
+24h soakはCodex継続実行セッション内の自己終了型jobであり、launchd/tmux/cron/常駐サービスを
+作成していない。完了確認は`cd backend && .venv/bin/python -m scripts.h11_v3_fault_soak
+--status-only --status-path market_data/h11_v3_wall_clock_soak_20260711.status.json`。
+`COMPLETED`かつ`wall_clock_24h_soak_completed=true`以外はclearにしない。
+
+残る判断はbroker-native pending expiry、actual account能力/partial-fill、ToS/fee、実通知先、
+execution host/観測時間、actual運用プロセス権限、sealed credential、operator記名resume、
+別current-turn actual activation。actual liveは引き続きblock。

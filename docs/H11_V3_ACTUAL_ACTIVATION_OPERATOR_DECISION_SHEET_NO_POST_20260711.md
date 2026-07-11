@@ -29,30 +29,39 @@ persistent_dead_man=true
 partial_fill_fail_closed_policy=true
 protection_children_reconcile_policy=true
 disabled_actual_boundary=true
+sender_contract_and_injection_point=true
+default_refusing_sender=true
+fake_credential_and_fake_http_client_binding=true
+actual_post_allowed_structurally_false=true
+private_ws_token_and_reconnect_design=true
+fake_external_notifier_binding=true
+heartbeat_dead_man_entry_settlement_notification_tests=true
+agents_md_v3_exception_draft=true
+major_incident_resume_declaration_draft=true
 synthetic_fault_soak=100_of_100_matched
-backend_full_tests=7503_passed
+wall_clock_24h_fake_soak=RUNNING_UNTIL_2026-07-12T13:45:56+09:00
+backend_full_tests=7522_passed
 backend_ruff=passed
 actual_post=false
 ```
 
-## 2. Operator / capability未決定
+上記のsender/notification項目は設計・fake実装がclearであることだけを意味する。production
+sender、actual WebSocket、外部送信、activation tokenは存在しない。
+
+## 2. Operator / actual account専任の未決定
 
 | 項目 | 現在値 | 推奨値・停止規則 |
 |---|---|---|
 | broker-native pending expiry | `FIELD_PRESENT_DURATION_UNCONFIRMED` | `CONFIRMED`必須。ifoOrder requestから期限指定不可。規則不明のままならv3 activation拒否、cancel追加はv4 |
-| partial-fill semantics | `PARTIAL_OBSERVABILITY_SPEC_ONLY` | event fieldsは存在。partial/unknownはHALT、追加POST禁止 |
-| minimum lot | `PUBLIC_SPEC_10000` | fresh public symbolsとactual accountの両方で10,000 units適合を確認 |
-| price increment | `PUBLIC_SPEC_0.001` | fresh public symbolsでUSD/JPY tickSizeを照合し、不一致ならHALT |
-| account mode | `UNKNOWN` | 1position制約とnetting/hedgingの整合確認 |
-| API permission | `UNKNOWN` | 必要最小限。値や画面raw情報を記録しない |
-| ToS automation policy | `SERVICE_SUPPORTS_API_AUTOMATION` | actual account契約、API手数料、責任条項はoperatorが確認 |
-| notification route | `PRIVATE_WS_SPEC_EXISTS_NO_ACTUAL_BINDING` | orderEvents / executionEventsを候補とするがtoken API・再接続設計と外部通知先は未決定 |
-| execution host | `UNKNOWN` | sleep抑止、時計同期、再起動時reconcile-first |
-| observation window | `UNKNOWN` | 初期burn-inはoperatorが目視可能な固定時間帯 |
-| resident-process authority | `false` | actual activation時に別途明示。cronは初期burn-in非推奨 |
-| sealed credential provision | `UNKNOWN` | 値非露出・ログ非保存・Git非保存を確認 |
-| actual transport binding | `false` | complete diff review後に別Stepでのみ実装 |
-| major-incident resume declaration | `false` | v3限定条件を明示し、generic allow bridgeは作らない |
+| actual account capability profile | `UNKNOWN` | account mode、1position/netting/hedging、10,000 units eligibility、API permission、IP bindingをoperatorがactual accountで確認。raw値は記録しない |
+| actual partial-fill semantics | `SPEC_ONLY_UNCONFIRMED_ON_ACCOUNT` | actual account/vendorで観測可能性を確認。partial/unknownはHALT、追加POST禁止 |
+| ToS / fee / responsibility acceptance | `PENDING_OPERATOR` | actual account契約、API手数料、自動化条件、責任条項をoperatorが記名確認 |
+| notification destination and owner | `PENDING_OPERATOR` | メール/Webhook等のactual宛先、所有者、障害時手順をoperatorが選定。credential値は文書化しない |
+| execution host / observation window | `PENDING_OPERATOR` | host、sleep抑止、時計同期、初期目視時間帯、再起動時reconcile-firstをoperatorが固定 |
+| bounded background authority | `false` | 24h fake soakを除くactual運用プロセス権限は別途明示。cron導入は別判断 |
+| sealed credential provision | `PENDING_OPERATOR` | actual hostへの値非露出・ログ非保存・Git非保存の提供方式をoperatorが承認 |
+| v3 major-incident resume declaration | `DRAFT_NOT_EFFECTIVE` | v3限定でoperatorが記名発効。generic allow bridgeは禁止 |
+| actual activation authorization | `false` | 上記完了後も別current-turnの専用activation承認が必須 |
 
 ## 3. Activation前の必須実証
 
@@ -69,14 +78,14 @@ actual_post=false
 
 ```text
 step=H11_V3_ACTUAL_ACTIVATION_STEP
-phase_A=public_spec_completion_and_operator_decisions
-phase_B=actual_transport_binding_no_send_review
-phase_C=fake_transport_fault_injection_and_24h_soak
-phase_D=fresh_sanitized_preflight
-phase_E=separate_current-turn first-live activation
+phase_A=operator_and_actual_account_decisions
+phase_B=operator_signed_v3_resume_and_complete_diff_review
+phase_C=fresh_sanitized_preflight
+phase_D=separate_current-turn first-live activation
 ```
 
-Phase A〜Cの完了はPhase D/Eのpermissionを自動発生させない。actual live開始時は、dirty tree、
+fake transport/notification実装と24h soakの完了は、上記phaseのpermissionを自動発生させない。
+actual live開始時は、dirty tree、
 HEAD不一致、test失敗、能力UNKNOWN、position/order不一致のいずれかで停止する。
 
 ## 5. 安全状態
@@ -88,7 +97,9 @@ settlement_post=false
 post_count=0
 broker_read=false
 broker_write=false
-credential_env_read=false
+credential_read=false
+resident_process=false
+cron=false
 raw_id_value_exposure=false
 performance_proof_status=false
 live_ready=false
