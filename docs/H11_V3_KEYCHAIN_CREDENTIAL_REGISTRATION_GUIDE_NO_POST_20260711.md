@@ -2,8 +2,10 @@
 
 Date: 2026-07-11
 
-Status: **SETUP_GUIDE_FOR_OPERATOR**（本書は手順書のみ。credential値の入力・登録は
-AIが代行しない。operatorが自分の手で実行すること）
+Status: **REGISTERED_AND_VERIFIED（2026-07-11）**（operatorが方法B・ターミナルCLIで登録完了。
+方法Aの新macOS「パスワード」アプリ新規パスワード機能は`security find-generic-password`から
+読み取り不可だったため使用しなかった。検証結果: api_key length=32 / api_secret length=64・
+値は非表示）
 
 対応する読み取りコード: `backend/app/services/h11_v3_keychain_credential_no_post.py`
 （`read_h11_v3_keychain_secret(service=..., account=...)`）
@@ -30,7 +32,13 @@ AIが代行しない。operatorが自分の手で実行すること）
 を実credentialの登録に使わないこと（`h11_v3_test_only_` 以外の service 名は helper 側で拒否される
 ため、そもそも実行不能）。
 
-## 2. 登録方法A: キーチェーンアクセス.app（GUI・推奨）
+## 2. 登録方法A: キーチェーンアクセス.app（GUI）
+
+**注意（2026-07-11実績）**: 新macOSの「パスワード」アプリ（Spotlightで見つかりやすい別アプリ）の
+「新規パスワード」機能で作成した項目は、`security find-generic-password`から読み取り不可だった
+（Internet Password形式等、Generic Password以外の形式で保存されると推測される）。
+**「パスワード」アプリではなく、必ず「キーチェーンアクセス」アプリを使うこと。**
+見つからない・不安な場合は「3. 登録方法B」のターミナルCLIを使う方が確実。
 
 1. Spotlight（`⌘+Space`）で「キーチェーンアクセス」を開く
 2. 左上のキーチェーンで「**ログイン**」を選択（システムキーチェーンではない）
