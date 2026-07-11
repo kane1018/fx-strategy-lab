@@ -13,7 +13,7 @@ sanitizedな値（YES/NO・カテゴリ）のみ転記する。**残高・建玉
 
 | # | 確認先（目安） | 確認すること | 記録する値 | 状態 |
 |---|---|---|---|---|
-| 1 | 外国為替FX メニュー内「証拠金・ポジション管理方式」 | netting（自動相殺）か hedging（両建て可）か | `NETTING` or `HEDGING` | **未確認** |
+| 1 | 外国為替FX メニュー内「証拠金・ポジション管理方式」 | netting（自動相殺）か hedging（両建て可）か | `NETTING` or `HEDGING` | 🟡 **実体験で確認(2026-07-11)**: `HEDGING`。operatorが過去に決済目的で反対注文を出したところ相殺されず両建てになった実績あり。GMOサポートへの公式問い合わせ（[問い合わせ下書き](H11_V3_GMO_SUPPORT_INQUIRY_DRAFT_NO_POST_20260711.md)質問3）で裏付け中・回答待ちでactivation blockerではなくなった |
 | 2 | 外国為替FX API設定ページ | APIキーの発注権限が有効か（照会のみ権限になっていないか） | `TRADE_PERMISSION_ENABLED` or `READ_ONLY` | ✅ **確認済み(2026-07-11)**: IFDOCO注文含む必要権限をON、それ以外はOFF（最小権限） |
 | 3 | 同上 | IPアドレス制限の有無・設定状況 | `IP_RESTRICTED` or `NO_IP_RESTRICTION` | ✅ **確認済み(2026-07-11)**: `NO_IP_RESTRICTION`（APIキー編集画面でIP制限チェックボックスOFF）。任意項目のためoperator判断で後から有効化も可能 |
 | 4 | ~~USD/JPY取引画面または仕様ページ~~ → live public API直接照会で解決 | 最小取引単位 | `CONFIRMED_100`（10,000ではない） | ✅ **確認済み(2026-07-11)**: `GET /public/v1/symbols`直接照会でUSD_JPY minOpenOrderSize=100・sizeStep=1・maxOrderSize=500000。以前の記録は`10000`という誤りだった（[API能力表訂正](API_CAPABILITY_SHEET_SANITIZED_NO_POST.md)参照）。operatorのスクリーンショット（「1通貨単位から取引可能」）とも整合。v3凍結position_size=10,000通貨は最小値を上回るため変更不要 |
