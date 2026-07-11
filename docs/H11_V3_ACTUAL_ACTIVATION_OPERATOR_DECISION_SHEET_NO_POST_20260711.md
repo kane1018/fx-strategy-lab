@@ -55,9 +55,9 @@ sender、actual WebSocket、外部送信、activation tokenは存在しない。
 | 項目 | 現在値 | 推奨値・停止規則 |
 |---|---|---|
 | broker-native pending expiry | `FIELD_PRESENT_DURATION_UNCONFIRMED` | 公開仕様に規則記載なし確認済み。[問い合わせ下書き](H11_V3_GMO_SUPPORT_INQUIRY_DRAFT_NO_POST_20260711.md)を用意。operatorが送信し回答待ち |
-| actual account capability profile | `UNKNOWN` | [account確認チェックリスト](H11_V3_ACCOUNT_CHECK_CHECKLIST_NO_POST_20260711.md)を用意。operatorがログインして確認 |
-| actual partial-fill semantics | `SPEC_ONLY_UNCONFIRMED_ON_ACCOUNT` | 公開仕様に部分約定の記載なし確認済み。GMO問い合わせ下書きに含めた。回答待ち |
-| ToS / fee / responsibility acceptance | `PARTIALLY_REVIEWED` | 公開情報でAPI自動売買手数料=約定金額の0.002%、免責条項（故意・重過失による漏洩時を除き当社は責任を負わない）を確認済み。詳細規約はaccount確認チェックリスト項目5でoperatorが確認 |
+| actual account capability profile | `API_PERMISSION_CONFIRMED_REST_ONLY_ACCOUNT_MODE_PENDING` | operator確認 2026-07-11: API権限で**IFDOCO注文を有効化済み**（注文/決済注文/IFDOCO注文/注文情報取得/有効注文一覧/約定情報取得/建玉一覧を取得のみON。注文変更系・キャンセル系・スピード注文・WebSocket通知4種はOFFのまま=最小権限でv3設計と整合）。account mode（netting/hedging）・IP制限・10,000 units eligibilityは[チェックリスト](H11_V3_ACCOUNT_CHECK_CHECKLIST_NO_POST_20260711.md)項目1・3・4として引き続きoperator確認待ち |
+| actual partial-fill semantics | `SPEC_ONLY_UNCONFIRMED_ON_ACCOUNT` | 公開仕様に部分約定の記載なし確認済み。[GMO問い合わせ下書き](H11_V3_GMO_SUPPORT_INQUIRY_DRAFT_NO_POST_20260711.md)に含めた。回答待ち |
+| ToS / fee / responsibility acceptance | `FEE_CONFIRMED_TOS_PARTIALLY_REVIEWED` | operator確認 2026-07-11: 手数料=約定金額×0.002%。当該APIキーは既存発行のため無料期間は**2026-07-25まで**（新規発行なら発行から30日間無料）。免責条項（故意・重過失による漏洩時を除き当社は責任を負わない）は公開情報で確認済み。詳細規約本文はチェックリスト項目5でoperatorが確認。**無料期間終了に活性化スケジュールを合わせる判断はしない**（安全確認未完了のまま急ぐ理由にしない） |
 | notification destination and owner | `DECIDED_EMAIL_DEFAULT_BINDING_IMPLEMENTED_DISABLED` | operator承認: 既定はメール（kansuinaoi@gmail.com）。[将来LINE切替手順書](H11_V3_LINE_MESSAGING_API_FUTURE_SETUP_NO_POST_20260711.md)を用意済み。**注入点を実装済み**（`backend/app/services/h11_v3_email_notification_binding_no_post.py`）: SMTP transport contract・default refusing transport・fake transport testのみ。実smtplib送信は未実装のまま次のactivation Stepで追加する |
 | execution host / observation window | `DECIDED_THIS_MAC` | operator承認: このMacで運用。sleep抑止はcaffeinateのみでは不十分な可能性があるため、電源接続＋システム設定でのスリープ無効化を併用する方針。実装時に手順を提示する |
 | bounded background authority | `false` | 24h fake soakを除くactual運用プロセス権限は別途明示。cron導入は別判断 |
