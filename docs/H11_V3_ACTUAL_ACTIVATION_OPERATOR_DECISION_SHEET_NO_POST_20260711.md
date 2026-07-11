@@ -33,6 +33,9 @@ sender_contract_and_injection_point=true
 default_refusing_sender=true
 fake_credential_and_fake_http_client_binding=true
 actual_post_allowed_structurally_false=true
+real_ifdoco_sender_scaffold_implemented=true（h11_v3_real_ifdoco_sender_no_post.py・
+  実HMAC署名/実Keychain credential結合済み・one-attempt-only・inert timestamp既定・
+  現ビルドに呼び出し口なしのため実行不能）
 private_ws_token_and_reconnect_design=true
 fake_external_notifier_binding=true
 heartbeat_dead_man_entry_settlement_notification_tests=true
@@ -42,7 +45,7 @@ synthetic_fault_soak=100_of_100_matched
 wall_clock_24h_fake_soak=RUNNING_UNTIL_2026-07-12T13:45:56+09:00
 keychain_credential_wrapper=implemented_tested_on_real_keychain_test_entries_only
 email_notification_injection_point=implemented_default_refusing_fake_transport_tested
-backend_full_tests=7534_passed
+backend_full_tests=7557_passed
 backend_ruff=passed
 actual_post=false
 ```
