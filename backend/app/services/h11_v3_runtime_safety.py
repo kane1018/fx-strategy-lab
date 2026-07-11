@@ -572,7 +572,12 @@ def _roll_risk_calendar(state: H11V3RiskPersistentState, current_day: date) -> N
             state.stopped_on_jst = None
     if state.current_month_jst != month_text:
         state.current_month_jst = month_text
-        state.monthly_loss_jpy = 0
+        # A monthly stop does NOT auto-resume on month rollover; it requires
+        # operator_reload_h11_v3_risk (post-mortem + cooling + review window).
+        # The loss figure that triggered the stop must survive the rollover
+        # too, or the post-mortem loses its evidence -- only reset while ACTIVE.
+        if state.stop_state == H11V3RiskStopState.ACTIVE.value:
+            state.monthly_loss_jpy = 0
 
 
 def _enter_risk_stop(

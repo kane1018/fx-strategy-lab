@@ -107,6 +107,28 @@ def test_monthly_budget_stop_fires_and_same_month_reload_refused():
     assert session.stop_state is H11Stage1StopState.ACTIVE
 
 
+def test_monthly_loss_figure_survives_month_rollover_while_stopped():
+    """The post-mortem evidence must not be erased by a calendar month change."""
+
+    session = H11Stage1Session()
+    day = TUESDAY_10AM + timedelta(days=7)
+    for _ in range(5):
+        session.record_paper_trade_outcome_jpy(-DAILY_MAX_LOSS_JPY, day)
+        day += timedelta(days=1)
+    assert session.stop_state is H11Stage1StopState.STOPPED_MONTHLY_BUDGET
+    lost_at_stop = session._monthly_loss_jpy
+    assert lost_at_stop >= MONTHLY_MAX_LOSS_JPY
+
+    # Cross into next month without ever calling operator_reload.
+    _run(session, now=datetime(2026, 8, 1, 10, 0))
+    assert session.stop_state is H11Stage1StopState.STOPPED_MONTHLY_BUDGET
+    assert session._monthly_loss_jpy == lost_at_stop  # preserved, not zeroed
+
+    # Once reloaded, the figure is intentionally cleared.
+    assert session.operator_reload(datetime(2026, 8, 10, 10, 0)) is True
+    assert session._monthly_loss_jpy == 0
+
+
 def test_consecutive_loss_stop_fires():
     session = H11Stage1Session()
     for i in range(MAX_CONSECUTIVE_LOSSES_STOP):

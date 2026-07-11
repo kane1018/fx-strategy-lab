@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from app.services.h11_stage1_paper_wiring import MONTHLY_MAX_LOSS_JPY
 from app.services.h11_v3_observed_live_state import H11V3ObservedState
 from app.services.h11_v3_runtime_safety import (
     H11V3BootReconcileInput,
@@ -120,6 +121,55 @@ def test_risk_stops_on_daily_and_resets_next_day() -> None:
     )
     assert next_day.allowed is True
     assert next_day.stop_state is H11V3RiskStopState.ACTIVE
+
+
+def test_risk_stops_on_monthly_budget_and_loss_figure_survives_rollover() -> None:
+    state = H11V3RiskPersistentState()
+    # Per-trade loss stays within PER_TRADE_MAX_LOSS_BOUND_JPY (5,000) so this
+    # exercises the monthly-budget path rather than the per-trade KILL path.
+    # A win is interleaved before every 5th loss so consecutive_losses never
+    # reaches MAX_CONSECUTIVE_LOSSES_STOP (5) and pre-empts the monthly stop.
+    # Dates land near month-end (like the v2 Stage 1 equivalent test) so
+    # 2026-08-01 falls inside the 14-day cooling window.
+    pnl_sequence = [-5_000, -5_000, -5_000, -5_000, 0, -5_000, -5_000, -5_000, -5_000, 0, -5_000, -5_000]
+    stop = H11V3RiskStopState.ACTIVE
+    for offset, pnl in enumerate(pnl_sequence):
+        stop = record_h11_v3_closed_result(
+            state=state,
+            cycle_day_jst=f"2026-07-{14 + offset:02d}",
+            pnl_jpy_internal=pnl,
+        )
+        if stop is not H11V3RiskStopState.ACTIVE:
+            break
+    assert stop is H11V3RiskStopState.STOPPED_MONTHLY_BUDGET
+    assert state.stopped_on_jst == "2026-07-25"
+    lost_at_stop = state.monthly_loss_jpy
+    assert lost_at_stop >= MONTHLY_MAX_LOSS_JPY
+
+    # Cross into next month without ever calling operator_reload_h11_v3_risk.
+    blocked = evaluate_h11_v3_risk_before_entry(
+        state=state, cycle_day_jst="2026-08-01"
+    )
+    assert blocked.allowed is False
+    assert blocked.stop_state is H11V3RiskStopState.STOPPED_MONTHLY_BUDGET
+    # The post-mortem evidence must survive the calendar rollover, not reset.
+    assert state.monthly_loss_jpy == lost_at_stop
+
+    # Next month but inside the 14-day cooling window (7 days): still refused.
+    assert not operator_reload_h11_v3_risk(
+        state=state,
+        reload_day_jst="2026-08-01",
+        postmortem_complete=True,
+        review_approved=True,
+    )
+    assert operator_reload_h11_v3_risk(
+        state=state,
+        reload_day_jst="2026-08-15",
+        postmortem_complete=True,
+        review_approved=True,
+    )
+    assert state.stop_state == H11V3RiskStopState.ACTIVE.value
+    assert state.monthly_loss_jpy == 0
 
 
 def test_risk_stops_on_consecutive_losses_and_reload_rules() -> None:

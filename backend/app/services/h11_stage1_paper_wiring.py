@@ -125,9 +125,12 @@ class H11Stage1Session:
                 self._stopped_at = None
         if self._current_month != month:
             self._current_month = month
-            self._monthly_loss_jpy = 0
-            # NOTE: a monthly stop does NOT auto-resume on month rollover;
-            # it requires operator_reload (post-mortem + cooling + review window).
+            # A monthly stop does NOT auto-resume on month rollover; it requires
+            # operator_reload (post-mortem + cooling + review window). The loss
+            # figure that triggered the stop must survive the rollover too, or
+            # the post-mortem loses its evidence -- only reset while ACTIVE.
+            if self.stop_state is H11Stage1StopState.ACTIVE:
+                self._monthly_loss_jpy = 0
 
     def _enter_stop(self, state: H11Stage1StopState, now_jst: datetime) -> None:
         self.stop_state = state
