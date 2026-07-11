@@ -67,6 +67,11 @@ Source: [GMOコイン 外国為替FX APIドキュメント](https://api.coin.z.c
 
 - IFDOCO: first LIMIT/STOP＋second LIMIT/STOPを同一親注文で表現
 - USD/JPY public symbols example: minOpenOrderSize=10000、sizeStep=1、tickSize=0.001
+  **【2026-07-11訂正】この`minOpenOrderSize=10000`はAPI docsの`responsetime=2022-12-15`古い
+  response exampleに由来する誤りだった。live public API `GET /public/v1/symbols`直接照会では
+  USD_JPY `minOpenOrderSize=100`。10,000通貨が最小なのはTRY/JPY等一部通貨ペアのみ。
+  詳細は[API能力表](API_CAPABILITY_SHEET_SANITIZED_NO_POST.md)・[Step 4 reconciliation記録](STEP4_SYMBOL_RULES_RECONCILIATION.md)参照。
+  本行以下、本報告書時点の記述は履歴として保持する**
 - clientOrderId: 36文字以内の半角英数字
 - order/execution Private WebSocket events: orderSize / orderExecutedSize / executionSizeあり
 - expiry fieldとEXPIRED statusは存在

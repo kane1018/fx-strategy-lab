@@ -3497,7 +3497,7 @@ operator目視は必須の安全補助だがper-trade execution gateではない
 ```text
 selected=H-11 v3（v2 TREND predictor + IFDOCO protected execution）
 config_hash=sha256:737765dcbed89befceef8660d2b362c834344cc7e36e139d2ff75984914c3262
-capability_contract_hash=sha256:8dd4c936e6cde8b5b9ac132cf68e9a7f4eecea2224a87a0d3864cd4c95aa9d7e
+capability_contract_hash=sha256:f35fe67b0129c310154bbc4b877d30165db98e6e5617547504145baa4af5f5d5
 current_stage=V3_BUILD_NO_POST
 actual_post=false / entry_post=false / settlement_post=false / post_count=0
 performance_proof_status=false / live_ready=false / unattended_live_supported=false

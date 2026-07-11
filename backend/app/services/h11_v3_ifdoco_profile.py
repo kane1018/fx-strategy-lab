@@ -52,7 +52,7 @@ H11_V3_FROZEN_SPEC = {
 
 H11_V3_CAPABILITY_CONTRACT = {
     "symbol": "USD_JPY",
-    "min_open_order_size": "10000",
+    "min_open_order_size": "100",
     "size_step": "1",
     "tick_size": "0.001",
     "public_spec_review_date": "2026-07-11",
@@ -86,7 +86,7 @@ H11_V3_CONFIG_HASH = (
     "sha256:737765dcbed89befceef8660d2b362c834344cc7e36e139d2ff75984914c3262"
 )
 H11_V3_CAPABILITY_CONTRACT_HASH = (
-    "sha256:8dd4c936e6cde8b5b9ac132cf68e9a7f4eecea2224a87a0d3864cd4c95aa9d7e"
+    "sha256:f35fe67b0129c310154bbc4b877d30165db98e6e5617547504145baa4af5f5d5"
 )
 
 

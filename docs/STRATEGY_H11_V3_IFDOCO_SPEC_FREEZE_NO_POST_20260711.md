@@ -10,7 +10,7 @@ Operator decision: 収益性の事前観測期間を短縮し、極小額liveで
 
 ```text
 config_hash=sha256:737765dcbed89befceef8660d2b362c834344cc7e36e139d2ff75984914c3262
-capability_contract_hash=sha256:8dd4c936e6cde8b5b9ac132cf68e9a7f4eecea2224a87a0d3864cd4c95aa9d7e
+capability_contract_hash=sha256:f35fe67b0129c310154bbc4b877d30165db98e6e5617547504145baa4af5f5d5
 prediction_model=H-11 v2 TREND_CONTINUATION_SINGLE_EXPERT（変更なし）
 execution_profile=H-11 v3 IFDOCO_PROTECTED_ENTRY（新規）
 actual_post=false

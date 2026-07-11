@@ -80,7 +80,7 @@ API 仕様の `YES` 根拠にしない。
 | private order/execution notification | `YES_SPEC_ONLY` | Private WebSocketにorderEvents / executionEventsあり。token取得・延長はPrivate APIを要するためactual確認なし | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
 | maintenance windows | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 | public/private rate limits | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| minimum lot and increments | `YES_PUBLIC_SPEC_USD_JPY` | 公開symbols仕様例: minOpenOrderSize=10000、sizeStep=1、tickSize=0.001。actual activation時はfresh public rule照合必須 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| minimum lot and increments | `CONFIRMED_USD_JPY_100` | **訂正(2026-07-11)**: live public API `GET /public/v1/symbols`直接照会でUSD_JPY `minOpenOrderSize=100`・`sizeStep=1`・`maxOrderSize=500000`・`tickSize=0.001`を確認。以前記載していた`10000`はAPI docsの`responsetime=2022-12-15`古いresponse exampleに由来する誤り（[Step 4 reconciliation記録](STEP4_SYMBOL_RULES_RECONCILIATION.md)で既に訂正済み・2026-06-26に実口座で100通貨の実entryも成功済み）。10,000が最小単位なのはTRY/JPY・ZAR/JPY・MXN/JPY等の一部通貨ペアのみ。H-11 v3の凍結position_size=10,000通貨は最小値(100)を大きく上回るため設計変更は不要 | GMOコイン外国為替FX Public API直接照会 + 公式商品ページ + 2025-09-25お知らせ / 2026-07-11 |
 | account mode: netting / hedging | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 | terms-of-service automation policy | `SERVICE_SUPPORTS_API_AUTOMATION` | GMO公式商品ページが外国為替FX APIによる自動売買を案内。actual account契約・API手数料・責任条項のoperator確認は別途必要 | GMOコイン API（外国為替FXの自動売買） / 2026-07-11 |
 
