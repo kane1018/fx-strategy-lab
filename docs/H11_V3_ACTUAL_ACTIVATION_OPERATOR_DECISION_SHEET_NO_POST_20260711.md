@@ -61,7 +61,7 @@ sender、actual WebSocket、外部送信、activation tokenは存在しない。
 | notification destination and owner | `DECIDED_EMAIL_DEFAULT_BINDING_IMPLEMENTED_DISABLED` | operator承認: 既定はメール（kansuinaoi@gmail.com）。[将来LINE切替手順書](H11_V3_LINE_MESSAGING_API_FUTURE_SETUP_NO_POST_20260711.md)を用意済み。**注入点を実装済み**（`backend/app/services/h11_v3_email_notification_binding_no_post.py`）: SMTP transport contract・default refusing transport・fake transport testのみ。実smtplib送信は未実装のまま次のactivation Stepで追加する |
 | execution host / observation window | `DECIDED_THIS_MAC` | operator承認: このMacで運用。sleep抑止はcaffeinateのみでは不十分な可能性があるため、電源接続＋システム設定でのスリープ無効化を併用する方針。実装時に手順を提示する |
 | bounded background authority | `false` | 24h fake soakを除くactual運用プロセス権限は別途明示。cron導入は別判断 |
-| sealed credential provision | `DECIDED_MACOS_KEYCHAIN_WRAPPER_IMPLEMENTED` | operator承認: macOS Keychain経由。**実装済み・実Keychainでテスト済み**（`backend/app/services/h11_v3_keychain_credential_no_post.py`）。値は`H11V3SealedSecret`でrepr/str非露出。テストは使い捨てtest専用エントリのみ使用し実GMO credentialには未接触 |
+| sealed credential provision | `DECIDED_MACOS_KEYCHAIN_WRAPPER_IMPLEMENTED_REGISTRATION_PENDING` | operator承認: macOS Keychain経由。読み取りコード実装済み・実Keychainでテスト済み（`backend/app/services/h11_v3_keychain_credential_no_post.py`）。[登録手順書](H11_V3_KEYCHAIN_CREDENTIAL_REGISTRATION_GUIDE_NO_POST_20260711.md)を用意済み。実GMO API key/secretの登録自体はoperator専任・未実施 |
 | v3 major-incident resume declaration | `DRAFT_NOT_EFFECTIVE` | v3限定でoperatorが記名発効。generic allow bridgeは禁止 |
 | actual activation authorization | `false` | 上記完了後も別current-turnの専用activation承認が必須 |
 
