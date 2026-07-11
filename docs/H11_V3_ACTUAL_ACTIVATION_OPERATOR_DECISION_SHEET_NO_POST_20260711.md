@@ -40,7 +40,9 @@ agents_md_v3_exception_draft=true
 major_incident_resume_declaration_draft=true
 synthetic_fault_soak=100_of_100_matched
 wall_clock_24h_fake_soak=RUNNING_UNTIL_2026-07-12T13:45:56+09:00
-backend_full_tests=7522_passed
+keychain_credential_wrapper=implemented_tested_on_real_keychain_test_entries_only
+email_notification_injection_point=implemented_default_refusing_fake_transport_tested
+backend_full_tests=7534_passed
 backend_ruff=passed
 actual_post=false
 ```
@@ -52,14 +54,14 @@ sender、actual WebSocket、外部送信、activation tokenは存在しない。
 
 | 項目 | 現在値 | 推奨値・停止規則 |
 |---|---|---|
-| broker-native pending expiry | `FIELD_PRESENT_DURATION_UNCONFIRMED` | `CONFIRMED`必須。ifoOrder requestから期限指定不可。規則不明のままならv3 activation拒否、cancel追加はv4 |
-| actual account capability profile | `UNKNOWN` | account mode、1position/netting/hedging、10,000 units eligibility、API permission、IP bindingをoperatorがactual accountで確認。raw値は記録しない |
-| actual partial-fill semantics | `SPEC_ONLY_UNCONFIRMED_ON_ACCOUNT` | actual account/vendorで観測可能性を確認。partial/unknownはHALT、追加POST禁止 |
-| ToS / fee / responsibility acceptance | `PENDING_OPERATOR` | actual account契約、API手数料、自動化条件、責任条項をoperatorが記名確認 |
-| notification destination and owner | `PENDING_OPERATOR` | メール/Webhook等のactual宛先、所有者、障害時手順をoperatorが選定。credential値は文書化しない |
-| execution host / observation window | `PENDING_OPERATOR` | host、sleep抑止、時計同期、初期目視時間帯、再起動時reconcile-firstをoperatorが固定 |
+| broker-native pending expiry | `FIELD_PRESENT_DURATION_UNCONFIRMED` | 公開仕様に規則記載なし確認済み。[問い合わせ下書き](H11_V3_GMO_SUPPORT_INQUIRY_DRAFT_NO_POST_20260711.md)を用意。operatorが送信し回答待ち |
+| actual account capability profile | `UNKNOWN` | [account確認チェックリスト](H11_V3_ACCOUNT_CHECK_CHECKLIST_NO_POST_20260711.md)を用意。operatorがログインして確認 |
+| actual partial-fill semantics | `SPEC_ONLY_UNCONFIRMED_ON_ACCOUNT` | 公開仕様に部分約定の記載なし確認済み。GMO問い合わせ下書きに含めた。回答待ち |
+| ToS / fee / responsibility acceptance | `PARTIALLY_REVIEWED` | 公開情報でAPI自動売買手数料=約定金額の0.002%、免責条項（故意・重過失による漏洩時を除き当社は責任を負わない）を確認済み。詳細規約はaccount確認チェックリスト項目5でoperatorが確認 |
+| notification destination and owner | `DECIDED_EMAIL_DEFAULT_BINDING_IMPLEMENTED_DISABLED` | operator承認: 既定はメール（kansuinaoi@gmail.com）。[将来LINE切替手順書](H11_V3_LINE_MESSAGING_API_FUTURE_SETUP_NO_POST_20260711.md)を用意済み。**注入点を実装済み**（`backend/app/services/h11_v3_email_notification_binding_no_post.py`）: SMTP transport contract・default refusing transport・fake transport testのみ。実smtplib送信は未実装のまま次のactivation Stepで追加する |
+| execution host / observation window | `DECIDED_THIS_MAC` | operator承認: このMacで運用。sleep抑止はcaffeinateのみでは不十分な可能性があるため、電源接続＋システム設定でのスリープ無効化を併用する方針。実装時に手順を提示する |
 | bounded background authority | `false` | 24h fake soakを除くactual運用プロセス権限は別途明示。cron導入は別判断 |
-| sealed credential provision | `PENDING_OPERATOR` | actual hostへの値非露出・ログ非保存・Git非保存の提供方式をoperatorが承認 |
+| sealed credential provision | `DECIDED_MACOS_KEYCHAIN_WRAPPER_IMPLEMENTED` | operator承認: macOS Keychain経由。**実装済み・実Keychainでテスト済み**（`backend/app/services/h11_v3_keychain_credential_no_post.py`）。値は`H11V3SealedSecret`でrepr/str非露出。テストは使い捨てtest専用エントリのみ使用し実GMO credentialには未接触 |
 | v3 major-incident resume declaration | `DRAFT_NOT_EFFECTIVE` | v3限定でoperatorが記名発効。generic allow bridgeは禁止 |
 | actual activation authorization | `false` | 上記完了後も別current-turnの専用activation承認が必須 |
 
