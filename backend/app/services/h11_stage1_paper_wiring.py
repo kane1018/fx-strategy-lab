@@ -242,12 +242,16 @@ class H11Stage1Session:
         else:
             self._consecutive_losses = 0
 
+        # Priority order matches h11_v3_runtime_safety.record_h11_v3_closed_result:
+        # consecutive > monthly > daily. A single elif chain means at most one
+        # stop reason is ever recorded per call, deterministically, instead of
+        # a later check silently overwriting an earlier one in the same call.
         if (
             self._consecutive_losses >= MAX_CONSECUTIVE_LOSSES_STOP
             and self.stop_state is H11Stage1StopState.ACTIVE
         ):
             self._enter_stop(H11Stage1StopState.STOPPED_CONSECUTIVE_LOSSES, now_jst)
-        if (
+        elif (
             self._monthly_loss_jpy >= MONTHLY_MAX_LOSS_JPY
             and self.stop_state is not H11Stage1StopState.STOPPED_MONTHLY_BUDGET
         ):

@@ -87,12 +87,31 @@ def test_daily_budget_stop_fires_and_expires_next_day():
     )
 
 
+def _run_monthly_cap_sequence(session: "H11Stage1Session") -> H11Stage1StopState:
+    """5,000/day loss with a win every 5th day, so 10 loss-days (=50,000,
+    the monthly cap) land before consecutive_losses ever reaches
+    MAX_CONSECUTIVE_LOSSES_STOP (5) -- isolating the monthly-stop path.
+    Lands on 2026-07-25 so 2026-08-01 falls inside the 14-day cooling window.
+    """
+
+    pnl_sequence = [
+        -5_000, -5_000, -5_000, -5_000, 0,
+        -5_000, -5_000, -5_000, -5_000, 0,
+        -5_000, -5_000,
+    ]
+    day = TUESDAY_10AM
+    stop = H11Stage1StopState.ACTIVE
+    for pnl in pnl_sequence:
+        stop = session.record_paper_trade_outcome_jpy(pnl, day)
+        day += timedelta(days=1)
+    return stop
+
+
 def test_monthly_budget_stop_fires_and_same_month_reload_refused():
     session = H11Stage1Session()
-    day = TUESDAY_10AM + timedelta(days=7)  # start 2026-07-21
-    for _ in range(5):  # 5 days x 10,000 = monthly cap -> stop at 2026-07-25
-        session.record_paper_trade_outcome_jpy(-DAILY_MAX_LOSS_JPY, day)
-        day += timedelta(days=1)
+    stop = _run_monthly_cap_sequence(session)
+    day = TUESDAY_10AM + timedelta(days=11)  # last recorded day: 2026-07-25
+    assert stop is H11Stage1StopState.STOPPED_MONTHLY_BUDGET
     assert session.stop_state is H11Stage1StopState.STOPPED_MONTHLY_BUDGET
     # monthly stop does not expire with the day
     assert H11Stage1BlockReason.SESSION_STOPPED.value in _run(
@@ -111,10 +130,8 @@ def test_monthly_loss_figure_survives_month_rollover_while_stopped():
     """The post-mortem evidence must not be erased by a calendar month change."""
 
     session = H11Stage1Session()
-    day = TUESDAY_10AM + timedelta(days=7)
-    for _ in range(5):
-        session.record_paper_trade_outcome_jpy(-DAILY_MAX_LOSS_JPY, day)
-        day += timedelta(days=1)
+    stop = _run_monthly_cap_sequence(session)
+    assert stop is H11Stage1StopState.STOPPED_MONTHLY_BUDGET
     assert session.stop_state is H11Stage1StopState.STOPPED_MONTHLY_BUDGET
     lost_at_stop = session._monthly_loss_jpy
     assert lost_at_stop >= MONTHLY_MAX_LOSS_JPY
@@ -127,6 +144,24 @@ def test_monthly_loss_figure_survives_month_rollover_while_stopped():
     # Once reloaded, the figure is intentionally cleared.
     assert session.operator_reload(datetime(2026, 8, 10, 10, 0)) is True
     assert session._monthly_loss_jpy == 0
+
+
+def test_simultaneous_consecutive_and_monthly_trigger_prefers_consecutive():
+    """When both thresholds are crossed by the same call, the recorded reason
+    must be deterministic and match h11_v3_runtime_safety's elif-chain
+    priority (consecutive > monthly > daily), not whichever check runs last.
+    """
+
+    session = H11Stage1Session()
+    day = TUESDAY_10AM
+    stop = H11Stage1StopState.ACTIVE
+    for _ in range(MAX_CONSECUTIVE_LOSSES_STOP):  # 5 x 10,000 = both caps at once
+        stop = session.record_paper_trade_outcome_jpy(-DAILY_MAX_LOSS_JPY, day)
+        day += timedelta(days=1)
+    assert session._consecutive_losses >= MAX_CONSECUTIVE_LOSSES_STOP
+    assert session._monthly_loss_jpy >= MONTHLY_MAX_LOSS_JPY
+    assert stop is H11Stage1StopState.STOPPED_CONSECUTIVE_LOSSES
+    assert session.stop_state is H11Stage1StopState.STOPPED_CONSECUTIVE_LOSSES
 
 
 def test_consecutive_loss_stop_fires():

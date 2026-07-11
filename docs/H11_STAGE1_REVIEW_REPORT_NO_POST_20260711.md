@@ -60,15 +60,27 @@ if self._current_month != month:
 - `h11_v3_observed_live_state.py`（state machine・process lock） — 遷移表・fcntl排他ロック・
   crash-safe永続化とも健全。バグなし
 - `h11_v3_fault_soak.py` — シナリオ網羅性・soak駆動ロジックとも健全。バグなし
-- 副次的発見（修正不要・記録のみ）: v2の`record_paper_trade_outcome_jpy`は
-  consecutive-loss判定とmonthly判定が独立した`if`文（両方成立時はmonthlyが上書き）だが、
-  v3の`record_h11_v3_closed_result`は`if/elif`連鎖（consecutive優先・排他）。
-  どちらも新規entryのブロックという安全動作は同一のため実害はないが、
-  「どちらの停止理由として記録されるか」がv2/v3で異なる。実害なしのため今回は未修正。
+## 追加修正: 連敗停止と月次停止の同時発火時の優先順位をv2/v3で統一（2026-07-11）
+
+上記レビューで副次的に見つけた不整合（v2の`record_paper_trade_outcome_jpy`は
+consecutive判定とmonthly判定が独立した`if`文で両方成立時はmonthlyが上書きしていたが、
+v3の`record_h11_v3_closed_result`は`if/elif`連鎖でconsecutive優先・排他）について、
+operatorの指示によりv2側をv3と同じ`elif`連鎖（consecutive > monthly > daily）に統一した。
+
+安全動作（新規entryのブロック）への影響はどちらの実装でも同一だったが、統一により
+「どの条件が停止理由として記録されるか」が両バージョンで完全に決定論的・一致する形になった。
+
+修正に伴い、偶然にconsecutive条件とmonthly条件を同時に満たしていた既存テスト2件
+（`test_monthly_budget_stop_fires_and_same_month_reload_refused`・
+`test_monthly_loss_figure_survives_month_rollover_while_stopped`）のデータパターンを、
+月次条件のみを単独で発火させる形（4損失+1勝ち×2+2損失、5,000円/日）に再設計し、
+両条件が同時発火した場合にconsecutiveが優先されることを検証する専用テスト
+`test_simultaneous_consecutive_and_monthly_trigger_prefers_consecutive`を新規追加した。
 
 ## 検証
 
 ```text
-backend_full_tests=7536_passed（修正前7534 + 新規回帰テスト2件）
-wall_clock_24h_soak=継続中・生存確認済み（8周時点）
+backend_full_tests=7537_passed（min_open_order_size修正前7534
+  → monthly_loss_jpy保持修正+回帰2件で7536 → 優先順位統一+新規テスト1件で7537）
+wall_clock_24h_soak=継続中・生存確認済み
 ```
