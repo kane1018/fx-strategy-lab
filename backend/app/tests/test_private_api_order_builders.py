@@ -17,9 +17,11 @@ import pytest
 from app.private_api.order_builders import (
     GMO_FX_ENTRY_ORDER_METHOD,
     GMO_FX_ENTRY_ORDER_PATH,
+    GMO_FX_IFDOCO_ORDER_PATH,
     GMO_FX_OFFICIAL_SETTLEMENT_METHOD,
     GMO_FX_OFFICIAL_SETTLEMENT_PATH,
     REQUEST_KIND_ENTRY,
+    REQUEST_KIND_IFDOCO_PROTECTED_ENTRY,
     REQUEST_KIND_OFFICIAL_SETTLEMENT,
     GmoFxEntryOrderBody,
     GmoFxOfficialSettlementBody,
@@ -27,6 +29,7 @@ from app.private_api.order_builders import (
     GmoFxOrderSide,
     build_gmo_fx_entry_order_body,
     build_gmo_fx_entry_request_plan,
+    build_gmo_fx_ifdoco_request_plan,
     build_gmo_fx_official_settlement_body,
     build_gmo_fx_official_settlement_request_plan,
     summarize_gmo_fx_private_request_plan,
@@ -144,6 +147,20 @@ def test_request_plan_has_method_path_body_json_and_kind() -> None:
     assert settlement_plan.path == GMO_FX_OFFICIAL_SETTLEMENT_PATH
     assert settlement_plan.path != plan.path
 
+    ifdoco_plan = build_gmo_fx_ifdoco_request_plan(
+        symbol=FIXTURE_SYMBOL,
+        first_side="BUY",
+        first_size=FIXTURE_SIZE,
+        first_price="150.1",
+        second_size=FIXTURE_SIZE,
+        second_limit_price="151.0",
+        second_stop_price="149.0",
+        client_order_id="SYNTHETIC123",
+    )
+    assert ifdoco_plan.request_kind == REQUEST_KIND_IFDOCO_PROTECTED_ENTRY
+    assert ifdoco_plan.path == GMO_FX_IFDOCO_ORDER_PATH == "/private/v1/ifoOrder"
+    assert ifdoco_plan.path not in {plan.path, settlement_plan.path}
+
 
 def test_safe_summary_never_includes_body_content_or_sensitive_flags() -> None:
     plan = build_gmo_fx_entry_request_plan(symbol=FIXTURE_SYMBOL, side="BUY", size=FIXTURE_SIZE)
@@ -165,8 +182,10 @@ def test_builder_functions_never_accept_credential_parameters() -> None:
 
     builder_functions = (
         order_builders.build_gmo_fx_entry_order_body,
+        order_builders.build_gmo_fx_ifdoco_order_body,
         order_builders.build_gmo_fx_official_settlement_body,
         order_builders.build_gmo_fx_entry_request_plan,
+        order_builders.build_gmo_fx_ifdoco_request_plan,
         order_builders.build_gmo_fx_official_settlement_request_plan,
         order_builders.summarize_gmo_fx_private_request_plan,
     )

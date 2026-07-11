@@ -31,6 +31,7 @@ raw price/spread/PnL/CSV row/ID/credential は載せない。performance_proof_s
 | H-10 | EVENT_DRIFT（BOJ/FOMC/NFP/CPI） | イベント前後 | DEFERRED | — | 方向 drift は 2015 後減衰・確実なのは非方向 vol・外部カレンダー要 | [feasibility](STRATEGY_MECHANISM_TIMESCALE_DATA_FEASIBILITY_NO_POST_20260709.md) |
 | H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY **v1** | regime-adaptive 3-expert directional probability MoE | USD/JPY H1・horizon 24バー | OPERATOR_SELECTED_UNPROVEN（**DISCONTINUED_DEVELOPMENT**） | development不支持 | v1（config_hash=sha256:7bff1ee4…）はdevelopment validationでrouterの追加予測力なし（equal-weight比+0.03%・支持基準1%未達・TREND単独がMoEを上回る）。formal test未消費のままv2へ移行 | [preregistration](STRATEGY_REGIME_ADAPTIVE_MOE_PREREGISTRATION_NO_POST_20260710.md) / [training記録](H11_DEVELOPMENT_TRAINING_NO_POST_20260711.md) |
 | H-11 **v2**（TREND単独expert directional probability） | 較正済みL2ロジスティック（TREND 3特徴量・4パラメータ）。regime軸はout-of-domain gating専用 | USD/JPY H1・horizon 24バー | OPERATOR_SELECTED_UNPROVEN | SPEC_FROZEN / development: baseline比+3.69%（**formal test未実施・edge証拠ではない**） | v2 freeze 2026-07-11（config_hash=sha256:483fa9e4…・operator推奨(b)採択）。formal test=forward予約・未収集。**Stage 1実稼働 2026-07-11開始**（配線・発火テスト11件パス。手動日次バッチ・[記録](H11_STAGE1_PAPER_WIRING_NO_POST_20260711.md)） | [v2 spec freeze](STRATEGY_H11_V2_TREND_SINGLE_EXPERT_SPEC_FREEZE_NO_POST_20260711.md) / [staged live policy](REGIME_ADAPTIVE_MOE_STAGED_LIVE_POLICY_NO_POST_20260710.md) |
+| H-11 **v3**（v2予測＋IFDOCO protected execution） | v2 TREND単独expertは不変。STOP entry＋broker-side OCOを一親注文で表現するexecution-only新version | USD/JPY H1・horizon 24バー | OPERATOR_SELECTED_UNPROVEN | SPEC_FROZEN / NO_POST_IMPLEMENTATION_AUTHORIZED | v3 freeze 2026-07-11（config_hash=sha256:737765dc…）。収益性期間はactual live前提から外したが、server-side protection、unknown halt、reconcile、sealed credentialはlive前必須。actual activationは未許可 | [v3 spec freeze](STRATEGY_H11_V3_IFDOCO_SPEC_FREEZE_NO_POST_20260711.md) / [observed unattended policy](H11_V3_OBSERVED_UNATTENDED_LIVE_POLICY_NO_POST_20260711.md) |
 
 ## 多重検定台帳（cumulative trial budget）
 
@@ -46,7 +47,7 @@ raw price/spread/PnL/CSV row/ID/credential は載せない。performance_proof_s
 - current_strategy_status: **NO_ROBUST_EDGE_FOUND_IN_TESTED_SCOPE**
 - research_phase: **CLOSED_OUT**（operator 判断で再開可）
 - operator_selected_hypothesis: **H-11_REGIME_ADAPTIVE_MOE_DIRECTIONAL_PROBABILITY**
-- operator_selection_status: **OPERATOR_SELECTED_UNPROVEN / SPEC_FROZEN / STAGE1_RUNNING**（v2 config_hash発行済み。Stage 1 paper実稼働中 2026-07-11〜・live/POST権限なし）
+- operator_selection_status: **OPERATOR_SELECTED_UNPROVEN / V3_SPEC_FROZEN / V3_BUILD_NO_POST**（v2 Stage 1は履歴・並行scorekeeper。v3 actual activation、live、POST権限なし）
 - performance_proof_status=false / live_ready=false / unattended_live_supported=false（不変）
 
 ## 新仮説の追加手順（要約）

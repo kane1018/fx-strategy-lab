@@ -6,7 +6,7 @@ Status: **STAGE1_EXECUTION_STARTED**（operator開始確認 2026-07-11・初回r
 
 ```text
 config_hash=sha256:483fa9e4cc094251c3b3bfc5daaa007242a3385ba41c57caa95e5106fa4c4af3（v2）
-stage1_wiring=COMPLETE / stage1_execution_started=false
+stage1_wiring=COMPLETE / stage1_execution_started=true
 actual_post=false / entry_post=false / settlement_post=false / post_count=0
 real_transport=none（fake-transport-only を型と実行時チェックで強制）
 performance_proof_status=false / live_ready=false / unattended_live_supported=false

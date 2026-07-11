@@ -84,6 +84,28 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   `performance_proof_status=false` / `live_ready=false` / `unattended_live_supported=false` /
   `automatic_trade_authority=false`。
 
+## 0D. H-11 v3 accelerated observed-live build（2026-07-11・no-POST）
+
+- Operatorは、収益性の事前期間を短縮して極小額liveで並行収集し、安全条件はlive前に
+  省略しない[新方針](H11_V3_OBSERVED_UNATTENDED_LIVE_POLICY_NO_POST_20260711.md)を採用。
+- [H-11 v3 spec](STRATEGY_H11_V3_IFDOCO_SPEC_FREEZE_NO_POST_20260711.md)を凍結。
+  予測モデルはv2 TREND単独expertのまま、executionだけをSTOP entry＋broker-side OCOの
+  IFDOCOへ変更。config hash=`sha256:737765dc…`。
+- pure IFDOCO builder、決定論candidate builder、automatic preview-signal adapter、
+  persistent process lock / safe state、fake lifecycleをno-POSTで実装済み。
+  focused/related 202 tests、Phase A–C focused/isolation 78 tests、final safety focused 48 tests、
+  backend全体7503 tests、Ruffが成功。
+  v2 Stage 1は履歴・並行scorekeeperとして維持。
+- public API仕様上IFDOCOは一次LIMIT/STOP＋二次OCOを同一親注文として表現可能。ただし
+  pending entryのbroker-native expiry、actual account capability、price increment等は未確認。
+- 現在は`V3_BUILD_NO_POST`。actual transport binding、credential/env、Private API、broker read、
+  actual POST、常駐/cron、commit/pushは未許可で、別`H11_V3_ACTUAL_ACTIVATION_STEP`が必要。
+- `E1_IMPLEMENTED_NOT_GATE_PASSED` / `performance_proof_status=false` / `live_ready=false` /
+  `unattended_live_supported=false` / `actual_post=false` / `post_count=0`は不変。
+- 長距離自走Phase A–Cで、append-only safe journal、persistent risk/stop、boot reconcile、
+  disabled actual boundary、100-cycle fault soakを追加。[実装報告](H11_V3_PHASE_ABC_NO_POST_IMPLEMENTATION_REPORT_20260711.md)。
+  soakは100/100 expectation一致、entry/settlement各最大1、POST 0。24h wall-clock soakは未実施。
+
 ## 0A. 2026-07-08 時点の履歴スナップショット（インシデント注記付き）
 
 - operator-gated live 1サイクル完了済み（entry POST 1回 accepted → ONE_POSITION_OPEN →

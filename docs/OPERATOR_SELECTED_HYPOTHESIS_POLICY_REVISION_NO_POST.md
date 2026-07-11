@@ -250,3 +250,34 @@ api_capability_sheet:            未記入（Stage 2 着手前までに operator
    （Stage 2 の各 POST は従来通り operator 依頼の Step 6G 実行としてのみ発生する）
 
 いずれも no-POST の準備 Step であり、実 POST は従来通り Step 6G の gate 全通過時のみ・最大1回。
+
+---
+
+## 10. 2026-07-11 H-11 v3 accelerated observed-live amendment
+
+Operatorは、[H-11 v3方針](H11_V3_OBSERVED_UNATTENDED_LIVE_POLICY_NO_POST_20260711.md)と
+[v3凍結仕様](STRATEGY_H11_V3_IFDOCO_SPEC_FREEZE_NO_POST_20260711.md)を採用した。
+本節はH-11 v3に限り、§5〜§7の旧stage順序より後発の限定改定として扱う。
+
+- 収益性の事前検証期間（Stage 1の2週間/20 paper trades、Stage 2の4週間/10 live trades、
+  E1 14日gate）はactual live開始のpermission条件から外し、live中のscorekeeperへ移す。
+- operatorの目視は必須の安全補助だがper-trade execution gateではない。
+- actual activation後のH-11 v3はautomatic entry / broker-side OCO / reconciliation /
+  timeout settlementを目標とする。
+- 二重attempt防止、unknown halt、server-side損失限定、boot reconcile-first、sealed credential、
+  budget/kill/dead-manはlive前の非交渉条件として残す。
+- H-11 v3は`OPERATOR_SELECTED_UNPROVEN`であり、`VALIDATED`へ昇格しない。
+- `E1_IMPLEMENTED_NOT_GATE_PASSED`と`performance_proof_status=false`は変更しない。
+
+今回のoperator授権は方針docs、v3 spec、pure IFDOCO builder、persistent safe state、fake lifecycle、
+testsまでである。actual transport binding、AGENTS.mdのactual自動POST例外、credential/env、Private API、
+broker read、actual POST、常駐/cron、commit/pushは別`H11_V3_ACTUAL_ACTIVATION_STEP`まで未許可。
+
+```text
+h11_v3_config_hash=sha256:737765dcbed89befceef8660d2b362c834344cc7e36e139d2ff75984914c3262
+current_stage=V3_BUILD_NO_POST
+actual_post=false
+post_count=0
+live_ready=false
+unattended_live_supported=false
+```

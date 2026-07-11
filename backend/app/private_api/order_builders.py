@@ -9,10 +9,13 @@ boundary, which must also pass through the shared real-broker-POST hard
 guard). It never imports the Step 6G controlled/simulation family or the
 one-shot live order primitive.
 
-Entry and official settlement are kept as separate types/functions on
-purpose:
+Entry, IFDOCO-protected entry, and official settlement are kept as separate
+types/functions on purpose:
 
 - The entry body targets `POST /private/v1/order` only.
+- The IFDOCO body targets `POST /private/v1/ifoOrder` only and atomically
+  describes one pending entry plus broker-side OCO protection. It remains a
+  pure request plan in this module; no sender is bound here.
 - The official settlement body targets the dedicated
   `POST /private/v1/closeOrder` route only -- never a generic opposite
   entry order used as a close. It only supports size-based settlement;
@@ -30,11 +33,14 @@ from app.private_api.schemas import SanitizedModel
 
 GMO_FX_ENTRY_ORDER_METHOD = "POST"
 GMO_FX_ENTRY_ORDER_PATH = "/private/v1/order"
+GMO_FX_IFDOCO_ORDER_METHOD = "POST"
+GMO_FX_IFDOCO_ORDER_PATH = "/private/v1/ifoOrder"
 GMO_FX_OFFICIAL_SETTLEMENT_METHOD = "POST"
 GMO_FX_OFFICIAL_SETTLEMENT_PATH = "/private/v1/closeOrder"
 GMO_FX_SUPPORTED_EXECUTION_TYPE = "MARKET"
 
 REQUEST_KIND_ENTRY = "ENTRY"
+REQUEST_KIND_IFDOCO_PROTECTED_ENTRY = "IFDOCO_PROTECTED_ENTRY"
 REQUEST_KIND_OFFICIAL_SETTLEMENT = "OFFICIAL_SETTLEMENT"
 
 
@@ -54,6 +60,20 @@ class GmoFxEntryOrderBody(SanitizedModel):
     side: str
     size: str
     executionType: str
+
+
+class GmoFxIfdocoOrderBody(SanitizedModel):
+    """Pure IFDOCO body: one pending entry and broker-side OCO protection."""
+
+    symbol: str
+    clientOrderId: str | None = None
+    firstSide: str
+    firstExecutionType: str
+    firstSize: str
+    firstPrice: str
+    secondSize: str
+    secondLimitPrice: str
+    secondStopPrice: str
 
 
 class GmoFxOfficialSettlementBody(SanitizedModel):
@@ -114,6 +134,61 @@ def build_gmo_fx_entry_order_body(
     )
 
 
+def build_gmo_fx_ifdoco_order_body(
+    *,
+    symbol: str,
+    first_side: str | GmoFxOrderSide,
+    first_size: str,
+    first_price: str,
+    second_size: str,
+    second_limit_price: str,
+    second_stop_price: str,
+    client_order_id: str | None = None,
+    first_execution_type: str = "STOP",
+) -> GmoFxIfdocoOrderBody:
+    """Build a pure H-11 v3 IFDOCO protected-entry body.
+
+    The first execution type is frozen to STOP. Supporting LIMIT later would
+    be a different frozen execution profile rather than a runtime switch.
+    """
+
+    if first_execution_type != "STOP":
+        raise GmoFxOrderBuilderError(
+            "H-11 v3 IFDOCO first execution type must be STOP"
+        )
+    size = _validate_size(first_size)
+    protective_size = _validate_size(second_size)
+    if size != protective_size:
+        raise GmoFxOrderBuilderError(
+            "IFDOCO entry and protective close sizes must match"
+        )
+    normalized_side = _normalize_side(first_side)
+    entry_price = _validate_positive_decimal(first_price, field_name="first_price")
+    take_profit = _validate_positive_decimal(
+        second_limit_price, field_name="second_limit_price"
+    )
+    stop_loss = _validate_positive_decimal(
+        second_stop_price, field_name="second_stop_price"
+    )
+    _validate_ifdoco_price_ordering(
+        side=normalized_side,
+        entry_price=entry_price,
+        take_profit=take_profit,
+        stop_loss=stop_loss,
+    )
+    return GmoFxIfdocoOrderBody(
+        symbol=_validate_symbol(symbol),
+        clientOrderId=_validate_client_order_id(client_order_id),
+        firstSide=normalized_side.value,
+        firstExecutionType="STOP",
+        firstSize=size,
+        firstPrice=entry_price,
+        secondSize=protective_size,
+        secondLimitPrice=take_profit,
+        secondStopPrice=stop_loss,
+    )
+
+
 def build_gmo_fx_official_settlement_body(
     *,
     symbol: str,
@@ -161,6 +236,37 @@ def build_gmo_fx_entry_request_plan(
     )
 
 
+def build_gmo_fx_ifdoco_request_plan(
+    *,
+    symbol: str,
+    first_side: str | GmoFxOrderSide,
+    first_size: str,
+    first_price: str,
+    second_size: str,
+    second_limit_price: str,
+    second_stop_price: str,
+    client_order_id: str | None = None,
+    first_execution_type: str = "STOP",
+) -> GmoFxPrivateRequestPlan:
+    body = build_gmo_fx_ifdoco_order_body(
+        symbol=symbol,
+        first_side=first_side,
+        first_size=first_size,
+        first_price=first_price,
+        second_size=second_size,
+        second_limit_price=second_limit_price,
+        second_stop_price=second_stop_price,
+        client_order_id=client_order_id,
+        first_execution_type=first_execution_type,
+    )
+    return GmoFxPrivateRequestPlan(
+        request_kind=REQUEST_KIND_IFDOCO_PROTECTED_ENTRY,
+        method=GMO_FX_IFDOCO_ORDER_METHOD,
+        path=GMO_FX_IFDOCO_ORDER_PATH,
+        body_json=_serialize_body(body),
+    )
+
+
 def build_gmo_fx_official_settlement_request_plan(
     *,
     symbol: str,
@@ -196,7 +302,7 @@ def summarize_gmo_fx_private_request_plan(
 
 def _serialize_body(body: SanitizedModel) -> str:
     return json.dumps(
-        body.model_dump(),
+        body.model_dump(exclude_none=True),
         ensure_ascii=True,
         sort_keys=True,
         separators=(",", ":"),
@@ -230,3 +336,42 @@ def _validate_size(size: str) -> str:
     if numeric <= 0:
         raise GmoFxOrderBuilderError("size must be positive")
     return size
+
+
+def _validate_positive_decimal(value: str, *, field_name: str) -> str:
+    if not isinstance(value, str) or not value:
+        raise GmoFxOrderBuilderError(f"{field_name} is required")
+    try:
+        numeric = float(value)
+    except ValueError as error:
+        raise GmoFxOrderBuilderError(f"{field_name} must be numeric") from error
+    if numeric <= 0:
+        raise GmoFxOrderBuilderError(f"{field_name} must be positive")
+    return value
+
+
+def _validate_client_order_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not value or len(value) > 36 or not value.isascii() or not value.isalnum():
+        raise GmoFxOrderBuilderError(
+            "client_order_id must be 1-36 ASCII alphanumeric characters"
+        )
+    return value
+
+
+def _validate_ifdoco_price_ordering(
+    *,
+    side: GmoFxOrderSide,
+    entry_price: str,
+    take_profit: str,
+    stop_loss: str,
+) -> None:
+    entry = float(entry_price)
+    take = float(take_profit)
+    stop = float(stop_loss)
+    valid = stop < entry < take if side is GmoFxOrderSide.BUY else take < entry < stop
+    if not valid:
+        raise GmoFxOrderBuilderError(
+            "IFDOCO protective prices must bracket the entry in the correct direction"
+        )

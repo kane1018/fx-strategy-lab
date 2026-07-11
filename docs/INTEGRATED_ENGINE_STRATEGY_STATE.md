@@ -142,3 +142,24 @@ Until an operator-authorized, sanitized evidence review updates the applicable s
    dedicated E1 evidence review. Do not pre-authorize E2 implementation.
 3. Decide separately whether and when the closed research phase may be reopened under a new
    mechanism-first preregistration; rejected hypotheses may not be repackaged.
+
+## H-11 v3 accelerated observed-live amendment (2026-07-11, no-POST build)
+
+The operator replaced the pre-live profitability waiting periods for H-11 with an accelerated
+engineering-burn-in policy. Profitability evidence is collected in parallel after future minimal
+live activation; it is not a precondition and is not treated as proven. Safety prerequisites remain
+pre-live requirements: duplicate-attempt prevention, unknown-result halt, broker-side loss
+protection, boot reconciliation, sealed credentials, budget/kill/dead-man, and notification.
+
+H-11 v3 keeps the v2 TREND single-expert predictor unchanged and freezes a new IFDOCO execution
+profile (`config_hash=sha256:737765dcbed89befceef8660d2b362c834344cc7e36e139d2ff75984914c3262`).
+The first leg is a STOP entry and the second legs are broker-side OCO protection. This is a new
+execution experiment; v2 and v3 results are never pooled.
+
+Current authorization is `V3_BUILD_NO_POST` only: pure request construction, deterministic profile,
+persistent safe state/lock, fake lifecycle, and tests. Actual transport binding, broker/API access,
+credential or environment read, POST, resident execution, cron, commit, and push remain disabled
+until a separate `H11_V3_ACTUAL_ACTIVATION_STEP`.
+
+The formal E1 state remains `E1_IMPLEMENTED_NOT_GATE_PASSED`; `performance_proof_status=false`,
+`live_ready=false`, `unattended_live_supported=false`, `actual_post=false`, and `post_count=0`.

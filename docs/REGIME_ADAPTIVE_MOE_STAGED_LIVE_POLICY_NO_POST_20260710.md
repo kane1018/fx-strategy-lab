@@ -6,6 +6,11 @@ Status: `DRAFT_INACTIVE`
 Future live intent: `CONDITIONAL_STAGE2_SUPERVISED_LIVE`
 Current stage: `PRE_STAGE1_SPEC_INCOMPLETE`
 
+> **Historical draft notice (2026-07-11):** H-11 v3については後発の
+> [observed-unattended policy](H11_V3_OBSERVED_UNATTENDED_LIVE_POLICY_NO_POST_20260711.md)
+> が採用された。本書はv1/v2の履歴として保持し、v3のstage順序・per-trade confirmation要件の
+> source of truthには使用しない。actual POST permissionはどちらの文書からも現在発生しない。
+
 ```text
 frozen_spec=false
 stage1_wiring_allowed=false

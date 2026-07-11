@@ -3486,3 +3486,65 @@ ACTIVE policy（OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md）
 - 稼働成績を理由とするサイズ・予算の増額、良績の `VALIDATED` 昇格、
   `performance_proof_status` / `live_ready` / `unattended_live_supported` の true 化
 - stash@{0}（Evidence Charter監査退避）の drop
+
+## H-11 v3 Accelerated Observed-Unattended Build Handoff (no-POST)
+
+`H11_V3_ACCELERATED_BUILD_HANDOFF` (2026-07-11) — operatorは収益性の事前期間を短縮し、
+極小額actual liveで並行収集する方針を採用した。ただし二重attempt防止、unknown halt、
+server-side損失限定、reconciliation、sealed credentialはlive前条件として省略しない。
+operator目視は必須の安全補助だがper-trade execution gateではない。
+
+```text
+selected=H-11 v3（v2 TREND predictor + IFDOCO protected execution）
+config_hash=sha256:737765dcbed89befceef8660d2b362c834344cc7e36e139d2ff75984914c3262
+capability_contract_hash=sha256:8dd4c936e6cde8b5b9ac132cf68e9a7f4eecea2224a87a0d3864cd4c95aa9d7e
+current_stage=V3_BUILD_NO_POST
+actual_post=false / entry_post=false / settlement_post=false / post_count=0
+performance_proof_status=false / live_ready=false / unattended_live_supported=false
+```
+
+正となる文書:
+[v3 freeze](STRATEGY_H11_V3_IFDOCO_SPEC_FREEZE_NO_POST_20260711.md) /
+[v3 policy](H11_V3_OBSERVED_UNATTENDED_LIVE_POLICY_NO_POST_20260711.md) /
+[ACTIVE policy amendment](OPERATOR_SELECTED_HYPOTHESIS_POLICY_REVISION_NO_POST.md#10-2026-07-11-h-11-v3-accelerated-observed-live-amendment)
+
+### 今回の授権
+
+- 方針docs改定、H-11 v3仕様凍結
+- pure IFDOCO builder / deterministic profile
+- persistent safe-label state / process lock / one-attempt cap
+- fake lifecycle / fault tests
+- focused/related tests、ruff、diff check、danger scan
+
+### 今回の禁止・停止点
+
+- actual transport binding / hard-guard allow / allow bridge
+- broker/Public/Private API、credential/env、account/position/order read
+- actual entry/settlement/cancel/change POST
+- resident process / cron
+- commit / push
+
+次Stepは、no-POST差分の完全レビューとAPI capability sheet残項目（pending expiry、partial fill、
+minimum lot/increment、account mode、ToS、notification）のoperator確認である。それらがclearになっても、
+actual liveは別`H11_V3_ACTUAL_ACTIVATION_STEP`の明示授権まで開始しない。
+未決定項目と推奨fail-closed値は
+[Operator Decision Sheet](H11_V3_ACTUAL_ACTIVATION_OPERATOR_DECISION_SHEET_NO_POST_20260711.md)に集約した。
+
+### V3-BUILD検証結果（2026-07-11）
+
+- focused/related: `202 passed`
+- Phase A–C focused/isolation: `78 passed`
+- final safety focused: `48 passed`
+- backend full regression: `7503 passed`
+- backend Ruff: `All checks passed`
+- `git diff --check`: pass
+- production isolation: full regression内でpass
+- actual POST / broker/API / credential/env / data fetch: none
+
+### Phase A–C long-run continuation（2026-07-11）
+
+[実装報告](H11_V3_PHASE_ABC_NO_POST_IMPLEMENTATION_REPORT_20260711.md)のとおり、公開仕様review、
+persistent safe journal/risk/stop/boot reconcile、disabled actual boundary、100-cycle synthetic
+fault soakまで完了。soakは100/100一致、journal/notification failure 0、entry/settlement各最大1、
+actual POST 0。pending expiry規則、partial fill、actual account、通知、host、sealed credential、
+24h wall-clock soak、actual sender bindingは未解決で、actual activationは引き続きblock。

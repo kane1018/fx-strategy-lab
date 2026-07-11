@@ -4,7 +4,7 @@ Date: 2026-07-10
 
 Owner: operator
 
-Initial status: `UNFILLED_UNKNOWN_DEFAULT`
+Current status: `PARTIAL_PUBLIC_SPEC_REVIEW_NO_ACTUAL_CHECK`
 
 E1 dependency: `false`
 
@@ -52,11 +52,11 @@ API 仕様の `YES` 根拠にしない。
 
 | Field | Value |
 | --- | --- |
-| sheet status | `UNFILLED_UNKNOWN_DEFAULT` |
+| sheet status | `PARTIAL_PUBLIC_SPEC_REVIEW_NO_ACTUAL_CHECK` |
 | operator reviewed | `false` |
-| official specification reviewed | `false` |
-| review date | `UNKNOWN` |
-| reviewer safe label | `OPERATOR_NOT_RECORDED` |
+| official specification reviewed | `true`（H-11 v3に直接必要な公開項目のみ） |
+| review date | `2026-07-11` |
+| reviewer safe label | `CODEX_PUBLIC_SPEC_ONLY` |
 | actual credential checked | `false` |
 | actual account setting checked by Codex | `false` |
 | actual API call performed for this sheet | `false` |
@@ -69,18 +69,23 @@ API 仕様の `YES` 根拠にしない。
 
 | Capability | Current value | Sanitized specification note | Public source title / review date |
 | --- | --- | --- | --- |
-| client order ID or idempotency key | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| position-specific close route | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| server-side SL/TP attached to entry | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| partial-fill semantics | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| supported order types | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| order-state query | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| position query | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
+| client order ID or idempotency key | `YES_CLIENT_ORDER_ID` | 36文字以内の半角英数字。idempotency保証・actual account利用可否は未確認 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| position-specific close route | `YES_SPEC_ONLY` | `closeOrder`の`settlePosition`でposition ID＋sizeを指定可能。v3 actual pathではID安全処理未完成のため未使用 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| server-side SL/TP attached to entry | `YES_IFDOCO_CONDITIONAL` | `ifoOrder`は一次LIMIT/STOPと二次LIMIT＋STOPを同一親注文で表現。通常MARKET entryへの直接付帯ではない | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| partial-fill semantics | `PARTIAL_OBSERVABILITY_SPEC_ONLY` | executionEventsに`executionSize` / `orderExecutedSize` / `orderSize`あり。partial発生条件・IFDOCO子注文連動・REST反映遅延は未確定 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| supported order types | `PARTIAL_YES` | 公開仕様: NORMAL / OCO / IFD / IFDOCO / LOSSCUT、MARKET / LIMIT / STOP。actual account可否は未確認 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| order-state query | `YES_SPEC_ONLY` | orders / activeOrdersの公開仕様あり。反映遅延・unknown解消能力は未確認 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| position query | `YES_SPEC_ONLY` | openPositionsの公開仕様あり。actual account・反映遅延は未確認 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| pending order expiry | `FIELD_PRESENT_DURATION_UNCONFIRMED` | order/activeOrders/IFDOCO responseに`expiry`と`EXPIRED`あり。ただしifoOrder requestにexpiry指定項目がなく、有効期限決定規則を公開仕様から確定できない | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| private order/execution notification | `YES_SPEC_ONLY` | Private WebSocketにorderEvents / executionEventsあり。token取得・延長はPrivate APIを要するためactual確認なし | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
 | maintenance windows | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 | public/private rate limits | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| minimum lot and increments | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
+| minimum lot and increments | `YES_PUBLIC_SPEC_USD_JPY` | 公開symbols仕様例: minOpenOrderSize=10000、sizeStep=1、tickSize=0.001。actual activation時はfresh public rule照合必須 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
 | account mode: netting / hedging | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
-| terms-of-service automation policy | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
+| terms-of-service automation policy | `SERVICE_SUPPORTS_API_AUTOMATION` | GMO公式商品ページが外国為替FX APIによる自動売買を案内。actual account契約・API手数料・責任条項のoperator確認は別途必要 | GMOコイン API（外国為替FXの自動売買） / 2026-07-11 |
+
+公開仕様レビュー元: [GMOコイン 外国為替FX APIドキュメント](https://api.coin.z.com/fxdocs/)。
+これは公開ページの文書確認だけであり、actual account、permission、credential、API接続、POSTの確認ではない。
 
 ## 5. 項目ごとの記入ガイド
 
@@ -150,22 +155,24 @@ API 仕様の `YES` 根拠にしない。
 ## 7. Operator completion block（初期値）
 
 ```yaml
-api_capability_sheet_status: UNFILLED_UNKNOWN_DEFAULT
+api_capability_sheet_status: PARTIAL_PUBLIC_SPEC_REVIEW_NO_ACTUAL_CHECK
 operator_reviewed: false
-official_specification_reviewed: false
+official_specification_reviewed: true
 all_required_items_answered: false
-idempotency_or_client_order_id: UNKNOWN
-position_specific_close_route: UNKNOWN
-server_side_sl_tp_attached_to_entry: UNKNOWN
-partial_fill_semantics: UNKNOWN
-order_types_supported: UNKNOWN
-order_state_query: UNKNOWN
-position_query: UNKNOWN
+idempotency_or_client_order_id: YES_CLIENT_ORDER_ID_SPEC_ONLY
+position_specific_close_route: YES_SPEC_ONLY_NOT_ENABLED
+server_side_sl_tp_attached_to_entry: YES_IFDOCO_CONDITIONAL
+partial_fill_semantics: PARTIAL_OBSERVABILITY_SPEC_ONLY
+order_types_supported: PARTIAL_YES_SPEC_ONLY
+order_state_query: YES_SPEC_ONLY
+position_query: YES_SPEC_ONLY
 maintenance_windows: UNKNOWN
 rate_limits: UNKNOWN
-min_lot_and_increments: UNKNOWN
+pending_order_expiry: FIELD_PRESENT_DURATION_UNCONFIRMED
+private_order_execution_notification: YES_SPEC_ONLY
+min_lot_and_increments: YES_PUBLIC_SPEC_USD_JPY_REQUIRES_FRESH_CHECK
 account_mode: UNKNOWN
-tos_automation_policy: UNKNOWN
+tos_automation_policy: SERVICE_SUPPORTS_API_AUTOMATION_OPERATOR_CONFIRMATION_PENDING
 credential_value_recorded: false
 real_id_value_recorded: false
 raw_request_response_recorded: false
