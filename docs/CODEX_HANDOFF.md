@@ -3585,3 +3585,30 @@ resident_process=false / cron=false
 残る判断はbroker-native pending expiry、actual account能力/partial-fill、ToS/fee、実通知先、
 execution host/観測時間、actual運用プロセス権限、sealed credential、operator記名resume、
 別current-turn actual activation。actual liveは引き続きblock。
+
+## H-11 v3 Broker Constraint Result / v4 Docs-Only Redesign Handoff
+
+`H11_V4_BROKER_CONSTRAINT_REDESIGN_HANDOFF` (2026-07-13) — operatorから共有されたGMOサポート
+回答をsafe aggregateとして確認した。IFDOCO一次注文のexpiryは固定30取引日でrequestごとに短縮できず、
+部分約定時に第二OCO注文sizeは実約定量へ自動調整されない。
+
+```text
+v3_status=FROZEN_BLOCKED_BROKER_CONSTRAINTS
+pending_expiry=FIXED_30_TRADING_DAYS_EXCEEDS_SIGNAL_WINDOW
+partial_fill=FIXED_OCO_SIZE_MISMATCH_RISK
+v3_actual_activation=false
+v3_safety_veto=true
+v4_status=DRAFT_PENDING_OPERATOR_APPROVAL_DOCS_ONLY
+actual_post=false
+broker_read=false
+broker_write=false
+credential_read=false
+resident_process=false
+cron=false
+```
+
+v3のconfig/specを変更して解消しない。v4はexecution profileを未選定とし、期限・部分約定・
+保護整合の非交渉条件を満たすbroker公式能力が確認できるまで実装・API接続・actual activationへ
+進まない。正となる文書は
+[safe response summary](H11_V3_GMO_SUPPORT_RESPONSE_SAFE_SUMMARY_NO_POST_20260713.md) と
+[v4 redesign draft](H11_V4_BROKER_CONSTRAINT_REDESIGN_DRAFT_NO_POST_20260713.md)。

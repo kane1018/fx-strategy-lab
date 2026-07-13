@@ -72,11 +72,11 @@ API 仕様の `YES` 根拠にしない。
 | client order ID or idempotency key | `YES_CLIENT_ORDER_ID` | 36文字以内の半角英数字。idempotency保証・actual account利用可否は未確認 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
 | position-specific close route | `YES_SPEC_ONLY` | `closeOrder`の`settlePosition`でposition ID＋sizeを指定可能。v3 actual pathではID安全処理未完成のため未使用 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
 | server-side SL/TP attached to entry | `YES_IFDOCO_CONDITIONAL` | `ifoOrder`は一次LIMIT/STOPと二次LIMIT＋STOPを同一親注文で表現。通常MARKET entryへの直接付帯ではない | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
-| partial-fill semantics | `PARTIAL_OBSERVABILITY_SPEC_ONLY` | executionEventsに`executionSize` / `orderExecutedSize` / `orderSize`あり。partial発生条件・IFDOCO子注文連動・REST反映遅延は未確定 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| partial-fill semantics | `CONFIRMED_FIXED_SECOND_ORDER_SIZE_PARTIAL_MISMATCH_RISK` | operator経由のGMOサポート回答（2026-07-13）: 部分約定は発生し得る。第二OCO注文sizeは実約定量へ自動調整されず、`orderExecutedSize`の累計値と注文sizeとの差分で検知可能。超過保護の実行結果は未確認であり、v3 actual activationをblock | operator-reported GMOサポート回答（safe summary） / 2026-07-13 |
 | supported order types | `PARTIAL_YES` | 公開仕様: NORMAL / OCO / IFD / IFDOCO / LOSSCUT、MARKET / LIMIT / STOP。actual account可否は未確認 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
 | order-state query | `YES_SPEC_ONLY` | orders / activeOrdersの公開仕様あり。反映遅延・unknown解消能力は未確認 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
 | position query | `YES_SPEC_ONLY` | openPositionsの公開仕様あり。actual account・反映遅延は未確認 | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
-| pending order expiry | `FIELD_PRESENT_DURATION_UNCONFIRMED` | order/activeOrders/IFDOCO responseに`expiry`と`EXPIRED`あり。ただしifoOrder requestにexpiry指定項目がなく、有効期限決定規則を公開仕様から確定できない | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
+| pending order expiry | `CONFIRMED_FIXED_30_TRADING_DAYS_EXCEEDS_V3_SIGNAL_WINDOW` | operator経由のGMOサポート回答（2026-07-13）: ifoOrder requestにexpiry指定項目はなく、一次注文の期限は注文種別・通貨ペアを問わず固定30取引日。v3は短いsignal windowへ制限できずauto-cancelもないためactual activationをblock | operator-reported GMOサポート回答（safe summary） / 2026-07-13 |
 | private order/execution notification | `YES_SPEC_ONLY` | Private WebSocketにorderEvents / executionEventsあり。token取得・延長はPrivate APIを要するためactual確認なし | GMOコイン 外国為替FX APIドキュメント / 2026-07-11 |
 | maintenance windows | `UNKNOWN` | `UNKNOWN` | `UNKNOWN` |
 | public/private rate limits | `CONFIRMED` | Private API: 同一アカウントでGET上限6回/秒・POST上限1回/秒。Public/Private WebSocket: 同一IPでsubscribe/unsubscribe上限1回/秒。IP制限機能は会員ページでopt-in（既定はoperator確認待ち） | GMOコイン公式サポートページ / 2026-07-11 |
@@ -162,13 +162,13 @@ all_required_items_answered: false
 idempotency_or_client_order_id: YES_CLIENT_ORDER_ID_SPEC_ONLY
 position_specific_close_route: YES_SPEC_ONLY_NOT_ENABLED
 server_side_sl_tp_attached_to_entry: YES_IFDOCO_CONDITIONAL
-partial_fill_semantics: PARTIAL_OBSERVABILITY_SPEC_ONLY
+partial_fill_semantics: CONFIRMED_FIXED_SECOND_ORDER_SIZE_PARTIAL_MISMATCH_RISK
 order_types_supported: PARTIAL_YES_SPEC_ONLY
 order_state_query: YES_SPEC_ONLY
 position_query: YES_SPEC_ONLY
 maintenance_windows: UNKNOWN
 rate_limits: UNKNOWN
-pending_order_expiry: FIELD_PRESENT_DURATION_UNCONFIRMED
+pending_order_expiry: CONFIRMED_FIXED_30_TRADING_DAYS_EXCEEDS_V3_SIGNAL_WINDOW
 private_order_execution_notification: YES_SPEC_ONLY
 min_lot_and_increments: YES_PUBLIC_SPEC_USD_JPY_REQUIRES_FRESH_CHECK
 account_mode: UNKNOWN

@@ -2,7 +2,7 @@
 
 Date: 2026-07-11
 
-Status: **PENDING_OPERATOR_AND_CAPABILITY_CONFIRMATION**
+Status: **BLOCKED_V3_BROKER_CONSTRAINTS**
 
 Purpose: `H11_V3_ACTUAL_ACTIVATION_STEP`前の未決定事項を一箇所に固定する。
 
@@ -57,9 +57,9 @@ sender、actual WebSocket、外部送信、activation tokenは存在しない。
 
 | 項目 | 現在値 | 推奨値・停止規則 |
 |---|---|---|
-| broker-native pending expiry | `FIELD_PRESENT_DURATION_UNCONFIRMED` | 公開仕様に規則記載なし確認済み。[問い合わせ下書き](H11_V3_GMO_SUPPORT_INQUIRY_DRAFT_NO_POST_20260711.md)を用意。operatorが送信し回答待ち |
+| broker-native pending expiry | `CONFIRMED_FIXED_30_TRADING_DAYS_EXCEEDS_SIGNAL_WINDOW` | operator経由のGMOサポート回答（2026-07-13）で、IFDOCO一次注文は固定30取引日・requestごとの短縮指定なしと確認。v3は自動cancelを持たず、短期signal windowを超えるためactual activationをblock。safe要約: [broker response summary](H11_V3_GMO_SUPPORT_RESPONSE_SAFE_SUMMARY_NO_POST_20260713.md) |
 | actual account capability profile | `API_PERMISSION_MIN_LOT_IP_CONFIRMED_ACCOUNT_MODE_EXPERIENTIALLY_CONFIRMED` | operator確認 2026-07-11: API権限で**IFDOCO注文を有効化済み**（注文/決済注文/IFDOCO注文/注文情報取得/有効注文一覧/約定情報取得/建玉一覧を取得のみON。注文変更系・キャンセル系・スピード注文・WebSocket通知4種はOFFのまま=最小権限でv3設計と整合）。**最小取引単位も訂正確認済み**: 公式ページ「API利用時 USD/JPY新規100通貨/回」（10,000通貨必須はTRY/ZAR/MXN/HUF/SEK/NOK系のみ）。v3凍結position_size=10,000通貨は最小値を上回るため問題なし。**IP制限=`NO_IP_RESTRICTION`（未設定）を確認済み**。**account mode=`HEDGING`をoperator実体験で確認**（過去に決済目的の反対注文が相殺されず両建てになった実績）— v3設計の「決済はofficial closeOrderルートのみ・generic opposite closeは禁止」の正しさを裏付ける。GMOサポート回答（[問い合わせ下書き](H11_V3_GMO_SUPPORT_INQUIRY_DRAFT_NO_POST_20260711.md)質問3）で公式に裏付け中だが、activation blockerではなくなった |
-| actual partial-fill semantics | `SPEC_ONLY_UNCONFIRMED_ON_ACCOUNT` | 公開仕様に部分約定の記載なし確認済み。[GMO問い合わせ下書き](H11_V3_GMO_SUPPORT_INQUIRY_DRAFT_NO_POST_20260711.md)に含めた。回答待ち |
+| actual partial-fill semantics | `CONFIRMED_FIXED_OCO_SIZE_PARTIAL_MISMATCH_RISK` | operator経由のGMOサポート回答（2026-07-13）で、部分約定は発生し得て、第二OCO注文のsizeは約定量へ自動調整されず、`orderExecutedSize`で検知可能と確認。検知は既約定後であり、v3には安全な不一致是正経路がないためactual activationをblock。safe要約: [broker response summary](H11_V3_GMO_SUPPORT_RESPONSE_SAFE_SUMMARY_NO_POST_20260713.md) |
 | ToS / fee / responsibility acceptance | `FEE_AND_TOS_CONFIRMED` | operator確認 2026-07-11: 手数料=約定金額×0.002%。当該APIキーは既存発行のため無料期間は**2026-07-25まで**（新規発行なら発行から30日間無料）。**約款原文確認済み**（第20〜22条）: 個人自動売買を禁止する条項なし、API注文は約款第8条2項で公式経路と明記、IFD-OCOも第9条(4)で正式注文種別と明記。システム誤動作の損害はoperator全責任（GMOの故意・重過失時を除く）— [条項サマリー](H11_V3_YAKKAN_API_CLAUSES_SUMMARY_NO_POST_20260711.md)参照。**無料期間終了に活性化スケジュールを合わせる判断はしない**（安全確認未完了のまま急ぐ理由にしない） |
 | notification destination and owner | `DECIDED_EMAIL_DEFAULT_BINDING_IMPLEMENTED_DISABLED` | operator承認: 既定はメール（kansuinaoi@gmail.com）。[将来LINE切替手順書](H11_V3_LINE_MESSAGING_API_FUTURE_SETUP_NO_POST_20260711.md)を用意済み。**注入点を実装済み**（`backend/app/services/h11_v3_email_notification_binding_no_post.py`）: SMTP transport contract・default refusing transport・fake transport testのみ。実smtplib送信は未実装のまま次のactivation Stepで追加する |
 | execution host / observation window | `DECIDED_THIS_MAC` | operator承認: このMacで運用。sleep抑止はcaffeinateのみでは不十分な可能性があるため、電源接続＋システム設定でのスリープ無効化を併用する方針。実装時に手順を提示する |
@@ -67,6 +67,23 @@ sender、actual WebSocket、外部送信、activation tokenは存在しない。
 | sealed credential provision | `REGISTERED_AND_VERIFIED` | operator承認: macOS Keychain経由。**実GMO API key/secretの登録・検証完了(2026-07-11)**。`security add-generic-password`（ターミナルCLI）で登録、`read_h11_v3_keychain_secret`で読み取り確認（値は非表示・文字数のみ: api_key length=32 / api_secret length=64）。※新macOS「パスワード」アプリの新規パスワード機能では読み取り不可だったため、確実なCLI方式に切り替えて解決 |
 | v3 major-incident resume declaration | `DRAFT_NOT_EFFECTIVE` | v3限定でoperatorが記名発効。generic allow bridgeは禁止 |
 | actual activation authorization | `false` | 上記完了後も別current-turnの専用activation承認が必須 |
+
+## 2A. 2026-07-13 broker回答によるv3 veto
+
+回答原文は保存しない。operatorから共有された公式サポート回答の安全な事実要約だけを
+[H11_V3_GMO_SUPPORT_RESPONSE_SAFE_SUMMARY_NO_POST_20260713.md](H11_V3_GMO_SUPPORT_RESPONSE_SAFE_SUMMARY_NO_POST_20260713.md)
+に記録する。
+
+```text
+v3_pending_expiry=CONFIRMED_FIXED_30_TRADING_DAYS_EXCEEDS_SIGNAL_WINDOW
+v3_partial_fill=CONFIRMED_FIXED_OCO_SIZE_PARTIAL_MISMATCH_RISK
+v3_actual_activation=false
+v3_safety_veto=true
+v4_docs_only_redesign=RECOMMENDED
+```
+
+このvetoは、検知可能性を「安全な是正可能性」と取り違えないためのもの。v3の凍結config、
+禁止されているauto-cancel、generic opposite close、retry/repostを変更して解消してはならない。
 
 ## 3. Activation前の必須実証
 
@@ -82,11 +99,11 @@ sender、actual WebSocket、外部送信、activation tokenは存在しない。
 ## 4. 次Stepの推奨scope
 
 ```text
-step=H11_V3_ACTUAL_ACTIVATION_STEP
-phase_A=operator_and_actual_account_decisions
-phase_B=operator_signed_v3_resume_and_complete_diff_review
-phase_C=fresh_sanitized_preflight
-phase_D=separate_current-turn first-live activation
+step=H11_V4_BROKER_CONSTRAINT_REDESIGN_STEP
+phase_A=docs_only_constraint_review_and_operator_decision
+phase_B=official_broker_capability_answers_for_a_new_execution_profile
+phase_C=new_frozen_config_and_independent_safety_review_if_a_safe_profile_exists
+phase_D=separate_future_activation_only_after_all_new_gates_clear
 ```
 
 fake transport/notification実装と24h soakの完了は、上記phaseのpermissionを自動発生させない。
