@@ -3,6 +3,51 @@
 Codex が新しいタスクを安全に開始するための要約済み文脈。詳細な現在地は
 [PROJECT_STATUS.md](PROJECT_STATUS.md)、固定ルールは [`../AGENTS.md`](../AGENTS.md) を参照する。
 
+## H-11 Manual Signal UI Handoff（local-only / no-POST, 2026-07-14）
+
+`H11_MANUAL_SIGNAL_UI_HANDOFF` — manual trading pivot向けのlocalhost専用UIを実装した。
+
+```text
+screen=シグナル
+primary_horizon=10m
+switchable_signals=10m_formal,30m_formal,24h_formal,realtime_rolling_10m_non_formal
+directions=買い,売り,見送り,判定不可
+short_model=M1_LOW_CAPACITY_LOGISTIC_FROZEN_AFTER_INITIAL_TRAIN
+long_context=H11_V2_H1_24_BARS
+validation=FORWARD_SIGNAL_SCORE_ONLY_NOT_EDGE_VALIDATION
+live_market_display=PUBLIC_WS_TICKER_RENDER_1_SECOND
+signal_refresh=M1_CLOSE_PLUS_3_SECONDS
+realtime_estimate=ROLLING_60S_EVERY_SECOND_NOT_FORMAL
+signal_probability_charts=FORMAL_PROSPECTIVE_LEDGER_PLUS_REALTIME_BROWSER_SESSION
+realtime_collection=LOCAL_SQLITE_SEPARATE_FROM_FORMAL_FORECASTS
+realtime_promotion=SEPARATE_VALIDATION_AND_OPERATOR_APPROVAL_REQUIRED
+chart_timeframes=1m,10m,30m,1h
+manual_exit_plan=LOCAL_RECORD_ONLY_NO_AUTOMATIC_EXIT_NO_BROKER_STATE
+position_aware_exit_signal=FIXED_SL_TP_TIME_FIRST_THEN_TWO_FORMAL_REVERSALS
+exit_signal_labels=建玉なし,継続,警戒,損切り候補,損切り,利益確定,時間切れ,判定不可
+exit_signal_price_stale_seconds=15
+realtime_estimate_used_for_exit_signal=false
+threshold_diagnostics=PROSPECTIVE_ONLY_FIXED_V1_NO_AUTO_CHANGE
+actual_post=false
+broker_read=false
+broker_write=false
+private_api=false
+credential_read=false
+```
+
+専用entrypointは `app.main_h11_manual:app`、launcherは
+`cd backend && python3 -m scripts.h11_manual_ui`。`127.0.0.1:8765`以外へ公開しない。
+Public WS tickerは画面を開いている間1接続でlive BID / ASKを受信し、1秒間隔で描画する。
+Public M1/H1 GETとsignal再計算は毎分境界+3秒に自動実行し、backendで30秒dedupする。
+「データを更新」は初期化・復旧用。launchd / background service / cronなし。
+local artifactは `backend/market_data/h11_manual/` 配下でcommit禁止。
+
+正となる文書:
+
+- [UI仕様](H11_MANUAL_SIGNAL_UI_NO_POST.md)
+- [forward validation契約](H11_FORWARD_SIGNAL_VALIDATION_NO_POST.md)
+- [runbook](H11_MANUAL_SIGNAL_UI_RUNBOOK_NO_POST.md)
+
 ## 1. 目的と現在地
 
 FX Strategy Lab は、FX の検証、ペーパートレード、通知、将来の少額自動売買へ安全に段階移行するための
@@ -3612,3 +3657,50 @@ v3のconfig/specを変更して解消しない。v4はexecution profileを未選
 進まない。正となる文書は
 [safe response summary](H11_V3_GMO_SUPPORT_RESPONSE_SAFE_SUMMARY_NO_POST_20260713.md) と
 [v4 redesign draft](H11_V4_BROKER_CONSTRAINT_REDESIGN_DRAFT_NO_POST_20260713.md)。
+
+## H-11 Every-Second Rolling Validation Handoff（2026-07-15・local-only / no-POST）
+
+毎秒ローリング推定の10分・30分予測を正式forecast tableから分離して永続化し、対象時刻+15秒以内の
+Public BIDだけで結果を解決する。15秒を超えた予測は `TARGET_PRICE_MISSING` に固定し、後の価格で
+補完しない。検証UIはraw秒行とhorizon間隔のnon-overlapping指標、Brier / Log loss、calibration、
+閾値診断、欠測・coverage・mode内訳を表示する。
+
+```text
+realtime_rolling_status=COLLECTING_OR_EVALUATING_NOT_FORMAL
+formal_signal=false
+promotion_eligible=false
+threshold_auto_change_allowed=false
+target_price_max_delay_seconds=15
+automatic_exit=false
+actual_post=false
+broker_read=false
+broker_write=false
+private_api=false
+credential_read=false
+env_read=false
+```
+
+## H-11 Manual One-Click Exit Start Handoff（2026-07-15・local-only / no-POST）
+
+主画面の `取引した` は、正式10分/30分の買い・売り、PROSPECTIVE forecast、15秒以内のPublic ticker、
+OPEN計画なしを満たすと `取引した＋出口開始` へ切り替わる。1クリックでoperator decisionを記録し、
+買いASK / 売りBIDを参考entryとして固定SL 15pips、TP 22.5pips、time exitを開始する。
+
+```text
+quick_exit_local_record_only=true
+actual_fill_confirmed=false
+broker_position_confirmed=false
+max_quote_age_seconds=15
+double_click_guard=true
+maximum_open_manual_plan=1
+automatic_exit=false
+actual_post=false
+broker_read=false
+broker_write=false
+private_api=false
+credential_read=false
+env_read=false
+```
+
+実約定価格との差がある場合は従来フォームを使用する。24時間、毎秒ローリング、見送り、判定不可、
+古い価格、direction mismatch、対象時刻経過はワンクリック開始不可。

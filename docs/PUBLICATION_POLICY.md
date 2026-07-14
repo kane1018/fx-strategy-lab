@@ -5,6 +5,13 @@ FX Strategy Lab の **一般公開可否・認証/アクセス制御の要否・
 **安全制約の単一参照点**として使う。安全実装の詳細は [SAFETY.md](SAFETY.md)、現在地は
 [PROJECT_STATUS.md](PROJECT_STATUS.md)、デプロイ実績は [DEPLOYMENT_RESULT.md](DEPLOYMENT_RESULT.md)。
 
+## H-11 Manual Signal UI（2026-07-14）
+
+`app.main_h11_manual:app` と `backend/app/h11_manual/static/` はlocalhost専用のprivate operator UIで
+あり、公開対象外とする。Render / Vercel / `app.main_readonly:app` へ接続しない。Public tickerの
+1秒sample、毎秒リアルタイム推定、4枠の確率履歴、手動出口計画、建玉前提の出口シグナル、
+local SQLiteも公開・配布・commitしない。
+
 ## 1. 現時点の公開判断（暫定：一般公開可）
 
 現在の本番は以下をすべて満たすため、**暫定的に一般公開可**とする。
@@ -83,3 +90,10 @@ FX Strategy Lab の **一般公開可否・認証/アクセス制御の要否・
 - Vercel/Render の環境変数・設定変更、`app.main_readonly:app` の変更、`app.main:app` の公開。
 - APIキー/secret/Private API の追加・参照・表示、実注文・自動売買の有効化。
 - 実データ・個人情報の docs 記載。
+
+## 8. H-11 local manual signal UI（非公開）
+
+毎秒ローリング検証を含むH-11 manual signal UIとローカルSQLite台帳は、注文送信がなくても
+売買シグナル・ローカル時系列を含むため公開対象外とする。`app.main_h11_manual:app`はlocalhost専用を維持し、
+`app.main_readonly:app`、Render、Vercelへ追加しない。SQLite、1秒sample、forecast、resolution集計を
+commitまたは公開artifactへ含めない。
