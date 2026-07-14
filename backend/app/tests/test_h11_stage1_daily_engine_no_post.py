@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
 
 from app.services.h11_stage1_daily_engine import (
+    ENTRY_EVAL_SLOTS_JST,
     Stage1OpenPosition,
+    entry_evaluation_gate,
     load_state,
     paper_pnl_jpy,
     save_state,
@@ -94,3 +97,52 @@ def test_state_roundtrip_preserves_ledger(tmp_path: Path):
             -1_000, datetime(2026, 7, 15 + i, 10, 0)
         )
     assert state2 is H11Stage1StopState.STOPPED_CONSECUTIVE_LOSSES
+
+
+def test_entry_evaluation_gate_slots_and_duplicates():
+    bar = "2026-07-14T06:00:00+00:00"
+    # In-slot (16 JST), fresh bar -> proceed
+    assert entry_evaluation_gate(datetime(2026, 7, 14, 16, 5), None, bar) == ""
+    # In-slot but the same bar was already evaluated -> skip
+    assert (
+        entry_evaluation_gate(datetime(2026, 7, 14, 16, 40), bar, bar)
+        == "BAR_ALREADY_EVALUATED"
+    )
+    # In-slot, a NEW bar since the last evaluation -> proceed again
+    next_bar = "2026-07-14T07:00:00+00:00"
+    assert entry_evaluation_gate(datetime(2026, 7, 14, 16, 40), bar, next_bar) == ""
+    # Off-schedule hours -> skip regardless of bar freshness
+    for hour in (9, 12, 15, 23, 0, 3):
+        assert (
+            entry_evaluation_gate(datetime(2026, 7, 14, hour, 0), None, bar)
+            == "OFF_SCHEDULE_RUN"
+        )
+    # All three configured slots are honored
+    for hour in ENTRY_EVAL_SLOTS_JST:
+        assert entry_evaluation_gate(datetime(2026, 7, 14, hour, 59), None, bar) == ""
+
+
+def test_state_backwards_compatible_without_last_eval_field(tmp_path: Path):
+    # A pre-amendment state file (no last_entry_eval_bar_utc key) must load.
+    legacy = {
+        "stage1_started_at_utc": "2026-07-10T21:19:18+00:00",
+        "stop_state": "ACTIVE",
+        "kill_switch_on": False,
+        "stopped_at_utc": None,
+        "monthly_loss_jpy": 0,
+        "daily_loss_jpy": 0,
+        "consecutive_losses": 0,
+        "trades_today": 0,
+        "current_day": "2026-7-14",
+        "current_month": "2026-7",
+        "closed_trades": 0,
+        "discipline_violations": [],
+        "open_position": None,
+    }
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps(legacy))
+    state = load_state(path, T0)
+    assert state.last_entry_eval_bar_utc is None
+    state.last_entry_eval_bar_utc = "2026-07-14T06:00:00+00:00"
+    save_state(path, state)
+    assert load_state(path, T0).last_entry_eval_bar_utc == "2026-07-14T06:00:00+00:00"

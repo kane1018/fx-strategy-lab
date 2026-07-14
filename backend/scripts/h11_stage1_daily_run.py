@@ -28,6 +28,7 @@ from app.services.h11_stage1_daily_engine import (
     JST_OFFSET,
     Stage1OpenPosition,
     build_entry_decision,
+    entry_evaluation_gate,
     load_state,
     paper_pnl_jpy,
     save_state,
@@ -169,13 +170,31 @@ def main() -> int:
         else:
             summary["open_position_held"] = True
 
-    # 2) evaluate at most one new paper entry through the frozen gates
+    # 2) evaluate at most one new paper entry through the frozen gates.
+    # Entry evaluation is slot-gated (10/16/22 JST; 2026-07-14 operational
+    # amendment): off-schedule runs settle only, and a bar already evaluated
+    # in this slot is not evaluated twice. Settlement above is never gated.
     if state.open_position is None:
+        latest_bar_utc = stamps[-1].isoformat(timespec="seconds")
+        slot_skip_reason = entry_evaluation_gate(
+            now_jst, state.last_entry_eval_bar_utc, latest_bar_utc
+        )
         gate_reasons = session.pre_trade_gate_reasons(now_jst, event_exclusion_active=False)
-        if gate_reasons:
+        if slot_skip_reason:
+            _append_journal(
+                {"event": "STAGE1_ENTRY_EVAL_SKIPPED", "reason": slot_skip_reason}
+            )
+            summary["entry"] = {
+                "action": "ENTRY_EVAL_SKIPPED",
+                "reason": slot_skip_reason,
+                "entry_slots_jst": "10/16/22",
+            }
+        elif gate_reasons:
+            state.last_entry_eval_bar_utc = latest_bar_utc
             _append_journal({"event": "STAGE1_BLOCKED_PRE_TRADE", "reasons": gate_reasons})
             summary["entry"] = {"action": "BLOCKED", "reasons": list(gate_reasons)}
         else:
+            state.last_entry_eval_bar_utc = latest_bar_utc
             decision = build_entry_decision(
                 parameters, open_, high, low, close, hour_jst, spread_wide, stamps
             )

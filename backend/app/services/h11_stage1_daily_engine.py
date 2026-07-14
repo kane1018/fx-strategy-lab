@@ -45,6 +45,29 @@ TP_R_MULTIPLE = 1.5
 MAX_HOLDING_BARS = 24
 JST_OFFSET = timedelta(hours=9)
 
+# Operational layer (2026-07-14 amendment; NOT part of the frozen model spec):
+# entry evaluation is code-gated to fixed JST hour slots covering the Tokyo,
+# London, and New York sessions. Off-schedule manual runs still settle open
+# positions (settlement is path-independent of run timing) but never evaluate
+# a new entry -- this structurally removes human-timed sampling bias
+# (e.g. running the batch only after seeing a large move). Duplicate runs
+# inside the same slot are also skipped once the latest bar was evaluated.
+ENTRY_EVAL_SLOTS_JST = (10, 16, 22)
+
+
+def entry_evaluation_gate(
+    now_jst: datetime,
+    last_entry_eval_bar_utc: str | None,
+    latest_bar_utc: str,
+) -> str:
+    """Return a skip reason, or "" when entry evaluation may proceed."""
+
+    if now_jst.hour not in ENTRY_EVAL_SLOTS_JST:
+        return "OFF_SCHEDULE_RUN"
+    if last_entry_eval_bar_utc == latest_bar_utc:
+        return "BAR_ALREADY_EVALUATED"
+    return ""
+
 
 @dataclass
 class Stage1OpenPosition:
@@ -71,6 +94,10 @@ class Stage1PersistentState:
     closed_trades: int = 0
     discipline_violations: list[str] | None = None
     open_position: dict | None = None
+    # Last H1 bar (UTC ISO) whose entry decision was evaluated. Used by
+    # entry_evaluation_gate to skip duplicate evaluations within a slot.
+    # Optional with default None so pre-amendment state files keep loading.
+    last_entry_eval_bar_utc: str | None = None
 
 
 def load_state(path: Path, now_utc: datetime) -> Stage1PersistentState:

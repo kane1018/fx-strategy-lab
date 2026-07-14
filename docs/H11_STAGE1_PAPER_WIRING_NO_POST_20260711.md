@@ -60,3 +60,25 @@ performance_proof_status=false / live_ready=false / unattended_live_supported=fa
 - 昇格判定（→Stage 2）は 2週間以上 かつ 20 paper trades 以上 かつ 違反0 を
   満たした後の operator review でのみ行う。実稼働は paper のみであり、
   Stage 2 以降・live・POST の許可ではない。
+
+## 3A. 運用改定（2026-07-14）: 固定スロット制・複数回/日
+
+- **背景**: H-11 v2 は H1 シグナルであり、1日1回のrunは1日約20本の取引可能バーの
+  うち1本しかサンプリングしない。運用初期3日間でrunが取引時間帯に当たらず、
+  entry評価が一度も走らない日が発生した。
+- **改定内容**: entry評価を**固定スロット（10時台・16時台・22時台 JST）**にコードで
+  ゲートする（`ENTRY_EVAL_SLOTS_JST`・`entry_evaluation_gate`）。
+  - スロット外のrun: 決済処理のみ実行し、entry評価はskip（`OFF_SCHEDULE_RUN`）。
+    「大きく動いたのを見てからrunする」等の人為的サンプリングバイアスを構造的に遮断する。
+  - 同一スロット内の重複run: 最新バーが評価済みならskip（`BAR_ALREADY_EVALUATED`）。
+  - 決済はrun時刻に依存しない（ヒストリカルバー基準で経路非依存）ため、常に無条件で処理する。
+- **凍結spec との関係**: 本改定は運用層のみ。timeframe H1・entry最大1/日・取引時間帯・
+  予算・停止基準・閾値・`config_hash` はすべて不変（entry上限は従来どおり
+  `MAX_TRADES_PER_DAY=1` がコードで強制）。スロット3回はサンプリング頻度の回復であり
+  取引頻度の増加ではない。
+- **運用手順（改定後）**: 平日、10時台・16時台・22時台のいずれか都合の付くタイミングで
+  `python -m scripts.h11_stage1_daily_run` を実行（3スロット全部が理想、最低1スロット）。
+  スロット外に実行しても安全（決済のみ処理される）。
+- 実挙動検証: 2026-07-14 15:31 JST（スロット外）のrunが `ENTRY_EVAL_SKIPPED /
+  OFF_SCHEDULE_RUN` となることを実データで確認済み。回帰テスト2件追加
+  （スロット判定・旧state fileの後方互換）。
