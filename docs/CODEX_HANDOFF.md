@@ -3682,8 +3682,8 @@ env_read=false
 
 ## H-11 Manual One-Click Exit Start Handoff（2026-07-15・local-only / no-POST）
 
-主画面の `取引した` は、正式10分/30分の買い・売り、PROSPECTIVE forecast、15秒以内のPublic ticker、
-OPEN計画なしを満たすと `取引した＋出口開始` へ切り替わる。1クリックでoperator decisionを記録し、
+正式10分/30分カードの `取引開始` は、買い・売り、PROSPECTIVE forecast、15秒以内のPublic ticker、
+OPEN計画なしを満たすと有効になる。1クリックで`TRADE_STARTED`を記録し、
 買いASK / 売りBIDを参考entryとして固定SL 15pips、TP 22.5pips、time exitを開始する。
 
 ```text
@@ -3704,3 +3704,152 @@ env_read=false
 
 実約定価格との差がある場合は従来フォームを使用する。24時間、毎秒ローリング、見送り、判定不可、
 古い価格、direction mismatch、対象時刻経過はワンクリック開始不可。
+
+## H-11 Manual One-Click Settlement Record Handoff（2026-07-15・local-only / no-POST）
+
+シグナル画面の出口シグナル行から、OPENの手動出口計画を1クリックでCLOSED記録できるようにした。
+固定SL / TP / time exit到達時は対応理由、損切り候補は損切り、警戒 / 継続は手動終了を使う。
+買いは15秒以内のPublic BID、売りはPublic ASKを終了価格とし、stale・不明・保存中の二重操作は拒否する。
+下段の `この表示をどう扱いましたか？` はデスクトップ幅で説明と操作を1行表示する。
+
+```text
+one_click_settlement_record=true
+local_ledger_only=true
+actual_broker_settlement=false
+max_quote_age_seconds=15
+double_click_guard=true
+actual_post=false
+broker_read=false
+broker_write=false
+private_api=false
+credential_read=false
+env_read=false
+```
+
+この操作はbroker建玉を閉じない。ユーザーの実決済とlocal ledger記録は別操作であり、UIは実決済完了を
+確認しない。
+
+## H-11 Signal-Focused Entry-to-Exit Flow Handoff（2026-07-15・local-only / no-POST）
+
+正式10分・30分カード内の取引開始は、出口管理画面へ遷移せず、シグナル画面に留まってlocal出口計画と
+出口シグナルを開始する。開始条件不足時は理由付きでボタンを無効化し、出口計画を伴わない取引記録を
+作らない。開始APIが失敗しても出口管理へ自動遷移せず、主画面へエラーを表示する。
+
+2026-07-15 UI clarification: 正式10分・30分の各シグナルカードへ取引開始ボタンを常時表示する。見送り・
+判定待ち・価格待ちは理由付きdisabled、買い・売りかつfresh Public価格時だけカードから開始可能。開始後は
+同じ時間軸カードへ出口状態を表示し、他時間軸は `別時間軸を管理中` とする。24時間と毎秒ローリングは
+取引・出口対象外。Private APIによる手動決済同期は未授権・未実装であり、brokerが手動約定もPrivate約定
+streamへ含めることの確認と、専用read-only reconciliation Stepが必要。
+
+```text
+stay_on_signal_screen_after_entry=true
+exit_signal_starts_on_trade_click=true
+auto_navigate_to_exit=false
+trade_record_without_exit_plan=false
+actual_post=false
+broker_read=false
+broker_write=false
+```
+
+## H-11 Inline Actual-Fill Correction Handoff（2026-07-15・local-only / no-POST）
+
+ワンクリック開始後の出口シグナル行へ `約定`入力と `反映`ボタンを追加した。実約定価格をoperatorが
+入力すると、シグナル画面に留まったままlocal entry価格を補正し、固定SL 15pips / TP 22.5pipsを
+同じ距離で再計算する。変更前後は `manual_trade_plan_fill_corrections`へappendする。
+
+```text
+inline_actual_fill_correction=true
+screen_transition=false
+quick_start_preset_only=true
+correction_audit_append_only=true
+broker_fill_confirmed_by_api=false
+private_api=false
+actual_post=false
+broker_read=false
+broker_write=false
+```
+
+OPEN計画なし、独自SL/TP計画、無効価格、保存中の二重操作は拒否する。入力値はoperator確認値であり、
+broker側の約定を取得・確認した結果ではない。
+
+## H-11 Signal Action Simplification and Risk-Sized Calculator Handoff（2026-07-15・local-only / no-POST）
+
+シグナル画面から `見送った / 保留 / 注文計算へ` を削除した。正式10分・30分カード内の取引開始が成功した
+場合だけ、quick-start監査と同じ処理内で`signal_actions.action=TRADE_STARTED`を一意記録する。開始記録が
+ないPROSPECTIVE forecastは満期後の次回current/refreshで`NO_ACTION`を一意記録し、表示は客観的な
+`取引開始記録なし`とする。24時間・毎秒ローリングはaction対象外。予測resolutionとvalidation分母は変更しない。
+旧`manual_trade_plan_quick_starts`は起動時に`TRADE_STARTED`へ移行し、既存開始を`NO_ACTION`へ誤分類しない。
+
+注文計算は独立ページのまま、選択中の正式10分・30分方向とfresh Public ASK/BIDを自動入力する。許容損失額
+から固定SLと追加コストを使って1,000通貨単位で数量を切り下げる。シグナル画面に計算導線は置かず、計算は
+注文、取引開始、出口計画を発生させない。
+
+```text
+signal_screen_manual_actions=TRADE_START_ONLY
+trade_started_recorded_on_quick_start=true
+no_action_recorded_after_maturity=true
+no_action_means_deliberate_skip=false
+validation_independent_from_signal_action=true
+calculator_separate_screen=true
+calculator_uses_fresh_public_quote=true
+calculator_sends_order=false
+actual_post=false
+broker_read=false
+broker_write=false
+private_api=false
+credential_read=false
+```
+
+## H-11 Per-Card Independent Exit Integration Handoff（2026-07-15・local-only / no-POST）
+
+シグナル方向の画面表示を `Buy / Sell / Stay / Unknown` に統一した（内部保存契約の日本語値は維持）。
+独立した出口管理nav・画面・主画面下部の共通出口stripを削除し、10分・30分の各カード内へ、その時間軸の
+出口シグナル、固定Entry/SL/TP、残り時間、実約定価格補正、現在Public価格での決済記録を統合した。
+
+local OPEN計画は全体1件制約から「10分・30分で各1件」へ変更し、APIの補正・決済は`plan_id`必須とした。
+同じ時間軸の二重開始は拒否する。画面上部の建玉数はlocal手動登録の0〜2件であり、broker口座の建玉数
+ではない。24時間・毎秒ローリングは引き続き取引・出口対象外。
+
+```text
+direction_display=Buy,Sell,Stay,Unknown
+direction_storage_contract_unchanged=true
+standalone_exit_screen=false
+per_horizon_open_plan_limit=1
+open_local_plan_total_limit=2
+exit_mutation_requires_plan_id=true
+position_count_source=LOCAL_MANUAL_LEDGER_ONLY
+broker_position_count_known=false
+actual_post=false
+broker_read=false
+broker_write=false
+private_api=false
+credential_read=false
+```
+
+## H-11 Manual Settlement Read-Only Synchronization Handoff（2026-07-15）
+
+Operatorの限定授権に基づき、localhost専用manual UIへGMO FX Private GET同期を追加した。到達可能な
+broker endpointは `latestExecutions` と `openPositions` の2つだけで、専用Keychain pairがなければ
+actual transportは構築されずfail closedする。Private WS、order/close/cancel/change、broker POSTはない。
+
+OPENは方向・120秒窓・未使用executionの一意性を満たす場合だけlocal planへ紐付け、actual entry priceと
+sizeを反映する。CLOSEはopaque position lineageで累積し、部分決済は残数量を表示、全数量到達時だけ
+`API同期決済`としてlocal planを閉じる。複数候補は`AMBIGUOUS_OPEN`、openPositions消失かつCLOSE不足は
+`RECHECK_REQUIRED`で停止する。execution receiptはopaque refの一意制約で冪等化した。
+
+UIから手動の実約定価格入力・反映とPublic価格でのlocal決済記録を削除し、各カードへbroker sync state、
+上部へlocal管理件数 / broker件数 / 最終同期状態を追加した。色はStay=青、Buy/Sell=黄、Unknown=灰。
+
+```text
+manual_settlement_sync=IMPLEMENTED_GET_ONLY_DEFAULT_DISABLED
+private_get_allowlist=latestExecutions,openPositions
+credential_source=MACOS_KEYCHAIN_DEDICATED_READONLY_PAIR
+raw_response_exposed=false
+raw_broker_id_exposed=false
+sqlite_storage=SANITIZED_LOCAL_ONLY
+ambiguous_match_auto_resolved=false
+partial_close_supported=true
+actual_post=false
+broker_write=false
+main_readonly_changed=false
+```

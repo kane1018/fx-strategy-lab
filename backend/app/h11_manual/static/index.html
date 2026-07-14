@@ -17,8 +17,7 @@
         <button class="nav-item active" data-tab="signal">シグナル</button>
         <button class="nav-item" data-tab="history">履歴</button>
         <button class="nav-item" data-tab="calculator">注文計算</button>
-        <button class="nav-item" data-tab="exit">出口管理</button>
-        <button class="nav-item" data-tab="record">手動記録</button>
+        <button class="nav-item" data-tab="record">取引記録</button>
         <button class="nav-item" data-tab="validation">検証</button>
       </nav>
       <div class="top-actions">
@@ -35,9 +34,21 @@
             <h1>シグナル</h1>
             <p>10分・30分・24時間の正式シグナルと、毎秒ローリング推定を切り替えて表示します。</p>
           </div>
-          <div class="update-state">
-            <span id="update-dot" class="status-dot"></span>
-            <span id="updated-at">読み込み中</span>
+          <div class="heading-status-group">
+            <div class="position-count" title="このUIが出口シグナルを管理している建玉計画数です。">
+              <span>管理中</span><strong id="open-position-count">0</strong><span>件</span>
+            </div>
+            <div class="position-count" title="GMO FX openPositionsをread-only GETした件数です。">
+              <span>Broker</span><strong id="broker-position-count">—</strong><span>件</span>
+            </div>
+            <div class="broker-sync-state" title="latestExecutions / openPositions のread-only同期状態">
+              <span id="broker-sync-dot" class="status-dot loading"></span>
+              <span id="broker-sync-label">Broker同期 確認中</span>
+            </div>
+            <div class="update-state">
+              <span id="update-dot" class="status-dot"></span>
+              <span id="updated-at">読み込み中</span>
+            </div>
           </div>
         </div>
 
@@ -50,28 +61,6 @@
               <aside id="sub-signals" class="signal-subs" aria-label="他のシグナル"></aside>
             </div>
 
-            <section id="exit-signal-strip" class="exit-signal-strip neutral" aria-live="polite">
-              <div class="exit-signal-summary">
-                <span>出口シグナル</span>
-                <strong id="exit-signal-label">建玉なし</strong>
-                <small id="exit-position-label">手動登録建玉なし</small>
-              </div>
-              <p id="exit-signal-reason">出口管理で開始した手動建玉計画はありません</p>
-              <button type="button" data-tab="exit">出口管理</button>
-            </section>
-
-            <div class="decision-row">
-              <div>
-                <span class="decision-title">この表示をどう扱いましたか？</span>
-                <span id="quick-exit-guidance" class="decision-sub">選択中のシグナル種別とともに記録します</span>
-              </div>
-              <div class="decision-actions">
-                <button id="trade-and-exit-button" type="button" data-decision="取引した">取引した</button>
-                <button type="button" data-decision="見送った">見送った</button>
-                <button type="button" data-decision="保留">保留</button>
-                <button type="button" class="primary-link" data-tab="calculator">注文計算へ</button>
-              </div>
-            </div>
           </div>
 
           <section class="market-panel" aria-labelledby="market-heading">
@@ -118,49 +107,26 @@
       </section>
 
       <section id="calculator" class="screen">
-        <div class="page-heading compact"><div><p class="eyebrow">MANUAL TOOL</p><h1>注文計算</h1><p>手入力した条件から値幅と最大損失の目安を計算します。注文送信は行いません。</p></div></div>
+        <div class="page-heading compact"><div><p class="eyebrow">RISK-BASED SIZE TOOL</p><h1>注文計算</h1><p>正式シグナルとPublic価格を自動反映し、許容損失額から取引数量を逆算します。注文送信は行いません。</p></div></div>
         <div class="calculator-grid">
           <form id="calculator-form" class="panel form-panel">
-            <label>方向<select id="calc-direction"><option value="buy">買い</option><option value="sell">売り</option></select></label>
-            <label>想定価格<input id="calc-entry" type="number" step="0.001" min="0" required placeholder="160.000" /></label>
+            <div id="calc-signal-context" class="calculator-context">正式シグナルとPublic価格を確認しています</div>
+            <label>方向<select id="calc-direction" required><option value="">選択してください</option><option value="buy">Buy</option><option value="sell">Sell</option></select></label>
+            <label>想定約定価格<input id="calc-entry" type="number" step="0.001" min="0.001" required placeholder="Public ASK / BID" /></label>
             <label>損切り幅（pips）<input id="calc-sl" type="number" step="0.1" min="0.1" required value="15" /></label>
             <label>利益幅（pips）<input id="calc-tp" type="number" step="0.1" min="0.1" required value="22.5" /></label>
-            <label>数量（通貨）<input id="calc-size" type="number" step="1000" min="1000" required value="10000" /></label>
-            <label>片道コスト（pips）<input id="calc-cost" type="number" step="0.1" min="0" required value="0.5" /></label>
-            <button class="calculate-button" type="submit">計算する</button>
+            <label>許容損失額（円）<input id="calc-max-loss" type="number" step="100" min="100" required value="1500" /></label>
+            <label>追加片道コスト（pips）<input id="calc-cost" type="number" step="0.1" min="0" required value="0" /></label>
+            <label>逆算数量（1,000通貨単位）<input id="calc-size" type="number" readonly value="0" /></label>
+            <p class="form-note">Public ASK/BIDを使用するため、spread以外に見込むslippage・手数料だけを追加コストへ入力します。</p>
+            <button class="calculate-button" type="submit">数量と価格を計算</button>
           </form>
           <div id="calculator-result" class="panel result-panel empty-state">条件を入力して「計算する」を押してください</div>
         </div>
       </section>
 
-      <section id="exit" class="screen">
-        <div class="page-heading compact"><div><p class="eyebrow">POSITION-AWARE EXIT SIGNAL</p><h1>出口管理</h1><p>固定出口と正式シグナルから、手動登録建玉の継続・警戒・損切り候補を表示します。自動決済は行いません。</p></div></div>
-        <div class="exit-grid">
-          <form id="exit-plan-form" class="panel exit-form">
-            <input id="exit-forecast-id" type="hidden" />
-            <label>根拠シグナル<select id="exit-horizon"><option value="10m">10分</option><option value="30m">30分</option></select></label>
-            <label>手動取引方向<select id="exit-direction" required><option value="">選択してください</option><option value="買い">買い</option><option value="売り">売り</option></select></label>
-            <label>エントリー価格<input id="exit-entry" type="number" step="0.001" min="0" required /></label>
-            <label>損切り幅（pips）<input id="exit-stop-pips" type="number" step="0.1" min="0.1" value="15" required /></label>
-            <label>利益確定幅（pips）<input id="exit-take-pips" type="number" step="0.1" min="0.1" value="22.5" required /></label>
-            <div class="exit-contract">
-              <div><span>シグナル観測</span><strong id="exit-origin">—</strong></div>
-              <div><span>時間切れ</span><strong id="exit-target">—</strong></div>
-              <div><span>損切り価格</span><strong id="exit-stop-price">—</strong></div>
-              <div><span>利益確定価格</span><strong id="exit-take-price">—</strong></div>
-            </div>
-            <button class="calculate-button" type="submit">この出口計画を開始</button>
-          </form>
-          <div id="active-exit-plan" class="panel empty-state">進行中の出口計画はありません</div>
-        </div>
-        <div class="panel exit-history-panel">
-          <h2>出口履歴</h2>
-          <div id="exit-history" class="table-wrap empty-state">履歴を読み込んでいます</div>
-        </div>
-      </section>
-
       <section id="record" class="screen">
-        <div class="page-heading compact"><div><p class="eyebrow">OPERATOR LOG</p><h1>手動記録</h1><p>「取引した・見送った・保留」の操作履歴です。</p></div></div>
+        <div class="page-heading compact"><div><p class="eyebrow">SIGNAL ACTION LOG</p><h1>取引記録</h1><p>取引開始と、満期まで取引開始記録がなかった事実を自動記録します。</p></div></div>
         <div class="panel"><div id="decision-table" class="table-wrap empty-state">記録を読み込んでいます</div></div>
       </section>
 
@@ -199,7 +165,7 @@
 
     <footer>
       <span>FX Strategy Lab · Manual Signal Workspace</span>
-      <span>broker / credential / order POST なし</span>
+      <span>GMO Private GETのみ · broker write / order POST なし</span>
     </footer>
     <script src="/static/app.js" defer></script>
   </body>

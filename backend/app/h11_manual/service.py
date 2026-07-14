@@ -15,7 +15,6 @@ from app.h11_manual.contracts import (
     Direction,
     Horizon,
     ManualExitReason,
-    OperatorDecision,
     RealtimeEstimateMode,
     RealtimeEstimateView,
     SignalStatus,
@@ -26,6 +25,12 @@ from app.h11_manual.contracts import (
 from app.h11_manual.data import DEFAULT_DATA_ROOT, CandleRepository, PublicCandleClient
 from app.h11_manual.ledger import SignalLedger
 from app.h11_manual.realtime import RollingFrameResult, build_rolling_feature_frame
+from app.h11_manual.settlement_sync import (
+    DisabledManualSettlementReadClient,
+    ManualSettlementReadClient,
+    ManualSettlementSyncError,
+    SyncAvailability,
+)
 from app.h11_manual.short_model import (
     ShortModelArtifact,
     predict_short_model,
@@ -51,6 +56,7 @@ class ManualSignalService:
         self,
         data_root: Path = DEFAULT_DATA_ROOT,
         supplemental_h1_paths: tuple[Path, ...] | None = None,
+        settlement_reader: ManualSettlementReadClient | None = None,
     ) -> None:
         self.data_root = data_root
         self.repository = (
@@ -60,6 +66,7 @@ class ManualSignalService:
         )
         self.ledger = SignalLedger(data_root / "signal_ledger.sqlite3")
         self.short_artifact_path = data_root / "short_model_artifact.json"
+        self.settlement_reader = settlement_reader or DisabledManualSettlementReadClient()
 
     def current(self, *, now: datetime | None = None, record: bool = True) -> dict[str, Any]:
         current = (now or datetime.now(UTC)).astimezone(UTC)
@@ -71,6 +78,7 @@ class ManualSignalService:
         if record:
             for signal in signals:
                 self.ledger.record_forecast(signal, recorded_at=current)
+            self.ledger.record_due_no_actions(now=current)
             self._resolve_available(current)
         latest_time = max(
             (signal.origin_time_utc for signal in signals if signal.origin_time_utc), default=None
@@ -96,28 +104,10 @@ class ManualSignalService:
         response["refresh"] = {**counts, "short_model_trained": trained}
         return response
 
-    def record_decision(
-        self,
-        *,
-        horizon: Horizon,
-        decision: OperatorDecision,
-        forecast_id: str | None,
-        note: str = "",
-        now: datetime | None = None,
-    ) -> dict[str, Any]:
-        decision_id = self.ledger.record_operator_decision(
-            forecast_id=forecast_id,
-            horizon=horizon,
-            decision=decision,
-            note=note,
-            recorded_at=now,
-        )
-        return {"recorded": True, "decision_id": decision_id}
-
     def history(self, limit: int = 100) -> dict[str, Any]:
         return {
             "forecasts": self.ledger.latest_forecasts(limit),
-            "operator_decisions": self.ledger.latest_decisions(limit),
+            "signal_actions": self.ledger.latest_signal_actions(limit),
         }
 
     def signal_series(self, limit: int = 120) -> dict[str, Any]:
@@ -233,6 +223,14 @@ class ManualSignalService:
             take_profit_price=take_profit_price,
             now=current,
         )
+        if not self.ledger.record_manual_trade_quick_start(
+            plan_id=int(result["plan_id"]),
+            forecast_id=forecast_id,
+            horizon=horizon,
+            reference_entry_price=entry_price,
+            started_at=current,
+        ):
+            raise ValueError("quick-start audit marker could not be recorded")
         result["quick_start"] = {
             "used": True,
             "price_source": "FRESH_GMO_PUBLIC_TICKER",
@@ -242,11 +240,101 @@ class ManualSignalService:
             "broker_position_confirmed": False,
             "actual_fill_confirmed": False,
         }
+        result["signal_action"] = {
+            "action": "TRADE_STARTED",
+            "forecast_id": forecast_id,
+            "recorded": True,
+        }
+        return result
+
+    def synchronize_manual_settlements(
+        self, *, now: datetime | None = None
+    ) -> dict[str, Any]:
+        """Read and apply manual OPEN/CLOSE facts; never submit or mutate an order."""
+
+        current = (now or datetime.now(UTC)).astimezone(UTC)
+        if self.settlement_reader.availability is SyncAvailability.NOT_CONFIGURED:
+            self.ledger.record_broker_sync_failure(
+                status="NOT_CONFIGURED",
+                safe_error_code="BROKER_SYNC_NOT_CONFIGURED",
+                source="DISABLED",
+                attempted_at=current,
+            )
+            return {
+                **self.ledger.broker_sync_overview(),
+                "configured": False,
+                "events": [],
+                "active_plans": self.exit_plan_status(now=current)["active_plans"],
+                "safety": self.broker_sync_safety_flags(actual_read=False),
+            }
+        try:
+            snapshot = self.settlement_reader.fetch_snapshot(symbol="USD_JPY")
+            result = self.ledger.apply_broker_sync_snapshot(
+                executions=[
+                    {
+                        "execution_ref": row.execution_ref,
+                        "position_ref": row.position_ref,
+                        "settle_type": row.settle_type,
+                        "symbol": row.symbol,
+                        "side": row.side,
+                        "size": str(row.size),
+                        "price": str(row.price),
+                        "executed_at_utc": row.executed_at_utc,
+                    }
+                    for row in snapshot.executions
+                ],
+                open_positions=[
+                    {
+                        "position_ref": row.position_ref,
+                        "symbol": row.symbol,
+                        "side": row.side,
+                        "size": str(row.size),
+                        "average_price": None
+                        if row.average_price is None
+                        else str(row.average_price),
+                    }
+                    for row in snapshot.open_positions
+                ],
+                source=snapshot.source,
+                synced_at=current,
+                stop_pips=QUICK_EXIT_STOP_PIPS,
+                take_pips=QUICK_EXIT_TAKE_PIPS,
+                pip_size=JPY_PIP_SIZE,
+            )
+        except (ManualSettlementSyncError, ValueError) as error:
+            safe_code = (
+                str(error)
+                if isinstance(error, ManualSettlementSyncError)
+                else "BROKER_SYNC_LOCAL_APPLY_ERROR"
+            )
+            self.ledger.record_broker_sync_failure(
+                status="ERROR",
+                safe_error_code=safe_code,
+                source="GMO_FX_PRIVATE_GET_READONLY",
+                attempted_at=current,
+            )
+            return {
+                **self.ledger.broker_sync_overview(),
+                "configured": True,
+                "events": [],
+                "active_plans": self.exit_plan_status(now=current)["active_plans"],
+                "safety": self.broker_sync_safety_flags(actual_read=True),
+            }
+        result.update(
+            {
+                "configured": True,
+                "active_plans": self.exit_plan_status(now=current)["active_plans"],
+                "safety": self.broker_sync_safety_flags(
+                    actual_read=snapshot.source == "GMO_FX_PRIVATE_GET_READONLY"
+                ),
+            }
+        )
         return result
 
     def close_exit_plan(
         self,
         *,
+        plan_id: int,
         reason: ManualExitReason,
         exit_price: float,
         now: datetime | None = None,
@@ -254,7 +342,7 @@ class ManualSignalService:
         current = (now or datetime.now(UTC)).astimezone(UTC)
         if not np.isfinite(exit_price) or exit_price <= 0:
             raise ValueError("manual exit price must be positive and finite")
-        active = self.ledger.active_manual_trade_plan()
+        active = self.ledger.active_manual_trade_plan(plan_id=plan_id)
         if active is None:
             raise ValueError("no open manual exit plan")
         if not self.ledger.close_manual_trade_plan(
@@ -268,12 +356,77 @@ class ManualSignalService:
         result["closed"] = True
         return result
 
+    def correct_active_fill_price(
+        self,
+        *,
+        plan_id: int,
+        actual_fill_price: float,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Correct a quick-start reference price and keep its fixed pip distances."""
+
+        current = (now or datetime.now(UTC)).astimezone(UTC)
+        if not np.isfinite(actual_fill_price) or actual_fill_price <= 0:
+            raise ValueError("actual fill price must be positive and finite")
+        active = self.ledger.active_manual_trade_plan(plan_id=plan_id)
+        if active is None:
+            raise ValueError("no open manual exit plan")
+        if not self.ledger.is_manual_trade_quick_start(int(active["plan_id"])):
+            raise ValueError("actual fill correction supports quick-start plans only")
+        direction = Direction(active["direction"])
+        sign = 1 if direction is Direction.BUY else -1
+        expected_stop = round(
+            float(active["entry_price"]) - sign * QUICK_EXIT_STOP_PIPS * JPY_PIP_SIZE,
+            6,
+        )
+        expected_take = round(
+            float(active["entry_price"]) + sign * QUICK_EXIT_TAKE_PIPS * JPY_PIP_SIZE,
+            6,
+        )
+        if not (
+            np.isclose(float(active["stop_loss_price"]), expected_stop, rtol=0.0, atol=1e-6)
+            and np.isclose(
+                float(active["take_profit_price"]), expected_take, rtol=0.0, atol=1e-6
+            )
+        ):
+            raise ValueError("actual fill correction supports the fixed quick-start preset only")
+        corrected_stop = round(
+            actual_fill_price - sign * QUICK_EXIT_STOP_PIPS * JPY_PIP_SIZE,
+            6,
+        )
+        corrected_take = round(
+            actual_fill_price + sign * QUICK_EXIT_TAKE_PIPS * JPY_PIP_SIZE,
+            6,
+        )
+        if min(actual_fill_price, corrected_stop, corrected_take) <= 0:
+            raise ValueError("corrected exit prices must remain positive")
+        if not self.ledger.correct_active_manual_trade_fill(
+            plan_id=int(active["plan_id"]),
+            entry_price=actual_fill_price,
+            stop_loss_price=corrected_stop,
+            take_profit_price=corrected_take,
+            corrected_at=current,
+        ):
+            raise ValueError("manual exit plan is no longer open")
+        result = self.exit_plan_status(now=current)
+        result["fill_correction"] = {
+            "used": True,
+            "actual_fill_price": actual_fill_price,
+            "stop_loss_pips": QUICK_EXIT_STOP_PIPS,
+            "take_profit_pips": QUICK_EXIT_TAKE_PIPS,
+            "broker_fill_confirmed_by_api": False,
+        }
+        return result
+
     def exit_plan_status(self, *, now: datetime | None = None) -> dict[str, Any]:
         current = (now or datetime.now(UTC)).astimezone(UTC)
-        active = self.ledger.active_manual_trade_plan()
-        if active is None:
+        broker_sync = self.ledger.broker_sync_overview()
+        active_plans = self.ledger.active_manual_trade_plans()
+        if not active_plans:
             return {
                 "active": None,
+                "active_plans": [],
+                "open_position_count": 0,
                 "exit_signal": {
                     "code": "NO_MANUAL_POSITION",
                     "label": "建玉なし",
@@ -285,8 +438,31 @@ class ManualSignalService:
                 },
                 "history": self.ledger.manual_trade_history(),
                 "automatic_exit": False,
-                "broker_state_known": False,
+                "broker_state_known": broker_sync["status"] == "SYNCED",
+                "broker_sync": broker_sync,
             }
+        plan_statuses = [
+            self._single_exit_plan_status(active=active, current=current)
+            for active in active_plans
+        ]
+        primary = plan_statuses[0]
+        return {
+            "active": primary["plan"],
+            "active_plans": plan_statuses,
+            "open_position_count": len(plan_statuses),
+            "exit_signal": primary["exit_signal"],
+            "history": self.ledger.manual_trade_history(),
+            "automatic_exit": False,
+            "broker_state_known": broker_sync["status"] == "SYNCED",
+            "broker_sync": broker_sync,
+        }
+
+    def _single_exit_plan_status(
+        self,
+        *,
+        active: dict[str, Any],
+        current: datetime,
+    ) -> dict[str, Any]:
         latest_tick = self.ledger.latest_realtime_tick()
         current_price: float | None = None
         price_is_fresh = False
@@ -414,13 +590,16 @@ class ManualSignalService:
             "time_exit_due": time_exit_due,
             "display_state": state,
         }
-        return {
-            "active": enriched,
-            "exit_signal": exit_signal,
-            "history": self.ledger.manual_trade_history(),
-            "automatic_exit": False,
-            "broker_state_known": False,
-        }
+        correction = self.ledger.manual_trade_fill_correction_summary(int(active["plan_id"]))
+        enriched["actual_fill_correction_count"] = int(correction["correction_count"])
+        enriched["actual_fill_corrected_at_utc"] = correction["corrected_at_utc"]
+        enriched["quick_start"] = self.ledger.is_manual_trade_quick_start(
+            int(active["plan_id"])
+        )
+        enriched["broker_sync"] = self.ledger.broker_plan_sync_status(
+            int(active["plan_id"])
+        )
+        return {"plan": enriched, "exit_signal": exit_signal}
 
     def realtime_estimate(
         self,
@@ -555,6 +734,20 @@ class ManualSignalService:
             "private_api": False,
             "credential_read": False,
             "env_read": False,
+            "automatic_trade_authority": False,
+        }
+
+    @staticmethod
+    def broker_sync_safety_flags(*, actual_read: bool) -> dict[str, bool]:
+        return {
+            "actual_post": False,
+            "broker_read": actual_read,
+            "broker_write": False,
+            "private_api": actual_read,
+            "credential_read": actual_read,
+            "env_read": False,
+            "raw_response_exposed": False,
+            "real_id_exposed": False,
             "automatic_trade_authority": False,
         }
 

@@ -46,10 +46,9 @@ class RealtimeEstimateMode(str, Enum):
     UNAVAILABLE = "UNAVAILABLE"
 
 
-class OperatorDecision(str, Enum):
-    TRADED = "取引した"
-    SKIPPED = "見送った"
-    PENDING = "保留"
+class SignalAction(str, Enum):
+    TRADE_STARTED = "TRADE_STARTED"
+    NO_ACTION = "NO_ACTION"
 
 
 class ManualExitReason(str, Enum):
@@ -58,6 +57,7 @@ class ManualExitReason(str, Enum):
     TIME_EXIT = "時間切れ"
     MANUAL = "手動終了"
     ABNORMAL = "異常終了"
+    BROKER_SYNC = "API同期決済"
 
 
 @dataclass(frozen=True)

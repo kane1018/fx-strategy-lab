@@ -10,29 +10,27 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from app.h11_manual.contracts import Direction, Horizon, ManualExitReason, OperatorDecision
+from app.h11_manual.contracts import Direction, Horizon, ManualExitReason
 from app.h11_manual.service import ManualSignalService
 from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
 
 router = APIRouter(prefix="/api/manual", tags=["local-manual-signal"])
 _refresh_lock = Lock()
+_broker_sync_lock = Lock()
 _last_refresh_monotonic = 0.0
 AUTO_REFRESH_DEDUP_SECONDS = 30.0
 
 
 @lru_cache
 def get_manual_signal_service() -> ManualSignalService:
-    return ManualSignalService()
+    from app.h11_manual.settlement_sync import build_keychain_manual_settlement_client
+
+    return ManualSignalService(
+        settlement_reader=build_keychain_manual_settlement_client()
+    )
 
 
 ServiceDependency = Annotated[ManualSignalService, Depends(get_manual_signal_service)]
-
-
-class DecisionRequest(BaseModel):
-    horizon: Horizon
-    decision: OperatorDecision
-    forecast_id: str | None = None
-    note: str = Field(default="", max_length=500)
 
 
 class RealtimeTickRequest(BaseModel):
@@ -57,8 +55,14 @@ class QuickStartExitPlanRequest(BaseModel):
 
 
 class CloseExitPlanRequest(BaseModel):
+    plan_id: int = Field(gt=0)
     reason: ManualExitReason
     exit_price: float = Field(gt=0)
+
+
+class CorrectActualFillRequest(BaseModel):
+    plan_id: int = Field(gt=0)
+    actual_fill_price: float = Field(gt=0)
 
 
 @router.get("/current")
@@ -95,19 +99,6 @@ def refresh(service: ServiceDependency, force: bool = False) -> dict:
         _refresh_lock.release()
 
 
-@router.post("/decisions")
-def decision(
-    request: DecisionRequest,
-    service: ServiceDependency,
-) -> dict:
-    return service.record_decision(
-        horizon=request.horizon,
-        decision=request.decision,
-        forecast_id=request.forecast_id,
-        note=request.note,
-    )
-
-
 @router.post("/realtime-estimate")
 def realtime_estimate(request: RealtimeTickRequest, service: ServiceDependency) -> dict:
     try:
@@ -136,6 +127,24 @@ def signal_series(service: ServiceDependency, limit: int = 120) -> dict:
 @router.get("/exit-plan")
 def exit_plan(service: ServiceDependency) -> dict:
     return service.exit_plan_status()
+
+
+@router.get("/broker-sync")
+def broker_sync(service: ServiceDependency) -> dict:
+    if not _broker_sync_lock.acquire(blocking=False):
+        status = service.exit_plan_status()
+        return {
+            **status["broker_sync"],
+            "configured": status["broker_sync"]["status"] != "NOT_CONFIGURED",
+            "events": [],
+            "active_plans": status["active_plans"],
+            "in_progress": True,
+            "safety": service.broker_sync_safety_flags(actual_read=False),
+        }
+    try:
+        return service.synchronize_manual_settlements()
+    finally:
+        _broker_sync_lock.release()
 
 
 @router.post("/exit-plan")
@@ -168,7 +177,22 @@ def quick_start_exit_plan(request: QuickStartExitPlanRequest, service: ServiceDe
 @router.post("/exit-plan/close")
 def close_exit_plan(request: CloseExitPlanRequest, service: ServiceDependency) -> dict:
     try:
-        return service.close_exit_plan(reason=request.reason, exit_price=request.exit_price)
+        return service.close_exit_plan(
+            plan_id=request.plan_id,
+            reason=request.reason,
+            exit_price=request.exit_price,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.post("/exit-plan/actual-fill")
+def correct_actual_fill(request: CorrectActualFillRequest, service: ServiceDependency) -> dict:
+    try:
+        return service.correct_active_fill_price(
+            plan_id=request.plan_id,
+            actual_fill_price=request.actual_fill_price,
+        )
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

@@ -12,7 +12,10 @@ const state = {
   validationHorizon: "10m",
   realtimeValidationHorizon: "10m",
   validationData: null,
-  activeExitPlan: null,
+  exitPlans: { "10m": null, "30m": null },
+  exitSignals: { "10m": null, "30m": null },
+  openPositionCount: 0,
+  brokerSync: { status: "NOT_CONFIGURED", configured: false, open_position_count: null },
   chartTimeframe: "1m",
   candles: [],
   live: {
@@ -32,8 +35,12 @@ const state = {
   realtimeInFlight: false,
   lastRealtimeSampleSecond: null,
   exitStatusInFlight: false,
+  brokerSyncInFlight: false,
   lastExitRefreshSecond: null,
-  decisionInFlight: false,
+  lastBrokerSyncSecond: null,
+  tradeStartInFlight: false,
+  calculatorPriceEdited: false,
+  calculatorDirectionEdited: false,
 };
 
 const formalHorizonOrder = ["10m", "30m", "24h"];
@@ -43,6 +50,12 @@ const directionClass = {
   "売り": "sell",
   "見送り": "no-trade",
   "判定不可": "unknown",
+};
+const directionDisplay = {
+  "買い": "Buy",
+  "売り": "Sell",
+  "見送り": "Stay",
+  "判定不可": "Unknown",
 };
 const chartLabels = { "1m": "1分足", "10m": "10分足", "30m": "30分足", "1h": "1時間足" };
 
@@ -159,26 +172,29 @@ function mainCard(signal, key) {
           : "未記録";
   return `
     <div class="card-top"><span class="horizon-label">${escapeHtml(signal.horizon_label)}の方向</span><span class="model-tag">${signalModelLabel(key)}</span></div>
-    <div class="direction ${directionClass[signal.direction] || "unknown"}">${escapeHtml(signal.direction)}</div>
+    <div class="direction ${directionClass[signal.direction] || "unknown"}">${escapeHtml(directionDisplay[signal.direction] || signal.direction)}</div>
     <div class="probability-row"><span class="probability-value">${percent(signal.p_up)}</span><span class="probability-label">上昇確率</span><span class="probability-label">下降 ${percent(signal.p_down)}</span></div>
     <div class="probability-bar" aria-label="上昇確率 ${width}%"><span style="width:${width}%"></span></div>
     <div class="reason">${escapeHtml(signal.reason)}</div>
+    ${signalCardControl(key)}
     ${signalSparkline(key)}
-    <div class="meta-line"><span>観測 ${jst(signal.origin_time_utc)} JST</span><span>閾値 買い58% / 売り42%</span><span>${escapeHtml(recordLabel)}</span></div>`;
+    <div class="meta-line"><span>観測 ${jst(signal.origin_time_utc)} JST</span><span>閾値 Buy 58% / Sell 42%</span><span>${escapeHtml(recordLabel)}</span></div>`;
 }
 
 function smallCard(signal, key) {
-  return `<button class="signal-small" type="button" data-signal-key="${key}" aria-label="${escapeHtml(signal.horizon_label)}を大きく表示">
-    <div class="card-top"><span class="horizon-label">${escapeHtml(signal.horizon_label)}</span><span class="swap-hint">クリックで切替</span></div>
-    <div class="direction ${directionClass[signal.direction] || "unknown"}">${escapeHtml(signal.direction)}</div>
-    <div class="probability-row"><span class="probability-value">${percent(signal.p_up)}</span><span class="probability-label">上昇</span></div>
-    ${signalSparkline(key, true)}
-  </button>`;
+  return `<article class="signal-small">
+    <button class="signal-card-select" type="button" data-signal-key="${key}" aria-label="${escapeHtml(signal.horizon_label)}を大きく表示">
+      <div class="card-top"><span class="horizon-label">${escapeHtml(signal.horizon_label)}</span><span class="swap-hint">クリックで切替</span></div>
+      <div class="small-signal-summary"><div class="direction ${directionClass[signal.direction] || "unknown"}">${escapeHtml(directionDisplay[signal.direction] || signal.direction)}</div><div class="probability-row"><span class="probability-value">${percent(signal.p_up)}</span><span class="probability-label">上昇</span></div></div>
+      ${signalSparkline(key, true)}
+    </button>
+    ${signalCardControl(key, true)}
+  </article>`;
 }
 
-function quickExitContext() {
-  const signal = displaySignal(state.selected);
-  const supported = ["10m", "30m"].includes(state.selected);
+function quickExitContext(key = state.selected) {
+  const signal = displaySignal(key);
+  const supported = ["10m", "30m"].includes(key);
   const directional = ["買い", "売り"].includes(signal.direction);
   const quoteAge = state.live.receivedAt == null ? Infinity : Date.now() - state.live.receivedAt;
   const referencePrice = signal.direction === "買い" ? state.live.ask : state.live.bid;
@@ -191,36 +207,144 @@ function quickExitContext() {
       signal.recorded_mode === "PROSPECTIVE" &&
       Number.isFinite(referencePrice) &&
       quoteAge <= 15000 &&
-      !state.activeExitPlan,
+      state.brokerSync.configured &&
+      state.brokerSync.status === "SYNCED" &&
+      !state.exitPlans[key],
   };
 }
 
-function updateQuickExitAction() {
-  const button = document.querySelector("#trade-and-exit-button");
-  const guidance = document.querySelector("#quick-exit-guidance");
-  if (!button || !guidance) return;
-  const context = quickExitContext();
-  if (state.decisionInFlight) {
-    button.textContent = "開始中…";
-    button.disabled = true;
-    button.classList.remove("quick-ready");
-    guidance.textContent = "取引記録と出口計画を固定しています";
-  } else if (state.activeExitPlan) {
-    button.textContent = "出口管理中";
-    button.disabled = true;
-    button.classList.remove("quick-ready");
-    guidance.textContent = "進行中の出口計画があります。出口シグナルを確認してください";
-  } else if (context.eligible) {
-    button.textContent = "取引した＋出口開始";
-    button.disabled = false;
-    button.classList.add("quick-ready");
-    guidance.textContent = "1クリックで最新Public価格から固定SL 15 / TP 22.5 pipsを開始します";
-  } else {
-    button.textContent = "取引した";
-    button.disabled = false;
-    button.classList.remove("quick-ready");
-    guidance.textContent = "ワンクリック開始は正式10分/30分の買い・売りと15秒以内の価格が必要です";
+function cardActionState(key) {
+  const signal = displaySignal(key);
+  if (key === "24h") {
+    return {
+      label: "参考表示・取引対象外",
+      enabled: false,
+      exitLabel: "出口対象外",
+      exitReason: "24時間モデルは相場方向の参考表示です",
+    };
   }
+  if (key === "realtime") {
+    return {
+      label: "検証前・取引対象外",
+      enabled: false,
+      exitLabel: "出口対象外",
+      exitReason: "毎秒ローリングは非正式推定です",
+    };
+  }
+  const active = state.exitPlans[key];
+  if (active) {
+    const exitSignal = state.exitSignals[key];
+    return {
+      label: "出口シグナル稼働中",
+      enabled: false,
+      exitLabel: `出口: ${exitSignal?.label || "確認中"}`,
+      exitReason: exitSignal?.reason || "出口条件を確認しています",
+      active,
+      exitSignal,
+    };
+  }
+  if (state.tradeStartInFlight) {
+    return { label: "開始中…", enabled: false, exitLabel: "出口: 開始処理中", exitReason: "二重操作を防止しています" };
+  }
+  const context = quickExitContext(key);
+  if (context.eligible) {
+    return {
+      label: `${directionDisplay[signal.direction]}で取引開始`,
+      enabled: true,
+      exitLabel: "出口: 建玉なし",
+      exitReason: "開始後、このカードへ出口シグナルを表示 · SL15 / TP22.5",
+    };
+  }
+  if (signal.direction === "見送り") {
+    return { label: "取引開始（Stay）", enabled: false, exitLabel: "出口: 建玉なし", exitReason: "方向条件を満たしていません" };
+  }
+  if (!['買い', '売り'].includes(signal.direction)) {
+    return { label: "取引開始（判定待ち）", enabled: false, exitLabel: "出口: 建玉なし", exitReason: "正式方向を確認できません" };
+  }
+  if (!state.brokerSync.configured) {
+    return {
+      label: "取引開始（同期未設定）",
+      enabled: false,
+      exitLabel: "Broker同期: 未設定",
+      exitReason: "read-only credentialをKeychainへ設定すると有効になります",
+    };
+  }
+  if (state.brokerSync.status !== "SYNCED") {
+    return {
+      label: "取引開始（同期確認待ち）",
+      enabled: false,
+      exitLabel: "Broker同期: 要確認",
+      exitReason: "latestExecutions / openPositionsの正常同期を待っています",
+    };
+  }
+  return {
+    label: "取引開始（価格待ち）",
+    enabled: false,
+    exitLabel: "出口: 建玉なし",
+    exitReason: "前向き記録と15秒以内のPublic価格が必要です",
+  };
+}
+
+function brokerPlanLabel(sync = {}) {
+  const labels = {
+    WAITING_FOR_OPEN: "Broker: OPEN約定待ち",
+    AMBIGUOUS_OPEN: "Broker: OPEN照合不明",
+    LINKED: "Broker: OPEN照合済み",
+    PARTIALLY_CLOSED: "Broker: 部分決済",
+    RECHECK_REQUIRED: "Broker: 同期要確認",
+    CLOSED: "Broker: CLOSE反映済み",
+    NOT_TRACKED: "Broker: 未追跡",
+  };
+  return labels[sync.state] || "Broker: 確認中";
+}
+
+function brokerPlanDetail(sync = {}) {
+  if (sync.state === "PARTIALLY_CLOSED") {
+    return `残 ${Number(sync.remaining_size || 0).toLocaleString("ja-JP")} / ${Number(sync.entry_size || 0).toLocaleString("ja-JP")}通貨`;
+  }
+  if (sync.state === "LINKED") {
+    return `${Number(sync.entry_size || 0).toLocaleString("ja-JP")}通貨 · 約定価格を自動反映`;
+  }
+  if (sync.state === "AMBIGUOUS_OPEN") return "複数候補のため自動で紐付けていません";
+  if (sync.state === "RECHECK_REQUIRED") return "推測で決済扱いにせず確認待ちで停止しています";
+  return "手動OPEN/CLOSEをread-only GETで確認します";
+}
+
+function signalCardControl(key, compact = false) {
+  const action = cardActionState(key);
+  if (action.active) {
+    const active = action.active;
+    const broker = active.broker_sync || {};
+    return `<div class="signal-card-control card-position-control ${compact ? "compact" : ""} ${escapeHtml(action.exitSignal?.tone || "neutral")}">
+      <div class="signal-card-exit" title="${escapeHtml(action.exitReason)}">
+        <strong>${escapeHtml(action.exitLabel)}</strong>
+        <span>${escapeHtml(action.exitReason)}</span>
+        <small>${escapeHtml(directionDisplay[active.direction] || active.direction)} · ${escapeHtml(active.horizon)} · Entry ${quote(active.entry_price)} · SL ${quote(active.stop_loss_price)} · TP ${quote(active.take_profit_price)} · ${remainingTime(active.remaining_seconds)}</small>
+      </div>
+      <div class="broker-card-state ${escapeHtml((broker.state || "").toLowerCase())}" title="${escapeHtml(brokerPlanDetail(broker))}">
+        <strong>${escapeHtml(brokerPlanLabel(broker))}</strong>
+        <span>${escapeHtml(brokerPlanDetail(broker))}</span>
+      </div>
+    </div>`;
+  }
+  return `<div class="signal-card-control ${compact ? "compact" : ""}">
+    <div class="signal-card-exit" title="${escapeHtml(action.exitReason)}"><strong data-card-exit-label="${key}">${escapeHtml(action.exitLabel)}</strong><span data-card-exit-reason="${key}">${escapeHtml(action.exitReason)}</span></div>
+    <button type="button" data-trade-start="${key}" ${action.enabled ? "" : "disabled"}>${escapeHtml(action.label)}</button>
+  </div>`;
+}
+
+function updateQuickExitAction() {
+  document.querySelectorAll("[data-trade-start]").forEach((button) => {
+    const key = button.dataset.tradeStart;
+    const action = cardActionState(key);
+    button.textContent = action.label;
+    button.disabled = !action.enabled;
+    button.classList.toggle("quick-ready", action.enabled);
+    const label = document.querySelector(`[data-card-exit-label="${key}"]`);
+    const reason = document.querySelector(`[data-card-exit-reason="${key}"]`);
+    if (label) label.textContent = action.exitLabel;
+    if (reason) reason.textContent = action.exitReason;
+  });
 }
 
 function renderSignals() {
@@ -234,6 +358,14 @@ function renderSignals() {
     button.addEventListener("click", () => {
       state.selected = button.dataset.signalKey;
       renderSignals();
+    });
+  });
+  document.querySelectorAll("[data-trade-start]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const key = button.dataset.tradeStart;
+      state.selected = key;
+      renderSignals();
+      await startTrade(key);
     });
   });
   updateQuickExitAction();
@@ -425,8 +557,9 @@ function renderMarket() {
   }
   drawChart();
   updateQuickExitAction();
+  if (state.currentTab === "calculator" && !state.calculatorPriceEdited) syncCalculatorQuote();
   if (age <= 15000) updateRealtimeEstimate();
-  if (["signal", "exit"].includes(state.currentTab)) refreshExitStatusOncePerSecond();
+  if (state.currentTab === "signal") refreshExitStatusOncePerSecond();
 }
 
 async function updateRealtimeEstimate() {
@@ -602,122 +735,34 @@ function drawChart() {
   });
 }
 
-async function recordDecision(decision) {
-  if (state.decisionInFlight) return;
-  state.decisionInFlight = true;
+async function startTrade(signalKey = state.selected) {
+  if (state.tradeStartInFlight) return;
+  state.tradeStartInFlight = true;
   updateQuickExitAction();
-  const isRealtime = state.selected === "realtime";
-  const horizon = isRealtime ? "10m" : state.selected;
-  const signal = isRealtime ? displaySignal("realtime") : signalByHorizon(horizon);
   try {
-    await request("/api/manual/decisions", {
-      method: "POST",
-      body: JSON.stringify({
-        horizon,
-        decision,
-        forecast_id: isRealtime ? null : signal.forecast_id,
-        note: isRealtime ? "REALTIME_ESTIMATE_NON_FORMAL" : "",
-      }),
-    });
-    showNotice(`${signal.horizon_label}を「${decision}」として記録しました。`);
-    if (decision === "取引した") {
-      const quick = quickExitContext();
-      if (quick.eligible) {
-        try {
-          const data = await request("/api/manual/exit-plan/quick-start", {
-            method: "POST",
-            body: JSON.stringify({
-              forecast_id: quick.signal.forecast_id,
-              horizon: quick.signal.horizon,
-              direction: quick.signal.direction,
-            }),
-          });
-          renderExitPlan(data);
-          showNotice(
-            "取引記録と出口管理を開始しました。固定SL 15 / TP 22.5 pipsを監視します。",
-          );
-          return;
-        } catch (error) {
-          await switchTab("exit");
-          prepareExitForm(horizon);
-          showNotice(
-            `ワンクリック開始できませんでした。実約定価格を確認してください: ${error.message}`,
-            "error",
-          );
-          return;
-        }
-      }
-      await switchTab("exit");
-      prepareExitForm(horizon);
+    const quick = quickExitContext(signalKey);
+    if (!quick.eligible) {
+      showNotice(
+        "取引開始を記録できません。正式10分/30分の買い・売りと15秒以内の価格を確認してください。",
+        "error",
+      );
+      return;
     }
-  } catch (error) {
-    showNotice(`記録できませんでした: ${error.message}`, "error");
-  } finally {
-    state.decisionInFlight = false;
-    updateQuickExitAction();
-  }
-}
-
-function prepareExitForm(requestedHorizon = state.selected) {
-  const horizon = ["24h", "realtime"].includes(requestedHorizon) ? "10m" : requestedHorizon;
-  const signal = signalByHorizon(horizon);
-  document.querySelector("#exit-horizon").value = horizon;
-  document.querySelector("#exit-forecast-id").value = signal.forecast_id || "";
-  document.querySelector("#exit-origin").textContent = `${jst(signal.origin_time_utc)} JST`;
-  const target = signal.origin_time_utc
-    ? new Date(new Date(signal.origin_time_utc).getTime() + Number.parseInt(horizon, 10) * 60000)
-    : null;
-  document.querySelector("#exit-target").textContent = target ? `${jst(target.toISOString())} JST` : "—";
-  const directionInput = document.querySelector("#exit-direction");
-  directionInput.value = ["買い", "売り"].includes(signal.direction) ? signal.direction : "";
-  const referencePrice = directionInput.value === "買い" ? state.live.ask : state.live.bid;
-  if (referencePrice != null) document.querySelector("#exit-entry").value = referencePrice.toFixed(3);
-  updateExitContractPrices();
-}
-
-function updateExitContractPrices() {
-  const direction = document.querySelector("#exit-direction")?.value;
-  const entry = Number(document.querySelector("#exit-entry")?.value);
-  const stopPips = Number(document.querySelector("#exit-stop-pips")?.value);
-  const takePips = Number(document.querySelector("#exit-take-pips")?.value);
-  if (![entry, stopPips, takePips].every(Number.isFinite) || !["買い", "売り"].includes(direction)) {
-    document.querySelector("#exit-stop-price").textContent = "—";
-    document.querySelector("#exit-take-price").textContent = "—";
-    return null;
-  }
-  const sign = direction === "買い" ? 1 : -1;
-  const stop = entry - sign * stopPips * 0.01;
-  const take = entry + sign * takePips * 0.01;
-  document.querySelector("#exit-stop-price").textContent = stop.toFixed(3);
-  document.querySelector("#exit-take-price").textContent = take.toFixed(3);
-  return { stop, take };
-}
-
-async function openExitPlan(event) {
-  event.preventDefault();
-  const prices = updateExitContractPrices();
-  const forecastId = document.querySelector("#exit-forecast-id").value;
-  if (!prices || !forecastId) {
-    showNotice("方向・価格・有効な正式シグナルを確認してください。", "error");
-    return;
-  }
-  try {
-    const data = await request("/api/manual/exit-plan", {
+    const data = await request("/api/manual/exit-plan/quick-start", {
       method: "POST",
       body: JSON.stringify({
-        forecast_id: forecastId,
-        horizon: document.querySelector("#exit-horizon").value,
-        direction: document.querySelector("#exit-direction").value,
-        entry_price: Number(document.querySelector("#exit-entry").value),
-        stop_loss_price: prices.stop,
-        take_profit_price: prices.take,
+        forecast_id: quick.signal.forecast_id,
+        horizon: quick.signal.horizon,
+        direction: quick.signal.direction,
       }),
     });
-    state.activeExitPlan = data.active;
-    renderExitPlan(data);
-    showNotice("固定SL・固定TP・time exitの出口計画を開始しました。");
+    applyExitPlanStatus(data);
+    showNotice("TRADE_STARTEDを記録し、出口シグナルを開始しました。");
   } catch (error) {
-    showNotice(`出口計画を開始できませんでした: ${error.message}`, "error");
+    showNotice(`取引開始と出口シグナルを開始できませんでした: ${error.message}`, "error");
+  } finally {
+    state.tradeStartInFlight = false;
+    updateQuickExitAction();
   }
 }
 
@@ -728,75 +773,73 @@ function remainingTime(seconds) {
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
-function renderExitSignal(data) {
-  const signal = data.exit_signal || {
-    label: "判定不可",
-    tone: "unknown",
-    reason: "出口シグナルを確認できません",
-  };
-  const active = data.active;
-  const strip = document.querySelector("#exit-signal-strip");
-  strip.className = `exit-signal-strip ${signal.tone || "neutral"}`;
-  document.querySelector("#exit-signal-label").textContent = signal.label;
-  document.querySelector("#exit-position-label").textContent = active
-    ? `${active.direction} · ${active.horizon} · 手動登録建玉`
-    : "手動登録建玉なし";
-  document.querySelector("#exit-signal-reason").textContent = signal.reason;
+function applyExitPlanStatus(data) {
+  state.exitPlans = { "10m": null, "30m": null };
+  state.exitSignals = { "10m": null, "30m": null };
+  (data.active_plans || []).forEach((item) => {
+    state.exitPlans[item.plan.horizon] = item.plan;
+    state.exitSignals[item.plan.horizon] = item.exit_signal;
+  });
+  state.openPositionCount = Number(data.open_position_count) || 0;
+  document.querySelector("#open-position-count").textContent = String(state.openPositionCount);
+  if (data.broker_sync) applyBrokerSyncOverview(data.broker_sync);
+  renderSignals();
 }
 
-function renderExitPlan(data) {
-  const active = data.active;
-  const exitSignal = data.exit_signal || { label: "判定不可", tone: "unknown", reason: "確認できません" };
-  state.activeExitPlan = active;
-  renderExitSignal(data);
-  const form = document.querySelector("#exit-plan-form");
-  form.classList.toggle("hidden", Boolean(active));
-  const panel = document.querySelector("#active-exit-plan");
-  if (!active) {
-    panel.className = "panel empty-state";
-    panel.innerHTML = "進行中の出口計画はありません";
+function applyBrokerSyncOverview(data) {
+  state.brokerSync = { ...state.brokerSync, ...data };
+  const brokerCount = document.querySelector("#broker-position-count");
+  brokerCount.textContent = data.open_position_count == null ? "—" : String(data.open_position_count);
+  const syncLabel = document.querySelector("#broker-sync-label");
+  const syncDot = document.querySelector("#broker-sync-dot");
+  if (data.status === "SYNCED") {
+    syncLabel.textContent = `同期 ${jst(data.last_success_at_utc)} JST`;
+    syncDot.className = "status-dot";
+  } else if (data.status === "NOT_CONFIGURED") {
+    syncLabel.textContent = "Broker同期 未設定";
+    syncDot.className = "status-dot loading";
   } else {
-    const alerts = [
-      active.stop_reached ? "損切り価格到達" : null,
-      active.take_profit_reached ? "利益確定価格到達" : null,
-      active.time_exit_due ? "予測対象時刻到達" : null,
-    ].filter(Boolean);
-    panel.className = `panel active-exit-card ${alerts.length ? "exit-due" : ""}`;
-    panel.innerHTML = `<div class="exit-card-head"><div><p class="eyebrow">ACTIVE MANUAL PLAN</p><h2>${escapeHtml(active.direction)} · ${escapeHtml(active.horizon)}</h2></div><span class="exit-state ${escapeHtml(exitSignal.tone)}">${escapeHtml(exitSignal.label)}</span></div>
-      <div class="active-exit-signal"><span>POSITION-AWARE EXIT SIGNAL</span><strong>${escapeHtml(exitSignal.label)}</strong><p>${escapeHtml(exitSignal.reason)}</p></div>
-      <div class="exit-live-grid"><div><span>現在価格</span><strong>${quote(active.current_price)}</strong></div><div><span>残り時間</span><strong>${remainingTime(active.remaining_seconds)}</strong></div><div><span>時間切れ</span><strong>${jst(active.target_time_utc)} JST</strong></div></div>
-      <div class="exit-levels"><div><span>エントリー</span><strong>${quote(active.entry_price)}</strong></div><div><span>損切り</span><strong>${quote(active.stop_loss_price)}</strong></div><div><span>利益確定</span><strong>${quote(active.take_profit_price)}</strong></div></div>
-      <div class="exit-alerts">${alerts.length ? alerts.map((item) => `<span>${escapeHtml(item)}</span>`).join("") : "固定条件の到達を監視しています"}</div>
-      <div class="exit-actions"><button type="button" data-exit-reason="損切り">損切りで終了</button><button type="button" data-exit-reason="利益確定">利益確定で終了</button><button type="button" data-exit-reason="時間切れ">時間切れで終了</button><button type="button" data-exit-reason="手動終了">手動終了</button><button type="button" data-exit-reason="異常終了">異常終了</button></div>
-      <p class="exit-footnote">表示と記録のみです。brokerの建玉確認・自動決済は行いません。</p>`;
-    panel.querySelectorAll("[data-exit-reason]").forEach((button) => {
-      button.addEventListener("click", () => closeExitPlan(button.dataset.exitReason));
-    });
+    syncLabel.textContent = "Broker同期 要確認";
+    syncDot.className = "status-dot error";
   }
-  const history = data.history || [];
-  const historyElement = document.querySelector("#exit-history");
-  historyElement.className = "table-wrap";
-  historyElement.innerHTML = renderTable(
-    history,
-    [
-      ["entry_time_utc", "開始", jst],
-      ["horizon", "時間軸"],
-      ["direction", "方向"],
-      ["entry_price", "Entry", quote],
-      ["exit_price", "Exit", quote],
-      ["exit_reason", "終了理由"],
-      ["status", "状態"],
-    ],
-    "出口履歴はまだありません",
-  );
-  updateQuickExitAction();
+}
+
+function applyBrokerSync(data) {
+  applyBrokerSyncOverview(data);
+  state.exitPlans = { "10m": null, "30m": null };
+  state.exitSignals = { "10m": null, "30m": null };
+  (data.active_plans || []).forEach((item) => {
+    state.exitPlans[item.plan.horizon] = item.plan;
+    state.exitSignals[item.plan.horizon] = item.exit_signal;
+  });
+  state.openPositionCount = (data.active_plans || []).length;
+  document.querySelector("#open-position-count").textContent = String(state.openPositionCount);
+  const closeEvent = (data.events || []).find((event) => event.type === "CLOSE_APPLIED");
+  const openEvent = (data.events || []).find((event) => event.type === "OPEN_LINKED");
+  if (closeEvent) showNotice("手動CLOSE約定を検知し、カードと取引記録へ反映しました。");
+  else if (openEvent) showNotice("手動OPEN約定を検知し、実約定価格と数量をカードへ反映しました。");
+  renderSignals();
+}
+
+async function loadBrokerSync() {
+  if (state.brokerSyncInFlight) return;
+  state.brokerSyncInFlight = true;
+  try {
+    applyBrokerSync(await request("/api/manual/broker-sync"));
+  } catch (error) {
+    state.brokerSync = { ...state.brokerSync, status: "ERROR" };
+    applyBrokerSyncOverview(state.brokerSync);
+    showNotice(`Broker read-only同期を確認できませんでした: ${error.message}`, "error");
+  } finally {
+    state.brokerSyncInFlight = false;
+  }
 }
 
 async function loadExitPlan() {
   if (state.exitStatusInFlight) return;
   state.exitStatusInFlight = true;
   try {
-    renderExitPlan(await request("/api/manual/exit-plan"));
+    applyExitPlanStatus(await request("/api/manual/exit-plan"));
   } catch (error) {
     showNotice(`出口計画を読み込めませんでした: ${error.message}`, "error");
   } finally {
@@ -809,27 +852,9 @@ function refreshExitStatusOncePerSecond() {
   if (state.lastExitRefreshSecond === second) return;
   state.lastExitRefreshSecond = second;
   loadExitPlan();
-}
-
-async function closeExitPlan(reason) {
-  const active = state.activeExitPlan;
-  if (!active) return;
-  const livePrice = active.direction === "買い" ? state.live.bid : state.live.ask;
-  const exitPrice = livePrice ?? active.current_price;
-  if (exitPrice == null) {
-    showNotice("終了価格を確認できません。Public tickerを確認してください。", "error");
-    return;
-  }
-  try {
-    const data = await request("/api/manual/exit-plan/close", {
-      method: "POST",
-      body: JSON.stringify({ reason, exit_price: exitPrice }),
-    });
-    renderExitPlan(data);
-    prepareExitForm();
-    showNotice(`出口計画を「${reason}」として記録しました。`);
-  } catch (error) {
-    showNotice(`出口を記録できませんでした: ${error.message}`, "error");
+  if (second % 5 === 0 && state.lastBrokerSyncSecond !== second) {
+    state.lastBrokerSyncSecond = second;
+    loadBrokerSync();
   }
 }
 
@@ -846,7 +871,7 @@ async function loadHistory() {
     [
       ["origin_time_utc", "観測時刻", jst],
       ["horizon", "時間軸"],
-      ["direction", "方向"],
+      ["direction", "方向", (value) => directionDisplay[value] || value],
       ["p_up", "上昇確率", percent],
       ["recorded_mode", "記録方式"],
       ["outcome_up", "結果", (value) => (value == null ? "未確定" : value ? "上昇" : "下降")],
@@ -855,14 +880,14 @@ async function loadHistory() {
   );
   document.querySelector("#decision-table").className = "table-wrap";
   document.querySelector("#decision-table").innerHTML = renderTable(
-    data.operator_decisions,
+    data.signal_actions,
     [
       ["recorded_at_utc", "記録時刻", jst],
       ["horizon", "時間軸"],
-      ["decision", "選択"],
+      ["action", "状態", (value) => value === "TRADE_STARTED" ? "取引開始" : "取引開始記録なし"],
       ["note", "メモ"],
     ],
-    "手動記録はまだありません",
+    "取引記録はまだありません",
   );
 }
 
@@ -995,12 +1020,54 @@ async function switchTab(tab) {
     item.classList.toggle("active", item.dataset.tab === tab);
   });
   if (tab === "history" || tab === "record") await loadHistory();
-  if (tab === "exit") {
-    prepareExitForm();
-    await loadExitPlan();
-  }
   if (tab === "validation") await loadValidation();
+  if (tab === "calculator") prepareCalculator();
   if (tab === "signal") drawChart();
+}
+
+function calculatorFormalSignal() {
+  const horizon = ["10m", "30m"].includes(state.selected) ? state.selected : "10m";
+  return signalByHorizon(horizon);
+}
+
+function syncCalculatorQuote() {
+  const directionInput = document.querySelector("#calc-direction");
+  const entryInput = document.querySelector("#calc-entry");
+  const context = document.querySelector("#calc-signal-context");
+  const signal = calculatorFormalSignal();
+  const formalDirection = signal.direction === "買い" ? "buy" : signal.direction === "売り" ? "sell" : "";
+  if (!state.calculatorDirectionEdited && directionInput.value !== formalDirection) {
+    directionInput.value = formalDirection;
+    state.calculatorPriceEdited = false;
+  }
+  const direction = directionInput.value;
+  const quoteAge = state.live.receivedAt == null ? Infinity : Date.now() - state.live.receivedAt;
+  const price = direction === "buy" ? state.live.ask : direction === "sell" ? state.live.bid : null;
+  const fresh = Number.isFinite(price) && quoteAge >= -5000 && quoteAge <= 15000;
+  if (!state.calculatorPriceEdited) entryInput.value = fresh ? Number(price).toFixed(3) : "";
+  const signalText = ["買い", "売り"].includes(signal.direction)
+    ? `${signal.horizon_label}正式シグナル: ${signal.direction}`
+    : `${signal.horizon_label}正式シグナル: ${signal.direction}`;
+  const priceText = !direction
+    ? "方向を選択するとPublic ASK/BIDを反映"
+    : fresh
+      ? `Public ${direction === "buy" ? "ASK" : "BID"}を自動反映`
+      : "15秒以内のPublic価格なし・手入力可能";
+  context.textContent = `${signalText} · ${priceText}`;
+}
+
+function prepareCalculator() {
+  const signal = calculatorFormalSignal();
+  const directionInput = document.querySelector("#calc-direction");
+  state.calculatorDirectionEdited = false;
+  state.calculatorPriceEdited = false;
+  directionInput.value = signal.direction === "買い" ? "buy" : signal.direction === "売り" ? "sell" : "";
+  document.querySelector("#calc-entry").value = "";
+  document.querySelector("#calc-size").value = "0";
+  document.querySelector("#calculator-result").className = "panel result-panel empty-state";
+  document.querySelector("#calculator-result").textContent =
+    "許容損失額を入力して「数量と価格を計算」を押してください";
+  syncCalculatorQuote();
 }
 
 function calculate(event) {
@@ -1009,16 +1076,26 @@ function calculate(event) {
   const entry = Number(document.querySelector("#calc-entry").value);
   const slPips = Number(document.querySelector("#calc-sl").value);
   const tpPips = Number(document.querySelector("#calc-tp").value);
-  const size = Number(document.querySelector("#calc-size").value);
+  const allowedLoss = Number(document.querySelector("#calc-max-loss").value);
   const cost = Number(document.querySelector("#calc-cost").value);
   const pip = 0.01;
+  const lossPerUnit = (slPips + 2 * cost) * pip;
+  const size = Math.floor(allowedLoss / lossPerUnit / 1000) * 1000;
+  const result = document.querySelector("#calculator-result");
+  if (!direction || !Number.isFinite(entry) || entry <= 0 || !Number.isFinite(size) || size < 1000) {
+    document.querySelector("#calc-size").value = "0";
+    result.className = "panel result-panel empty-state";
+    result.textContent = "方向・価格を確認してください。許容損失額が1,000通貨分より小さい場合も計算できません。";
+    return;
+  }
+  document.querySelector("#calc-size").value = String(size);
   const sign = direction === "buy" ? 1 : -1;
   const stop = entry - sign * slPips * pip;
   const take = entry + sign * tpPips * pip;
-  const maxLoss = (slPips + 2 * cost) * pip * size;
+  const maxLoss = lossPerUnit * size;
   const targetGain = Math.max(0, tpPips - 2 * cost) * pip * size;
-  document.querySelector("#calculator-result").className = "panel result-panel";
-  document.querySelector("#calculator-result").innerHTML = `<div class="result-item"><span>損切り価格</span><strong>${stop.toFixed(3)}</strong></div><div class="result-item"><span>利益確定価格</span><strong>${take.toFixed(3)}</strong></div><div class="result-item"><span>最大損失目安</span><strong>¥${Math.round(maxLoss).toLocaleString("ja-JP")}</strong></div><div class="result-item"><span>利益目安</span><strong>¥${Math.round(targetGain).toLocaleString("ja-JP")}</strong></div>`;
+  result.className = "panel result-panel";
+  result.innerHTML = `<div class="result-item"><span>逆算数量</span><strong>${size.toLocaleString("ja-JP")}通貨</strong></div><div class="result-item"><span>損切り価格</span><strong>${stop.toFixed(3)}</strong></div><div class="result-item"><span>利益確定価格</span><strong>${take.toFixed(3)}</strong></div><div class="result-item"><span>最大損失目安</span><strong>¥${Math.round(maxLoss).toLocaleString("ja-JP")}</strong></div><div class="result-item"><span>利益目安</span><strong>¥${Math.round(targetGain).toLocaleString("ja-JP")}</strong></div><p class="result-note">許容損失 ¥${Math.round(allowedLoss).toLocaleString("ja-JP")}以内になるよう1,000通貨単位で切り下げています。注文は送信されません。</p>`;
 }
 
 async function initialize() {
@@ -1026,6 +1103,7 @@ async function initialize() {
   await loadSignalSeries();
   await loadChart();
   await loadExitPlan();
+  await loadBrokerSync();
   connectTicker();
   scheduleSignalRefresh();
   renderMarket();
@@ -1042,9 +1120,6 @@ document.addEventListener("DOMContentLoaded", () => {
       switchTab(item.dataset.tab);
     });
   });
-  document.querySelectorAll("[data-decision]").forEach((item) => {
-    item.addEventListener("click", () => recordDecision(item.dataset.decision));
-  });
   document.querySelectorAll("[data-chart-timeframe]").forEach((item) => {
     item.addEventListener("click", async () => {
       state.chartTimeframe = item.dataset.chartTimeframe;
@@ -1058,13 +1133,14 @@ document.addEventListener("DOMContentLoaded", () => {
     refreshData({ auto: false });
   });
   document.querySelector("#calculator-form").addEventListener("submit", calculate);
-  document.querySelector("#exit-plan-form").addEventListener("submit", openExitPlan);
-  document.querySelector("#exit-horizon").addEventListener("change", (event) => {
-    prepareExitForm(event.target.value);
+  document.querySelector("#calc-direction").addEventListener("change", () => {
+    state.calculatorDirectionEdited = true;
+    state.calculatorPriceEdited = false;
+    syncCalculatorQuote();
   });
-  ["#exit-direction", "#exit-entry", "#exit-stop-pips", "#exit-take-pips"].forEach(
-    (selector) => document.querySelector(selector).addEventListener("input", updateExitContractPrices),
-  );
+  document.querySelector("#calc-entry").addEventListener("input", () => {
+    state.calculatorPriceEdited = true;
+  });
   document.querySelectorAll("[data-validation-horizon]").forEach((button) => {
     button.addEventListener("click", () => {
       state.validationHorizon = button.dataset.validationHorizon;

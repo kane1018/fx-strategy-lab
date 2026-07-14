@@ -51,8 +51,10 @@ class ActiveOrder(SanitizedModel):
 class Execution(SanitizedModel):
     execution_id: str
     order_id: str | None = None
+    position_id: str | None = None
     symbol: str
     side: str | None = None
+    settle_type: str | None = None
     size: Decimal | None = None
     price: Decimal | None = None
     executed_at: str | None = None
@@ -144,8 +146,10 @@ def execution_from_api(raw: Mapping[str, Any]) -> Execution:
     return Execution(
         execution_id=_string(raw, "executionId", "execution_id", default=""),
         order_id=_string_or_none(raw, "orderId", "rootOrderId"),
+        position_id=_string_or_none(raw, "positionId", "position_id"),
         symbol=_string(raw, "symbol", default=""),
         side=_string_or_none(raw, "side"),
+        settle_type=_string_or_none(raw, "settleType", "settle_type"),
         size=_decimal(raw, "size", "executionSize"),
         price=_decimal(raw, "price", "executionPrice"),
         executed_at=_string_or_none(raw, "timestamp", "executedAt"),

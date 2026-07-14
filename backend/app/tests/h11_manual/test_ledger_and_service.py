@@ -13,7 +13,6 @@ from app.h11_manual.contracts import (
     Direction,
     Horizon,
     ManualExitReason,
-    OperatorDecision,
     SignalStatus,
     SignalView,
 )
@@ -68,13 +67,55 @@ def test_ledger_is_idempotent_and_scores_resolved_forecasts(tmp_path) -> None:
     summary = ledger.validation_summary()
     assert summary["overall"]["resolved_n"] == 1
     assert summary["overall"]["brier"] == round((0.62 - 1.0) ** 2, 6)
-    decision_id = ledger.record_operator_decision(
-        forecast_id="forecast_test",
+    expiry = datetime(2026, 7, 14, 1, 10, tzinfo=UTC)
+    assert ledger.record_due_no_actions(now=expiry) == 1
+    assert ledger.record_due_no_actions(now=expiry) == 0
+    action = ledger.latest_signal_actions()[0]
+    assert action["action"] == "NO_ACTION"
+    assert action["note"] == "取引開始記録なし"
+    assert ledger.validation_summary()["overall"]["resolved_n"] == 1
+
+
+def test_existing_quick_start_migrates_over_no_action(tmp_path) -> None:
+    path = tmp_path / "signals.sqlite3"
+    ledger = SignalLedger(path)
+    origin = datetime(2026, 7, 14, 1, 0, tzinfo=UTC)
+    signal = SignalView(
         horizon=Horizon.MINUTES_10,
-        decision=OperatorDecision.TRADED,
+        direction=Direction.BUY,
+        status=SignalStatus.OK,
+        p_up=0.62,
+        p_down=0.38,
+        reason="migration test",
+        origin_time_utc=origin.isoformat(),
+        model_config_hash="sha256:migration",
+        forecast_id="legacy_quick_start",
+        recorded_mode="PROSPECTIVE",
     )
-    assert decision_id == 1
-    assert ledger.latest_decisions()[0]["decision"] == "取引した"
+    assert ledger.record_forecast(signal, recorded_at=origin)
+    plan_id = ledger.open_manual_trade_plan(
+        forecast_id="legacy_quick_start",
+        horizon=Horizon.MINUTES_10,
+        direction=Direction.BUY,
+        signal_origin_utc=origin.isoformat(),
+        target_time_utc=(origin + timedelta(minutes=10)).isoformat(),
+        entry_price=160.0,
+        stop_loss_price=159.85,
+        take_profit_price=160.225,
+        opened_at=origin,
+    )
+    assert ledger.record_due_no_actions(now=origin + timedelta(minutes=10)) == 1
+    with ledger._connect() as db:
+        db.execute(
+            """INSERT INTO manual_trade_plan_quick_starts
+            (plan_id, reference_entry_price, started_at_utc) VALUES (?, ?, ?)""",
+            (plan_id, 160.0, origin.isoformat()),
+        )
+
+    migrated = SignalLedger(path)
+    action = migrated.latest_signal_actions()[0]
+    assert action["action"] == "TRADE_STARTED"
+    assert action["note"] == "既存quick-start監査から移行"
 
 
 def test_validation_diagnostics_are_prospective_and_overlap_aware(tmp_path) -> None:
@@ -312,7 +353,13 @@ def test_manual_exit_plan_is_local_record_only_with_fixed_levels(tmp_path) -> No
     assert opened["automatic_exit"] is False
     assert opened["broker_state_known"] is False
 
+    with pytest.raises(ValueError, match="supports quick-start plans only"):
+        service.correct_active_fill_price(
+            plan_id=opened["plan_id"], actual_fill_price=160.01, now=now
+        )
+
     closed = service.close_exit_plan(
+        plan_id=opened["plan_id"],
         reason=ManualExitReason.MANUAL,
         exit_price=160.05,
         now=now + timedelta(minutes=1),
@@ -394,15 +441,43 @@ def test_quick_exit_start_uses_fresh_public_side_and_fixed_preset(tmp_path) -> N
         "broker_position_confirmed": False,
         "actual_fill_confirmed": False,
     }
+    assert result["signal_action"] == {
+        "action": "TRADE_STARTED",
+        "forecast_id": "quick_forecast_test",
+        "recorded": True,
+    }
+    assert service.ledger.latest_signal_actions()[0]["action"] == "TRADE_STARTED"
+    assert service.ledger.record_due_no_actions(now=now + timedelta(minutes=10)) == 0
+
+    corrected = service.correct_active_fill_price(
+        plan_id=result["plan_id"], actual_fill_price=160.012, now=now
+    )
+    assert corrected["active"]["entry_price"] == 160.012
+    assert corrected["active"]["stop_loss_price"] == 159.862
+    assert corrected["active"]["take_profit_price"] == 160.237
+    assert corrected["active"]["actual_fill_correction_count"] == 1
+    assert corrected["active"]["actual_fill_corrected_at_utc"] == now.isoformat()
+    assert corrected["fill_correction"] == {
+        "used": True,
+        "actual_fill_price": 160.012,
+        "stop_loss_pips": 15.0,
+        "take_profit_pips": 22.5,
+        "broker_fill_confirmed_by_api": False,
+    }
 
     assert (
         service.close_exit_plan(
+            plan_id=result["plan_id"],
             reason=ManualExitReason.MANUAL,
             exit_price=160.01,
             now=now + timedelta(seconds=1),
         )["closed"]
         is True
     )
+    with pytest.raises(ValueError, match="no open manual exit plan"):
+        service.correct_active_fill_price(
+            plan_id=result["plan_id"], actual_fill_price=160.02, now=now
+        )
     sell_origin = now + timedelta(seconds=1)
     sell_signal = SignalView(
         horizon=Horizon.MINUTES_30,
@@ -432,6 +507,71 @@ def test_quick_exit_start_uses_fresh_public_side_and_fixed_preset(tmp_path) -> N
     assert sell_result["active"]["entry_price"] == 159.99
     assert sell_result["active"]["stop_loss_price"] == 160.14
     assert sell_result["active"]["take_profit_price"] == 159.765
+
+
+def test_10m_and_30m_exit_plans_are_independent_and_counted(tmp_path) -> None:
+    now = datetime(2026, 7, 15, 2, 0, tzinfo=UTC)
+    service = ManualSignalService(tmp_path, supplemental_h1_paths=())
+    for horizon, direction, probability, forecast_id in (
+        (Horizon.MINUTES_10, Direction.BUY, 0.62, "independent_10m"),
+        (Horizon.MINUTES_30, Direction.SELL, 0.38, "independent_30m"),
+    ):
+        signal = SignalView(
+            horizon=horizon,
+            direction=direction,
+            status=SignalStatus.OK,
+            p_up=probability,
+            p_down=1 - probability,
+            reason="independent plan test",
+            origin_time_utc=now.isoformat(),
+            model_config_hash=f"sha256:{forecast_id}",
+            forecast_id=forecast_id,
+            recorded_mode="PROSPECTIVE",
+        )
+        assert service.ledger.record_forecast(signal, recorded_at=now)
+    assert service.ledger.record_realtime_tick(
+        bid=160.0,
+        ask=160.005,
+        market_time_utc=now.isoformat(),
+        sampled_at=now,
+    )
+
+    buy = service.quick_start_exit_plan(
+        forecast_id="independent_10m",
+        horizon=Horizon.MINUTES_10,
+        direction=Direction.BUY,
+        now=now,
+    )
+    sell = service.quick_start_exit_plan(
+        forecast_id="independent_30m",
+        horizon=Horizon.MINUTES_30,
+        direction=Direction.SELL,
+        now=now,
+    )
+    status = service.exit_plan_status(now=now)
+    assert status["open_position_count"] == 2
+    assert {item["plan"]["horizon"] for item in status["active_plans"]} == {"10m", "30m"}
+    assert all(item["plan"]["quick_start"] for item in status["active_plans"])
+
+    with pytest.raises(ValueError, match="already exists for this horizon"):
+        service.open_exit_plan(
+            forecast_id="independent_10m",
+            horizon=Horizon.MINUTES_10,
+            direction=Direction.BUY,
+            entry_price=160.005,
+            stop_loss_price=159.855,
+            take_profit_price=160.23,
+            now=now,
+        )
+
+    closed = service.close_exit_plan(
+        plan_id=sell["plan_id"],
+        reason=ManualExitReason.MANUAL,
+        exit_price=160.005,
+        now=now,
+    )
+    assert closed["open_position_count"] == 1
+    assert closed["active_plans"][0]["plan"]["plan_id"] == buy["plan_id"]
 
 
 def test_position_aware_exit_signal_requires_two_formal_reversals_and_hard_stop_wins(

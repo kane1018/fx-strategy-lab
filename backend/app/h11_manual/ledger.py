@@ -13,12 +13,30 @@ from app.h11_manual.contracts import (
     Direction,
     Horizon,
     ManualExitReason,
-    OperatorDecision,
+    SignalAction,
     SignalView,
 )
 
 CALIBRATION_BIN_WIDTH = 0.05
 THRESHOLD_CANDIDATES = (0.52, 0.54, 0.56, 0.58, 0.60, 0.62, 0.65)
+
+
+def _parse_broker_datetime(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("invalid sanitized broker execution timestamp") from error
+    if parsed.tzinfo is None:
+        raise ValueError("sanitized broker execution timestamp must be timezone-aware")
+    return parsed.astimezone(UTC)
+
+
+def _decimal_text(value: float) -> str:
+    return format(value, ".12g")
+
+
+def _float_or_none(value: Any) -> float | None:
+    return None if value is None else float(value)
 
 
 class SignalLedger:
@@ -55,11 +73,11 @@ class SignalLedger:
                     target_time_utc TEXT NOT NULL,
                     resolved_at_utc TEXT NOT NULL
                 );
-                CREATE TABLE IF NOT EXISTS operator_decisions (
-                    decision_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    forecast_id TEXT,
-                    horizon TEXT NOT NULL,
-                    decision TEXT NOT NULL,
+                CREATE TABLE IF NOT EXISTS signal_actions (
+                    action_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    forecast_id TEXT NOT NULL UNIQUE REFERENCES forecasts(forecast_id),
+                    horizon TEXT NOT NULL CHECK (horizon IN ('10m', '30m')),
+                    action TEXT NOT NULL CHECK (action IN ('TRADE_STARTED', 'NO_ACTION')),
                     note TEXT NOT NULL,
                     recorded_at_utc TEXT NOT NULL
                 );
@@ -116,8 +134,75 @@ class SignalLedger:
                     exit_price REAL,
                     exit_reason TEXT
                 );
-                CREATE UNIQUE INDEX IF NOT EXISTS one_open_manual_trade_plan
-                ON manual_trade_plans(status) WHERE status = 'OPEN';
+                DROP INDEX IF EXISTS one_open_manual_trade_plan;
+                CREATE UNIQUE INDEX IF NOT EXISTS one_open_manual_trade_plan_per_horizon
+                ON manual_trade_plans(horizon) WHERE status = 'OPEN';
+                CREATE TABLE IF NOT EXISTS manual_trade_plan_quick_starts (
+                    plan_id INTEGER PRIMARY KEY REFERENCES manual_trade_plans(plan_id),
+                    reference_entry_price REAL NOT NULL CHECK (reference_entry_price > 0),
+                    started_at_utc TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS manual_trade_plan_fill_corrections (
+                    correction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    plan_id INTEGER NOT NULL REFERENCES manual_trade_plans(plan_id),
+                    corrected_at_utc TEXT NOT NULL,
+                    previous_entry_price REAL NOT NULL CHECK (previous_entry_price > 0),
+                    corrected_entry_price REAL NOT NULL CHECK (corrected_entry_price > 0),
+                    previous_stop_loss_price REAL NOT NULL CHECK (previous_stop_loss_price > 0),
+                    corrected_stop_loss_price REAL NOT NULL CHECK (corrected_stop_loss_price > 0),
+                    previous_take_profit_price REAL NOT NULL CHECK (previous_take_profit_price > 0),
+                    corrected_take_profit_price REAL NOT NULL CHECK (
+                        corrected_take_profit_price > 0
+                    )
+                );
+                CREATE TABLE IF NOT EXISTS manual_broker_plan_links (
+                    plan_id INTEGER PRIMARY KEY REFERENCES manual_trade_plans(plan_id),
+                    position_ref TEXT UNIQUE,
+                    entry_execution_ref TEXT UNIQUE,
+                    entry_size TEXT,
+                    closed_size TEXT NOT NULL DEFAULT '0',
+                    close_value TEXT NOT NULL DEFAULT '0',
+                    remaining_size TEXT,
+                    sync_state TEXT NOT NULL CHECK (sync_state IN (
+                        'WAITING_FOR_OPEN', 'AMBIGUOUS_OPEN', 'LINKED',
+                        'PARTIALLY_CLOSED', 'RECHECK_REQUIRED', 'CLOSED'
+                    )),
+                    linked_at_utc TEXT,
+                    updated_at_utc TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS manual_broker_execution_receipts (
+                    execution_ref TEXT PRIMARY KEY,
+                    position_ref TEXT NOT NULL,
+                    settle_type TEXT NOT NULL CHECK (settle_type IN ('OPEN', 'CLOSE')),
+                    symbol TEXT NOT NULL CHECK (symbol = 'USD_JPY'),
+                    side TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')),
+                    size TEXT NOT NULL,
+                    price TEXT NOT NULL,
+                    executed_at_utc TEXT NOT NULL,
+                    applied_plan_id INTEGER REFERENCES manual_trade_plans(plan_id),
+                    recorded_at_utc TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS manual_broker_sync_state (
+                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+                    status TEXT NOT NULL,
+                    safe_error_code TEXT,
+                    source TEXT NOT NULL,
+                    open_position_count INTEGER,
+                    last_attempt_at_utc TEXT NOT NULL,
+                    last_success_at_utc TEXT
+                );
+                INSERT INTO signal_actions
+                    (forecast_id, horizon, action, note, recorded_at_utc)
+                SELECT p.forecast_id, p.horizon, 'TRADE_STARTED',
+                       '既存quick-start監査から移行', q.started_at_utc
+                FROM manual_trade_plan_quick_starts q
+                JOIN manual_trade_plans p USING(plan_id)
+                WHERE 1
+                ON CONFLICT(forecast_id) DO UPDATE SET
+                    action = 'TRADE_STARTED',
+                    note = '既存quick-start監査から移行',
+                    recorded_at_utc = excluded.recorded_at_utc
+                WHERE signal_actions.action = 'NO_ACTION';
                 """
             )
 
@@ -306,24 +391,45 @@ class SignalLedger:
             )
             return cursor.rowcount == 1
 
-    def record_operator_decision(
-        self,
-        *,
-        forecast_id: str | None,
-        horizon: Horizon,
-        decision: OperatorDecision,
-        note: str = "",
-        recorded_at: datetime | None = None,
-    ) -> int:
-        now = (recorded_at or datetime.now(UTC)).astimezone(UTC).isoformat(timespec="seconds")
+    def record_due_no_actions(self, *, now: datetime | None = None) -> int:
+        """Record objective expiry without inferring that an operator deliberately skipped."""
+
+        current = (now or datetime.now(UTC)).astimezone(UTC)
+        recorded_at = current.isoformat(timespec="seconds")
         with self._connect() as db:
-            cursor = db.execute(
-                """INSERT INTO operator_decisions
-                (forecast_id, horizon, decision, note, recorded_at_utc)
+            rows = db.execute(
+                """SELECT f.forecast_id, f.horizon, f.origin_time_utc
+                FROM forecasts f
+                LEFT JOIN signal_actions a USING(forecast_id)
+                WHERE f.recorded_mode = 'PROSPECTIVE'
+                  AND f.horizon IN ('10m', '30m')
+                  AND a.forecast_id IS NULL
+                ORDER BY f.origin_time_utc"""
+            ).fetchall()
+            due = []
+            for row in rows:
+                horizon = Horizon(row["horizon"])
+                origin = datetime.fromisoformat(row["origin_time_utc"]).astimezone(UTC)
+                if current >= origin + timedelta(minutes=horizon.bars):
+                    due.append(
+                        (
+                            row["forecast_id"],
+                            horizon.value,
+                            SignalAction.NO_ACTION.value,
+                            "取引開始記録なし",
+                            recorded_at,
+                        )
+                    )
+            if not due:
+                return 0
+            before = db.total_changes
+            db.executemany(
+                """INSERT OR IGNORE INTO signal_actions
+                (forecast_id, horizon, action, note, recorded_at_utc)
                 VALUES (?, ?, ?, ?, ?)""",
-                (forecast_id, horizon.value, decision.value, note[:500], now),
+                due,
             )
-            return int(cursor.lastrowid)
+            return db.total_changes - before
 
     def latest_forecasts(self, limit: int = 100) -> list[dict[str, Any]]:
         safe_limit = max(1, min(limit, 500))
@@ -369,11 +475,11 @@ class SignalLedger:
                 result[horizon.value] = [dict(row) for row in reversed(rows)]
         return result
 
-    def latest_decisions(self, limit: int = 100) -> list[dict[str, Any]]:
+    def latest_signal_actions(self, limit: int = 100) -> list[dict[str, Any]]:
         safe_limit = max(1, min(limit, 500))
         with self._connect() as db:
             rows = db.execute(
-                "SELECT * FROM operator_decisions ORDER BY decision_id DESC LIMIT ?",
+                "SELECT * FROM signal_actions ORDER BY action_id DESC LIMIT ?",
                 (safe_limit,),
             ).fetchall()
         return [dict(row) for row in rows]
@@ -420,14 +526,444 @@ class SignalLedger:
                 )
                 return int(cursor.lastrowid)
         except sqlite3.IntegrityError as error:
-            raise ValueError("an open manual trade plan already exists") from error
+            raise ValueError("an open manual trade plan already exists for this horizon") from error
 
-    def active_manual_trade_plan(self) -> dict[str, Any] | None:
+    def active_manual_trade_plans(self) -> list[dict[str, Any]]:
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT * FROM manual_trade_plans WHERE status = 'OPEN'
+                ORDER BY CASE horizon WHEN '10m' THEN 1 ELSE 2 END, plan_id"""
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def active_manual_trade_plan(
+        self,
+        *,
+        plan_id: int | None = None,
+        horizon: Horizon | None = None,
+    ) -> dict[str, Any] | None:
+        clauses = ["status = 'OPEN'"]
+        parameters: list[Any] = []
+        if plan_id is not None:
+            clauses.append("plan_id = ?")
+            parameters.append(plan_id)
+        if horizon is not None:
+            clauses.append("horizon = ?")
+            parameters.append(horizon.value)
         with self._connect() as db:
             row = db.execute(
-                "SELECT * FROM manual_trade_plans WHERE status = 'OPEN' LIMIT 1"
+                f"SELECT * FROM manual_trade_plans WHERE {' AND '.join(clauses)} LIMIT 1",
+                parameters,
             ).fetchone()
         return None if row is None else dict(row)
+
+    def record_manual_trade_quick_start(
+        self,
+        *,
+        plan_id: int,
+        forecast_id: str,
+        horizon: Horizon,
+        reference_entry_price: float,
+        started_at: datetime | None = None,
+    ) -> bool:
+        now = (started_at or datetime.now(UTC)).astimezone(UTC).isoformat(timespec="seconds")
+        with self._connect() as db:
+            cursor = db.execute(
+                """INSERT OR IGNORE INTO manual_trade_plan_quick_starts
+                (plan_id, reference_entry_price, started_at_utc) VALUES (?, ?, ?)""",
+                (plan_id, reference_entry_price, now),
+            )
+            if cursor.rowcount != 1:
+                return False
+            db.execute(
+                """INSERT OR IGNORE INTO manual_broker_plan_links
+                (plan_id, sync_state, updated_at_utc)
+                VALUES (?, 'WAITING_FOR_OPEN', ?)""",
+                (plan_id, now),
+            )
+            action = db.execute(
+                """INSERT OR IGNORE INTO signal_actions
+                (forecast_id, horizon, action, note, recorded_at_utc)
+                VALUES (?, ?, ?, ?, ?)""",
+                (
+                    forecast_id,
+                    horizon.value,
+                    SignalAction.TRADE_STARTED.value,
+                    "カード内の取引開始からlocal出口計画を開始",
+                    now,
+                ),
+            )
+            return action.rowcount == 1
+
+    def record_broker_sync_failure(
+        self,
+        *,
+        status: str,
+        safe_error_code: str,
+        source: str,
+        attempted_at: datetime | None = None,
+    ) -> None:
+        now = (attempted_at or datetime.now(UTC)).astimezone(UTC).isoformat(timespec="seconds")
+        with self._connect() as db:
+            previous = db.execute(
+                "SELECT last_success_at_utc FROM manual_broker_sync_state WHERE singleton = 1"
+            ).fetchone()
+            last_success = None if previous is None else previous["last_success_at_utc"]
+            db.execute(
+                """INSERT INTO manual_broker_sync_state
+                (singleton, status, safe_error_code, source, open_position_count,
+                 last_attempt_at_utc, last_success_at_utc)
+                VALUES (1, ?, ?, ?, NULL, ?, ?)
+                ON CONFLICT(singleton) DO UPDATE SET
+                    status = excluded.status,
+                    safe_error_code = excluded.safe_error_code,
+                    source = excluded.source,
+                    open_position_count = NULL,
+                    last_attempt_at_utc = excluded.last_attempt_at_utc,
+                    last_success_at_utc = excluded.last_success_at_utc""",
+                (status, safe_error_code, source, now, last_success),
+            )
+
+    def apply_broker_sync_snapshot(
+        self,
+        *,
+        executions: list[dict[str, Any]],
+        open_positions: list[dict[str, Any]],
+        source: str,
+        synced_at: datetime | None = None,
+        match_window_seconds: int = 120,
+        stop_pips: float = 15.0,
+        take_pips: float = 22.5,
+        pip_size: float = 0.01,
+    ) -> dict[str, Any]:
+        """Atomically apply sanitized receipts; no raw broker identifier enters SQLite."""
+
+        now_dt = (synced_at or datetime.now(UTC)).astimezone(UTC)
+        now = now_dt.isoformat(timespec="seconds")
+        events: list[dict[str, Any]] = []
+        with self._connect() as db:
+            for execution in executions:
+                db.execute(
+                    """INSERT OR IGNORE INTO manual_broker_execution_receipts
+                    (execution_ref, position_ref, settle_type, symbol, side, size, price,
+                     executed_at_utc, applied_plan_id, recorded_at_utc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)""",
+                    (
+                        execution["execution_ref"],
+                        execution["position_ref"],
+                        execution["settle_type"],
+                        execution["symbol"],
+                        execution["side"],
+                        execution["size"],
+                        execution["price"],
+                        execution["executed_at_utc"],
+                        now,
+                    ),
+                )
+
+            active = db.execute(
+                """SELECT p.*, l.sync_state, l.position_ref, l.entry_size
+                FROM manual_trade_plans p
+                JOIN manual_broker_plan_links l USING(plan_id)
+                WHERE p.status = 'OPEN'
+                ORDER BY p.plan_id"""
+            ).fetchall()
+            unmatched_open = db.execute(
+                """SELECT * FROM manual_broker_execution_receipts
+                WHERE settle_type = 'OPEN' AND applied_plan_id IS NULL
+                ORDER BY executed_at_utc, execution_ref"""
+            ).fetchall()
+
+            candidate_map: dict[int, list[sqlite3.Row]] = {}
+            execution_use_count: dict[str, int] = {}
+            for plan in active:
+                if plan["position_ref"]:
+                    continue
+                entry_time = datetime.fromisoformat(plan["entry_time_utc"]).astimezone(UTC)
+                expected_side = "BUY" if plan["direction"] == Direction.BUY.value else "SELL"
+                candidates: list[sqlite3.Row] = []
+                for execution in unmatched_open:
+                    executed_at = _parse_broker_datetime(execution["executed_at_utc"])
+                    if (
+                        execution["side"] == expected_side
+                        and abs((executed_at - entry_time).total_seconds()) <= match_window_seconds
+                    ):
+                        candidates.append(execution)
+                        execution_use_count[execution["execution_ref"]] = (
+                            execution_use_count.get(execution["execution_ref"], 0) + 1
+                        )
+                candidate_map[int(plan["plan_id"])] = candidates
+
+            for plan in active:
+                plan_id = int(plan["plan_id"])
+                if plan["position_ref"]:
+                    continue
+                candidates = candidate_map.get(plan_id, [])
+                unique = [
+                    row
+                    for row in candidates
+                    if execution_use_count.get(row["execution_ref"], 0) == 1
+                ]
+                if len(candidates) != 1 or len(unique) != 1:
+                    state = "AMBIGUOUS_OPEN" if candidates else "WAITING_FOR_OPEN"
+                    db.execute(
+                        """UPDATE manual_broker_plan_links
+                        SET sync_state = ?, updated_at_utc = ? WHERE plan_id = ?""",
+                        (state, now, plan_id),
+                    )
+                    continue
+                execution = unique[0]
+                entry_price = float(execution["price"])
+                sign = 1 if plan["direction"] == Direction.BUY.value else -1
+                stop_price = round(entry_price - sign * stop_pips * pip_size, 6)
+                take_price = round(entry_price + sign * take_pips * pip_size, 6)
+                db.execute(
+                    """UPDATE manual_trade_plans
+                    SET entry_price = ?, stop_loss_price = ?, take_profit_price = ?
+                    WHERE plan_id = ? AND status = 'OPEN'""",
+                    (entry_price, stop_price, take_price, plan_id),
+                )
+                db.execute(
+                    """INSERT INTO manual_trade_plan_fill_corrections
+                    (plan_id, corrected_at_utc, previous_entry_price, corrected_entry_price,
+                     previous_stop_loss_price, corrected_stop_loss_price,
+                     previous_take_profit_price, corrected_take_profit_price)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        plan_id,
+                        now,
+                        plan["entry_price"],
+                        entry_price,
+                        plan["stop_loss_price"],
+                        stop_price,
+                        plan["take_profit_price"],
+                        take_price,
+                    ),
+                )
+                db.execute(
+                    """UPDATE manual_broker_plan_links
+                    SET position_ref = ?, entry_execution_ref = ?, entry_size = ?,
+                        remaining_size = ?, sync_state = 'LINKED', linked_at_utc = ?,
+                        updated_at_utc = ?
+                    WHERE plan_id = ?""",
+                    (
+                        execution["position_ref"],
+                        execution["execution_ref"],
+                        execution["size"],
+                        execution["size"],
+                        execution["executed_at_utc"],
+                        now,
+                        plan_id,
+                    ),
+                )
+                db.execute(
+                    """UPDATE manual_broker_execution_receipts SET applied_plan_id = ?
+                    WHERE execution_ref = ?""",
+                    (plan_id, execution["execution_ref"]),
+                )
+                events.append({"type": "OPEN_LINKED", "plan_id": plan_id})
+
+            close_rows = db.execute(
+                """SELECT * FROM manual_broker_execution_receipts
+                WHERE settle_type = 'CLOSE' AND applied_plan_id IS NULL
+                ORDER BY executed_at_utc, execution_ref"""
+            ).fetchall()
+            for execution in close_rows:
+                link = db.execute(
+                    """SELECT l.*, p.status, p.horizon
+                    FROM manual_broker_plan_links l JOIN manual_trade_plans p USING(plan_id)
+                    WHERE l.position_ref = ?""",
+                    (execution["position_ref"],),
+                ).fetchone()
+                if link is None:
+                    continue
+                plan_id = int(link["plan_id"])
+                closed_size = float(link["closed_size"]) + float(execution["size"])
+                close_value = float(link["close_value"]) + (
+                    float(execution["size"]) * float(execution["price"])
+                )
+                entry_size = float(link["entry_size"])
+                state = "CLOSED" if closed_size + 1e-9 >= entry_size else "PARTIALLY_CLOSED"
+                remaining_size = max(0.0, entry_size - closed_size)
+                db.execute(
+                    """UPDATE manual_broker_plan_links
+                    SET closed_size = ?, close_value = ?, remaining_size = ?,
+                        sync_state = ?, updated_at_utc = ? WHERE plan_id = ?""",
+                    (
+                        _decimal_text(closed_size),
+                        _decimal_text(close_value),
+                        _decimal_text(remaining_size),
+                        state,
+                        now,
+                        plan_id,
+                    ),
+                )
+                db.execute(
+                    """UPDATE manual_broker_execution_receipts SET applied_plan_id = ?
+                    WHERE execution_ref = ?""",
+                    (plan_id, execution["execution_ref"]),
+                )
+                if state == "CLOSED" and link["status"] == "OPEN":
+                    average_exit = close_value / closed_size
+                    db.execute(
+                        """UPDATE manual_trade_plans SET status = 'CLOSED', exit_time_utc = ?,
+                        exit_price = ?, exit_reason = ?
+                        WHERE plan_id = ? AND status = 'OPEN'""",
+                        (
+                            execution["executed_at_utc"],
+                            average_exit,
+                            ManualExitReason.BROKER_SYNC.value,
+                            plan_id,
+                        ),
+                    )
+                    events.append({"type": "CLOSE_APPLIED", "plan_id": plan_id})
+                else:
+                    events.append({"type": "PARTIAL_CLOSE_APPLIED", "plan_id": plan_id})
+
+            open_by_ref = {row["position_ref"]: row for row in open_positions}
+            linked_open = db.execute(
+                """SELECT l.*, p.status FROM manual_broker_plan_links l
+                JOIN manual_trade_plans p USING(plan_id)
+                WHERE p.status = 'OPEN' AND l.position_ref IS NOT NULL"""
+            ).fetchall()
+            for link in linked_open:
+                position = open_by_ref.get(link["position_ref"])
+                if position is None:
+                    db.execute(
+                        """UPDATE manual_broker_plan_links
+                        SET sync_state = 'RECHECK_REQUIRED', updated_at_utc = ?
+                        WHERE plan_id = ?""",
+                        (now, link["plan_id"]),
+                    )
+                    continue
+                remaining = float(position["size"])
+                entry_size = float(link["entry_size"])
+                state = "PARTIALLY_CLOSED" if remaining + 1e-9 < entry_size else "LINKED"
+                db.execute(
+                    """UPDATE manual_broker_plan_links
+                    SET remaining_size = ?, sync_state = ?, updated_at_utc = ?
+                    WHERE plan_id = ?""",
+                    (_decimal_text(remaining), state, now, link["plan_id"]),
+                )
+
+            db.execute(
+                """INSERT INTO manual_broker_sync_state
+                (singleton, status, safe_error_code, source, open_position_count,
+                 last_attempt_at_utc, last_success_at_utc)
+                VALUES (1, 'SYNCED', NULL, ?, ?, ?, ?)
+                ON CONFLICT(singleton) DO UPDATE SET
+                    status = 'SYNCED', safe_error_code = NULL, source = excluded.source,
+                    open_position_count = excluded.open_position_count,
+                    last_attempt_at_utc = excluded.last_attempt_at_utc,
+                    last_success_at_utc = excluded.last_success_at_utc""",
+                (source, len(open_positions), now, now),
+            )
+        return {"events": events, **self.broker_sync_overview()}
+
+    def broker_plan_sync_status(self, plan_id: int) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT sync_state, entry_size, closed_size, remaining_size,
+                linked_at_utc, updated_at_utc FROM manual_broker_plan_links
+                WHERE plan_id = ?""",
+                (plan_id,),
+            ).fetchone()
+        if row is None:
+            return {
+                "state": "NOT_TRACKED",
+                "entry_size": None,
+                "closed_size": None,
+                "remaining_size": None,
+                "linked_at_utc": None,
+                "updated_at_utc": None,
+            }
+        return {
+            "state": row["sync_state"],
+            "entry_size": _float_or_none(row["entry_size"]),
+            "closed_size": _float_or_none(row["closed_size"]),
+            "remaining_size": _float_or_none(row["remaining_size"]),
+            "linked_at_utc": row["linked_at_utc"],
+            "updated_at_utc": row["updated_at_utc"],
+        }
+
+    def broker_sync_overview(self) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT * FROM manual_broker_sync_state WHERE singleton = 1"
+            ).fetchone()
+        if row is None:
+            return {
+                "status": "NOT_CONFIGURED",
+                "safe_error_code": None,
+                "source": "DISABLED",
+                "open_position_count": None,
+                "last_attempt_at_utc": None,
+                "last_success_at_utc": None,
+            }
+        result = dict(row)
+        result.pop("singleton", None)
+        return result
+
+    def is_manual_trade_quick_start(self, plan_id: int) -> bool:
+        with self._connect() as db:
+            row = db.execute(
+                "SELECT 1 FROM manual_trade_plan_quick_starts WHERE plan_id = ?",
+                (plan_id,),
+            ).fetchone()
+        return row is not None
+
+    def correct_active_manual_trade_fill(
+        self,
+        *,
+        plan_id: int,
+        entry_price: float,
+        stop_loss_price: float,
+        take_profit_price: float,
+        corrected_at: datetime | None = None,
+    ) -> bool:
+        now = (corrected_at or datetime.now(UTC)).astimezone(UTC).isoformat(timespec="seconds")
+        with self._connect() as db:
+            previous = db.execute(
+                "SELECT * FROM manual_trade_plans WHERE plan_id = ? AND status = 'OPEN'",
+                (plan_id,),
+            ).fetchone()
+            if previous is None:
+                return False
+            cursor = db.execute(
+                """UPDATE manual_trade_plans
+                SET entry_price = ?, stop_loss_price = ?, take_profit_price = ?
+                WHERE plan_id = ? AND status = 'OPEN'""",
+                (entry_price, stop_loss_price, take_profit_price, plan_id),
+            )
+            if cursor.rowcount != 1:
+                return False
+            db.execute(
+                """INSERT INTO manual_trade_plan_fill_corrections
+                (plan_id, corrected_at_utc, previous_entry_price, corrected_entry_price,
+                 previous_stop_loss_price, corrected_stop_loss_price,
+                 previous_take_profit_price, corrected_take_profit_price)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    plan_id,
+                    now,
+                    previous["entry_price"],
+                    entry_price,
+                    previous["stop_loss_price"],
+                    stop_loss_price,
+                    previous["take_profit_price"],
+                    take_profit_price,
+                ),
+            )
+            return True
+
+    def manual_trade_fill_correction_summary(self, plan_id: int) -> dict[str, Any]:
+        with self._connect() as db:
+            row = db.execute(
+                """SELECT COUNT(*) AS correction_count, MAX(corrected_at_utc) AS corrected_at_utc
+                FROM manual_trade_plan_fill_corrections WHERE plan_id = ?""",
+                (plan_id,),
+            ).fetchone()
+        return dict(row)
 
     def close_manual_trade_plan(
         self,

@@ -23,7 +23,9 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         assert "シグナル" in page.text
         assert "今の判断" not in page.text
         script = client.get("/static/app.js")
+        styles = client.get("/static/styles.css")
         assert script.status_code == 200
+        assert styles.status_code == 200
         assert '["10m", "30m", "24h", "realtime"]' in script.text
         assert "data-signal-key" in script.text
         assert "signalSparkline" in script.text
@@ -33,21 +35,59 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         assert 'request("/api/manual/realtime-estimate"' in script.text
         assert "非正式・検証前" in script.text
         assert "renderValidationDiagnostics" in script.text
-        assert "openExitPlan" in script.text
+        assert "openExitPlan" not in script.text
         assert "quickExitContext" in script.text
         assert 'request("/api/manual/exit-plan/quick-start"' in script.text
-        assert "取引した＋出口開始" in script.text
-        assert "固定SL 15 / TP 22.5 pips" in script.text
-        assert "decisionInFlight" in script.text
+        assert "data-trade-start" in script.text
+        assert "${directionDisplay[signal.direction]}で取引開始" in script.text
+        assert "取引開始（Stay）" in script.text
+        assert '"買い": "Buy"' in script.text
+        assert '"売り": "Sell"' in script.text
+        assert '"見送り": "Stay"' in script.text
+        assert "参考表示・取引対象外" in script.text
+        assert "検証前・取引対象外" in script.text
+        assert "別時間軸を管理中" not in script.text
+        assert "TRADE_STARTEDを記録し、出口シグナルを開始しました。" in script.text
+        assert 'await switchTab("exit")' not in script.text
+        assert "SL15 / TP22.5" in script.text
+        assert "tradeStartInFlight" in script.text
+        assert "TRADE_STARTED" in script.text
+        assert 'request("/api/manual/decisions"' not in script.text
+        assert "quick-exit-close-button" not in page.text
+        assert "trade-and-exit-button" not in page.text
+        assert "quickSettlementAction" not in script.text
+        assert "損切りで決済記録" not in script.text
+        assert "現在価格で決済記録" not in script.text
+        assert "data-card-fill-input" not in script.text
+        assert "data-card-settle" not in script.text
+        assert "correctActualFill" not in script.text
+        assert 'request("/api/manual/exit-plan/actual-fill"' not in script.text
+        assert 'request("/api/manual/broker-sync"' in script.text
+        assert "OPEN約定待ち" in script.text
+        assert "部分決済" in script.text
+        assert "同期要確認" in script.text
         assert "wss://forex-api.coin.z.com/ws/public/v1" in script.text
         assert "data-chart-timeframe" in page.text
-        assert "出口管理" in page.text
-        assert "出口シグナル" in page.text
-        assert "exit-signal-strip" in page.text
+        assert "出口シグナル" in script.text
+        assert 'data-tab="exit"' not in page.text
+        assert 'id="exit"' not in page.text
+        assert "exit-signal-strip" not in page.text
+        assert "管理中" in page.text
+        assert "Broker同期 確認中" in page.text
+        assert 'id="broker-position-count"' in page.text
+        assert ".direction.buy, .direction.sell { color: var(--amber)" in styles.text
+        assert ".direction.no-trade { color: #67a8ff" in styles.text
+        assert 'id="open-position-count"' in page.text
         assert "確率帯別の実現上昇率" in page.text
         assert "毎秒ローリング検証" in page.text
         assert "非正式・別台帳" in page.text
         assert "renderRealtimeValidationDiagnostics" in script.text
+        assert "prepareCalculator" in script.text
+        assert "calc-max-loss" in page.text
+        assert "逆算数量" in page.text
+        assert "注文計算へ" not in page.text
+        assert "見送った" not in page.text
+        assert "保留" not in page.text
 
         current = client.get("/api/manual/current")
         assert current.status_code == 200
@@ -75,8 +115,13 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         exit_status = client.get("/api/manual/exit-plan")
         assert exit_status.status_code == 200
         assert exit_status.json()["automatic_exit"] is False
+        assert exit_status.json()["active_plans"] == []
+        assert exit_status.json()["open_position_count"] == 0
         assert exit_status.json()["exit_signal"]["code"] == "NO_MANUAL_POSITION"
-        assert exit_status.json()["exit_signal"]["label"] == "建玉なし"
+        broker_sync = client.get("/api/manual/broker-sync")
+        assert broker_sync.status_code == 200
+        assert broker_sync.json()["status"] == "NOT_CONFIGURED"
+        assert broker_sync.json()["safety"]["actual_post"] is False
         quick_start = client.post(
             "/api/manual/exit-plan/quick-start",
             json={
@@ -86,18 +131,18 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
             },
         )
         assert quick_start.status_code == 422
+        actual_fill = client.post(
+            "/api/manual/exit-plan/actual-fill",
+            json={"plan_id": 1, "actual_fill_price": 160.012},
+        )
+        assert actual_fill.status_code == 422
         validation = client.get("/api/manual/validation")
         assert validation.status_code == 200
         assert validation.json()["metrics"]["threshold_auto_change_allowed"] is False
         assert validation.json()["realtime_rolling"]["formal_signal"] is False
         assert validation.json()["realtime_rolling"]["promotion_eligible"] is False
         assert validation.json()["realtime_rolling"]["target_price_max_delay_seconds"] == 15
-        decision = client.post(
-            "/api/manual/decisions",
-            json={"horizon": "10m", "decision": "見送った", "forecast_id": None},
-        )
-        assert decision.status_code == 200
-        assert decision.json()["recorded"] is True
+        assert client.post("/api/manual/decisions", json={}).status_code == 404
     finally:
         manual_app.dependency_overrides.pop(get_manual_signal_service, None)
 
@@ -116,6 +161,7 @@ def test_public_entrypoint_does_not_expose_manual_ui() -> None:
     assert client.get("/api/manual/exit-plan").status_code == 404
     assert client.post("/api/manual/exit-plan").status_code == 404
     assert client.post("/api/manual/exit-plan/quick-start").status_code == 404
+    assert client.post("/api/manual/exit-plan/actual-fill").status_code == 404
     assert client.post("/api/manual/exit-plan/close").status_code == 404
     assert client.post("/api/manual/decisions").status_code == 404
 

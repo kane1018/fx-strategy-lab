@@ -124,8 +124,9 @@ class CandleRepository:
     ) -> dict[str, int]:
         """Fetch public BID klines once per requested date, then atomically merge.
 
-        This method is only called by the operator's local `データを更新` action.
-        There is no automatic retry or background loop.
+        This method is called by the local `データを更新` action and by the
+        active browser page's once-per-minute scheduler. There is no
+        server-side background loop or automatic retry.
         """
 
         current = (now or datetime.now(UTC)).astimezone(UTC)

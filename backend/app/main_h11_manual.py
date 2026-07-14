@@ -1,7 +1,7 @@
 """Local-only H-11 manual signal UI entrypoint.
 
 Start only through ``python -m scripts.h11_manual_ui``. This application has no
-broker/order/credential routes and is intentionally separate from both
+broker-write/order routes and is intentionally separate from both
 ``app.main`` and the public ``app.main_readonly`` deployment.
 """
 
@@ -22,7 +22,10 @@ ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
 app = FastAPI(
     title="FX Strategy Lab Manual Signals (local-only)",
     version="1.0.0",
-    description="Local-only directional signal viewer. No broker, credentials, or orders.",
+    description=(
+        "Local-only directional signal viewer with optional GET-only manual-settlement sync. "
+        "No broker write or order endpoint."
+    ),
 )
 
 
