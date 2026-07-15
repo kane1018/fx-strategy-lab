@@ -60,6 +60,15 @@ def test_empty_service_or_account_rejected():
         read_h11_v3_keychain_secret(service=SERVICE, account="")
 
 
+def test_non_positive_read_timeout_rejected():
+    with pytest.raises(H11V3KeychainError):
+        read_h11_v3_keychain_secret(
+            service=SERVICE,
+            account=ACCOUNT,
+            timeout_seconds=0,
+        )
+
+
 def test_write_helper_refuses_non_test_service_names():
     with pytest.raises(H11V3KeychainError):
         write_h11_v3_keychain_secret_for_test_only(

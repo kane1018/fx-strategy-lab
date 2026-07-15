@@ -34,9 +34,14 @@ GMO_PRIVATE_BASE_URL = "https://forex-api.coin.z.com"
 LATEST_EXECUTIONS_PATH = "/private/v1/latestExecutions"
 OPEN_POSITIONS_PATH = "/private/v1/openPositions"
 ALLOWED_PRIVATE_GET_PATHS = frozenset({LATEST_EXECUTIONS_PATH, OPEN_POSITIONS_PATH})
+PRIVATE_GET_SIGNATURE_PATHS = {
+    LATEST_EXECUTIONS_PATH: "/v1/latestExecutions",
+    OPEN_POSITIONS_PATH: "/v1/openPositions",
+}
 KEYCHAIN_SERVICE = "fx-strategy-lab-h11-manual-readonly"
 KEYCHAIN_API_KEY_ACCOUNT = "gmo-fx-api-key"
 KEYCHAIN_API_SECRET_ACCOUNT = "gmo-fx-api-secret"
+KEYCHAIN_PROMPT_TIMEOUT_SECONDS = 120.0
 
 
 class ManualSettlementSyncError(RuntimeError):
@@ -155,7 +160,7 @@ class GmoManualSettlementPrivateGetClient:
             api_secret=self._api_secret,
             timestamp=timestamp,
             method="GET",
-            path=path,
+            path=PRIVATE_GET_SIGNATURE_PATHS[path],
         )
         try:
             response = self._client.get(path, params=dict(params), headers=headers)
@@ -254,10 +259,12 @@ def build_keychain_manual_settlement_client() -> ManualSettlementReadClient:
         api_key = read_h11_v3_keychain_secret(
             service=KEYCHAIN_SERVICE,
             account=KEYCHAIN_API_KEY_ACCOUNT,
+            timeout_seconds=KEYCHAIN_PROMPT_TIMEOUT_SECONDS,
         )
         api_secret = read_h11_v3_keychain_secret(
             service=KEYCHAIN_SERVICE,
             account=KEYCHAIN_API_SECRET_ACCOUNT,
+            timeout_seconds=KEYCHAIN_PROMPT_TIMEOUT_SECONDS,
         )
     except H11V3KeychainError:
         return DisabledManualSettlementReadClient()

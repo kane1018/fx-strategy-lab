@@ -6,6 +6,7 @@ import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 import numpy as np
@@ -67,6 +68,34 @@ class ManualSignalService:
         self.ledger = SignalLedger(data_root / "signal_ledger.sqlite3")
         self.short_artifact_path = data_root / "short_model_artifact.json"
         self.settlement_reader = settlement_reader or DisabledManualSettlementReadClient()
+        self._m1_cache_lock = Lock()
+        self._m1_cache: pd.DataFrame | None = None
+        self._m1_cache_mtime_ns: int | None = None
+
+    def _load_m1_cached(
+        self,
+        *,
+        now: datetime,
+        force: bool = False,
+    ) -> pd.DataFrame:
+        """Reuse normalized M1 data until the atomically replaced CSV changes."""
+
+        try:
+            mtime_ns = self.repository.m1_path.stat().st_mtime_ns
+        except FileNotFoundError:
+            mtime_ns = None
+        with self._m1_cache_lock:
+            if (
+                force
+                or self._m1_cache is None
+                or self._m1_cache_mtime_ns != mtime_ns
+            ):
+                self._m1_cache = self.repository.load_m1(now=now)
+                try:
+                    self._m1_cache_mtime_ns = self.repository.m1_path.stat().st_mtime_ns
+                except FileNotFoundError:
+                    self._m1_cache_mtime_ns = None
+            return self._m1_cache
 
     def current(self, *, now: datetime | None = None, record: bool = True) -> dict[str, Any]:
         current = (now or datetime.now(UTC)).astimezone(UTC)
@@ -95,9 +124,10 @@ class ManualSignalService:
     def refresh(self, client: PublicCandleClient, *, now: datetime | None = None) -> dict[str, Any]:
         current = (now or datetime.now(UTC)).astimezone(UTC)
         counts = self.repository.refresh(client, now=current)
+        m1 = self._load_m1_cached(now=current, force=True)
         trained = False
         if not self.short_artifact_path.exists():
-            artifact = train_short_model(self.repository.load_m1(now=current), now=current)
+            artifact = train_short_model(m1, now=current)
             artifact.save(self.short_artifact_path)
             trained = True
         response = self.current(now=current)
@@ -108,6 +138,20 @@ class ManualSignalService:
         return {
             "forecasts": self.ledger.latest_forecasts(limit),
             "signal_actions": self.ledger.latest_signal_actions(limit),
+        }
+
+    def position_history(self, limit: int = 100) -> dict[str, Any]:
+        """Return locally sanitized broker position history without broker identifiers."""
+
+        broker_sync = self.ledger.broker_sync_overview()
+        positions = self.ledger.broker_position_history(limit=limit)
+        return {
+            "positions": positions,
+            "open_positions": [
+                row for row in positions if row["status"] in {"OPEN", "PARTIALLY_CLOSED"}
+            ],
+            "broker_sync": broker_sync,
+            "safety": self.broker_sync_safety_flags(actual_read=False),
         }
 
     def signal_series(self, limit: int = 120) -> dict[str, Any]:
@@ -265,6 +309,7 @@ class ManualSignalService:
                 "configured": False,
                 "events": [],
                 "active_plans": self.exit_plan_status(now=current)["active_plans"],
+                "actual_positions": self.actual_position_status(now=current),
                 "safety": self.broker_sync_safety_flags(actual_read=False),
             }
         try:
@@ -318,12 +363,14 @@ class ManualSignalService:
                 "configured": True,
                 "events": [],
                 "active_plans": self.exit_plan_status(now=current)["active_plans"],
+                "actual_positions": self.actual_position_status(now=current),
                 "safety": self.broker_sync_safety_flags(actual_read=True),
             }
         result.update(
             {
                 "configured": True,
                 "active_plans": self.exit_plan_status(now=current)["active_plans"],
+                "actual_positions": self.actual_position_status(now=current),
                 "safety": self.broker_sync_safety_flags(
                     actual_read=snapshot.source == "GMO_FX_PRIVATE_GET_READONLY"
                 ),
@@ -421,12 +468,14 @@ class ManualSignalService:
     def exit_plan_status(self, *, now: datetime | None = None) -> dict[str, Any]:
         current = (now or datetime.now(UTC)).astimezone(UTC)
         broker_sync = self.ledger.broker_sync_overview()
+        actual_positions = self.actual_position_status(now=current)
         active_plans = self.ledger.active_manual_trade_plans()
         if not active_plans:
             return {
                 "active": None,
                 "active_plans": [],
                 "open_position_count": 0,
+                "actual_position_count": len(actual_positions),
                 "exit_signal": {
                     "code": "NO_MANUAL_POSITION",
                     "label": "建玉なし",
@@ -437,6 +486,7 @@ class ManualSignalService:
                     "required_confirmations": 2,
                 },
                 "history": self.ledger.manual_trade_history(),
+                "actual_positions": actual_positions,
                 "automatic_exit": False,
                 "broker_state_known": broker_sync["status"] == "SYNCED",
                 "broker_sync": broker_sync,
@@ -450,11 +500,166 @@ class ManualSignalService:
             "active": primary["plan"],
             "active_plans": plan_statuses,
             "open_position_count": len(plan_statuses),
+            "actual_position_count": len(actual_positions),
             "exit_signal": primary["exit_signal"],
             "history": self.ledger.manual_trade_history(),
+            "actual_positions": actual_positions,
             "automatic_exit": False,
             "broker_state_known": broker_sync["status"] == "SYNCED",
             "broker_sync": broker_sync,
+        }
+
+    def actual_position_status(self, *, now: datetime | None = None) -> list[dict[str, Any]]:
+        """Evaluate every actual open position against each formal short horizon."""
+
+        current = (now or datetime.now(UTC)).astimezone(UTC)
+        statuses: list[dict[str, Any]] = []
+        for position in self.ledger.active_broker_positions():
+            public_position = {
+                key: value for key, value in position.items() if key != "position_ref"
+            }
+            public_position["exit_signals"] = {
+                horizon.value: self._actual_position_exit_signal(
+                    position=position,
+                    horizon=horizon,
+                    current=current,
+                )
+                for horizon in (Horizon.MINUTES_10, Horizon.MINUTES_30)
+            }
+            statuses.append(public_position)
+        return statuses
+
+    def _actual_position_exit_signal(
+        self,
+        *,
+        position: dict[str, Any],
+        horizon: Horizon,
+        current: datetime,
+    ) -> dict[str, Any]:
+        latest_tick = self.ledger.latest_realtime_tick()
+        side = str(position["side"])
+        is_buy = side == "BUY"
+        current_price: float | None = None
+        price_time: str | None = None
+        price_is_fresh = False
+        if latest_tick is not None:
+            sampled_at = datetime.fromisoformat(latest_tick["sample_time_utc"]).astimezone(UTC)
+            price_is_fresh = -5 <= (current - sampled_at).total_seconds() <= 15
+            if price_is_fresh:
+                current_price = float(latest_tick["bid"] if is_buy else latest_tick["ask"])
+                price_time = latest_tick["sample_time_utc"]
+
+        entry_price = position["average_entry_price"]
+        stop_price = None
+        take_price = None
+        if entry_price is not None:
+            sign = 1 if is_buy else -1
+            stop_price = round(float(entry_price) - sign * QUICK_EXIT_STOP_PIPS * JPY_PIP_SIZE, 6)
+            take_price = round(float(entry_price) + sign * QUICK_EXIT_TAKE_PIPS * JPY_PIP_SIZE, 6)
+        stop_reached = current_price is not None and stop_price is not None and (
+            current_price <= stop_price if is_buy else current_price >= stop_price
+        )
+        take_reached = current_price is not None and take_price is not None and (
+            current_price >= take_price if is_buy else current_price <= take_price
+        )
+
+        opened_at = datetime.fromisoformat(position["opened_at_utc"]).astimezone(UTC)
+        target = opened_at + timedelta(minutes=horizon.bars)
+        time_basis_known = position["opened_at_source"] == "OPEN_EXECUTION"
+        time_exit_due = time_basis_known and current >= target
+        formal = self.ledger.recent_prospective_forecasts(
+            horizon,
+            since_utc=position["opened_at_utc"],
+            limit=10,
+        )
+        latest_p_up = None if not formal else float(formal[0]["p_up"])
+
+        def adverse(row: dict[str, Any]) -> bool:
+            probability = float(row["p_up"])
+            return probability <= 0.42 if is_buy else probability >= 0.58
+
+        adverse_count = 0
+        for row in formal:
+            if not adverse(row):
+                break
+            adverse_count += 1
+
+        if stop_reached:
+            code, label, tone, reason = (
+                "STOP_LOSS_REACHED",
+                "損切り",
+                "danger",
+                "現在価格が実約定価格基準の損切り参考値へ到達しました",
+            )
+        elif take_reached:
+            code, label, tone, reason = (
+                "TAKE_PROFIT_REACHED",
+                "利益確定",
+                "profit",
+                "現在価格が実約定価格基準の利益確定参考値へ到達しました",
+            )
+        elif time_exit_due:
+            code, label, tone, reason = (
+                "TIME_EXIT_DUE",
+                "時間切れ",
+                "danger",
+                f"実OPEN約定から{horizon.bars}分へ到達しました",
+            )
+        elif not price_is_fresh:
+            code, label, tone, reason = (
+                "PRICE_UNKNOWN",
+                "判定不可",
+                "unknown",
+                "15秒以内のPublic価格を確認できません",
+            )
+        elif adverse_count >= 2:
+            code, label, tone, reason = (
+                "MODEL_STOP_CANDIDATE",
+                "損切り候補",
+                "danger",
+                "保有方向と反対の正式基準を2回連続で満たしました",
+            )
+        elif latest_p_up is None:
+            code, label, tone, reason = (
+                "FORMAL_SIGNAL_UNKNOWN",
+                "判定不可",
+                "unknown",
+                "この時間軸の正式シグナルを確認できません",
+            )
+        elif (is_buy and latest_p_up < 0.50) or (not is_buy and latest_p_up > 0.50):
+            code, label, tone, reason = (
+                "MODEL_EDGE_WARNING",
+                "警戒",
+                "warning",
+                "保有方向の正式確率が50%の中立線を不利側へ越えました",
+            )
+        else:
+            code, label, tone, reason = (
+                "CONTINUE_POSITION",
+                "継続",
+                "continue",
+                "実建玉の保有方向とこの時間軸の正式シグナルが整合しています",
+            )
+        return {
+            "code": code,
+            "label": label,
+            "tone": tone,
+            "reason": reason,
+            "horizon": horizon.value,
+            "side": side,
+            "remaining_size": position["remaining_size"],
+            "entry_price": entry_price,
+            "current_price": current_price,
+            "latest_price_time_utc": price_time,
+            "stop_reference_price": stop_price,
+            "take_reference_price": take_price,
+            "remaining_seconds": None
+            if not time_basis_known
+            else max(0, int((target - current).total_seconds())),
+            "time_basis_known": time_basis_known,
+            "latest_formal_p_up": latest_p_up,
+            "adverse_confirmation_count": adverse_count,
+            "required_confirmations": 2,
         }
 
     def _single_exit_plan_status(
@@ -635,7 +840,7 @@ class ManualSignalService:
             sampled_at=current,
         )
         ticks = pd.DataFrame(self.ledger.recent_realtime_ticks())
-        rolling = build_rolling_feature_frame(self.repository.load_m1(now=current), ticks)
+        rolling = build_rolling_feature_frame(self._load_m1_cached(now=current), ticks)
         estimates = [
             self._realtime_short_estimate(horizon, rolling, current)
             for horizon in (Horizon.MINUTES_10, Horizon.MINUTES_30)
@@ -700,7 +905,7 @@ class ManualSignalService:
         if timeframe == "1h":
             frame = self.repository.load_h1(now=current)
         elif timeframe in {"1m", "10m", "30m"}:
-            frame = self.repository.load_m1(now=current)
+            frame = self._load_m1_cached(now=current)
             minutes = {"1m": 1, "10m": 10, "30m": 30}[timeframe]
             if minutes > 1 and not frame.empty:
                 frame = self._aggregate_chart_frame(frame, minutes)
@@ -765,7 +970,7 @@ class ManualSignalService:
         return aggregated
 
     def _short_signal(self, horizon: Horizon, now: datetime) -> SignalView:
-        frame = self.repository.load_m1(now=now)
+        frame = self._load_m1_cached(now=now)
         if not self.short_artifact_path.exists():
             return self._blocked(horizon, "短期モデルの初期化が必要です")
         if frame.empty:
@@ -923,7 +1128,7 @@ class ManualSignalService:
         return "forecast_" + hashlib.sha256(source).hexdigest()[:24]
 
     def _resolve_available(self, now: datetime) -> None:
-        frames = {"M1": self.repository.load_m1(now=now), "H1": self.repository.load_h1(now=now)}
+        frames = {"M1": self._load_m1_cached(now=now), "H1": self.repository.load_h1(now=now)}
         for forecast in self.ledger.unresolved():
             try:
                 horizon = Horizon(forecast["horizon"])

@@ -28,6 +28,10 @@ body {
 }
 button, input, select { font: inherit; }
 button { color: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #7db3ff;
+  outline-offset: 2px;
+}
 
 .topbar {
   height: 68px;
@@ -89,6 +93,20 @@ main { width: min(1480px, calc(100% - 36px)); margin: 0 auto; padding: 22px 0 40
 .card-top { display: flex; align-items: center; justify-content: space-between; position: relative; z-index: 1; }
 .horizon-label { color: #adbed3; font-size: 14px; font-weight: 650; }
 .model-tag { color: #7187a3; font-size: 11px; letter-spacing: .05em; }
+.signal-age { position: relative; z-index: 1; align-self: flex-start; margin-top: 5px; color: #6f8aa8; font-size: 10px; font-variant-numeric: tabular-nums; }
+.signal-age.compact { margin-top: 2px; font-size: 8px; }
+.signal-main .card-top { gap: 12px; }
+.signal-main .horizon-label { flex: 0 0 auto; white-space: nowrap; }
+.signal-main .model-tag { min-width: 0; text-align: right; }
+.realtime-horizon-switch { position: relative; z-index: 2; display: flex; align-items: center; align-self: flex-start; gap: 4px; margin-top: 9px; padding: 3px; border: 1px solid #315079; border-radius: 9px; background: rgba(6, 17, 31, .72); }
+.realtime-horizon-switch > span { padding: 0 6px; color: #7890ac; font-size: 10px; }
+.realtime-horizon-switch button { min-width: 46px; border: 0; border-radius: 6px; padding: 5px 8px; color: #8fa4be; background: transparent; cursor: pointer; font-size: 10px; font-weight: 700; }
+.realtime-horizon-switch button:hover { color: var(--text); background: rgba(49, 80, 121, .55); }
+.realtime-horizon-switch button.active { color: #fff; background: #285f9f; box-shadow: 0 0 14px rgba(59, 130, 246, .22); }
+.realtime-horizon-switch.compact { width: 100%; justify-content: flex-end; margin-top: 3px; padding: 2px; }
+.realtime-horizon-switch.compact > span { margin-right: auto; padding-left: 3px; font-size: 8px; }
+.realtime-horizon-switch.compact button { min-width: 34px; padding: 3px 5px; font-size: 8px; }
+.signal-main:has(.realtime-horizon-switch) .direction { margin-top: 12px; }
 .direction { margin: 18px 0 10px; font-size: clamp(48px, 5vw, 68px); line-height: 1; letter-spacing: -.07em; font-weight: 820; position: relative; z-index: 1; }
 .signal-small .direction { margin: 0; font-size: 23px; }
 .small-signal-summary { display: flex; align-items: baseline; justify-content: space-between; gap: 7px; margin-top: 3px; }
@@ -131,6 +149,14 @@ main { width: min(1480px, calc(100% - 36px)); margin: 0 auto; padding: 22px 0 40
 .broker-card-state.partially_closed { border-color: rgba(96, 165, 250, .65); }
 .card-position-control.compact { flex-direction: column; align-items: stretch; }
 .card-position-control.compact .signal-card-exit small { display: none; }
+.actual-position-control { align-items: stretch; }
+.actual-position-control .signal-card-exit { width: 100%; }
+.actual-position-control.continue { border-color: rgba(45, 212, 191, .55); }
+.actual-position-control.warning { border-color: rgba(251, 191, 36, .6); }
+.actual-position-control.danger { border-color: rgba(251, 113, 133, .7); background: rgba(67, 18, 35, .48); }
+.actual-position-control.profit { border-color: rgba(96, 165, 250, .7); }
+.actual-position-control.unknown { border-color: rgba(148, 163, 184, .55); }
+.actual-position-control.compact .signal-card-exit small { display: none; }
 .card-position-control.compact .card-position-actions { justify-content: flex-end; gap: 3px; }
 .card-position-control.compact .card-position-actions label { font-size: 7px; }
 .card-position-control.compact .card-position-actions input { width: 52px; padding: 3px; font-size: 8px; }
@@ -266,9 +292,32 @@ input:focus, select:focus { border-color: var(--blue); }
 .validation-note { margin-top: 16px; color: var(--muted); font-size: 13px; box-shadow: none; }
 .diagnostic-toolbar { margin-top: 26px; display: flex; justify-content: space-between; align-items: end; gap: 20px; }
 .diagnostic-toolbar h2 { margin: 0; }
+.score-heading { margin-top: 30px; }
+.score-heading + .metric-grid { margin-top: 14px; }
 .diagnostic-horizons { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: #081523; }
 .diagnostic-horizons button { border: 0; border-radius: 7px; background: transparent; color: var(--muted); padding: 8px 13px; cursor: pointer; }
 .diagnostic-horizons button.active { color: var(--text); background: #1b3558; }
+.action-breakdown-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+.action-metric-card { min-width: 0; padding: 17px 18px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(145deg, rgba(18, 34, 56, .95), rgba(10, 23, 40, .96)); box-shadow: var(--shadow); }
+.action-metric-card.buy, .action-metric-card.sell { border-color: rgba(251, 191, 36, .38); }
+.action-metric-card.stay { border-color: rgba(96, 165, 250, .42); }
+.action-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.action-card-head strong { font-size: 19px; }
+.action-metric-card.buy .action-card-head strong, .action-metric-card.sell .action-card-head strong { color: var(--amber); }
+.action-metric-card.stay .action-card-head strong { color: #67a8ff; }
+.action-card-head span { color: var(--muted); font-size: 11px; }
+.action-primary-rate { display: flex; align-items: baseline; gap: 8px; margin: 10px 0 12px; font-size: 34px; font-weight: 760; letter-spacing: -.04em; }
+.action-primary-rate small { color: var(--muted); font-size: 10px; font-weight: 500; letter-spacing: 0; }
+.action-metric-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin: 0; }
+.action-metric-card dl div { display: flex; justify-content: space-between; gap: 8px; min-width: 0; padding-top: 7px; border-top: 1px solid rgba(70, 93, 125, .34); }
+.action-metric-card dt { color: var(--muted); font-size: 10px; }
+.action-metric-card dd { margin: 0; font-size: 11px; font-weight: 650; text-align: right; }
+.action-metric-card .confidence-row { grid-column: 1 / -1; }
+.stay-direction-rates { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 12px; }
+.stay-direction-rates div { padding: 8px 10px; border: 1px solid rgba(59, 130, 246, .24); border-radius: 9px; background: rgba(7, 22, 40, .62); }
+.stay-direction-rates small { display: block; color: var(--muted); font-size: 9px; }
+.stay-direction-rates strong { display: block; margin-top: 2px; font-size: 22px; }
+.planned-metric-note { margin-top: 10px; padding: 9px 12px; border: 1px dashed rgba(91, 130, 179, .5); border-radius: 10px; color: #8297b0; background: rgba(9, 23, 39, .5); font-size: 11px; }
 .diagnostic-grid { display: grid; gap: 16px; margin-top: 14px; }
 .diagnostic-panel h2 { margin: 0 0 14px; font-size: 17px; }
 .threshold-current td { background: rgba(31, 91, 169, .24); color: #e8f2ff; }
@@ -348,6 +397,7 @@ footer { min-height: 54px; border-top: 1px solid rgba(69, 91, 122, .38); display
   .exit-signal-strip p { grid-column: 1 / -1; grid-row: 2; }
   .exit-signal-actions { flex-wrap: wrap; justify-content: flex-end; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
+  .action-breakdown-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 600px) {
   .topbar { height: auto; min-height: 62px; flex-wrap: wrap; padding: 10px 14px; }

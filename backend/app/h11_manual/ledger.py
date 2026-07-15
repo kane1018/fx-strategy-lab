@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from app.h11_manual.contracts import (
+    BUY_THRESHOLD,
+    SELL_THRESHOLD,
     Direction,
     Horizon,
     ManualExitReason,
@@ -181,6 +183,28 @@ class SignalLedger:
                     executed_at_utc TEXT NOT NULL,
                     applied_plan_id INTEGER REFERENCES manual_trade_plans(plan_id),
                     recorded_at_utc TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS manual_broker_positions (
+                    position_ref TEXT PRIMARY KEY,
+                    symbol TEXT NOT NULL CHECK (symbol = 'USD_JPY'),
+                    side TEXT NOT NULL CHECK (side IN ('BUY', 'SELL')),
+                    opened_at_utc TEXT NOT NULL,
+                    opened_at_source TEXT NOT NULL CHECK (
+                        opened_at_source IN ('OPEN_EXECUTION', 'FIRST_OPEN_SNAPSHOT')
+                    ),
+                    entry_size TEXT NOT NULL,
+                    average_entry_price TEXT,
+                    remaining_size TEXT NOT NULL,
+                    closed_size TEXT NOT NULL DEFAULT '0',
+                    close_value TEXT NOT NULL DEFAULT '0',
+                    average_close_price TEXT,
+                    closed_at_utc TEXT,
+                    status TEXT NOT NULL CHECK (status IN (
+                        'OPEN', 'PARTIALLY_CLOSED', 'CLOSED', 'RECHECK_REQUIRED'
+                    )),
+                    first_seen_at_utc TEXT NOT NULL,
+                    last_seen_at_utc TEXT NOT NULL,
+                    updated_at_utc TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS manual_broker_sync_state (
                     singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -661,6 +685,141 @@ class SignalLedger:
                     ),
                 )
 
+            open_by_ref = {row["position_ref"]: row for row in open_positions}
+            for position_ref, position in open_by_ref.items():
+                previous = db.execute(
+                    "SELECT * FROM manual_broker_positions WHERE position_ref = ?",
+                    (position_ref,),
+                ).fetchone()
+                open_rows = db.execute(
+                    """SELECT size, price, executed_at_utc
+                    FROM manual_broker_execution_receipts
+                    WHERE position_ref = ? AND settle_type = 'OPEN'
+                    ORDER BY executed_at_utc, execution_ref""",
+                    (position_ref,),
+                ).fetchall()
+                close_rows_for_position = db.execute(
+                    """SELECT size, price, executed_at_utc
+                    FROM manual_broker_execution_receipts
+                    WHERE position_ref = ? AND settle_type = 'CLOSE'
+                    ORDER BY executed_at_utc, execution_ref""",
+                    (position_ref,),
+                ).fetchall()
+                open_size = sum(float(row["size"]) for row in open_rows)
+                close_size = sum(float(row["size"]) for row in close_rows_for_position)
+                close_value = sum(
+                    float(row["size"]) * float(row["price"])
+                    for row in close_rows_for_position
+                )
+                remaining = float(position["size"])
+                previous_entry_size = 0.0 if previous is None else float(previous["entry_size"])
+                entry_size = max(open_size, previous_entry_size, remaining + close_size)
+                if open_rows and open_size > 0:
+                    average_entry = sum(
+                        float(row["size"]) * float(row["price"]) for row in open_rows
+                    ) / open_size
+                    opened_at = open_rows[0]["executed_at_utc"]
+                    opened_at_source = "OPEN_EXECUTION"
+                else:
+                    average_entry = _float_or_none(position.get("average_price"))
+                    if average_entry is None and previous is not None:
+                        average_entry = _float_or_none(previous["average_entry_price"])
+                    opened_at = now if previous is None else previous["opened_at_utc"]
+                    opened_at_source = (
+                        "FIRST_OPEN_SNAPSHOT"
+                        if previous is None
+                        else previous["opened_at_source"]
+                    )
+                average_close = None if close_size <= 0 else close_value / close_size
+                status = (
+                    "PARTIALLY_CLOSED"
+                    if close_size > 0 or remaining + 1e-9 < entry_size
+                    else "OPEN"
+                )
+                first_seen = now if previous is None else previous["first_seen_at_utc"]
+                db.execute(
+                    """INSERT INTO manual_broker_positions
+                    (position_ref, symbol, side, opened_at_utc, opened_at_source,
+                     entry_size, average_entry_price, remaining_size, closed_size,
+                     close_value, average_close_price, closed_at_utc, status,
+                     first_seen_at_utc, last_seen_at_utc, updated_at_utc)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+                    ON CONFLICT(position_ref) DO UPDATE SET
+                        symbol = excluded.symbol,
+                        side = excluded.side,
+                        opened_at_utc = excluded.opened_at_utc,
+                        opened_at_source = excluded.opened_at_source,
+                        entry_size = excluded.entry_size,
+                        average_entry_price = excluded.average_entry_price,
+                        remaining_size = excluded.remaining_size,
+                        closed_size = excluded.closed_size,
+                        close_value = excluded.close_value,
+                        average_close_price = excluded.average_close_price,
+                        closed_at_utc = NULL,
+                        status = excluded.status,
+                        last_seen_at_utc = excluded.last_seen_at_utc,
+                        updated_at_utc = excluded.updated_at_utc""",
+                    (
+                        position_ref,
+                        position["symbol"],
+                        position["side"],
+                        opened_at,
+                        opened_at_source,
+                        _decimal_text(entry_size),
+                        None if average_entry is None else _decimal_text(average_entry),
+                        _decimal_text(remaining),
+                        _decimal_text(close_size),
+                        _decimal_text(close_value),
+                        None if average_close is None else _decimal_text(average_close),
+                        status,
+                        first_seen,
+                        now,
+                        now,
+                    ),
+                )
+
+            tracked_positions = db.execute(
+                "SELECT * FROM manual_broker_positions WHERE status != 'CLOSED'"
+            ).fetchall()
+            for tracked in tracked_positions:
+                if tracked["position_ref"] in open_by_ref:
+                    continue
+                close_rows_for_position = db.execute(
+                    """SELECT size, price, executed_at_utc
+                    FROM manual_broker_execution_receipts
+                    WHERE position_ref = ? AND settle_type = 'CLOSE'
+                    ORDER BY executed_at_utc, execution_ref""",
+                    (tracked["position_ref"],),
+                ).fetchall()
+                close_size = sum(float(row["size"]) for row in close_rows_for_position)
+                close_value = sum(
+                    float(row["size"]) * float(row["price"])
+                    for row in close_rows_for_position
+                )
+                entry_size = float(tracked["entry_size"])
+                fully_closed = close_size > 0 and close_size + 1e-9 >= entry_size
+                closed_at = (
+                    close_rows_for_position[-1]["executed_at_utc"]
+                    if fully_closed
+                    else None
+                )
+                db.execute(
+                    """UPDATE manual_broker_positions
+                    SET remaining_size = ?, closed_size = ?, close_value = ?,
+                        average_close_price = ?, closed_at_utc = ?, status = ?,
+                        updated_at_utc = ? WHERE position_ref = ?""",
+                    (
+                        "0" if fully_closed else tracked["remaining_size"],
+                        _decimal_text(close_size),
+                        _decimal_text(close_value),
+                        None if close_size <= 0 else _decimal_text(close_value / close_size),
+                        closed_at,
+                        "CLOSED" if fully_closed else "RECHECK_REQUIRED",
+                        now,
+                        tracked["position_ref"],
+                    ),
+                )
+
             active = db.execute(
                 """SELECT p.*, l.sync_state, l.position_ref, l.entry_size
                 FROM manual_trade_plans p
@@ -820,7 +979,6 @@ class SignalLedger:
                 else:
                     events.append({"type": "PARTIAL_CLOSE_APPLIED", "plan_id": plan_id})
 
-            open_by_ref = {row["position_ref"]: row for row in open_positions}
             linked_open = db.execute(
                 """SELECT l.*, p.status FROM manual_broker_plan_links l
                 JOIN manual_trade_plans p USING(plan_id)
@@ -859,6 +1017,45 @@ class SignalLedger:
                 (source, len(open_positions), now, now),
             )
         return {"events": events, **self.broker_sync_overview()}
+
+    def broker_position_history(
+        self,
+        *,
+        limit: int = 100,
+        include_private_ref: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return sanitized local position facts; broker identifiers stay internal by default."""
+
+        safe_limit = max(1, min(limit, 500))
+        with self._connect() as db:
+            rows = db.execute(
+                """SELECT * FROM manual_broker_positions
+                ORDER BY opened_at_utc DESC, first_seen_at_utc DESC LIMIT ?""",
+                (safe_limit,),
+            ).fetchall()
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            if not include_private_ref:
+                item.pop("position_ref", None)
+            for key in (
+                "entry_size",
+                "average_entry_price",
+                "remaining_size",
+                "closed_size",
+                "average_close_price",
+            ):
+                item[key] = _float_or_none(item[key])
+            item.pop("close_value", None)
+            result.append(item)
+        return result
+
+    def active_broker_positions(self) -> list[dict[str, Any]]:
+        return [
+            row
+            for row in self.broker_position_history(limit=500, include_private_ref=True)
+            if row["status"] in {"OPEN", "PARTIALLY_CLOSED"}
+        ]
 
     def broker_plan_sync_status(self, plan_id: int) -> dict[str, Any]:
         with self._connect() as db:
@@ -1002,19 +1199,39 @@ class SignalLedger:
         return [dict(row) for row in rows]
 
     def validation_summary(self) -> dict[str, Any]:
+        overall_rows = self._resolved_rows(None)
+        overall_actions = self._action_breakdown(overall_rows, [])
+        overall_actions["confidence_interval_basis"] = "NOT_AVAILABLE_MIXED_HORIZONS"
+        overall_actions["mixed_horizon_aggregate"] = True
+        overall_calibration = self._calibration_bands(overall_rows, [])
+        overall_thresholds = self._threshold_curve(overall_rows, [])
+        for row in overall_calibration:
+            row["non_overlapping_n"] = None
+        for row in overall_thresholds:
+            row["non_overlapping_n"] = None
         result: dict[str, Any] = {
             "scope": "PROSPECTIVE_ONLY",
             "threshold_version": "SHORT_V1_FIXED_58_42",
             "threshold_auto_change_allowed": False,
             "overall": self._metrics(None),
             "horizons": {},
-            "diagnostics": {},
+            "diagnostics": {
+                "overall": {
+                    "action_breakdown": overall_actions,
+                    "calibration_bands": overall_calibration,
+                    "threshold_curve": overall_thresholds,
+                    "raw_resolved_n": len(overall_rows),
+                    "non_overlapping_n": None,
+                    "overlap_note": "MIXED_HORIZONS_NO_SINGLE_NON_OVERLAPPING_SAMPLE",
+                }
+            },
         }
         for horizon in Horizon:
             result["horizons"][horizon.value] = self._metrics(horizon)
             rows = self._resolved_rows(horizon)
             independent = self._non_overlapping_rows(rows, horizon)
             result["diagnostics"][horizon.value] = {
+                "action_breakdown": self._action_breakdown(rows, independent),
                 "calibration_bands": self._calibration_bands(rows, independent),
                 "threshold_curve": self._threshold_curve(rows, independent),
                 "raw_resolved_n": len(rows),
@@ -1236,6 +1453,80 @@ class SignalLedger:
                 }
             )
         return result
+
+    @classmethod
+    def _action_breakdown(
+        cls, rows: list[dict[str, Any]], independent: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        def selected(source: list[dict[str, Any]], action: str) -> list[dict[str, Any]]:
+            if action == "buy":
+                return [row for row in source if float(row["p_up"]) >= BUY_THRESHOLD]
+            if action == "sell":
+                return [row for row in source if float(row["p_up"]) <= SELL_THRESHOLD]
+            return [
+                row
+                for row in source
+                if SELL_THRESHOLD < float(row["p_up"]) < BUY_THRESHOLD
+            ]
+
+        items: dict[str, Any] = {}
+        for action in ("buy", "sell", "stay"):
+            action_rows = selected(rows, action)
+            independent_rows = selected(independent, action)
+            up_count = sum(int(row["outcome_up"]) for row in action_rows)
+            down_count = len(action_rows) - up_count
+            independent_up = sum(int(row["outcome_up"]) for row in independent_rows)
+            independent_down = len(independent_rows) - independent_up
+            up_low, up_high = cls._wilson_interval(independent_up, len(independent_rows))
+            down_low, down_high = cls._wilson_interval(
+                independent_down, len(independent_rows)
+            )
+            direction_correct = up_count if action == "buy" else down_count
+            independent_correct = independent_up if action == "buy" else independent_down
+            direction_low, direction_high = (
+                (None, None)
+                if action == "stay"
+                else cls._wilson_interval(independent_correct, len(independent_rows))
+            )
+            items[action] = {
+                "sample_n": len(action_rows),
+                "coverage": None
+                if not rows
+                else round(len(action_rows) / len(rows), 6),
+                "direction_accuracy": None
+                if action == "stay" or not action_rows
+                else round(direction_correct / len(action_rows), 6),
+                "realized_up_rate": None
+                if not action_rows
+                else round(up_count / len(action_rows), 6),
+                "realized_down_rate": None
+                if not action_rows
+                else round(down_count / len(action_rows), 6),
+                "non_overlapping_n": len(independent_rows),
+                "non_overlapping_direction_accuracy": None
+                if action == "stay" or not independent_rows
+                else round(independent_correct / len(independent_rows), 6),
+                "non_overlapping_realized_up_rate": None
+                if not independent_rows
+                else round(independent_up / len(independent_rows), 6),
+                "non_overlapping_realized_down_rate": None
+                if not independent_rows
+                else round(independent_down / len(independent_rows), 6),
+                "wilson_low": direction_low,
+                "wilson_high": direction_high,
+                "up_wilson_low": up_low,
+                "up_wilson_high": up_high,
+                "down_wilson_low": down_low,
+                "down_wilson_high": down_high,
+            }
+        return {
+            "buy_threshold": BUY_THRESHOLD,
+            "sell_threshold": SELL_THRESHOLD,
+            "total_resolved_n": len(rows),
+            "items": items,
+            "confidence_interval_basis": "NON_OVERLAPPING_WILSON_95",
+            "cost_adjusted_stay_fit_available": False,
+        }
 
     @staticmethod
     def _rows_at_threshold(rows: list[dict[str, Any]], threshold: float) -> list[dict[str, Any]]:

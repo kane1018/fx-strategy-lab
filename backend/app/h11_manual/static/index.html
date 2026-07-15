@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark" />
     <title>FX Strategy Lab — シグナル</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260715-5" />
   </head>
   <body>
     <header class="topbar">
@@ -17,7 +17,7 @@
         <button class="nav-item active" data-tab="signal">シグナル</button>
         <button class="nav-item" data-tab="history">履歴</button>
         <button class="nav-item" data-tab="calculator">注文計算</button>
-        <button class="nav-item" data-tab="record">取引記録</button>
+        <button class="nav-item" data-tab="record">ポジション履歴</button>
         <button class="nav-item" data-tab="validation">検証</button>
       </nav>
       <div class="top-actions">
@@ -32,18 +32,15 @@
           <div>
             <p class="eyebrow">USD/JPY · 方向確率</p>
             <h1>シグナル</h1>
-            <p>10分・30分・24時間の正式シグナルと、毎秒ローリング推定を切り替えて表示します。</p>
+            <p>正式シグナル（10分・30分）、方向参考（24時間）、毎秒推定を比較できます。</p>
           </div>
           <div class="heading-status-group">
-            <div class="position-count" title="このUIが出口シグナルを管理している建玉計画数です。">
-              <span>管理中</span><strong id="open-position-count">0</strong><span>件</span>
-            </div>
-            <div class="position-count" title="GMO FX openPositionsをread-only GETした件数です。">
-              <span>Broker</span><strong id="broker-position-count">—</strong><span>件</span>
+            <div class="position-count" title="GMO FX openPositionsをread-only GETした現在のUSD/JPY建玉数です。">
+              <span>建玉数</span><strong id="broker-position-count">—</strong><span>件</span>
             </div>
             <div class="broker-sync-state" title="latestExecutions / openPositions のread-only同期状態">
               <span id="broker-sync-dot" class="status-dot loading"></span>
-              <span id="broker-sync-label">Broker同期 確認中</span>
+              <span id="broker-sync-label">建玉同期 確認中</span>
             </div>
             <div class="update-state">
               <span id="update-dot" class="status-dot"></span>
@@ -126,30 +123,36 @@
       </section>
 
       <section id="record" class="screen">
-        <div class="page-heading compact"><div><p class="eyebrow">SIGNAL ACTION LOG</p><h1>取引記録</h1><p>取引開始と、満期まで取引開始記録がなかった事実を自動記録します。</p></div></div>
-        <div class="panel"><div id="decision-table" class="table-wrap empty-state">記録を読み込んでいます</div></div>
+        <div class="page-heading compact"><div><p class="eyebrow">BROKER POSITION HISTORY</p><h1>ポジション履歴</h1><p>read-only同期で確認した実際のOPEN・一部決済・CLOSEを表示します。Broker IDは表示しません。</p></div></div>
+        <div class="panel"><div id="position-table" class="table-wrap empty-state">ポジション履歴を読み込んでいます</div></div>
       </section>
 
       <section id="validation" class="screen">
         <div class="page-heading compact"><div><p class="eyebrow">FORWARD SCORE</p><h1>検証</h1><p>全シグナルを同じ分母で採点します。売買収益やエッジ証明ではありません。</p></div></div>
-        <div id="validation-cards" class="metric-grid"></div>
-        <div class="panel validation-note">Brier scoreとLog lossは低いほど良く、方向精度は補助指標です。PROSPECTIVEだけを対象にし、見送りも除外しません。</div>
         <div class="diagnostic-toolbar">
-          <div><p class="eyebrow">THRESHOLD DIAGNOSTICS</p><h2>確率帯・閾値診断</h2></div>
+          <div><p class="eyebrow">CURRENT 58% / 42%</p><h2>売買判定別の結果</h2></div>
           <div class="diagnostic-horizons" aria-label="検証時間軸">
-            <button class="active" type="button" data-validation-horizon="10m">10分</button>
+            <button class="active" type="button" data-validation-horizon="overall">全体</button>
+            <button type="button" data-validation-horizon="10m">10分</button>
             <button type="button" data-validation-horizon="30m">30分</button>
             <button type="button" data-validation-horizon="24h">24時間</button>
           </div>
         </div>
+        <div id="action-breakdown-cards" class="action-breakdown-grid" aria-live="polite"></div>
+        <div class="planned-metric-note">将来追加：コストモデルを事前固定した後、値幅と取引コストを使う「Stay適合率」を別指標として追加します。</div>
+        <div class="diagnostic-toolbar score-heading">
+          <div><p class="eyebrow">PROBABILITY SCORE</p><h2>確率予測の採点</h2></div>
+        </div>
+        <div id="validation-cards" class="metric-grid"></div>
+        <div class="panel validation-note">Brier scoreとLog lossは全予測を採点します。売買判断に対応する結果は上のBuy・Sell・Stayを主に確認します。非重複Nは予測期間が重ならない標本数、95%区間は非重複標本から算出した推定幅です。</div>
         <div class="diagnostic-grid">
           <section class="panel diagnostic-panel"><h2>確率帯別の実現上昇率</h2><div id="calibration-table" class="table-wrap empty-state">確定結果を待っています</div></section>
           <section class="panel diagnostic-panel"><h2>閾値別の方向精度</h2><div id="threshold-table" class="table-wrap empty-state">確定結果を待っています</div></section>
         </div>
         <div id="threshold-policy-note" class="panel validation-note">58%／42%はSHORT v1で固定されています。診断結果から自動変更しません。</div>
         <div class="diagnostic-toolbar realtime-validation-heading">
-          <div><p class="eyebrow">REALTIME ROLLING · SEPARATE LEDGER</p><h2>毎秒ローリング検証 <span class="research-badge">非正式・別台帳</span></h2></div>
-          <div class="diagnostic-horizons" aria-label="毎秒ローリング検証時間軸">
+          <div><p class="eyebrow">REALTIME ROLLING · SEPARATE LEDGER</p><h2>毎秒推定の検証 <span class="research-badge">非正式・別台帳</span></h2></div>
+          <div class="diagnostic-horizons" aria-label="毎秒推定の検証時間軸">
             <button class="active" type="button" data-realtime-validation-horizon="10m">10分</button>
             <button type="button" data-realtime-validation-horizon="30m">30分</button>
           </div>
@@ -167,6 +170,6 @@
       <span>FX Strategy Lab · Manual Signal Workspace</span>
       <span>GMO Private GETのみ · broker write / order POST なし</span>
     </footer>
-    <script src="/static/app.js" defer></script>
+    <script src="/static/app.js?v=20260715-5" defer></script>
   </body>
 </html>

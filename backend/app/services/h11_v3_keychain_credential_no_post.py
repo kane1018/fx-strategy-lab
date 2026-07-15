@@ -47,18 +47,22 @@ def _require_darwin(action: str) -> None:
         raise H11V3KeychainError(f"Keychain {action} is only supported on macOS")
 
 
-def read_h11_v3_keychain_secret(*, service: str, account: str) -> H11V3SealedSecret:
+def read_h11_v3_keychain_secret(
+    *, service: str, account: str, timeout_seconds: float = 5.0
+) -> H11V3SealedSecret:
     """Read a generic-password item. Raises if unavailable; never logs the value."""
 
     _require_darwin("read")
     if not service or not account:
         raise H11V3KeychainError("service and account are required")
+    if timeout_seconds <= 0:
+        raise H11V3KeychainError("timeout_seconds must be positive")
     try:
         completed = subprocess.run(
             ["security", "find-generic-password", "-s", service, "-a", account, "-w"],
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=timeout_seconds,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:

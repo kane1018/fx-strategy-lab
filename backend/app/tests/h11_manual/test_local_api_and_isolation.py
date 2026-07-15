@@ -30,28 +30,38 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         assert "data-signal-key" in script.text
         assert "signalSparkline" in script.text
         assert "毎秒ローリング" in script.text
+        assert 'realtimeHorizon: "10m"' in script.text
+        assert 'data-realtime-horizon="10m"' in script.text
+        assert 'data-realtime-horizon="30m"' in script.text
+        assert 'realtimeByHorizon(state.realtimeHorizon)' in script.text
+        assert '["10m", "30m"].forEach' in script.text
         assert "MARKET_RENDER_INTERVAL_MS = 1000" in script.text
         assert "SIGNAL_SETTLE_DELAY_MS = 3000" in script.text
+        assert "FORMAL_REFRESH_RECHECK_MS = 10000" in script.text
+        assert "FORMAL_REFRESH_MAX_RECHECKS = 3" in script.text
+        assert "formalSignalsIncludeLatestCompletedM1" in script.text
         assert 'request("/api/manual/realtime-estimate"' in script.text
         assert "非正式・検証前" in script.text
         assert "renderValidationDiagnostics" in script.text
+        assert "renderActionBreakdown" in script.text
         assert "openExitPlan" not in script.text
-        assert "quickExitContext" in script.text
-        assert 'request("/api/manual/exit-plan/quick-start"' in script.text
-        assert "data-trade-start" in script.text
-        assert "${directionDisplay[signal.direction]}で取引開始" in script.text
-        assert "取引開始（Stay）" in script.text
+        assert "quickExitContext" not in script.text
+        assert 'request("/api/manual/exit-plan/quick-start"' not in script.text
+        assert "data-trade-start" not in script.text
+        assert "実建玉の出口シグナル" in script.text
+        assert "actualPositions" in script.text
+        assert "brokerSnapshotRevision" in script.text
+        assert "allowBrokerSnapshot" in script.text
+        assert "requestedBrokerSnapshotRevision === state.brokerSnapshotRevision" in script.text
         assert '"買い": "Buy"' in script.text
         assert '"売り": "Sell"' in script.text
         assert '"見送り": "Stay"' in script.text
-        assert "参考表示・取引対象外" in script.text
-        assert "検証前・取引対象外" in script.text
+        assert "24時間モデルは相場方向の参考表示です" in script.text
+        assert "毎秒推定は非正式の研究表示です" in script.text
         assert "別時間軸を管理中" not in script.text
-        assert "TRADE_STARTEDを記録し、出口シグナルを開始しました。" in script.text
         assert 'await switchTab("exit")' not in script.text
-        assert "SL15 / TP22.5" in script.text
-        assert "tradeStartInFlight" in script.text
-        assert "TRADE_STARTED" in script.text
+        assert "tradeStartInFlight" not in script.text
+        assert "TRADE_STARTED" not in script.text
         assert 'request("/api/manual/decisions"' not in script.text
         assert "quick-exit-close-button" not in page.text
         assert "trade-and-exit-button" not in page.text
@@ -63,23 +73,37 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         assert "correctActualFill" not in script.text
         assert 'request("/api/manual/exit-plan/actual-fill"' not in script.text
         assert 'request("/api/manual/broker-sync"' in script.text
-        assert "OPEN約定待ち" in script.text
-        assert "部分決済" in script.text
-        assert "同期要確認" in script.text
+        assert 'request("/api/manual/positions?limit=100"' in script.text
+        assert "ポジション履歴" in page.text
+        assert 'id="position-table"' in page.text
+        assert "Broker IDは表示しません" in page.text
         assert "wss://forex-api.coin.z.com/ws/public/v1" in script.text
         assert "data-chart-timeframe" in page.text
         assert "出口シグナル" in script.text
         assert 'data-tab="exit"' not in page.text
         assert 'id="exit"' not in page.text
         assert "exit-signal-strip" not in page.text
-        assert "管理中" in page.text
-        assert "Broker同期 確認中" in page.text
+        assert "管理中" not in page.text
+        assert "建玉数" in page.text
+        assert "建玉同期 確認中" in page.text
         assert 'id="broker-position-count"' in page.text
+        assert "signalAgeLabel" in script.text
+        assert "確定足 ${seconds}秒前" in script.text
+        assert "最終推定 ${seconds}秒前" in script.text
+        assert 'if (["10m", "30m"].includes(key)) return 60' in script.text
+        assert 'if (key === "24h") return 3600' in script.text
+        assert "data-signal-age" in script.text
         assert ".direction.buy, .direction.sell { color: var(--amber)" in styles.text
         assert ".direction.no-trade { color: #67a8ff" in styles.text
-        assert 'id="open-position-count"' in page.text
+        assert 'id="open-position-count"' not in page.text
         assert "確率帯別の実現上昇率" in page.text
-        assert "毎秒ローリング検証" in page.text
+        assert "売買判定別の結果" in page.text
+        assert 'id="action-breakdown-cards"' in page.text
+        assert 'data-validation-horizon="overall"' in page.text
+        assert "確率予測の採点" in page.text
+        assert "コストモデルを事前固定した後" in page.text
+        assert "全予測方向一致率" not in script.text
+        assert "毎秒推定の検証" in page.text
         assert "非正式・別台帳" in page.text
         assert "renderRealtimeValidationDiagnostics" in script.text
         assert "prepareCalculator" in script.text
@@ -122,6 +146,10 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         assert broker_sync.status_code == 200
         assert broker_sync.json()["status"] == "NOT_CONFIGURED"
         assert broker_sync.json()["safety"]["actual_post"] is False
+        positions = client.get("/api/manual/positions")
+        assert positions.status_code == 200
+        assert positions.json()["positions"] == []
+        assert positions.json()["safety"]["actual_post"] is False
         quick_start = client.post(
             "/api/manual/exit-plan/quick-start",
             json={
@@ -139,6 +167,9 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         validation = client.get("/api/manual/validation")
         assert validation.status_code == 200
         assert validation.json()["metrics"]["threshold_auto_change_allowed"] is False
+        assert validation.json()["metrics"]["diagnostics"]["10m"]["action_breakdown"][
+            "cost_adjusted_stay_fit_available"
+        ] is False
         assert validation.json()["realtime_rolling"]["formal_signal"] is False
         assert validation.json()["realtime_rolling"]["promotion_eligible"] is False
         assert validation.json()["realtime_rolling"]["target_price_max_delay_seconds"] == 15
@@ -158,6 +189,7 @@ def test_public_entrypoint_does_not_expose_manual_ui() -> None:
     assert client.get("/api/manual/chart").status_code == 404
     assert client.post("/api/manual/realtime-estimate").status_code == 404
     assert client.get("/api/manual/signal-series").status_code == 404
+    assert client.get("/api/manual/positions").status_code == 404
     assert client.get("/api/manual/exit-plan").status_code == 404
     assert client.post("/api/manual/exit-plan").status_code == 404
     assert client.post("/api/manual/exit-plan/quick-start").status_code == 404

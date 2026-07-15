@@ -7,11 +7,14 @@ from decimal import Decimal
 from pathlib import Path
 
 import httpx
+import pytest
 
+from app.h11_manual import settlement_sync
 from app.h11_manual.contracts import Direction, Horizon, SignalStatus, SignalView
 from app.h11_manual.service import ManualSignalService
 from app.h11_manual.settlement_sync import (
     ALLOWED_PRIVATE_GET_PATHS,
+    KEYCHAIN_PROMPT_TIMEOUT_SECONDS,
     LATEST_EXECUTIONS_PATH,
     OPEN_POSITIONS_PATH,
     FakeManualSettlementReadClient,
@@ -20,6 +23,8 @@ from app.h11_manual.settlement_sync import (
     SanitizedExecution,
     SanitizedOpenPosition,
 )
+from app.private_api.auth import create_signature
+from app.services.h11_v3_keychain_credential_no_post import H11V3SealedSecret
 
 
 def _execution(
@@ -95,6 +100,13 @@ def test_private_transport_uses_only_two_gets_and_opaque_refs() -> None:
         seen.append((request.method, request.url.path))
         assert request.method == "GET"
         assert request.url.path in ALLOWED_PRIVATE_GET_PATHS
+        expected_signature = create_signature(
+            api_secret="fake-secret",
+            timestamp="1700000000000",
+            method="GET",
+            path=request.url.path.removeprefix("/private"),
+        )
+        assert request.headers["API-SIGN"] == expected_signature
         if request.url.path == LATEST_EXECUTIONS_PATH:
             return httpx.Response(
                 200,
@@ -156,6 +168,37 @@ def test_private_transport_uses_only_two_gets_and_opaque_refs() -> None:
     assert "fake-secret" not in repr(client)
 
 
+def test_manual_keychain_build_allows_time_for_two_interactive_prompts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, float]] = []
+
+    def fake_read(
+        *, service: str, account: str, timeout_seconds: float
+    ) -> H11V3SealedSecret:
+        calls.append((service, account, timeout_seconds))
+        value = "fake-key" if account == "gmo-fx-api-key" else "fake-secret"
+        return H11V3SealedSecret(value)
+
+    monkeypatch.setattr(settlement_sync, "read_h11_v3_keychain_secret", fake_read)
+
+    client = settlement_sync.build_keychain_manual_settlement_client()
+
+    assert client.availability.value == "CONFIGURED"
+    assert calls == [
+        (
+            "fx-strategy-lab-h11-manual-readonly",
+            "gmo-fx-api-key",
+            KEYCHAIN_PROMPT_TIMEOUT_SECONDS,
+        ),
+        (
+            "fx-strategy-lab-h11-manual-readonly",
+            "gmo-fx-api-secret",
+            KEYCHAIN_PROMPT_TIMEOUT_SECONDS,
+        ),
+    ]
+
+
 def test_sync_source_has_no_broker_write_or_environment_escape_hatch() -> None:
     source = (
         Path(__file__).resolve().parents[2]
@@ -196,6 +239,12 @@ def test_open_partial_and_full_close_are_applied_idempotently(tmp_path) -> None:
     assert active["take_profit_price"] == 160.237
     assert active["broker_sync"]["state"] == "LINKED"
     assert active["broker_sync"]["entry_size"] == 10000
+    actual = opened["actual_positions"][0]
+    assert actual["side"] == "BUY"
+    assert actual["remaining_size"] == 10000
+    assert actual["average_entry_price"] == 160.012
+    assert set(actual["exit_signals"]) == {"10m", "30m"}
+    assert "position_ref" not in actual
 
     partial = _execution(
         ref="opaque-close-1",
@@ -219,6 +268,8 @@ def test_open_partial_and_full_close_are_applied_idempotently(tmp_path) -> None:
     ]
     assert active["broker_sync"]["state"] == "PARTIALLY_CLOSED"
     assert active["broker_sync"]["remaining_size"] == 6000
+    assert partially_closed["actual_positions"][0]["status"] == "PARTIALLY_CLOSED"
+    assert partially_closed["actual_positions"][0]["remaining_size"] == 6000
 
     final = _execution(
         ref="opaque-close-2",
@@ -242,10 +293,55 @@ def test_open_partial_and_full_close_are_applied_idempotently(tmp_path) -> None:
     assert history[0]["status"] == "CLOSED"
     assert history[0]["exit_reason"] == "API同期決済"
     assert history[0]["exit_price"] == 160.08
+    position_history = service.position_history()
+    assert position_history["open_positions"] == []
+    assert position_history["positions"][0]["status"] == "CLOSED"
+    assert position_history["positions"][0]["average_close_price"] == 160.08
+    assert "position_ref" not in position_history["positions"][0]
 
     repeated = service.synchronize_manual_settlements(now=now + timedelta(seconds=22))
     assert repeated["events"] == []
     assert len(service.ledger.manual_trade_history()) == 1
+
+
+def test_actual_position_starts_exit_signals_without_ui_trade_plan(tmp_path) -> None:
+    now = datetime(2026, 7, 15, 3, 0, tzinfo=UTC)
+    service = ManualSignalService(tmp_path, supplemental_h1_paths=())
+    service.settlement_reader = FakeManualSettlementReadClient(
+        ManualSettlementSnapshot(
+            executions=(
+                _execution(
+                    ref="opaque-independent-open",
+                    position_ref="opaque-independent-position",
+                    side="SELL",
+                    price="160.200",
+                    executed_at=now,
+                ),
+            ),
+            open_positions=(
+                _position(
+                    position_ref="opaque-independent-position",
+                    side="SELL",
+                    size="10000",
+                ),
+            ),
+            source="FAKE_READONLY",
+        )
+    )
+
+    result = service.synchronize_manual_settlements(now=now + timedelta(seconds=1))
+
+    assert result["active_plans"] == []
+    assert len(result["actual_positions"]) == 1
+    position = result["actual_positions"][0]
+    assert position["side"] == "SELL"
+    assert position["opened_at_source"] == "OPEN_EXECUTION"
+    assert position["exit_signals"]["10m"]["side"] == "SELL"
+    assert position["exit_signals"]["30m"]["side"] == "SELL"
+    assert "position_ref" not in position
+    stored = service.ledger.broker_position_history()
+    assert len(stored) == 1
+    assert "position_ref" not in stored[0]
 
 
 def test_ambiguous_open_is_not_guessed(tmp_path) -> None:

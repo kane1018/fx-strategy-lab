@@ -172,12 +172,79 @@ def test_validation_diagnostics_are_prospective_and_overlap_aware(tmp_path) -> N
     assert current["buy_threshold"] == 0.58
     assert current["sell_threshold"] == 0.42
     assert current["sample_n"] == 3
+    actions = diagnostics["action_breakdown"]
+    assert actions["buy_threshold"] == 0.58
+    assert actions["sell_threshold"] == 0.42
+    assert actions["confidence_interval_basis"] == "NON_OVERLAPPING_WILSON_95"
+    assert actions["cost_adjusted_stay_fit_available"] is False
+    assert actions["items"]["buy"]["sample_n"] == 2
+    assert actions["items"]["buy"]["direction_accuracy"] == 0.5
+    assert actions["items"]["buy"]["coverage"] == 0.4
+    assert actions["items"]["sell"]["sample_n"] == 1
+    assert actions["items"]["sell"]["direction_accuracy"] == 1.0
+    assert actions["items"]["sell"]["non_overlapping_n"] == 1
+    assert actions["items"]["sell"]["wilson_low"] is not None
+    assert actions["items"]["stay"]["sample_n"] == 2
+    assert actions["items"]["stay"]["realized_up_rate"] == 0.5
+    assert actions["items"]["stay"]["realized_down_rate"] == 0.5
+    assert actions["items"]["stay"]["direction_accuracy"] is None
+    overall_actions = summary["diagnostics"]["overall"]["action_breakdown"]
+    assert summary["diagnostics"]["overall"]["raw_resolved_n"] == 5
+    assert summary["diagnostics"]["overall"]["non_overlapping_n"] is None
+    assert overall_actions["items"]["buy"]["direction_accuracy"] == 0.5
+    assert overall_actions["items"]["buy"]["non_overlapping_n"] == 0
+    assert overall_actions["items"]["buy"]["wilson_low"] is None
+    assert overall_actions["confidence_interval_basis"] == "NOT_AVAILABLE_MIXED_HORIZONS"
 
     series = ledger.signal_probability_series(limit=120)
     assert [row["p_up"] for row in series["10m"]] == list(probabilities)
     assert series["30m"] == []
     assert series["24h"] == []
     assert all(row["p_up"] != 0.99 for row in series["10m"])
+
+
+def test_validation_overall_action_breakdown_combines_formal_horizons(tmp_path) -> None:
+    ledger = SignalLedger(tmp_path / "signals.sqlite3")
+    cases = (
+        (Horizon.MINUTES_10, 0.60, True),
+        (Horizon.MINUTES_30, 0.65, False),
+        (Horizon.HOURS_24, 0.40, False),
+        (Horizon.MINUTES_10, 0.50, True),
+    )
+    for index, (horizon, probability, outcome) in enumerate(cases):
+        origin = datetime(2026, 7, 14, index, tzinfo=UTC)
+        signal = SignalView(
+            horizon=horizon,
+            direction=Direction.BUY,
+            status=SignalStatus.OK,
+            p_up=probability,
+            p_down=1 - probability,
+            reason="overall aggregation test",
+            origin_time_utc=origin.isoformat(),
+            model_config_hash="sha256:test",
+            forecast_id=f"overall_{index}",
+            recorded_mode="PROSPECTIVE",
+        )
+        assert ledger.record_forecast(signal)
+        assert ledger.resolve(
+            signal.forecast_id or "",
+            outcome_up=outcome,
+            target_time_utc=(origin + timedelta(days=1)).isoformat(),
+        )
+
+    diagnostics = ledger.validation_summary()["diagnostics"]["overall"]
+    actions = diagnostics["action_breakdown"]
+    assert diagnostics["raw_resolved_n"] == 4
+    assert diagnostics["non_overlapping_n"] is None
+    assert actions["items"]["buy"]["sample_n"] == 2
+    assert actions["items"]["buy"]["direction_accuracy"] == 0.5
+    assert actions["items"]["buy"]["coverage"] == 0.5
+    assert actions["items"]["sell"]["sample_n"] == 1
+    assert actions["items"]["sell"]["direction_accuracy"] == 1.0
+    assert actions["items"]["stay"]["sample_n"] == 1
+    assert actions["items"]["stay"]["realized_up_rate"] == 1.0
+    assert all(row["non_overlapping_n"] is None for row in diagnostics["calibration_bands"])
+    assert all(row["non_overlapping_n"] is None for row in diagnostics["threshold_curve"])
 
 
 def test_realtime_tick_samples_are_separate_and_one_per_second(tmp_path) -> None:
@@ -715,6 +782,30 @@ def test_chart_returns_real_cache_candles_and_aggregates_timeframes(tmp_path) ->
     assert len(one_minute["candles"]) == 60
     assert 20 <= len(ten_minutes["candles"]) <= 25
     assert ten_minutes["candles"][-1]["high"] >= ten_minutes["candles"][-1]["low"]
+
+
+def test_m1_frame_is_reused_until_refresh_for_realtime_latency(tmp_path, monkeypatch) -> None:
+    m1 = _synthetic_frame(240, "min")
+    now = pd.to_datetime(m1.iloc[-1]["time_utc"], utc=True).to_pydatetime() + timedelta(minutes=2)
+    service = ManualSignalService(tmp_path, supplemental_h1_paths=())
+    save_candle_csv(service.repository.m1_path, m1)
+    original = service.repository.load_m1
+    calls = 0
+
+    def counted_load_m1(*, now=None):
+        nonlocal calls
+        calls += 1
+        return original(now=now)
+
+    monkeypatch.setattr(service.repository, "load_m1", counted_load_m1)
+    first = service._load_m1_cached(now=now)
+    second = service._load_m1_cached(now=now)
+    assert calls == 1
+    assert first is second
+
+    refreshed = service._load_m1_cached(now=now, force=True)
+    assert calls == 2
+    assert refreshed is not first
 
 
 def test_chart_rejects_unsupported_timeframe(tmp_path) -> None:

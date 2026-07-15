@@ -1,5 +1,7 @@
 const MARKET_RENDER_INTERVAL_MS = 1000;
 const SIGNAL_SETTLE_DELAY_MS = 3000;
+const FORMAL_REFRESH_RECHECK_MS = 10000;
+const FORMAL_REFRESH_MAX_RECHECKS = 3;
 const PUBLIC_TICKER_WS = "wss://forex-api.coin.z.com/ws/public/v1";
 
 const state = {
@@ -7,14 +9,15 @@ const state = {
   signals: [],
   realtimeEstimates: [],
   realtimeCollection: null,
-  signalSeries: { "10m": [], "30m": [], "24h": [], realtime: [] },
+  realtimeHorizon: "10m",
+  signalSeries: { "10m": [], "30m": [], "24h": [], realtime: { "10m": [], "30m": [] } },
   currentTab: "signal",
-  validationHorizon: "10m",
+  validationHorizon: "overall",
   realtimeValidationHorizon: "10m",
   validationData: null,
   exitPlans: { "10m": null, "30m": null },
   exitSignals: { "10m": null, "30m": null },
-  openPositionCount: 0,
+  actualPositions: [],
   brokerSync: { status: "NOT_CONFIGURED", configured: false, open_position_count: null },
   chartTimeframe: "1m",
   candles: [],
@@ -31,14 +34,15 @@ const state = {
   renderTimer: null,
   signalTimer: null,
   nextSignalRefreshAt: null,
+  formalRefreshRechecks: 0,
   refreshInFlight: false,
   realtimeInFlight: false,
   lastRealtimeSampleSecond: null,
   exitStatusInFlight: false,
   brokerSyncInFlight: false,
+  brokerSnapshotRevision: 0,
   lastExitRefreshSecond: null,
   lastBrokerSyncSecond: null,
-  tradeStartInFlight: false,
   calculatorPriceEdited: false,
   calculatorDirectionEdited: false,
 };
@@ -83,6 +87,34 @@ function jst(value, includeSeconds = true) {
   return new Intl.DateTimeFormat("ja-JP", options).format(new Date(value));
 }
 
+function signalAgeOffsetSeconds(key) {
+  if (["10m", "30m"].includes(key)) return 60;
+  if (key === "24h") return 3600;
+  return 0;
+}
+
+function signalAgeLabel(value, key) {
+  const fallback = key === "realtime" ? "最終推定 —" : "確定足 —";
+  if (!value) return fallback;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const seconds = Math.max(
+    0,
+    Math.floor((Date.now() - parsed - signalAgeOffsetSeconds(key) * 1000) / 1000),
+  );
+  return key === "realtime" ? `最終推定 ${seconds}秒前` : `確定足 ${seconds}秒前`;
+}
+
+function signalAgeMarkup(signal, key, compact = false) {
+  return `<span class="signal-age ${compact ? "compact" : ""}" data-signal-age="${key}" data-signal-time="${escapeHtml(signal.origin_time_utc || "")}">${signalAgeLabel(signal.origin_time_utc, key)}</span>`;
+}
+
+function updateSignalAges() {
+  document.querySelectorAll("[data-signal-age]").forEach((node) => {
+    node.textContent = signalAgeLabel(node.dataset.signalTime, node.dataset.signalAge);
+  });
+}
+
 function signalByHorizon(horizon) {
   return state.signals.find((item) => item.horizon === horizon) || {
     horizon,
@@ -108,10 +140,10 @@ function realtimeModeLabel(estimate) {
 
 function displaySignal(key) {
   if (key !== "realtime") return signalByHorizon(key);
-  const estimate = realtimeByHorizon("10m");
+  const estimate = realtimeByHorizon(state.realtimeHorizon);
   return {
     horizon: "realtime",
-    horizon_label: "毎秒ローリング",
+    horizon_label: "毎秒推定",
     direction: estimate?.direction || "判定不可",
     p_up: estimate?.p_up ?? null,
     p_down: estimate?.p_down ?? null,
@@ -124,21 +156,29 @@ function displaySignal(key) {
 }
 
 function signalModelLabel(key) {
-  if (key === "realtime") return "非正式・検証前 · 10分方向の毎秒推定";
-  return `正式シグナル · ${key === "24h" ? "H11 v2" : "SHORT v1"}`;
+  if (key === "realtime") {
+    const label = state.realtimeHorizon === "30m" ? "30分" : "10分";
+    return `非正式・検証前 · ${label}方向の毎秒ローリング推定`;
+  }
+  return key === "24h" ? "方向参考 · H11 v2" : "正式シグナル · SHORT v1";
 }
 
 function realtimeProgress() {
   const stored = state.realtimeCollection?.stored_sample_count ?? 0;
   const coverage = state.realtimeCollection?.recent_coverage_seconds ?? 0;
   const remaining = Math.max(0, 31 * 60 - coverage);
-  return state.realtimeCollection?.tick_native_window_ready
-    ? "1秒ローリング窓 準備完了"
-    : `1秒データ ${stored.toLocaleString("ja-JP")}件 · native窓まで約${Math.ceil(remaining / 60)}分`;
+  if (state.realtimeCollection?.tick_native_window_ready) return "1秒ローリング窓 準備完了";
+  if (remaining < 60) return `1秒データ ${stored.toLocaleString("ja-JP")}件 · 最終確認中`;
+  return `1秒データ ${stored.toLocaleString("ja-JP")}件 · native窓まで約${Math.ceil(remaining / 60)}分`;
+}
+
+function signalSeriesFor(key) {
+  if (key === "realtime") return state.signalSeries.realtime[state.realtimeHorizon] || [];
+  return state.signalSeries[key] || [];
 }
 
 function signalSparkline(key, compact = false) {
-  const points = (state.signalSeries[key] || [])
+  const points = signalSeriesFor(key)
     .map((item) => Number(item.p_up))
     .filter(Number.isFinite)
     .slice(compact ? -45 : -120);
@@ -160,142 +200,121 @@ function signalSparkline(key, compact = false) {
   </div>`;
 }
 
+function realtimeHorizonControl(compact = false) {
+  return `<div class="realtime-horizon-switch ${compact ? "compact" : ""}" role="group" aria-label="毎秒推定の予測時間">
+    <span>予測時間</span>
+    <button type="button" data-realtime-horizon="10m" class="${state.realtimeHorizon === "10m" ? "active" : ""}" aria-pressed="${state.realtimeHorizon === "10m"}">10分</button>
+    <button type="button" data-realtime-horizon="30m" class="${state.realtimeHorizon === "30m" ? "active" : ""}" aria-pressed="${state.realtimeHorizon === "30m"}">30分</button>
+  </div>`;
+}
+
 function mainCard(signal, key) {
   const width = signal.p_up == null ? 0 : Math.round(signal.p_up * 100);
+  const cardTitle = key === "realtime" ? signal.horizon_label : `${signal.horizon_label}の方向`;
   const recordLabel =
     key === "realtime"
-      ? `${realtimeModeLabel(realtimeByHorizon("10m"))} · ${realtimeProgress()}`
+      ? `${realtimeModeLabel(realtimeByHorizon(state.realtimeHorizon))} · ${realtimeProgress()}`
       : signal.recorded_mode === "PROSPECTIVE"
         ? "前向き記録"
         : signal.recorded_mode === "REPLAYED_AFTER_MATURITY"
           ? "成熟後記録"
           : "未記録";
   return `
-    <div class="card-top"><span class="horizon-label">${escapeHtml(signal.horizon_label)}の方向</span><span class="model-tag">${signalModelLabel(key)}</span></div>
+    <div class="card-top"><span class="horizon-label">${escapeHtml(cardTitle)}</span><span class="model-tag">${signalModelLabel(key)}</span></div>
+    ${signalAgeMarkup(signal, key)}
+    ${key === "realtime" ? realtimeHorizonControl() : ""}
     <div class="direction ${directionClass[signal.direction] || "unknown"}">${escapeHtml(directionDisplay[signal.direction] || signal.direction)}</div>
     <div class="probability-row"><span class="probability-value">${percent(signal.p_up)}</span><span class="probability-label">上昇確率</span><span class="probability-label">下降 ${percent(signal.p_down)}</span></div>
     <div class="probability-bar" aria-label="上昇確率 ${width}%"><span style="width:${width}%"></span></div>
     <div class="reason">${escapeHtml(signal.reason)}</div>
     ${signalCardControl(key)}
     ${signalSparkline(key)}
-    <div class="meta-line"><span>観測 ${jst(signal.origin_time_utc)} JST</span><span>閾値 Buy 58% / Sell 42%</span><span>${escapeHtml(recordLabel)}</span></div>`;
+    <div class="meta-line"><span>観測 ${jst(signal.origin_time_utc)} JST</span><span>判定基準 Buy 58% / Sell 42%</span><span>${escapeHtml(recordLabel)}</span></div>`;
 }
 
 function smallCard(signal, key) {
   return `<article class="signal-small">
     <button class="signal-card-select" type="button" data-signal-key="${key}" aria-label="${escapeHtml(signal.horizon_label)}を大きく表示">
-      <div class="card-top"><span class="horizon-label">${escapeHtml(signal.horizon_label)}</span><span class="swap-hint">クリックで切替</span></div>
+      <div class="card-top"><span class="horizon-label">${escapeHtml(signal.horizon_label)}</span><span class="swap-hint">メイン表示</span></div>
+      ${signalAgeMarkup(signal, key, true)}
       <div class="small-signal-summary"><div class="direction ${directionClass[signal.direction] || "unknown"}">${escapeHtml(directionDisplay[signal.direction] || signal.direction)}</div><div class="probability-row"><span class="probability-value">${percent(signal.p_up)}</span><span class="probability-label">上昇</span></div></div>
       ${signalSparkline(key, true)}
     </button>
+    ${key === "realtime" ? realtimeHorizonControl(true) : ""}
     ${signalCardControl(key, true)}
   </article>`;
 }
 
-function quickExitContext(key = state.selected) {
-  const signal = displaySignal(key);
-  const supported = ["10m", "30m"].includes(key);
-  const directional = ["買い", "売り"].includes(signal.direction);
-  const quoteAge = state.live.receivedAt == null ? Infinity : Date.now() - state.live.receivedAt;
-  const referencePrice = signal.direction === "買い" ? state.live.ask : state.live.bid;
-  return {
-    signal,
-    eligible:
-      supported &&
-      directional &&
-      Boolean(signal.forecast_id) &&
-      signal.recorded_mode === "PROSPECTIVE" &&
-      Number.isFinite(referencePrice) &&
-      quoteAge <= 15000 &&
-      state.brokerSync.configured &&
-      state.brokerSync.status === "SYNCED" &&
-      !state.exitPlans[key],
-  };
-}
-
 function cardActionState(key) {
-  const signal = displaySignal(key);
   if (key === "24h") {
     return {
-      label: "参考表示・取引対象外",
-      enabled: false,
       exitLabel: "出口対象外",
       exitReason: "24時間モデルは相場方向の参考表示です",
+      positions: [],
     };
   }
   if (key === "realtime") {
     return {
-      label: "検証前・取引対象外",
-      enabled: false,
       exitLabel: "出口対象外",
-      exitReason: "毎秒ローリングは非正式推定です",
+      exitReason: "毎秒推定は非正式の研究表示です",
+      positions: [],
     };
-  }
-  const active = state.exitPlans[key];
-  if (active) {
-    const exitSignal = state.exitSignals[key];
-    return {
-      label: "出口シグナル稼働中",
-      enabled: false,
-      exitLabel: `出口: ${exitSignal?.label || "確認中"}`,
-      exitReason: exitSignal?.reason || "出口条件を確認しています",
-      active,
-      exitSignal,
-    };
-  }
-  if (state.tradeStartInFlight) {
-    return { label: "開始中…", enabled: false, exitLabel: "出口: 開始処理中", exitReason: "二重操作を防止しています" };
-  }
-  const context = quickExitContext(key);
-  if (context.eligible) {
-    return {
-      label: `${directionDisplay[signal.direction]}で取引開始`,
-      enabled: true,
-      exitLabel: "出口: 建玉なし",
-      exitReason: "開始後、このカードへ出口シグナルを表示 · SL15 / TP22.5",
-    };
-  }
-  if (signal.direction === "見送り") {
-    return { label: "取引開始（Stay）", enabled: false, exitLabel: "出口: 建玉なし", exitReason: "方向条件を満たしていません" };
-  }
-  if (!['買い', '売り'].includes(signal.direction)) {
-    return { label: "取引開始（判定待ち）", enabled: false, exitLabel: "出口: 建玉なし", exitReason: "正式方向を確認できません" };
   }
   if (!state.brokerSync.configured) {
     return {
-      label: "取引開始（同期未設定）",
-      enabled: false,
-      exitLabel: "Broker同期: 未設定",
-      exitReason: "read-only credentialをKeychainへ設定すると有効になります",
+      exitLabel: "出口: 同期未設定",
+      exitReason: "実建玉を確認するread-only同期が未設定です",
+      positions: [],
     };
   }
   if (state.brokerSync.status !== "SYNCED") {
     return {
-      label: "取引開始（同期確認待ち）",
-      enabled: false,
-      exitLabel: "Broker同期: 要確認",
+      exitLabel: "出口: 同期要確認",
       exitReason: "latestExecutions / openPositionsの正常同期を待っています",
+      positions: [],
     };
   }
+  if (!state.actualPositions.length) {
+    return {
+      exitLabel: "出口: 実建玉なし",
+      exitReason: "GMO FXの現在建玉はありません",
+      positions: [],
+    };
+  }
+  const priority = {
+    STOP_LOSS_REACHED: 100,
+    TAKE_PROFIT_REACHED: 95,
+    TIME_EXIT_DUE: 90,
+    PRICE_UNKNOWN: 80,
+    MODEL_STOP_CANDIDATE: 70,
+    FORMAL_SIGNAL_UNKNOWN: 60,
+    MODEL_EDGE_WARNING: 50,
+    CONTINUE_POSITION: 10,
+  };
+  const positions = state.actualPositions
+    .map((position) => ({ position, exit: position.exit_signals?.[key] }))
+    .filter((item) => item.exit)
+    .sort((left, right) => (priority[right.exit.code] || 0) - (priority[left.exit.code] || 0));
+  const primary = positions[0];
   return {
-    label: "取引開始（価格待ち）",
-    enabled: false,
-    exitLabel: "出口: 建玉なし",
-    exitReason: "前向き記録と15秒以内のPublic価格が必要です",
+    exitLabel: `出口: ${primary?.exit.label || "確認中"}`,
+    exitReason: primary?.exit.reason || "実建玉の出口条件を確認しています",
+    positions,
+    exitSignal: primary?.exit || null,
   };
 }
 
 function brokerPlanLabel(sync = {}) {
   const labels = {
-    WAITING_FOR_OPEN: "Broker: OPEN約定待ち",
-    AMBIGUOUS_OPEN: "Broker: OPEN照合不明",
-    LINKED: "Broker: OPEN照合済み",
-    PARTIALLY_CLOSED: "Broker: 部分決済",
-    RECHECK_REQUIRED: "Broker: 同期要確認",
-    CLOSED: "Broker: CLOSE反映済み",
-    NOT_TRACKED: "Broker: 未追跡",
+    WAITING_FOR_OPEN: "約定同期: 新規約定待ち",
+    AMBIGUOUS_OPEN: "約定同期: 新規約定を特定不可",
+    LINKED: "約定同期: 新規約定反映済み",
+    PARTIALLY_CLOSED: "約定同期: 一部決済",
+    RECHECK_REQUIRED: "約定同期: 要確認",
+    CLOSED: "約定同期: 決済反映済み",
+    NOT_TRACKED: "約定同期: 未追跡",
   };
-  return labels[sync.state] || "Broker: 確認中";
+  return labels[sync.state] || "約定同期: 確認中";
 }
 
 function brokerPlanDetail(sync = {}) {
@@ -312,39 +331,20 @@ function brokerPlanDetail(sync = {}) {
 
 function signalCardControl(key, compact = false) {
   const action = cardActionState(key);
-  if (action.active) {
-    const active = action.active;
-    const broker = active.broker_sync || {};
-    return `<div class="signal-card-control card-position-control ${compact ? "compact" : ""} ${escapeHtml(action.exitSignal?.tone || "neutral")}">
-      <div class="signal-card-exit" title="${escapeHtml(action.exitReason)}">
-        <strong>${escapeHtml(action.exitLabel)}</strong>
-        <span>${escapeHtml(action.exitReason)}</span>
-        <small>${escapeHtml(directionDisplay[active.direction] || active.direction)} · ${escapeHtml(active.horizon)} · Entry ${quote(active.entry_price)} · SL ${quote(active.stop_loss_price)} · TP ${quote(active.take_profit_price)} · ${remainingTime(active.remaining_seconds)}</small>
-      </div>
-      <div class="broker-card-state ${escapeHtml((broker.state || "").toLowerCase())}" title="${escapeHtml(brokerPlanDetail(broker))}">
-        <strong>${escapeHtml(brokerPlanLabel(broker))}</strong>
-        <span>${escapeHtml(brokerPlanDetail(broker))}</span>
-      </div>
-    </div>`;
-  }
-  return `<div class="signal-card-control ${compact ? "compact" : ""}">
-    <div class="signal-card-exit" title="${escapeHtml(action.exitReason)}"><strong data-card-exit-label="${key}">${escapeHtml(action.exitLabel)}</strong><span data-card-exit-reason="${key}">${escapeHtml(action.exitReason)}</span></div>
-    <button type="button" data-trade-start="${key}" ${action.enabled ? "" : "disabled"}>${escapeHtml(action.label)}</button>
+  const details = action.positions
+    .map(({ position, exit }) => {
+      const side = position.side === "BUY" ? "Buy" : "Sell";
+      const time = exit.remaining_seconds == null ? "時刻不明" : remainingTime(exit.remaining_seconds);
+      return `<small>${side} · ${Number(position.remaining_size || 0).toLocaleString("ja-JP")}通貨 · Entry ${quote(position.average_entry_price)} · ${escapeHtml(exit.label)} · ${time}</small>`;
+    })
+    .join("");
+  return `<div class="signal-card-control actual-position-control ${compact ? "compact" : ""} ${escapeHtml(action.exitSignal?.tone || "neutral")}">
+    <div class="signal-card-exit" title="${escapeHtml(action.exitReason)}">
+      <strong>${escapeHtml(action.exitLabel)}</strong>
+      <span>${escapeHtml(action.exitReason)}</span>
+      ${details}
+    </div>
   </div>`;
-}
-
-function updateQuickExitAction() {
-  document.querySelectorAll("[data-trade-start]").forEach((button) => {
-    const key = button.dataset.tradeStart;
-    const action = cardActionState(key);
-    button.textContent = action.label;
-    button.disabled = !action.enabled;
-    button.classList.toggle("quick-ready", action.enabled);
-    const label = document.querySelector(`[data-card-exit-label="${key}"]`);
-    const reason = document.querySelector(`[data-card-exit-reason="${key}"]`);
-    if (label) label.textContent = action.exitLabel;
-    if (reason) reason.textContent = action.exitReason;
-  });
 }
 
 function renderSignals() {
@@ -360,15 +360,14 @@ function renderSignals() {
       renderSignals();
     });
   });
-  document.querySelectorAll("[data-trade-start]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const key = button.dataset.tradeStart;
-      state.selected = key;
+  document.querySelectorAll("[data-realtime-horizon]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      state.realtimeHorizon = button.dataset.realtimeHorizon;
       renderSignals();
-      await startTrade(key);
     });
   });
-  updateQuickExitAction();
+  updateSignalAges();
 }
 
 function setUpdateStatus(text, type = "ok") {
@@ -475,13 +474,53 @@ async function refreshData({ auto = false } = {}) {
 
 function scheduleSignalRefresh() {
   if (state.signalTimer) window.clearTimeout(state.signalTimer);
+  state.formalRefreshRechecks = 0;
   const now = Date.now();
   const nextMinute = (Math.floor(now / 60000) + 1) * 60000;
   state.nextSignalRefreshAt = nextMinute + SIGNAL_SETTLE_DELAY_MS;
   state.signalTimer = window.setTimeout(async () => {
-    await refreshData({ auto: true });
-    scheduleSignalRefresh();
+    await refreshFormalSignal();
   }, Math.max(250, state.nextSignalRefreshAt - now));
+}
+
+function expectedCompletedM1OriginMs(now = Date.now()) {
+  return (Math.floor(now / 60000) - 1) * 60000;
+}
+
+function formalSignalsIncludeLatestCompletedM1() {
+  const expected = expectedCompletedM1OriginMs();
+  return ["10m", "30m"].every((horizon) => {
+    const origin = Date.parse(signalByHorizon(horizon).origin_time_utc || "");
+    return Number.isFinite(origin) && origin >= expected;
+  });
+}
+
+function scheduleFormalRefreshRecheck() {
+  if (state.signalTimer) window.clearTimeout(state.signalTimer);
+  state.nextSignalRefreshAt = Date.now() + FORMAL_REFRESH_RECHECK_MS;
+  state.signalTimer = window.setTimeout(async () => {
+    await refreshFormalSignal();
+  }, FORMAL_REFRESH_RECHECK_MS);
+}
+
+async function refreshFormalSignal() {
+  await refreshData({ auto: true });
+  if (formalSignalsIncludeLatestCompletedM1()) {
+    state.formalRefreshRechecks = 0;
+    scheduleSignalRefresh();
+    return;
+  }
+  if (
+    state.live.marketStatus !== "CLOSE" &&
+    state.formalRefreshRechecks < FORMAL_REFRESH_MAX_RECHECKS
+  ) {
+    state.formalRefreshRechecks += 1;
+    setUpdateStatus(`確定足の公開反映を再確認中 (${state.formalRefreshRechecks}/${FORMAL_REFRESH_MAX_RECHECKS})`, "loading");
+    scheduleFormalRefreshRecheck();
+    return;
+  }
+  state.formalRefreshRechecks = 0;
+  scheduleSignalRefresh();
 }
 
 function setMarketStatus(text, stateClass = "") {
@@ -556,7 +595,7 @@ function renderMarket() {
       `次回シグナル更新まで ${Math.ceil(remaining / 1000)}秒`;
   }
   drawChart();
-  updateQuickExitAction();
+  updateSignalAges();
   if (state.currentTab === "calculator" && !state.calculatorPriceEdited) syncCalculatorQuote();
   if (age <= 15000) updateRealtimeEstimate();
   if (state.currentTab === "signal") refreshExitStatusOncePerSecond();
@@ -579,14 +618,15 @@ async function updateRealtimeEstimate() {
     });
     state.realtimeEstimates = data.estimates;
     state.realtimeCollection = data.collection;
-    const estimate = realtimeByHorizon("10m");
-    if (estimate?.p_up != null && estimate?.estimate_time_utc) {
-      const series = state.signalSeries.realtime;
+    ["10m", "30m"].forEach((horizon) => {
+      const estimate = realtimeByHorizon(horizon);
+      if (estimate?.p_up == null || !estimate?.estimate_time_utc) return;
+      const series = state.signalSeries.realtime[horizon];
       const point = { time_utc: estimate.estimate_time_utc, p_up: estimate.p_up };
       if (series.at(-1)?.time_utc === point.time_utc) series[series.length - 1] = point;
       else series.push(point);
-      state.signalSeries.realtime = series.slice(-120);
-    }
+      state.signalSeries.realtime[horizon] = series.slice(-120);
+    });
     renderSignals();
   } catch (_) {
     // Formal signals remain visible; transient realtime estimation failures stay isolated.
@@ -735,37 +775,6 @@ function drawChart() {
   });
 }
 
-async function startTrade(signalKey = state.selected) {
-  if (state.tradeStartInFlight) return;
-  state.tradeStartInFlight = true;
-  updateQuickExitAction();
-  try {
-    const quick = quickExitContext(signalKey);
-    if (!quick.eligible) {
-      showNotice(
-        "取引開始を記録できません。正式10分/30分の買い・売りと15秒以内の価格を確認してください。",
-        "error",
-      );
-      return;
-    }
-    const data = await request("/api/manual/exit-plan/quick-start", {
-      method: "POST",
-      body: JSON.stringify({
-        forecast_id: quick.signal.forecast_id,
-        horizon: quick.signal.horizon,
-        direction: quick.signal.direction,
-      }),
-    });
-    applyExitPlanStatus(data);
-    showNotice("TRADE_STARTEDを記録し、出口シグナルを開始しました。");
-  } catch (error) {
-    showNotice(`取引開始と出口シグナルを開始できませんでした: ${error.message}`, "error");
-  } finally {
-    state.tradeStartInFlight = false;
-    updateQuickExitAction();
-  }
-}
-
 function remainingTime(seconds) {
   const safe = Math.max(0, Number(seconds) || 0);
   const minutes = Math.floor(safe / 60);
@@ -773,16 +782,17 @@ function remainingTime(seconds) {
   return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
-function applyExitPlanStatus(data) {
+function applyExitPlanStatus(data, { allowBrokerSnapshot = true } = {}) {
   state.exitPlans = { "10m": null, "30m": null };
   state.exitSignals = { "10m": null, "30m": null };
   (data.active_plans || []).forEach((item) => {
     state.exitPlans[item.plan.horizon] = item.plan;
     state.exitSignals[item.plan.horizon] = item.exit_signal;
   });
-  state.openPositionCount = Number(data.open_position_count) || 0;
-  document.querySelector("#open-position-count").textContent = String(state.openPositionCount);
-  if (data.broker_sync) applyBrokerSyncOverview(data.broker_sync);
+  if (allowBrokerSnapshot) {
+    state.actualPositions = data.actual_positions || [];
+    if (data.broker_sync) applyBrokerSyncOverview(data.broker_sync);
+  }
   renderSignals();
 }
 
@@ -793,18 +803,19 @@ function applyBrokerSyncOverview(data) {
   const syncLabel = document.querySelector("#broker-sync-label");
   const syncDot = document.querySelector("#broker-sync-dot");
   if (data.status === "SYNCED") {
-    syncLabel.textContent = `同期 ${jst(data.last_success_at_utc)} JST`;
+    syncLabel.textContent = `建玉同期 ${jst(data.last_success_at_utc)} JST`;
     syncDot.className = "status-dot";
   } else if (data.status === "NOT_CONFIGURED") {
-    syncLabel.textContent = "Broker同期 未設定";
+    syncLabel.textContent = "建玉同期 未設定";
     syncDot.className = "status-dot loading";
   } else {
-    syncLabel.textContent = "Broker同期 要確認";
+    syncLabel.textContent = "建玉同期 要確認";
     syncDot.className = "status-dot error";
   }
 }
 
 function applyBrokerSync(data) {
+  state.brokerSnapshotRevision += 1;
   applyBrokerSyncOverview(data);
   state.exitPlans = { "10m": null, "30m": null };
   state.exitSignals = { "10m": null, "30m": null };
@@ -812,12 +823,11 @@ function applyBrokerSync(data) {
     state.exitPlans[item.plan.horizon] = item.plan;
     state.exitSignals[item.plan.horizon] = item.exit_signal;
   });
-  state.openPositionCount = (data.active_plans || []).length;
-  document.querySelector("#open-position-count").textContent = String(state.openPositionCount);
+  state.actualPositions = data.actual_positions || [];
   const closeEvent = (data.events || []).find((event) => event.type === "CLOSE_APPLIED");
   const openEvent = (data.events || []).find((event) => event.type === "OPEN_LINKED");
-  if (closeEvent) showNotice("手動CLOSE約定を検知し、カードと取引記録へ反映しました。");
-  else if (openEvent) showNotice("手動OPEN約定を検知し、実約定価格と数量をカードへ反映しました。");
+  if (closeEvent) showNotice("手動CLOSE約定を検知し、出口表示とポジション履歴へ反映しました。");
+  else if (openEvent) showNotice("手動OPEN約定を検知し、実建玉の出口シグナルを開始しました。");
   renderSignals();
 }
 
@@ -838,8 +848,12 @@ async function loadBrokerSync() {
 async function loadExitPlan() {
   if (state.exitStatusInFlight) return;
   state.exitStatusInFlight = true;
+  const requestedBrokerSnapshotRevision = state.brokerSnapshotRevision;
   try {
-    applyExitPlanStatus(await request("/api/manual/exit-plan"));
+    const data = await request("/api/manual/exit-plan");
+    applyExitPlanStatus(data, {
+      allowBrokerSnapshot: requestedBrokerSnapshotRevision === state.brokerSnapshotRevision,
+    });
   } catch (error) {
     showNotice(`出口計画を読み込めませんでした: ${error.message}`, "error");
   } finally {
@@ -878,16 +892,36 @@ async function loadHistory() {
     ],
     "予測履歴はまだありません",
   );
-  document.querySelector("#decision-table").className = "table-wrap";
-  document.querySelector("#decision-table").innerHTML = renderTable(
-    data.signal_actions,
+}
+
+function positionStatusLabel(value) {
+  return {
+    OPEN: "保有中",
+    PARTIALLY_CLOSED: "一部決済",
+    CLOSED: "決済済み",
+    RECHECK_REQUIRED: "要確認",
+  }[value] || value;
+}
+
+async function loadPositionHistory() {
+  const data = await request("/api/manual/positions?limit=100");
+  if (data.broker_sync) applyBrokerSyncOverview(data.broker_sync);
+  document.querySelector("#position-table").className = "table-wrap";
+  document.querySelector("#position-table").innerHTML = renderTable(
+    data.positions,
     [
-      ["recorded_at_utc", "記録時刻", jst],
-      ["horizon", "時間軸"],
-      ["action", "状態", (value) => value === "TRADE_STARTED" ? "取引開始" : "取引開始記録なし"],
-      ["note", "メモ"],
+      ["status", "状態", positionStatusLabel],
+      ["side", "方向", (value) => value === "BUY" ? "Buy" : "Sell"],
+      ["opened_at_utc", "OPEN時刻", jst],
+      ["entry_size", "当初数量", (value) => `${Number(value || 0).toLocaleString("ja-JP")}通貨`],
+      ["remaining_size", "現在数量", (value) => `${Number(value || 0).toLocaleString("ja-JP")}通貨`],
+      ["average_entry_price", "平均約定価格", quote],
+      ["closed_at_utc", "CLOSE時刻", jst],
+      ["average_close_price", "平均決済価格", quote],
     ],
-    "取引記録はまだありません",
+    data.broker_sync?.status === "SYNCED"
+      ? "同期済みのポジション履歴はまだありません"
+      : "Broker read-only同期後にポジション履歴を表示します",
   );
 }
 
@@ -899,9 +933,59 @@ function percent1(value) {
   return value == null ? "—" : `${(Number(value) * 100).toFixed(1)}%`;
 }
 
+function interval95(low, high) {
+  return low == null || high == null ? "—" : `${percent1(low)}–${percent1(high)}`;
+}
+
+function renderActionBreakdown(diagnostics) {
+  const root = document.querySelector("#action-breakdown-cards");
+  const breakdown = diagnostics?.action_breakdown;
+  if (!root || !breakdown) return;
+  const buy = breakdown.items.buy;
+  const sell = breakdown.items.sell;
+  const stay = breakdown.items.stay;
+  const isOverall = state.validationHorizon === "overall";
+  const overlapRows = (item, stayMode = false) => isOverall
+    ? `<div class="confidence-row"><dt>非重複・95%区間</dt><dd>時間軸別で確認</dd></div>`
+    : stayMode
+      ? `<div><dt>非重複N</dt><dd>${item.non_overlapping_n}件</dd></div>
+        <div><dt>非重複 上昇／下降</dt><dd>${percent1(item.non_overlapping_realized_up_rate)}／${percent1(item.non_overlapping_realized_down_rate)}</dd></div>
+        <div class="confidence-row"><dt>上昇 95%区間</dt><dd>${interval95(item.up_wilson_low, item.up_wilson_high)}</dd></div>
+        <div class="confidence-row"><dt>下降 95%区間</dt><dd>${interval95(item.down_wilson_low, item.down_wilson_high)}</dd></div>`
+      : `<div><dt>非重複N</dt><dd>${item.non_overlapping_n}件</dd></div>
+        <div><dt>非重複一致率</dt><dd>${percent1(item.non_overlapping_direction_accuracy)}</dd></div>
+        <div class="confidence-row"><dt>95%区間</dt><dd>${interval95(item.wilson_low, item.wilson_high)}</dd></div>`;
+  const directionalCard = (key, label, metricLabel, item) => `
+    <article class="action-metric-card ${key}">
+      <div class="action-card-head"><strong>${label}</strong><span>${metricLabel}</span></div>
+      <div class="action-primary-rate">${percent1(item.direction_accuracy)}<small>全件</small></div>
+      <dl>
+        <div><dt>対象数</dt><dd>${item.sample_n}件</dd></div>
+        <div><dt>対象率</dt><dd>${percent1(item.coverage)}</dd></div>
+        ${overlapRows(item)}
+      </dl>
+    </article>`;
+  root.innerHTML = `
+    ${directionalCard("buy", "Buy", "上昇一致率", buy)}
+    ${directionalCard("sell", "Sell", "下降一致率", sell)}
+    <article class="action-metric-card stay">
+      <div class="action-card-head"><strong>Stay</strong><span>実現方向</span></div>
+      <div class="stay-direction-rates">
+        <div><small>上昇</small><strong>${percent1(stay.realized_up_rate)}</strong></div>
+        <div><small>下降</small><strong>${percent1(stay.realized_down_rate)}</strong></div>
+      </div>
+      <dl>
+        <div><dt>対象数</dt><dd>${stay.sample_n}件</dd></div>
+        <div><dt>対象率</dt><dd>${percent1(stay.coverage)}</dd></div>
+        ${overlapRows(stay, true)}
+      </dl>
+    </article>`;
+}
+
 function renderValidationDiagnostics() {
   const diagnostics = state.validationData?.metrics?.diagnostics?.[state.validationHorizon];
   if (!diagnostics) return;
+  renderActionBreakdown(diagnostics);
   const calibration = document.querySelector("#calibration-table");
   calibration.className = "table-wrap";
   calibration.innerHTML = renderTable(
@@ -922,17 +1006,20 @@ function renderValidationDiagnostics() {
   if (!rows.length) {
     threshold.innerHTML = '<div class="empty-state">この時間軸の確定結果はまだありません</div>';
   } else {
-    threshold.innerHTML = `<table><thead><tr><th>買い／売り基準</th><th>全件N</th><th>Coverage</th><th>全件精度</th><th>非重複N</th><th>非重複精度</th><th>95%区間</th></tr></thead><tbody>${rows
+    threshold.innerHTML = `<table><thead><tr><th>買い／売り基準</th><th>全件N</th><th>対象率</th><th>全件精度</th><th>非重複N</th><th>非重複精度</th><th>95%区間</th></tr></thead><tbody>${rows
       .map(
-        (row) => `<tr class="${row.is_current_v1 ? "threshold-current" : ""}"><td>${Math.round(row.buy_threshold * 100)}%／${Math.round(row.sell_threshold * 100)}%${row.is_current_v1 ? " · 現行v1" : ""}</td><td>${row.sample_n}</td><td>${percent1(row.coverage)}</td><td>${percent1(row.direction_accuracy)}</td><td>${row.non_overlapping_n}</td><td>${percent1(row.non_overlapping_accuracy)}</td><td>${row.wilson_low == null ? "—" : `${percent1(row.wilson_low)}–${percent1(row.wilson_high)}`}</td></tr>`,
+        (row) => `<tr class="${row.is_current_v1 ? "threshold-current" : ""}"><td>${Math.round(row.buy_threshold * 100)}%／${Math.round(row.sell_threshold * 100)}%${row.is_current_v1 ? " · 現行v1" : ""}</td><td>${row.sample_n}</td><td>${percent1(row.coverage)}</td><td>${percent1(row.direction_accuracy)}</td><td>${row.non_overlapping_n == null ? "—" : row.non_overlapping_n}</td><td>${percent1(row.non_overlapping_accuracy)}</td><td>${row.wilson_low == null ? "—" : `${percent1(row.wilson_low)}–${percent1(row.wilson_high)}`}</td></tr>`,
       )
       .join("")}</tbody></table>`;
   }
   document.querySelectorAll("[data-validation-horizon]").forEach((button) => {
     button.classList.toggle("active", button.dataset.validationHorizon === state.validationHorizon);
   });
+  const scope = state.validationHorizon === "overall"
+    ? `全時間軸 · PROSPECTIVE ${diagnostics.raw_resolved_n}件。全体は時間軸を横断するため、非重複率と95%区間は時間軸別で確認します。`
+    : `${signalByHorizon(state.validationHorizon).horizon_label} · PROSPECTIVE ${diagnostics.raw_resolved_n}件 · 非重複 ${diagnostics.non_overlapping_n}件。`;
   document.querySelector("#threshold-policy-note").textContent =
-    `対象: ${signalByHorizon(state.validationHorizon).horizon_label} · PROSPECTIVE ${diagnostics.raw_resolved_n}件 · 非重複 ${diagnostics.non_overlapping_n}件。58%／42%はSHORT v1で固定し、診断結果から自動変更しません。`;
+    `対象: ${scope}58%／42%はSHORT v1で固定し、診断結果から自動変更しません。`;
 }
 
 function renderRealtimeValidationDiagnostics() {
@@ -942,7 +1029,7 @@ function renderRealtimeValidationDiagnostics() {
   const raw = selected.raw_metrics;
   const independent = selected.non_overlapping_metrics;
   const cards = [
-    ["記録予測", selected.forecast_n, "1秒ごとのraw件数"],
+    ["記録予測", selected.forecast_n, "1秒ごとの全件数"],
     ["結果確定", selected.resolved_n, `照合率 ${percent1(selected.target_resolution_coverage)}`],
     ["非重複N", independent.resolved_n, `${state.realtimeValidationHorizon}間隔で抽出`],
     ["対象価格欠測", selected.target_price_missing_n, "目標時刻+15秒超"],
@@ -959,7 +1046,7 @@ function renderRealtimeValidationDiagnostics() {
     selected.calibration_bands,
     [
       ["label", "予測帯"],
-      ["sample_n", "raw N"],
+      ["sample_n", "毎秒N"],
       ["non_overlapping_n", "非重複N"],
       ["mean_p_up", "平均予測", percent1],
       ["realized_up_rate", "実現上昇率", percent1],
@@ -971,7 +1058,7 @@ function renderRealtimeValidationDiagnostics() {
   const rows = selected.threshold_curve;
   threshold.className = "table-wrap";
   threshold.innerHTML = rows.length
-    ? `<table><thead><tr><th>買い／売り基準</th><th>raw N</th><th>Coverage</th><th>raw精度</th><th>非重複N</th><th>非重複精度</th><th>95%区間</th></tr></thead><tbody>${rows
+    ? `<table><thead><tr><th>買い／売り基準</th><th>毎秒N</th><th>対象率</th><th>毎秒精度</th><th>非重複N</th><th>非重複精度</th><th>95%区間</th></tr></thead><tbody>${rows
         .map(
           (row) => `<tr class="${row.is_current_v1 ? "threshold-current" : ""}"><td>${Math.round(row.buy_threshold * 100)}%／${Math.round(row.sell_threshold * 100)}%</td><td>${row.sample_n}</td><td>${percent1(row.coverage)}</td><td>${percent1(row.direction_accuracy)}</td><td>${row.non_overlapping_n}</td><td>${percent1(row.non_overlapping_accuracy)}</td><td>${row.wilson_low == null ? "—" : `${percent1(row.wilson_low)}–${percent1(row.wilson_high)}`}</td></tr>`,
         )
@@ -987,7 +1074,7 @@ function renderRealtimeValidationDiagnostics() {
     ? selected.estimate_modes.map((item) => `${item.estimate_mode}: ${item.forecast_n}件`).join(" / ")
     : "予測待ち";
   document.querySelector("#realtime-validation-note").textContent =
-    `対象: ${state.realtimeValidationHorizon} · raw Brier ${metric(raw.brier)}（0.5基準比 ${metric(raw.brier_improvement_vs_0_5)}）· 非重複 Brier ${metric(independent.brier)}。rawの毎秒行は独立標本ではありません。対象BIDは目標時刻から15秒以内だけを採用し、遅延時は欠測に固定します。${modeSummary}。正式シグナルへの自動昇格・閾値自動変更はありません。`;
+    `対象: ${state.realtimeValidationHorizon} · 毎秒Brier ${metric(raw.brier)}（0.5基準比 ${metric(raw.brier_improvement_vs_0_5)}）· 非重複Brier ${metric(independent.brier)}。毎秒の全件行は互いに重なるため、独立標本ではありません。対象BIDは目標時刻から15秒以内だけを採用し、遅延時は欠測に固定します。${modeSummary}。正式シグナルへの自動昇格・判定基準の自動変更はありません。`;
 }
 
 async function loadValidation() {
@@ -1004,7 +1091,7 @@ async function loadValidation() {
   document.querySelector("#validation-cards").innerHTML = items
     .map(
       ([_, label, item]) =>
-        `<article class="metric-card"><h2>${label}</h2><dl><div><dt>確定数</dt><dd>${item.resolved_n}</dd></div><div><dt>Brier</dt><dd>${metric(item.brier)}</dd></div><div><dt>Log loss</dt><dd>${metric(item.log_loss)}</dd></div><div><dt>方向精度</dt><dd>${item.accuracy == null ? "—" : percent(item.accuracy)}</dd></div></dl></article>`,
+        `<article class="metric-card"><h2>${label}</h2><dl><div><dt>確定数</dt><dd>${item.resolved_n}</dd></div><div><dt>Brier</dt><dd>${metric(item.brier)}</dd></div><div><dt>Log loss</dt><dd>${metric(item.log_loss)}</dd></div></dl></article>`,
     )
     .join("");
   renderValidationDiagnostics();
@@ -1019,7 +1106,8 @@ async function switchTab(tab) {
   document.querySelectorAll(".nav-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.tab === tab);
   });
-  if (tab === "history" || tab === "record") await loadHistory();
+  if (tab === "history") await loadHistory();
+  if (tab === "record") await loadPositionHistory();
   if (tab === "validation") await loadValidation();
   if (tab === "calculator") prepareCalculator();
   if (tab === "signal") drawChart();

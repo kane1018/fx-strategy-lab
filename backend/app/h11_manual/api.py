@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 from threading import Lock
 from time import monotonic
 from typing import Annotated, Literal
@@ -17,17 +16,31 @@ from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
 router = APIRouter(prefix="/api/manual", tags=["local-manual-signal"])
 _refresh_lock = Lock()
 _broker_sync_lock = Lock()
+_service_init_lock = Lock()
+_manual_signal_service: ManualSignalService | None = None
 _last_refresh_monotonic = 0.0
-AUTO_REFRESH_DEDUP_SECONDS = 30.0
+# The browser retries a just-closed M1 candle a bounded number of times when
+# the public kline feed publishes it a few seconds late.  Keep this below the
+# browser retry interval so a real refresh is possible, while still coalescing
+# double-clicks and overlapping page work.
+AUTO_REFRESH_DEDUP_SECONDS = 8.0
 
 
-@lru_cache
 def get_manual_signal_service() -> ManualSignalService:
-    from app.h11_manual.settlement_sync import build_keychain_manual_settlement_client
+    global _manual_signal_service
 
-    return ManualSignalService(
-        settlement_reader=build_keychain_manual_settlement_client()
-    )
+    if _manual_signal_service is not None:
+        return _manual_signal_service
+    with _service_init_lock:
+        if _manual_signal_service is None:
+            from app.h11_manual.settlement_sync import (
+                build_keychain_manual_settlement_client,
+            )
+
+            _manual_signal_service = ManualSignalService(
+                settlement_reader=build_keychain_manual_settlement_client()
+            )
+    return _manual_signal_service
 
 
 ServiceDependency = Annotated[ManualSignalService, Depends(get_manual_signal_service)]
@@ -119,6 +132,14 @@ def history(
     return service.history(limit)
 
 
+@router.get("/positions")
+def positions(
+    service: ServiceDependency,
+    limit: int = 100,
+) -> dict:
+    return service.position_history(limit)
+
+
 @router.get("/signal-series")
 def signal_series(service: ServiceDependency, limit: int = 120) -> dict:
     return service.signal_series(limit)
@@ -138,6 +159,7 @@ def broker_sync(service: ServiceDependency) -> dict:
             "configured": status["broker_sync"]["status"] != "NOT_CONFIGURED",
             "events": [],
             "active_plans": status["active_plans"],
+            "actual_positions": status["actual_positions"],
             "in_progress": True,
             "safety": service.broker_sync_safety_flags(actual_read=False),
         }
