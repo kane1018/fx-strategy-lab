@@ -3,6 +3,32 @@
 Codex が新しいタスクを安全に開始するための要約済み文脈。詳細な現在地は
 [PROJECT_STATUS.md](PROJECT_STATUS.md)、固定ルールは [`../AGENTS.md`](../AGENTS.md) を参照する。
 
+## H-11 v4 Activation Preparation Handoff（fake-only / no-POST, 2026-07-15）
+
+operatorは30分`SHORT_V1`、risk 5,000/10,000/50,000円、5連敗、1 entry/日、heartbeat 15秒・stale
+60秒、`EXCLUSIVE_DURING_AUTO`、初回current-Mac supervised rehearsal、Pushover primary + email secondaryを
+承認した。承認値は`sha256:249be96c…`へ固定済み。exact formal signal config hashは既存local artifactを
+整合検証し、再学習せず固定した。
+
+- Private GETは最短0.25秒（最大4回/秒）、POSTは最短1.10秒。actual-shaped transportのsigning/credential/network
+  より前で拒否し、sleep/queue/retryしない。3 GETは0.00/0.25/0.50秒offset契約。
+- auto有効中のmanual trade、別Private API client、unowned position/orderはHALT。
+- clock sync unknown、skew unknown/5秒超、wall backward、monotonic停止はHALT。
+- Pushover/emailはrefusing default + fake transportだけ。実token、宛先、HTTP/SMTP送信なし。
+- launchdはdisabled template rendererだけで未install。15秒current-Mac fake rehearsalは
+  `PASSED_FAKE_ONLY_NOT_ACTIVATED`。
+- focused 26、h11_auto + real-POST isolation 342、Keychain書込test除外backend 7911、Ruff、diff check、
+  danger scanは成功。
+- actual Keychain、broker GET/POST、external notification、resident process、launchd install、activation permit、
+  independent review、resume発効は未実施。
+
+正:
+
+- [implementation report](H11_V4_ACTIVATION_PREPARATION_IMPLEMENTATION_REPORT_NO_POST_20260715.md)
+- [operator sheet](H11_AUTO_OPERATOR_DECISION_SHEET_NO_POST_20260715.md)
+- [runbook](H11_V4_GMO_OPERATOR_RUNBOOK_NO_POST_20260715.md)
+- [resume draft](H11_V4_MAJOR_INCIDENT_RESUME_DECLARATION_DRAFT_NO_POST_20260715.md)
+
 ## H-11 Manual Signal UI Handoff（local-only / no-POST, 2026-07-14）
 
 `H11_MANUAL_SIGNAL_UI_HANDOFF` — manual trading pivot向けのlocalhost専用UIを実装した。
@@ -3826,6 +3852,35 @@ private_api=false
 credential_read=false
 ```
 
+## H-11 v4 Initial Supervised Canary Evidence Policy Handoff（2026-07-16・policy approval only）
+
+Operatorは、初回の監視付きH-11 v4 live canary（10,000通貨、entry最大1回）を、target accountの
+actual `activeOrders` OCO rowsと、entry fillから15秒以内のexact-size server-side protection成立の
+実証に兼用する方針を承認した。actual OCO証拠が事前に存在しないことを、自動売買全体の
+証明済みと読み替えない。
+
+Canary後にOCO ownership、actual filled sizeとprotection sizeのexact match、15秒以内のconfirmation、
+duplicate/retry/repost 0、journal/risk/dead-man/notification/reconciliation clearが実証できない場合、
+第2 live cycleは禁止しpersistent HALTとする。same-action retry/repostは行わない。
+
+OperatorはPushover 2件、email 2件、GMO v4 2件のKeychain登録とAPI権限設定を完了したと申告。
+IP restrictionは無効とするresidual riskを受容した。値は未読、未表示、未検証。
+
+この承認はpolicy recordであり、credential read、actual notification、Private GET、POST、activation permitを
+許可しない。次は専用actual activation StepでAGENTS.md v4例外、完全manifest、actual delivery/read-only
+rehearsal、host/KILL proof、独立安全reviewを完了し、最終POST直前にfresh operator承認を取得する。
+
+```text
+initial_canary_evidence_policy_approved=true
+actual_post=false
+broker_read=false
+broker_write=false
+credential_read=false
+activation_permit_issued=false
+live_ready=false
+unattended_live_supported=false
+```
+
 ## H-11 Manual Settlement Read-Only Synchronization Handoff（2026-07-15）
 
 Operatorの限定授権に基づき、localhost専用manual UIへGMO FX Private GET同期を追加した。到達可能な
@@ -3853,3 +3908,18 @@ actual_post=false
 broker_write=false
 main_readonly_changed=false
 ```
+
+## H-11 v4 Actual Activation Preparation Corrective Handoff（2026-07-16）
+
+Operatorはcanary broker POST直前で再停止する条件で、Keychain値非表示確認、Pushover/email実配送、
+GMO Private GET 3経路、非破壊host/KILL試験、独立reviewを授権した。
+
+準備限定AGENTS例外とfake-first実装は追加済み。Corrective core 45、preparation 49、expanded isolation 101、
+H-11 auto 341 testsとfull ruffは成功した。固定ledger発行permitのexact型・private token・operation一致を
+全外部関数で強制し、duck-typed permit bypassも拒否する。実Keychain／通知／broker GETは、clean main／HEAD一致条件を
+満たさないため未実行。実POST、permit、canaryは0のまま。
+
+次Stepは完全差分のpost-review後、operatorからcommit/pushを別途授権され、clean mainを作ること。その後だけ
+presence→通知→host/KILL→3 GETの有限順で実外部試験を行う。manifest/runtime VETOが残ればcanary確認へ進まない。
+
+詳細: [H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md](H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md)

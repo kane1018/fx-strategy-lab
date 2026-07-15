@@ -1,0 +1,229 @@
+"""Non-destructive current-host and persistent KILL rehearsal for H-11 v4."""
+
+from __future__ import annotations
+
+import os
+import platform
+import re
+import shutil
+import signal
+import subprocess
+import sys
+from collections.abc import Callable
+from dataclasses import asdict, dataclass
+
+from app.h11_auto.runtime_safety import (
+    AutoRiskStopState,
+    PhaseBRiskPolicy,
+    PhaseBRiskStore,
+    engage_risk_kill,
+    evaluate_risk_before_entry,
+)
+from app.h11_auto.v4_actual_preparation_guard import (
+    V4ExternalPreparationGate,
+    V4PreparationOperation,
+    V4PreparationOperationPermit,
+    require_external_preparation_gate,
+    require_operation_permit,
+)
+
+
+class V4ActualHostKillRehearsalError(RuntimeError):
+    """Fixed safe host/KILL rehearsal failure."""
+
+
+@dataclass(frozen=True)
+class V4ActualHostKillReport:
+    status: str
+    host_is_macos: bool
+    disk_free_bytes_sufficient: bool
+    external_power_connected: bool | None
+    network_time_enabled: bool | None
+    clock_probe_succeeded: bool
+    absolute_clock_skew_seconds: float | None
+    clock_skew_within_five_seconds: bool
+    disposable_process_started: bool
+    disposable_process_sigkill_observed: bool
+    persistent_kill_latched: bool
+    entry_blocked_after_reload: bool
+    actual_runtime_process_killed: bool = False
+    sleep_performed: bool = False
+    reboot_performed: bool = False
+    network_changed: bool = False
+    keychain_locked: bool = False
+    resident_process_added: bool = False
+    launchd_installed: bool = False
+    cron_added: bool = False
+    broker_get_count: int = 0
+    broker_post_count: int = 0
+
+    def to_safe_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    def __bool__(self) -> bool:
+        return False
+
+
+def run_actual_host_kill_rehearsal(
+    *,
+    external_gate: V4ExternalPreparationGate,
+    operation_permit: V4PreparationOperationPermit,
+    cycle_day_jst: str,
+    command_runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+) -> V4ActualHostKillReport:
+    """Inspect host and SIGKILL only a disposable child, then prove KILL persistence."""
+
+    require_external_preparation_gate(external_gate)
+    require_operation_permit(
+        operation_permit,
+        expected_operation=V4PreparationOperation.HOST_KILL,
+        consume=True,
+    )
+    state_dir = (
+        external_gate.state_root_for_internal_preparation_only() / "host_kill"
+    )
+    unresolved_state_dir = state_dir.expanduser()
+    if unresolved_state_dir.is_symlink():
+        raise V4ActualHostKillRehearsalError("HOST_REHEARSAL_STATE_SYMLINK_FORBIDDEN")
+    state_dir = unresolved_state_dir.resolve()
+    state_dir.mkdir(parents=True, exist_ok=True)
+    runner = command_runner or _run_readonly_host_command
+    host_is_macos = platform.system() == "Darwin"
+    free = shutil.disk_usage(state_dir).free
+    disk_sufficient = free >= 1_000_000_000
+    external_power = _external_power_state(runner) if host_is_macos else None
+    network_time = _network_time_state(runner) if host_is_macos else None
+    clock_skew = _clock_skew_seconds(runner) if host_is_macos else None
+    clock_probe_succeeded = clock_skew is not None
+    clock_skew_within_five_seconds = (
+        clock_skew is not None and clock_skew <= 5.0
+    )
+
+    child: subprocess.Popen[bytes] | None = None
+    try:
+        child = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        started = child.poll() is None
+        if not started:
+            raise V4ActualHostKillRehearsalError("DISPOSABLE_KILL_PROCESS_NOT_STARTED")
+        os.kill(child.pid, signal.SIGKILL)
+        try:
+            returncode = child.wait(timeout=5.0)
+        except subprocess.TimeoutExpired:
+            raise V4ActualHostKillRehearsalError(
+                "DISPOSABLE_KILL_NOT_OBSERVED"
+            ) from None
+    finally:
+        if child is not None and child.poll() is None:
+            child.kill()
+            child.wait(timeout=5.0)
+    killed = returncode == -signal.SIGKILL
+
+    policy = PhaseBRiskPolicy(
+        policy_label="H11_V4_ACTUAL_PREPARATION_KILL_V1",
+        per_trade_loss_bound_jpy=5_000,
+        daily_loss_limit_jpy=10_000,
+        monthly_loss_limit_jpy=50_000,
+        maximum_consecutive_losses=5,
+    )
+    store = PhaseBRiskStore(state_dir / "v4_actual_preparation_kill.json", policy=policy)
+    state = store.load()
+    engage_risk_kill(state=state, cycle_day_jst=cycle_day_jst)
+    store.save(state)
+    reloaded = store.load()
+    gate = evaluate_risk_before_entry(
+        state=reloaded,
+        policy=policy,
+        cycle_day_jst=cycle_day_jst,
+    )
+    latched = AutoRiskStopState(reloaded.stop_state) is AutoRiskStopState.KILLED
+    entry_blocked = not gate.allowed and "PERSISTENT_RISK_STOPPED" in gate.blocked_reasons
+    clear = (
+        host_is_macos
+        and disk_sufficient
+        and external_power is True
+        and network_time is True
+        and clock_skew_within_five_seconds
+        and killed
+        and latched
+        and entry_blocked
+    )
+    return V4ActualHostKillReport(
+        status=(
+            "PASSED_CURRENT_HOST_GENERIC_KILL_PREPARATION_NO_BROKER_POST"
+            if clear
+            else "BLOCKED_CURRENT_HOST_REQUIREMENT_NOT_CLEAR"
+        ),
+        host_is_macos=host_is_macos,
+        disk_free_bytes_sufficient=disk_sufficient,
+        external_power_connected=external_power,
+        network_time_enabled=network_time,
+        clock_probe_succeeded=clock_probe_succeeded,
+        absolute_clock_skew_seconds=clock_skew,
+        clock_skew_within_five_seconds=clock_skew_within_five_seconds,
+        disposable_process_started=started,
+        disposable_process_sigkill_observed=killed,
+        persistent_kill_latched=latched,
+        entry_blocked_after_reload=entry_blocked,
+    )
+
+
+def _run_readonly_host_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=5.0,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise V4ActualHostKillRehearsalError("READ_ONLY_HOST_CHECK_FAILED") from error
+
+
+def _external_power_state(
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]],
+) -> bool | None:
+    result = runner(["pmset", "-g", "batt"])
+    if result.returncode != 0:
+        return None
+    if "AC Power" in result.stdout:
+        return True
+    if "Battery Power" in result.stdout:
+        return False
+    return None
+
+
+def _network_time_state(
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]],
+) -> bool | None:
+    result = runner(["/usr/sbin/systemsetup", "-getusingnetworktime"])
+    if result.returncode != 0:
+        return None
+    normalized = result.stdout.strip().lower()
+    if normalized.endswith("on"):
+        return True
+    if normalized.endswith("off"):
+        return False
+    return None
+
+
+def _clock_skew_seconds(
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]],
+) -> float | None:
+    """Return only an absolute aggregate; never retain the time-server response."""
+
+    result = runner(["/usr/bin/sntp", "-t", "2", "time.apple.com"])
+    if result.returncode != 0:
+        return None
+    match = re.search(r"(?:^|\s)([+-]\d+(?:\.\d+)?)", result.stdout)
+    if match is None:
+        return None
+    try:
+        return abs(float(match.group(1)))
+    except ValueError:
+        return None

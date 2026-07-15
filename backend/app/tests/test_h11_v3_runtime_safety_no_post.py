@@ -131,7 +131,20 @@ def test_risk_stops_on_monthly_budget_and_loss_figure_survives_rollover() -> Non
     # reaches MAX_CONSECUTIVE_LOSSES_STOP (5) and pre-empts the monthly stop.
     # Dates land near month-end (like the v2 Stage 1 equivalent test) so
     # 2026-08-01 falls inside the 14-day cooling window.
-    pnl_sequence = [-5_000, -5_000, -5_000, -5_000, 0, -5_000, -5_000, -5_000, -5_000, 0, -5_000, -5_000]
+    pnl_sequence = [
+        -5_000,
+        -5_000,
+        -5_000,
+        -5_000,
+        0,
+        -5_000,
+        -5_000,
+        -5_000,
+        -5_000,
+        0,
+        -5_000,
+        -5_000,
+    ]
     stop = H11V3RiskStopState.ACTIVE
     for offset, pnl in enumerate(pnl_sequence):
         stop = record_h11_v3_closed_result(

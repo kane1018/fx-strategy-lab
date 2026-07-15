@@ -87,7 +87,7 @@ def test_daily_budget_stop_fires_and_expires_next_day():
     )
 
 
-def _run_monthly_cap_sequence(session: "H11Stage1Session") -> H11Stage1StopState:
+def _run_monthly_cap_sequence(session: H11Stage1Session) -> H11Stage1StopState:
     """5,000/day loss with a win every 5th day, so 10 loss-days (=50,000,
     the monthly cap) land before consecutive_losses ever reaches
     MAX_CONSECUTIVE_LOSSES_STOP (5) -- isolating the monthly-stop path.

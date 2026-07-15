@@ -182,3 +182,26 @@ e1_gate_passed: false
 e2_allowed: false
 e3_allowed: false
 ```
+
+## 8. GMO support response update for relaxed v4（2026-07-15）
+
+operatorが提示した公式サポート回答をsafe summaryへ反映した。actual API callやcredential確認は行っていない。
+
+このsafe capability集合は
+`sha256:33cb3ab46256b3feaaa191d7578ea8dd7e1388e4ac349363554504c13b3a54ab`
+としてcanonical固定し、v4 execution policy / generation config hashへ結合した。
+
+| Capability | Confirmed safe value | v4 consequence |
+| --- | --- | --- |
+| per-order expiry / TIF | `NO_REQUEST_FIELD` | pending entryを使わずMARKET entryに変更 |
+| AON / FOK | `NOT_SUPPORTED` | partial fillを正式状態として処理 |
+| atomic actual-fill-sized protection | `NOT_SUPPORTED` | fill reconciliation後に別OCO操作 |
+| partial fill detection | `orderExecutedSize_CUMULATIVE_PLUS_OPEN_POSITIONS` | actual filled sizeを確定 |
+| protection size change | `NOT_SUPPORTED` | 不一致OCOはcancelしてreplace/exit |
+| official mismatch remediation | `CANCEL_RECONCILE_REPLACE_EXACT_SIZE` | v4正常経路へ採用 |
+| excess protection behavior | `NOT_GUARANTEED_UNEXPECTED_OPERATION` | 過大保護を維持せず、存在不明時HALT |
+| client order linkage | `ORDER_EXECUTION_RECORDS_WHEN_SET` | execution record経由でpositionへ紐付け |
+| openPositions linkage | `POSITION_ID_ONLY` | clientOrderIdとの直接照合不可 |
+
+この回答によりstrict IFDOCO profileは`REJECT`のまま確定した。operatorは原子的安全性を緩和した別v4を
+選択したが、actual adapter、broker access、credential、POST、liveは許可されていない。

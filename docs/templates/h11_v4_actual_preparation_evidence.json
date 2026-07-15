@@ -1,0 +1,15 @@
+{
+  "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
+  "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST",
+  "reviewed_files_digest": "sha256:f1c6aa058911db7e688bea5a6fda8adff2a91edbc82fb6dd6fb1944eca259ec3",
+  "focused_tests_passed": true,
+  "related_tests_passed": true,
+  "ruff_passed": true,
+  "diff_check_passed": true,
+  "danger_scan_passed": true,
+  "architecture_review_clear": true,
+  "safety_review_clear": true,
+  "operations_review_clear": true,
+  "broker_post_authorized": false,
+  "activation_permit_issued": false
+}
