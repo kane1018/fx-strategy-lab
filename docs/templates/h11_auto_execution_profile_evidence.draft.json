@@ -1,0 +1,25 @@
+{
+  "schema": "H11_AUTO_EXECUTION_PROFILE_EVIDENCE_V1",
+  "profile_label": "CANDIDATE_PROFILE_LABEL",
+  "capabilities": {
+    "short_pending_expiry": "NOT_ANSWERED",
+    "no_pending_entry": "NOT_ANSWERED",
+    "full_fill_or_none": "NOT_ANSWERED",
+    "atomic_protection_with_entry": "NOT_ANSWERED",
+    "protection_size_matches_actual_fill": "NOT_ANSWERED",
+    "server_side_stop_loss": "NOT_ANSWERED",
+    "server_side_take_profit": "NOT_ANSWERED",
+    "position_specific_settlement": "NOT_ANSWERED",
+    "authoritative_read_after_unknown": "NOT_ANSWERED",
+    "broker_state_readable": "NOT_ANSWERED",
+    "protected_size_readable": "NOT_ANSWERED",
+    "excess_size_can_reverse_position": "NOT_ANSWERED",
+    "minimum_permission_known": "NOT_ANSWERED",
+    "private_get_rate_limit_known": "NOT_ANSWERED",
+    "private_post_rate_limit_known": "NOT_ANSWERED",
+    "tos_automatic_trading_allowed": "NOT_ANSWERED",
+    "fee_model_known": "NOT_ANSWERED",
+    "ownership_isolation_supported": "NOT_ANSWERED"
+  },
+  "official_evidence_refs": []
+}

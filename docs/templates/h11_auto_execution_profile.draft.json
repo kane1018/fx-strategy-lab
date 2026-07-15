@@ -1,0 +1,31 @@
+{
+  "profile_schema": "H11_AUTO_EXECUTION_PROFILE_V1_DRAFT",
+  "profile_status": "PENDING_BROKER_AND_OPERATOR",
+  "profile_label": "CANDIDATE_PROFILE_LABEL",
+  "broker_label": "GMO_FX",
+  "entry_mode": "PENDING_BROKER_ANSWER",
+  "pending_expiry_contract": "PENDING_GMO_RESPONSE",
+  "fill_atomicity_contract": "PENDING_GMO_RESPONSE",
+  "protection_creation_contract": "PENDING_GMO_RESPONSE",
+  "protection_size_contract": "PENDING_GMO_RESPONSE",
+  "server_side_stop_loss": false,
+  "server_side_take_profit": false,
+  "position_specific_settlement": false,
+  "authoritative_read_after_unknown": false,
+  "ownership_contract": "PENDING_OPERATOR_FREEZE",
+  "minimum_permission_contract": "PENDING_GMO_RESPONSE",
+  "rate_limit_contract": "PENDING_GMO_RESPONSE",
+  "fee_and_holding_cost_contract": "PENDING_GMO_RESPONSE",
+  "official_evidence_refs": [],
+  "accepted_evidence_digest": "PENDING_GMO_RESPONSE",
+  "operator_approval_ref": "PENDING_OPERATOR_APPROVAL",
+  "safety": {
+    "actual_adapter_authorized": false,
+    "broker_read_authorized": false,
+    "broker_write_authorized": false,
+    "credential_read_authorized": false,
+    "actual_post_authorized": false,
+    "live_ready": false,
+    "unattended_live_supported": false
+  }
+}

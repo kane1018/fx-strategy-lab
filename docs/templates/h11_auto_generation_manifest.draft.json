@@ -1,0 +1,114 @@
+{
+  "manifest_schema": "H11_AUTO_GENERATION_V1_DRAFT",
+  "manifest_status": "PENDING_OPERATOR_APPROVAL",
+  "identity": {
+    "generation_label": "PENDING_OPERATOR_FREEZE",
+    "project": "H11_AUTO_PARALLEL",
+    "strategy_version": "SHORT_V1",
+    "implementation_digest": "PENDING_CODE_FREEZE"
+  },
+  "signal": {
+    "selected_horizon": "PENDING_OPERATOR_FREEZE",
+    "signal_config_hash": "PENDING_EXACT_ARTIFACT_HASH",
+    "buy_threshold": "0.58",
+    "sell_threshold": "0.42",
+    "formal_only": true,
+    "rolling_allowed": false,
+    "h24_allowed": false
+  },
+  "data_clock": {
+    "source_profile_label": "PENDING_OPERATOR_FREEZE",
+    "finalized_m1_required": true,
+    "finalization_margin_seconds": "PENDING_OPERATOR_FREEZE",
+    "maximum_m1_age_seconds": "PENDING_OPERATOR_FREEZE",
+    "maximum_ticker_age_seconds": "PENDING_OPERATOR_FREEZE",
+    "maximum_clock_skew_seconds": "PENDING_HOST_REHEARSAL",
+    "missed_signal_backfill_allowed": false
+  },
+  "position": {
+    "symbol": "USD_JPY",
+    "quantity_units": "PENDING_OPERATOR_FREEZE",
+    "maximum_open_positions": 1,
+    "maximum_entries_per_jst_day": 1,
+    "scale_in_allowed": false,
+    "hedging_allowed": false
+  },
+  "risk": {
+    "policy_label": "PENDING_OPERATOR_FREEZE",
+    "per_trade_loss_bound_jpy": "PENDING_OPERATOR_FREEZE",
+    "daily_loss_limit_jpy": "PENDING_OPERATOR_FREEZE",
+    "monthly_loss_limit_jpy": "PENDING_OPERATOR_FREEZE",
+    "maximum_consecutive_losses": "PENDING_OPERATOR_FREEZE",
+    "automatic_resume_after_stop": false
+  },
+  "entry": {
+    "execution_profile_label": "PENDING_GMO_RESPONSE",
+    "execution_profile_hash": "PENDING_GMO_RESPONSE",
+    "entry_style": "PENDING_GMO_RESPONSE",
+    "short_pending_expiry_or_no_pending_entry_required": true,
+    "full_fill_or_atomic_protection_size_match_required": true,
+    "server_side_stop_required": true,
+    "server_side_take_profit_required": true,
+    "maximum_attempts_per_intent": 1,
+    "retry_allowed": false,
+    "repost_allowed": false
+  },
+  "exit": {
+    "exit_profile_label": "PENDING_GMO_RESPONSE",
+    "position_specific_route_required": true,
+    "generic_close_allowed": false,
+    "opposite_entry_as_exit_allowed": false,
+    "maximum_attempts_per_intent": 1,
+    "retry_allowed": false,
+    "repost_allowed": false,
+    "stop_loss_contract": "PENDING_OPERATOR_FREEZE",
+    "take_profit_contract": "PENDING_OPERATOR_FREEZE",
+    "maximum_hold_seconds": "PENDING_OPERATOR_FREEZE",
+    "formal_edge_exit_enabled": "PENDING_OPERATOR_FREEZE"
+  },
+  "reconciliation": {
+    "boot_required": true,
+    "before_entry_required": true,
+    "after_entry_required": true,
+    "periodic_position_monitor_required": true,
+    "before_exit_required": true,
+    "after_exit_required": true,
+    "after_websocket_reconnect_required": true,
+    "after_process_restart_required": true,
+    "maximum_age_seconds": "PENDING_EXECUTION_PROFILE",
+    "unknown_result_halts": true
+  },
+  "dead_man": {
+    "policy_label": "PENDING_OPERATOR_FREEZE",
+    "heartbeat_interval_seconds": "PENDING_HOST_REHEARSAL",
+    "maximum_heartbeat_age_seconds": "PENDING_OPERATOR_FREEZE",
+    "automatic_resume": false
+  },
+  "notification": {
+    "primary_profile_label": "PENDING_OPERATOR_FREEZE",
+    "secondary_profile_label": "PENDING_OPERATOR_FREEZE",
+    "entry_requires_primary_ready": true,
+    "delivery_failure_blocks_new_entry": true
+  },
+  "ownership": {
+    "account_mode": "DEDICATED",
+    "external_or_manual_position_halts": true
+  },
+  "host": {
+    "host_profile_label": "PENDING_OPERATOR_FREEZE",
+    "supervisor_profile_label": "PENDING_OPERATOR_FREEZE",
+    "clock_monitor_required": true,
+    "operator_kill_required": true
+  },
+  "credential_permission": {
+    "credential_profile_label": "PENDING_OPERATOR_FREEZE",
+    "permission_profile_label": "PENDING_OPERATOR_FREEZE",
+    "env_fallback_allowed": false,
+    "raw_secret_logging_allowed": false
+  },
+  "safety": {
+    "actual_post_authorized": false,
+    "live_ready": false,
+    "unattended_live_supported": false
+  }
+}

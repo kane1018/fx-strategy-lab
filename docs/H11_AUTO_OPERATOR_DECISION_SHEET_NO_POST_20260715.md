@@ -1,0 +1,332 @@
+# H-11 Auto Operator Decision Sheet（approved preparation / no-POST）
+
+Date: 2026-07-15
+
+Status: `OPERATOR_SELECTIONS_AND_INITIAL_CANARY_EVIDENCE_POLICY_APPROVED_NOT_ACTIVATED`
+
+## 1. Purpose
+
+H-11 auto parallel trackの承認済みoperator選択と、依然として実地証拠が必要なactivation条件を分離する。
+2026-07-15にoperatorは§2と§6の推奨値を承認した。本書への記入とfake-only実装はactual activation、
+live許可、POST許可、credential許可を意味しない。
+
+```text
+actual_post=false
+broker_read=false
+broker_write=false
+credential_read=false
+live_ready=false
+unattended_live_supported=false
+```
+
+## 2. Approved operator selections
+
+### A. Formal signal horizon
+
+30分を事前固定する。run中の成績による10分/30分の自動切替は行わない。
+
+```text
+selected_horizon: 30m
+strategy_version: SHORT_V1
+signal_config_hash: sha256:ca08df187ae11b89192f1bbb4f77adc712ad41dc07d06d85bd67c9c7bcf6135d
+run_generation_label_pattern: H11_AUTO_30M_YYYYMMDD_GNNN
+```
+
+現在見えている成績だけで有利なhorizonを選ぶとselection biasになるため、選定理由と将来の再評価条件を
+同時に記録する。
+
+### B. Auto-track risk policy
+
+H-11 v2 Stage 1で承認済みの既存参考値は次のとおり。
+
+```text
+per_trade_loss_bound_jpy=5000
+daily_loss_limit_jpy=10000
+monthly_loss_limit_jpy=50000
+maximum_consecutive_losses=5
+maximum_entries_per_day=1
+```
+
+auto trackはsignal contractが異なるため、新しいpolicy labelで承認し、CLI必須値とpersistent digestへ固定する。
+execution / risk / dead-manの全選択はcanonical generation manifestとして同じSQLiteへ固定し、
+同じstate directoryを異なる設定で再利用しない。
+完全manifestのfieldとhash規則は
+`docs/H11_AUTO_FROZEN_GENERATION_MANIFEST_TEMPLATE_NO_POST_20260715.md`を参照する。
+
+```text
+auto_risk_policy_label: H11_AUTO_INITIAL_MINIMUM_LIVE_V1
+per_trade_loss_bound_jpy: 5000
+daily_loss_limit_jpy: 10000
+monthly_loss_limit_jpy: 50000
+maximum_consecutive_losses: 5
+maximum_entries_per_day: 1
+```
+
+### C. Dead-man and notification
+
+```text
+dead_man_policy_label: H11_AUTO_DEAD_MAN_15_60_V1
+heartbeat_interval_seconds: 15
+maximum_heartbeat_age_seconds: 60
+primary_notification_route: PUSHOVER
+secondary_notification_route: EMAIL
+actual_destination_credentials: OPERATOR_REPORTED_KEYCHAIN_PROVISIONED_NOT_READ_NOT_DELIVERY_VERIFIED
+```
+
+Pushover emergency receipt/ackとemail secondaryのinterface、refusing default、fake bindingは実装済み。
+actual destination、network send、delivery acknowledgement実地証拠は未実装であり、別の安全レビューと
+授権が必要。
+
+### D. Account ownership and host
+
+```text
+account_ownership: EXCLUSIVE_DURING_AUTO
+manual_trading_while_auto_enabled: FORBIDDEN
+other_private_api_client_while_auto_enabled: FORBIDDEN
+unowned_position_or_order: HALT
+always_on_host_for_first_rehearsal: CURRENT_MAC_SUPERVISED_FAKE_REHEARSAL
+supervisor: DISABLED_LAUNCHD_TEMPLATE_IMPLEMENTED_NOT_INSTALLED
+clock_sync_monitor: REQUIRED_MAX_SKEW_5_SECONDS
+operator_kill_access: REQUIRED_ACTUAL_PROOF_PENDING
+```
+
+同一口座を時間排他で使用する。auto有効中の手動売買・別Private API clientを禁止し、外部建玉・注文検知は
+HALTする。手動とautoを同時稼働させる場合は、別口座または別brokerへの再設計が必要。
+host、supervisor、clock、通知の受入条件は
+`docs/H11_AUTO_ALWAYS_ON_HOST_NOTIFICATION_REQUIREMENTS_DRAFT_NO_POST_20260715.md`を参照する。
+
+## 3. Broker-dependent decisions
+
+2026-07-15 operator decisionにより、厳格profileの成立を待たず、GMO向けrelaxed v4を別versionとして
+採用した。正は
+[H11_V4_GMO_RELAXED_EXECUTION_PROFILE_NO_POST_20260715.md](H11_V4_GMO_RELAXED_EXECUTION_PROFILE_NO_POST_20260715.md)。
+
+GMOの公式回答から、次を同時に満たすexecution profileを1つ選ぶ。
+回答のsafe summaryとacceptance判定には
+`docs/H11_AUTO_GMO_RESPONSE_ACCEPTANCE_TEMPLATE_NO_POST_20260715.md`を使用する。
+profile選定後のreconciliation / unknown / disabled adapter境界は
+`docs/H11_AUTO_PHASE_C_D_PREIMPLEMENTATION_DESIGN_NO_POST_20260715.md`を使用する。
+
+```text
+selected_execution_profile: H11_V4_GMO_MARKET_THEN_EXACT_OCO_NO_POST_V1
+short_pending_expiry: NOT_REQUIRED_MARKET_ENTRY
+full_fill_or_none_or_atomic_size_match: RELAXED_PARTIAL_RECONCILE_CANCEL_REPLACE
+server_side_loss_limit: REQUIRED
+position_specific_settlement: REQUIRED
+unknown_result_reconciliation: REQUIRED
+manual_or_external_position_identification: CLIENT_ORDER_ID_VIA_EXECUTION_RECORDS_IMPLEMENTED_FAKE_REVIEWED
+accepted_evidence_digest: sha256:33cb3ab46256b3feaaa191d7578ea8dd7e1388e4ac349363554504c13b3a54ab
+execution_profile_hash: RUNNER_DERIVED_IMPLEMENTED_FAKE_ONLY
+temporary_unprotected_gap: ACCEPTED_MAX_15_SECONDS
+actual_adapter: IMPLEMENTED_ACTIVATION_GATED_NOT_CONNECTED
+```
+
+満たすprofileがGMOにない場合は、次のいずれかをoperatorが選ぶ。
+
+1. 注文方式を変更する。
+2. strategyのentry/holding contractを変更して再検証する。
+3. 必要機能を持つbrokerへ変更する。
+4. actual autoを見送り、manual signal trackを継続する。
+
+上記の選択肢のうち「注文方式と安全契約を変更する」をoperatorが選択済み。actual adapter実装も
+別途承認され、fake client検証まで完了した。実credential provisioning/read、broker access、POST、
+runtime binding、activationは別授権のままである。
+
+## 4. Implemented preparation
+
+```text
+formal_signal_contract=implemented
+persistent_duplicate_prevention=implemented_fake_only
+unknown_no_resend_halt=implemented_fake_only
+process_lock=implemented
+journal_hash_chain=implemented
+restart_recovery=implemented_fake_only
+persistent_risk_and_dead_man=implemented_unactivated
+fake_notification_heartbeat=implemented
+approved_operator_selection_digest=sha256:249be96c69cf71747f4ebdae0191cc298cd92f3a682838685df27e1ae43e6f96
+exclusive_during_auto_contract=implemented_fail_closed
+private_get_cadence=fixed_0.25_seconds_max_4_per_second_transport_enforced_no_sleep
+private_post_cadence=fixed_1.10_seconds_transport_enforced_no_sleep
+clock_monitor=fixed_5_second_skew_bound_fake_rehearsal
+pushover_primary_interface=implemented_refusing_default_fake_verified
+email_secondary_interface=implemented_refusing_default_fake_verified
+disabled_launchd_template_renderer=implemented_not_installed
+finite_current_mac_host_rehearsal=implemented_fake_only
+safe_status_and_aggregate=implemented
+offline_broker_capability_verdict=implemented_no_post
+offline_execution_profile_freeze=implemented_no_post_review_only
+gmo_relaxed_v4_state_machine=implemented_fake_only
+gmo_relaxed_v4_capability_evidence_hash=sha256:33cb3ab46256b3feaaa191d7578ea8dd7e1388e4ac349363554504c13b3a54ab
+gmo_relaxed_v4_exact_fill_oco_calculation=implemented_pure_no_post
+gmo_relaxed_v4_persistent_per_action_attempt_ledger=implemented
+gmo_relaxed_v4_restart_no_resend_reconciliation=implemented_fake_only
+gmo_relaxed_v4_protected_position_restart_reconciliation=implemented_fake_only
+gmo_relaxed_v4_generation_risk_dead_man_binding=implemented
+gmo_relaxed_v4_operator_reload=implemented_fake_only_exact_phrase_and_flat
+gmo_relaxed_v4_safe_aggregate=implemented_read_only
+gmo_relaxed_v4_finite_cli=implemented_fake_only
+generation_manifest_profile_hash_binding=implemented_no_post
+frozen_artifact_bundle_verifier=implemented_no_post
+gmo_relaxed_v4_100_cycle_fault_soak=passed_14_scenarios
+gmo_relaxed_v4_actual_adapter=implemented_activation_gated
+gmo_relaxed_v4_private_request_mapping=fake_client_verified
+gmo_relaxed_v4_actual_reconciliation=fake_raw_envelope_verified
+gmo_relaxed_v4_keychain_loader=implemented_not_invoked
+24h_wall_clock_soak=running_but_source_digest_superseded_not_current_v4_evidence
+```
+
+## 5. Remaining external/operator proof and separate authorization
+
+本シートが全て埋まっても、次は自動的に許可されない。
+
+- actual Pushover destination/token provisioning and delivery/ack proof
+- actual email destination/credential provisioning and delivery proof
+- real broker read-only reconciliation execution
+- real sealed credential provisioning/read
+- actual runtime-to-adapter/cadence sequencing binding
+- activeOrders OCO rows on the target account through sanitized rehearsal
+- current Mac actual sleep/reboot/network/clock/disk/Keychain fault rehearsal
+- operator remote/physical KILL proof
+- independent full-diff safety review
+- major-incident resume declaration approval and effectuation
+- activation permit issuance in a separate activation step
+- actual activation
+- any POST
+
+各Stepは独立reviewとoperatorの明示授権を必要とする。
+
+## 6. Approved values（実装済み・未発効）
+
+以下はoperator承認済みで、`V4ApprovedOperatorSelections`へ固定した。ただしactual activationを許可せず、
+外部実地証拠が揃うまでruntime、live、POSTを有効にしない。
+
+```yaml
+formal_signal:
+  selected_horizon: 30m
+  strategy_version: SHORT_V1
+  signal_config_hash: sha256:ca08df187ae11b89192f1bbb4f77adc712ad41dc07d06d85bd67c9c7bcf6135d
+  generation_label_pattern: H11_AUTO_30M_YYYYMMDD_GNNN
+
+risk:
+  policy_label: H11_AUTO_INITIAL_MINIMUM_LIVE_V1
+  per_trade_loss_bound_jpy: 5000
+  daily_loss_limit_jpy: 10000
+  monthly_loss_limit_jpy: 50000
+  maximum_consecutive_losses: 5
+  maximum_entries_per_day: 1
+
+dead_man:
+  heartbeat_interval_seconds: 15
+  maximum_heartbeat_age_seconds: 60
+
+ownership:
+  account_ownership: EXCLUSIVE_DURING_AUTO
+
+network:
+  api_ip_restriction: DISABLED_OPERATOR_ACCEPTED
+
+host:
+  first_rehearsal_host: CURRENT_MAC_SUPERVISED_FAKE_REHEARSAL
+  unattended_host_after_rehearsal: PENDING
+  supervisor: DISABLED_LAUNCHD_TEMPLATE_IMPLEMENTED_NOT_INSTALLED
+  clock_sync_monitor: REQUIRED_MAX_SKEW_5_SECONDS
+  operator_kill_access: REQUIRED
+
+notification:
+  primary: PUSHOVER
+  secondary: EMAIL
+```
+
+### Rationale
+
+- 初回は30mを推奨する。10mよりもM1確定、poll、reconciliation、operator observationの時間余裕が大きく、
+  timing failureへ相対的に強い。現在見えている成績だけを理由に選ぶものではない。
+- risk値はH-11 v2 Stage 1の参考値を、新しいauto policy labelで再承認した。自動継承ではない。
+- heartbeat 15秒、stale 60秒は固定済み。actual host fault rehearsalに失敗した場合は緩和せず、新generationの
+  再設計またはactivation見送りへ戻る。
+- 初回は同一口座を時間排他で使い、auto中のmanual/private clientとunowned position/orderをHALT条件にする。
+- MacBookの画面表示やoperator目視をheartbeat成立条件にしない。sleepしない専用hostと独立通知を要求する。
+
+### Approval effect
+
+operator承認で許可されたのは、config freezeとfake-only検証準備までである。
+broker read、credential、actual notification、POST、live、activation permitは許可されない。
+
+## 7. Initial supervised live canary evidence policy approval
+
+2026-07-16、operatorは、初回監視付きH-11 v4 live canaryを、target accountのactual OCO表示と
+entry約定から15秒以内のexact-size server-side protection成立の実証に兼用する方針を承認した。
+
+```text
+initial_canary_policy_approved=true
+initial_canary_supervised=true
+initial_canary_max_entries=1
+initial_canary_quantity_units=10000
+actual_oco_rows_required_before_initial_canary=false
+actual_oco_rows_required_before_second_live_cycle=true
+exact_size_protection_required=true
+maximum_unprotected_seconds=15
+same_action_retry=false
+same_action_repost=false
+unknown_result_halts=true
+failure_blocks_second_live_cycle=true
+```
+
+この承認は初回canaryの証拠収集方法を固定するものであり、credential read、actual notification、
+Private GET、POST、activation permit、major-incident resume発効を許可しない。それらは別のactual
+activation Stepでfresh gate、独立review、current-turn operator承認を必要とする。
+
+Operatorが申告したexternal preparationは次のとおり。値は未読、未表示、未検証である。
+
+```text
+pushover_keychain_items=OPERATOR_REPORTED_TWO_ITEMS_PROVISIONED
+email_keychain_items=OPERATOR_REPORTED_TWO_ITEMS_PROVISIONED
+gmo_v4_keychain_items=OPERATOR_REPORTED_TWO_ITEMS_PROVISIONED
+gmo_api_permission_profile=OPERATOR_REPORTED_CONFIGURED_NOT_RUNTIME_VERIFIED
+api_ip_restriction=DISABLED_OPERATOR_ACCEPTED
+```
+
+## 8. Actual activation preparation authorization（2026-07-16）
+
+Operatorはcanary broker POST直前で再停止する条件で、H-11 v4専用のactual activation準備を明示授権した。
+
+```text
+actual_keychain_presence_and_internal_sealed_read_authorized=true
+actual_pushover_single_test_and_receipt_ack_authorized=true
+actual_email_single_test_authorized=true
+actual_private_get_three_endpoint_rehearsal_authorized=true
+finite_non_destructive_host_kill_rehearsal_authorized=true
+independent_read_only_review_authorized=true
+broker_post_authorized=false
+activation_permit_issuance_authorized=false
+canary_execution_authorized=false
+commit_push_authorized=false
+```
+
+AGENTS.mdへ本Step専用の限定例外を追加し、actual notificationとGMO Private GETをbroker POSTから分離した。
+外部試験は、working tree clean、`HEAD == origin/main`、完全artifact、検証、独立レビューclearを開始条件とする。
+
+準備操作は次の固定順序とし、各段階の開始を外部I/Oより先にpersistent local ledgerへ記録する。同じ段階の
+retry／second attemptはprocess再起動後も禁止する。
+
+```text
+presence -> notification provider acceptance -> email receipt confirmation
+-> host/KILL preparation -> account exclusivity confirmation -> Private GET
+```
+
+SMTPのacceptはemail受信の証明ではない。Private GETのzero countはUSD/JPY限定snapshotであり、口座全体の
+排他性やcanary preflight clearを単独では証明しない。host/KILL preparationはdisposable childとpersistent
+risk KILLの証拠であり、actual v4 runtime supervisorの完全proofはcanary前の別VETOとして残す。
+
+初回事前レビューで、現worktreeがdirtyかつ`HEAD != origin/main`、完全manifest／actual runtime bindingが未完成
+であることが判明した。そのため実Keychain read、外部通知、Private GETはまだ実行せず、準備用コードを
+fake-firstで修正中である。
+
+```text
+api_ip_restriction=DISABLED_OPERATOR_ACCEPTED_RESIDUAL_RISK
+actual_keychain_read=false
+external_notification_send=false
+broker_private_get=false
+broker_private_post=false
+activation_permit_issued=false
+```
