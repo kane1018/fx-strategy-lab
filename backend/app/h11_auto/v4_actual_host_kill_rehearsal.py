@@ -32,6 +32,14 @@ class V4ActualHostKillRehearsalError(RuntimeError):
     """Fixed safe host/KILL rehearsal failure."""
 
 
+_ADMIN_NETWORK_TIME_COMMAND = (
+    "/usr/bin/osascript",
+    "-e",
+    'do shell script "/usr/sbin/systemsetup -getusingnetworktime" '
+    "with administrator privileges",
+)
+
+
 @dataclass(frozen=True)
 class V4ActualHostKillReport:
     status: str
@@ -39,6 +47,7 @@ class V4ActualHostKillReport:
     disk_free_bytes_sufficient: bool
     external_power_connected: bool | None
     network_time_enabled: bool | None
+    network_time_admin_fallback_used: bool
     clock_probe_succeeded: bool
     absolute_clock_skew_seconds: float | None
     clock_skew_within_five_seconds: bool
@@ -70,6 +79,9 @@ def run_actual_host_kill_rehearsal(
     operation_permit: V4PreparationOperationPermit,
     cycle_day_jst: str,
     command_runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+    admin_command_runner: (
+        Callable[[list[str]], subprocess.CompletedProcess[str]] | None
+    ) = None,
 ) -> V4ActualHostKillReport:
     """Inspect host and SIGKILL only a disposable child, then prove KILL persistence."""
 
@@ -88,11 +100,34 @@ def run_actual_host_kill_rehearsal(
     state_dir = unresolved_state_dir.resolve()
     state_dir.mkdir(parents=True, exist_ok=True)
     runner = command_runner or _run_readonly_host_command
+    admin_runner = admin_command_runner or _run_readonly_admin_host_command
     host_is_macos = platform.system() == "Darwin"
     free = shutil.disk_usage(state_dir).free
     disk_sufficient = free >= 1_000_000_000
     external_power = _external_power_state(runner) if host_is_macos else None
-    network_time = _network_time_state(runner) if host_is_macos else None
+    if external_power is not True:
+        return V4ActualHostKillReport(
+            status="BLOCKED_CURRENT_HOST_AC_POWER_NOT_CLEAR",
+            host_is_macos=host_is_macos,
+            disk_free_bytes_sufficient=disk_sufficient,
+            external_power_connected=external_power,
+            network_time_enabled=None,
+            network_time_admin_fallback_used=False,
+            clock_probe_succeeded=False,
+            absolute_clock_skew_seconds=None,
+            clock_skew_within_five_seconds=False,
+            disposable_process_started=False,
+            disposable_process_sigkill_observed=False,
+            persistent_kill_latched=False,
+            entry_blocked_after_reload=False,
+        )
+    if host_is_macos:
+        network_time, network_time_admin_fallback_used = _network_time_state(
+            runner,
+            admin_runner,
+        )
+    else:
+        network_time, network_time_admin_fallback_used = None, False
     clock_skew = _clock_skew_seconds(runner) if host_is_macos else None
     clock_probe_succeeded = clock_skew is not None
     clock_skew_within_five_seconds = (
@@ -162,6 +197,7 @@ def run_actual_host_kill_rehearsal(
         disk_free_bytes_sufficient=disk_sufficient,
         external_power_connected=external_power,
         network_time_enabled=network_time,
+        network_time_admin_fallback_used=network_time_admin_fallback_used,
         clock_probe_succeeded=clock_probe_succeeded,
         absolute_clock_skew_seconds=clock_skew,
         clock_skew_within_five_seconds=clock_skew_within_five_seconds,
@@ -185,6 +221,25 @@ def _run_readonly_host_command(command: list[str]) -> subprocess.CompletedProces
         raise V4ActualHostKillRehearsalError("READ_ONLY_HOST_CHECK_FAILED") from error
 
 
+def _run_readonly_admin_host_command(
+    command: list[str],
+) -> subprocess.CompletedProcess[str]:
+    if tuple(command) != _ADMIN_NETWORK_TIME_COMMAND:
+        raise V4ActualHostKillRehearsalError("ADMIN_HOST_COMMAND_FORBIDDEN")
+    try:
+        return subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=120.0,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise V4ActualHostKillRehearsalError(
+            "ADMIN_READ_ONLY_HOST_CHECK_FAILED"
+        ) from error
+
+
 def _external_power_state(
     runner: Callable[[list[str]], subprocess.CompletedProcess[str]],
 ) -> bool | None:
@@ -200,16 +255,22 @@ def _external_power_state(
 
 def _network_time_state(
     runner: Callable[[list[str]], subprocess.CompletedProcess[str]],
-) -> bool | None:
-    result = runner(["/usr/sbin/systemsetup", "-getusingnetworktime"])
+    admin_runner: Callable[[list[str]], subprocess.CompletedProcess[str]],
+) -> tuple[bool | None, bool]:
+    direct_command = ["/usr/sbin/systemsetup", "-getusingnetworktime"]
+    result = runner(direct_command)
+    fallback_used = False
     if result.returncode != 0:
-        return None
+        fallback_used = True
+        result = admin_runner(list(_ADMIN_NETWORK_TIME_COMMAND))
+    if result.returncode != 0:
+        return None, fallback_used
     normalized = result.stdout.strip().lower()
     if normalized.endswith("on"):
-        return True
+        return True, fallback_used
     if normalized.endswith("off"):
-        return False
-    return None
+        return False, fallback_used
+    return None, fallback_used
 
 
 def _clock_skew_seconds(

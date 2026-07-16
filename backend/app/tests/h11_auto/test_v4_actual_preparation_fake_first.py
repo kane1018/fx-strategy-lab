@@ -11,8 +11,10 @@ from pathlib import Path
 import httpx
 import pytest
 
+from app.h11_auto import v4_actual_host_kill_rehearsal as host_rehearsal_module
 from app.h11_auto import v4_actual_preparation_guard as guard_module
 from app.h11_auto.v4_actual_host_kill_rehearsal import (
+    V4ActualHostKillRehearsalError,
     run_actual_host_kill_rehearsal,
 )
 from app.h11_auto.v4_actual_preparation_guard import (
@@ -1058,8 +1060,144 @@ def test_current_host_kill_rehearsal_kills_only_disposable_child_and_latches(
     assert report.clock_probe_succeeded is True
     assert report.absolute_clock_skew_seconds == 0.125
     assert report.clock_skew_within_five_seconds is True
+    assert report.network_time_admin_fallback_used is False
     assert report.actual_runtime_process_killed is False
     assert report.broker_post_count == 0
+
+
+def test_host_rehearsal_on_battery_stops_before_admin_clock_or_kill(
+    external_gate: V4ExternalPreparationGate,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command == ["pmset", "-g", "batt"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout="Now drawing from 'Battery Power'\n",
+            )
+        raise AssertionError("no probe may run after AC precondition fails")
+
+    def admin_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        del command
+        raise AssertionError("admin fallback must not run on battery")
+
+    monkeypatch.setattr(host_rehearsal_module.platform, "system", lambda: "Darwin")
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.HOST_KILL,
+    )
+    report = run_actual_host_kill_rehearsal(
+        external_gate=external_gate,
+        operation_permit=operation_permit,
+        cycle_day_jst="2026-07-16",
+        command_runner=runner,
+        admin_command_runner=admin_runner,
+    )
+
+    assert report.status == "BLOCKED_CURRENT_HOST_AC_POWER_NOT_CLEAR"
+    assert report.external_power_connected is False
+    assert report.network_time_admin_fallback_used is False
+    assert report.disposable_process_started is False
+    assert report.actual_runtime_process_killed is False
+    assert calls == [["pmset", "-g", "batt"]]
+
+
+def test_network_time_state_uses_fixed_admin_readonly_fallback() -> None:
+    direct_calls: list[list[str]] = []
+    admin_calls: list[list[str]] = []
+
+    def direct_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        direct_calls.append(command)
+        return subprocess.CompletedProcess(command, 1, stdout="")
+
+    def admin_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        admin_calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="Network Time: On\n")
+
+    state, fallback_used = host_rehearsal_module._network_time_state(
+        direct_runner,
+        admin_runner,
+    )
+
+    assert state is True
+    assert fallback_used is True
+    assert direct_calls == [["/usr/sbin/systemsetup", "-getusingnetworktime"]]
+    assert admin_calls == [
+        [
+            "/usr/bin/osascript",
+            "-e",
+            'do shell script "/usr/sbin/systemsetup -getusingnetworktime" '
+            "with administrator privileges",
+        ]
+    ]
+
+
+def test_network_time_state_skips_admin_when_direct_probe_is_clear() -> None:
+    calls: list[list[str]] = []
+
+    def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="Network Time: On\n")
+
+    def forbidden_admin_runner(
+        command: list[str],
+    ) -> subprocess.CompletedProcess[str]:
+        del command
+        raise AssertionError("admin fallback must not run")
+
+    state, fallback_used = host_rehearsal_module._network_time_state(
+        runner,
+        forbidden_admin_runner,
+    )
+
+    assert state is True
+    assert fallback_used is False
+    assert calls == [["/usr/sbin/systemsetup", "-getusingnetworktime"]]
+
+
+def test_host_command_runners_use_separate_finite_timeouts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[tuple[tuple[str, ...], float]] = []
+
+    def fake_run(
+        command: list[str],
+        *,
+        capture_output: bool,
+        text: bool,
+        timeout: float,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        assert capture_output is True
+        assert text is True
+        assert check is False
+        observed.append((tuple(command), timeout))
+        return subprocess.CompletedProcess(command, 0, stdout="Network Time: On\n")
+
+    monkeypatch.setattr(host_rehearsal_module.subprocess, "run", fake_run)
+    host_rehearsal_module._run_readonly_host_command(["pmset", "-g", "batt"])
+    host_rehearsal_module._run_readonly_admin_host_command(
+        list(host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND)
+    )
+
+    assert observed == [
+        (("pmset", "-g", "batt"), 5.0),
+        (host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND, 120.0),
+    ]
+
+
+def test_admin_host_runner_rejects_every_nonfixed_command() -> None:
+    with pytest.raises(
+        V4ActualHostKillRehearsalError,
+        match="ADMIN_HOST_COMMAND_FORBIDDEN",
+    ):
+        host_rehearsal_module._run_readonly_admin_host_command(
+            ["/usr/sbin/systemsetup", "-setusingnetworktime", "on"]
+        )
 
 
 def test_preparation_ledger_rejects_symlink_fixed_state_before_resolve(

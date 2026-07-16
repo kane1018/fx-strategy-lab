@@ -35,7 +35,8 @@ def main() -> int:
             cycle_day_jst=datetime.now(JST).date().isoformat(),
         )
         if not report.status.startswith("PASSED_"):
-            raise V4ActualHostKillRehearsalError("HOST_REHEARSAL_NOT_CLEAR")
+            print(json.dumps(report.to_safe_dict(), sort_keys=True, indent=2))
+            return 2
         ledger.complete(
             V4PreparationOperation.HOST_KILL,
             operation_permit=operation_permit,
