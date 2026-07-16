@@ -29,6 +29,7 @@ GMO_V4_PRIVATE_BASE_URL = "https://forex-api.coin.z.com"
 GMO_V4_KEYCHAIN_SERVICE = "fx-strategy-lab-h11-v4-actual"
 GMO_V4_API_KEY_ACCOUNT = "gmo-fx-api-key"
 GMO_V4_API_SECRET_ACCOUNT = "gmo-fx-api-secret"
+KEYCHAIN_PROMPT_TIMEOUT_SECONDS = 120.0
 
 _READ_SEQUENCE = (
     ("/private/v1/latestExecutions", "/v1/latestExecutions"),
@@ -71,7 +72,7 @@ def read_v4_gmo_readonly_keychain_secret(
     service: str,
     account: str,
     *,
-    timeout_seconds: float = 5.0,
+    timeout_seconds: float = KEYCHAIN_PROMPT_TIMEOUT_SECONDS,
 ) -> V4GmoReadOnlySealedSecret:
     if platform.system() != "Darwin":
         raise V4GmoReadOnlyPreflightError("PRIVATE_GET_KEYCHAIN_PLATFORM_UNSUPPORTED")

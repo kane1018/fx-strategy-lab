@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import subprocess
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from enum import Enum
@@ -18,6 +19,8 @@ class V4ActualPreparationGuardError(RuntimeError):
 
 
 CommandRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
+KeychainValueRunner = Callable[[list[str], float], subprocess.CompletedProcess[str]]
+MonotonicClock = Callable[[], float]
 
 PREPARATION_ARTIFACT = Path(
     "docs/templates/h11_v4_actual_preparation_evidence.json"
@@ -38,6 +41,7 @@ _REVIEWED_FILES = (
     "backend/app/services/h11_v4_notification_actual_preparation.py",
     "backend/app/services/h11_v4_gmo_readonly_preflight.py",
     "backend/scripts/h11_auto_v4_actual_preparation_presence.py",
+    "backend/scripts/h11_auto_v4_keychain_access_rehearsal.py",
     "backend/scripts/h11_auto_v4_actual_notification_rehearsal.py",
     "backend/scripts/h11_auto_v4_actual_host_kill_rehearsal.py",
     "backend/scripts/h11_auto_v4_email_delivery_confirm.py",
@@ -71,6 +75,18 @@ def _default_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _default_keychain_value_runner(
+    command: list[str], timeout_seconds: float
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=timeout_seconds,
+        check=False,
+    )
+
+
 @dataclass(frozen=True)
 class V4PreparationGitGate:
     working_tree_clean: bool
@@ -91,6 +107,21 @@ class V4KeychainPresenceReport:
     present_count: int
     all_present: bool
     values_read: bool = False
+    credential_value_exposed: bool = False
+
+    def to_safe_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    def __bool__(self) -> bool:
+        return False
+
+
+@dataclass(frozen=True)
+class V4KeychainAccessReport:
+    total_required: int
+    accessible_count: int
+    all_accessible: bool
+    values_read_internal: bool = True
     credential_value_exposed: bool = False
 
     def to_safe_dict(self) -> dict[str, object]:
@@ -164,6 +195,7 @@ def require_external_preparation_gate(
 
 class V4PreparationOperation(str, Enum):
     PRESENCE = "00_presence"
+    KEYCHAIN_ACCESS = "05_keychain_access"
     NOTIFICATION = "10_notification"
     EMAIL_CONFIRMATION = "20_email_confirmation"
     HOST_KILL = "30_host_kill"
@@ -173,7 +205,8 @@ class V4PreparationOperation(str, Enum):
 
 _PREVIOUS_OPERATION = {
     V4PreparationOperation.PRESENCE: None,
-    V4PreparationOperation.NOTIFICATION: V4PreparationOperation.PRESENCE,
+    V4PreparationOperation.KEYCHAIN_ACCESS: V4PreparationOperation.PRESENCE,
+    V4PreparationOperation.NOTIFICATION: V4PreparationOperation.KEYCHAIN_ACCESS,
     V4PreparationOperation.EMAIL_CONFIRMATION: V4PreparationOperation.NOTIFICATION,
     V4PreparationOperation.HOST_KILL: V4PreparationOperation.EMAIL_CONFIRMATION,
     V4PreparationOperation.EXCLUSIVITY_CONFIRMATION: V4PreparationOperation.HOST_KILL,
@@ -380,8 +413,24 @@ class V4PreparationAttemptLedger:
         )
 
 
-def preparation_state_root(*, repository: Path) -> Path:
-    return repository.resolve() / PREPARATION_STATE_RELATIVE
+def preparation_state_root(
+    *, repository: Path, reviewed_files_digest: str
+) -> Path:
+    """Bind every immutable no-retry attempt set to one reviewed digest."""
+
+    prefix = "sha256:"
+    digest = reviewed_files_digest.removeprefix(prefix)
+    if (
+        not reviewed_files_digest.startswith(prefix)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise V4ActualPreparationGuardError("PREPARATION_REVIEWED_DIGEST_INVALID")
+    return (
+        repository.resolve()
+        / PREPARATION_STATE_RELATIVE
+        / f"generation-{digest}"
+    )
 
 
 def confirm_email_delivery_exact(
@@ -464,7 +513,10 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
     return V4ExternalPreparationGate(
         token=_GATE_TOKEN,
         reviewed_files_digest=actual_digest,
-        state_root=preparation_state_root(repository=repository),
+        state_root=preparation_state_root(
+            repository=repository,
+            reviewed_files_digest=actual_digest,
+        ),
     )
 
 
@@ -541,4 +593,74 @@ def check_v4_keychain_presence_only(
         total_required=len(items),
         present_count=present,
         all_present=present == len(items),
+    )
+
+
+def check_v4_keychain_access_internal_only(
+    *,
+    operation_permit: V4PreparationOperationPermit,
+    runner: KeychainValueRunner = _default_keychain_value_runner,
+    timeout_seconds: float = 120.0,
+    clock: MonotonicClock = time.monotonic,
+) -> V4KeychainAccessReport:
+    """Read and immediately discard six fixed values without exposing content."""
+
+    require_operation_permit(
+        operation_permit,
+        expected_operation=V4PreparationOperation.KEYCHAIN_ACCESS,
+        consume=True,
+    )
+    if platform.system() != "Darwin":
+        raise V4ActualPreparationGuardError("PREPARATION_KEYCHAIN_PLATFORM_UNSUPPORTED")
+    if timeout_seconds < 30.0 or timeout_seconds > 300.0:
+        raise V4ActualPreparationGuardError("PREPARATION_KEYCHAIN_TIMEOUT_INVALID")
+    items = (
+        ("fx-strategy-lab-h11-v4-actual", "gmo-fx-api-key"),
+        ("fx-strategy-lab-h11-v4-actual", "gmo-fx-api-secret"),
+        ("fx-strategy-lab-h11-v4-notify", "pushover-api-token"),
+        ("fx-strategy-lab-h11-v4-notify", "pushover-user-key"),
+        ("fx-strategy-lab-h11-v4-notify", "smtp-username"),
+        ("fx-strategy-lab-h11-v4-notify", "smtp-app-password"),
+    )
+    accessible = 0
+    deadline = clock() + timeout_seconds
+    for service, account in items:
+        remaining_seconds = deadline - clock()
+        if remaining_seconds <= 0:
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_KEYCHAIN_ACCESS_FAILED"
+            ) from None
+        try:
+            completed = runner(
+                [
+                    "security",
+                    "find-generic-password",
+                    "-s",
+                    service,
+                    "-a",
+                    account,
+                    "-w",
+                ],
+                remaining_seconds,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            completed = None
+        if completed is None:
+            # Raise outside the exception handler so a TimeoutExpired carrying
+            # partial output is not retained as context or cause.
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_KEYCHAIN_ACCESS_FAILED"
+            ) from None
+        # Never include stdout/stderr or the item name in a failure.  A
+        # successful non-empty value is counted and immediately discarded.
+        if completed.returncode != 0 or not completed.stdout.rstrip("\n"):
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_KEYCHAIN_ACCESS_FAILED"
+            )
+        accessible += 1
+        del completed
+    return V4KeychainAccessReport(
+        total_required=len(items),
+        accessible_count=accessible,
+        all_accessible=accessible == len(items),
     )

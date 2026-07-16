@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: `CORRECTIVE_IMPLEMENTATION_VALIDATED_EXTERNAL_REHEARSAL_PENDING_CLEAN_MAIN`
+Status: `KEYCHAIN_ACCESS_CORRECTIVE_GENERATION_IMPLEMENTED_PENDING_REVIEW`
 
 ## 1. Authorization boundary
 
@@ -68,12 +68,31 @@ I/Oへ到達しない。
 
 ```text
 presence
+-> sealed Keychain access rehearsal
 -> Pushover + SMTP
 -> operator email receipt confirmation
 -> current-host generic KILL preparation
 -> operator account-exclusivity confirmation
 -> three Private GETs
 ```
+
+各実行集合のstate rootはreviewed-files digestごとの新規generation directoryに固定する。
+失敗済みの旧generation markerは保持し、同じdigestでは再試行できない。
+
+### First external attempt and corrective generation
+
+初回generationでpresenceは6/6成功したが、notification開始時のKeychain internal readが
+5秒timeoutで失敗した。credential値は表示されず、Pushoverとemailは送信開始前だった。
+`10_notification.started.json`はno-retry証跡として保持している。
+
+修正generationでは、通知より前に固定6 itemのinternal readだけを行う独立段階を追加し、
+Keychain対話承認の待機をoperation全体で最大120秒に延長した。timeoutの部分出力は
+例外context/causeにも保持しない。broker read-only preflightのKeychain読取りも
+同じ120秒に固定した。読み取った値はレポート・exception・markerに含めない。
+
+実行時はMacをロックせず、Terminalを前面にして待つ。SecurityAgentは最大6回表示され得る。
+想定した`security`による固定item accessだけを承認し、後続の通知／Private GETで再表示させないため
+「常に許可」を推奨する。想定外のprocess・item・表示なら拒否し、そのgenerationを停止する。
 
 ### Notification
 
@@ -126,15 +145,14 @@ credential読取りとnetworkへ到達しない。POST分岐のcommon hard guard
 ## 4. Fake-first validation
 
 ```text
-corrective_core_tests=45 passed
-preparation_plus_notification_binding_tests=49 passed
-expanded_preparation_and_isolation_tests=101 passed
-h11_auto_related_tests=341 passed
-repository_app_tests=7933 passed, 2 keychain-write tests deselected
+focused_preparation_tests=69 passed
+h11_auto_related_tests=346 passed
+repository_app_tests=7938 passed, 2 keychain-write tests deselected
 full_ruff_app_scripts=passed
 git_diff_check=passed
 danger_scan=no_broker_POST_route_or_activation_permit_in_preparation_paths
-actual_keychain_read=false
+actual_keychain_read_attempted=true
+actual_keychain_read_completed=false
 external_notification_send=false
 broker_private_get=false
 broker_private_post=false

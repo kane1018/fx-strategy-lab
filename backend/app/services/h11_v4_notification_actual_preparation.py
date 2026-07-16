@@ -42,6 +42,7 @@ PUSHOVER_MESSAGE_URL = "https://api.pushover.net/1/messages.json"
 PUSHOVER_RECEIPT_URL_PREFIX = "https://api.pushover.net/1/receipts/"
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
+KEYCHAIN_PROMPT_TIMEOUT_SECONDS = 120.0
 
 _SAFE_TITLE = "FX Strategy Lab H-11 v4"
 _SAFE_MESSAGE = (
@@ -82,7 +83,7 @@ def read_notification_keychain_secret(
     service: str,
     account: str,
     *,
-    timeout_seconds: float = 5.0,
+    timeout_seconds: float = KEYCHAIN_PROMPT_TIMEOUT_SECONDS,
 ) -> _SealedNotificationSecret:
     if platform.system() != "Darwin":
         raise H11V4ActualNotificationError("NOTIFICATION_KEYCHAIN_PLATFORM_UNSUPPORTED")

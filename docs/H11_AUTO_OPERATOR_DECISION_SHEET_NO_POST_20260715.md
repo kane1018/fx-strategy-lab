@@ -300,7 +300,7 @@ independent_read_only_review_authorized=true
 broker_post_authorized=false
 activation_permit_issuance_authorized=false
 canary_execution_authorized=false
-commit_push_authorized=false
+current_worktree_commit_push_authorized=true
 ```
 
 AGENTS.mdへ本Step専用の限定例外を追加し、actual notificationとGMO Private GETをbroker POSTから分離した。
@@ -310,9 +310,15 @@ AGENTS.mdへ本Step専用の限定例外を追加し、actual notificationとGMO
 retry／second attemptはprocess再起動後も禁止する。
 
 ```text
-presence -> notification provider acceptance -> email receipt confirmation
+presence -> sealed Keychain access rehearsal -> notification provider acceptance -> email receipt confirmation
 -> host/KILL preparation -> account exclusivity confirmation -> Private GET
 ```
+
+初回notificationはKeychainの5秒対話timeoutで送信前に停止した。旧no-retry markerは保持する。
+修正後は新reviewed-files digest専用generationでのみ再開し、通知前に120秒の
+Keychain access rehearsalを完了させる。120秒は6 itemの合計上限である。実行時はMacをロックせず
+Terminalを前面にし、想定した`security` accessだけ「常に許可」を推奨する。最大6回表示され得るが、
+想定外のprocess・item・表示なら拒否して停止する。
 
 SMTPのacceptはemail受信の証明ではない。Private GETのzero countはUSD/JPY限定snapshotであり、口座全体の
 排他性やcanary preflight clearを単独では証明しない。host/KILL preparationはdisposable childとpersistent
@@ -324,7 +330,8 @@ fake-firstで修正中である。
 
 ```text
 api_ip_restriction=DISABLED_OPERATOR_ACCEPTED_RESIDUAL_RISK
-actual_keychain_read=false
+actual_keychain_read_attempted=true
+actual_keychain_read_completed=false
 external_notification_send=false
 broker_private_get=false
 broker_private_post=false

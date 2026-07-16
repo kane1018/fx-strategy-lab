@@ -22,12 +22,14 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4PreparationAttemptLedger,
     V4PreparationOperation,
     V4PreparationOperationPermit,
+    check_v4_keychain_access_internal_only,
     check_v4_keychain_presence_only,
     confirm_account_exclusivity_exact,
     confirm_email_delivery_exact,
     load_external_preparation_gate,
 )
 from app.services import h11_v4_gmo_readonly_preflight as readonly_module
+from app.services import h11_v4_notification_actual_preparation as notification_actual_module
 from app.services.h11_v4_gmo_readonly_preflight import (
     V4GmoFiniteReadOnlyPreflight,
     V4GmoReadOnlyPreflightError,
@@ -170,6 +172,139 @@ def test_presence_only_check_never_requests_keychain_value(
     assert report.present_count == 6
     assert report.values_read is False
     assert all("-w" not in command and "-g" not in command for command in commands)
+
+
+def test_keychain_access_check_reads_internal_values_with_long_prompt_window(
+    monkeypatch: pytest.MonkeyPatch,
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    calls: list[tuple[list[str], float]] = []
+
+    def runner(
+        command: list[str], timeout_seconds: float
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append((command, timeout_seconds))
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="synthetic-secret-never-reported\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.KEYCHAIN_ACCESS,
+    )
+    report = check_v4_keychain_access_internal_only(
+        operation_permit=operation_permit,
+        runner=runner,
+        clock=iter((0.0, 0.0, 10.0, 20.0, 30.0, 40.0, 50.0)).__next__,
+    )
+
+    assert report.total_required == 6
+    assert report.accessible_count == 6
+    assert report.all_accessible is True
+    assert report.values_read_internal is True
+    assert report.credential_value_exposed is False
+    assert "synthetic-secret-never-reported" not in repr(report)
+    assert len(calls) == 6
+    assert [timeout for _, timeout in calls] == [120.0, 110.0, 100.0, 90.0, 80.0, 70.0]
+    assert all("-w" in command and "-g" not in command for command, _ in calls)
+
+
+def test_keychain_timeout_does_not_retain_partial_secret_in_exception_chain(
+    monkeypatch: pytest.MonkeyPatch,
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    partial_secret = "synthetic-partial-secret-never-retained"
+
+    def runner(
+        command: list[str], timeout_seconds: float
+    ) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(
+            command,
+            timeout_seconds,
+            output=partial_secret,
+            stderr=partial_secret,
+        )
+
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.KEYCHAIN_ACCESS,
+    )
+
+    with pytest.raises(V4ActualPreparationGuardError) as captured:
+        check_v4_keychain_access_internal_only(
+            operation_permit=operation_permit,
+            runner=runner,
+            clock=iter((0.0, 0.0)).__next__,
+        )
+
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+    assert partial_secret not in repr(captured.value)
+
+
+def test_keychain_access_uses_one_total_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    calls = 0
+
+    def runner(
+        command: list[str], timeout_seconds: float
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(command, 0, stdout="synthetic\n", stderr="")
+
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.KEYCHAIN_ACCESS,
+    )
+
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="PREPARATION_KEYCHAIN_ACCESS_FAILED",
+    ):
+        check_v4_keychain_access_internal_only(
+            operation_permit=operation_permit,
+            runner=runner,
+            timeout_seconds=30.0,
+            clock=iter((0.0, 0.0, 31.0)).__next__,
+        )
+
+    assert calls == 1
+
+
+def test_new_digest_generation_preserves_legacy_no_retry_markers(
+    tmp_path: Path,
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    legacy_root = tmp_path / guard_module.PREPARATION_STATE_RELATIVE
+    legacy_root.mkdir(parents=True, exist_ok=True)
+    legacy_marker = legacy_root / "10_notification.started.json"
+    legacy_marker.write_text("legacy marker retained\n", encoding="utf-8")
+
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+
+    assert ledger.state_root.parent == legacy_root
+    assert ledger.state_root.name == f"generation-{'a' * 64}"
+    assert legacy_marker.read_text(encoding="utf-8") == "legacy marker retained\n"
+
+
+def test_actual_keychain_readers_allow_interactive_prompt_time() -> None:
+    notification_default = inspect.signature(
+        notification_actual_module.read_notification_keychain_secret
+    ).parameters["timeout_seconds"].default
+    private_get_default = inspect.signature(
+        readonly_module.read_v4_gmo_readonly_keychain_secret
+    ).parameters["timeout_seconds"].default
+    assert notification_default == 120.0
+    assert private_get_default == 120.0
 
 
 def test_actual_external_functions_reject_unreviewed_direct_calls(tmp_path: Path) -> None:
@@ -488,6 +623,14 @@ def test_persistent_preparation_ledger_enforces_order_and_no_retry(
     ledger.complete(
         V4PreparationOperation.PRESENCE,
         operation_permit=presence_permit,
+    )
+    with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
+        ledger.begin(V4PreparationOperation.NOTIFICATION)
+    access_permit = ledger.begin(V4PreparationOperation.KEYCHAIN_ACCESS)
+    access_permit.consume_for(V4PreparationOperation.KEYCHAIN_ACCESS)
+    ledger.complete(
+        V4PreparationOperation.KEYCHAIN_ACCESS,
+        operation_permit=access_permit,
     )
     ledger.begin(V4PreparationOperation.NOTIFICATION)
 

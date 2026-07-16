@@ -3914,12 +3914,18 @@ main_readonly_changed=false
 Operatorはcanary broker POST直前で再停止する条件で、Keychain値非表示確認、Pushover/email実配送、
 GMO Private GET 3経路、非破壊host/KILL試験、独立reviewを授権した。
 
-準備限定AGENTS例外とfake-first実装は追加済み。Corrective core 45、preparation 49、expanded isolation 101、
-H-11 auto 341 testsとfull ruffは成功した。固定ledger発行permitのexact型・private token・operation一致を
-全外部関数で強制し、duck-typed permit bypassも拒否する。実Keychain／通知／broker GETは、clean main／HEAD一致条件を
-満たさないため未実行。実POST、permit、canaryは0のまま。
+準備限定AGENTS例外とfake-first実装は追加済み。固定ledger発行permitのexact型・private token・operation一致を
+全外部関数で強制し、duck-typed permit bypassも拒否する。初回generationではpresence 6/6後、通知送信前の
+Keychain internal readが5秒の対話timeoutで停止した。Pushover/email、Private GET、broker POSTはいずれも0で、
+旧`00_presence.*`／`10_notification.started.json` markerはno-retry証跡として保持する。
 
-次Stepは完全差分のpost-review後、operatorからcommit/pushを別途授権され、clean mainを作ること。その後だけ
-presence→通知→host/KILL→3 GETの有限順で実外部試験を行う。manifest/runtime VETOが残ればcanary確認へ進まない。
+Keychain診断ではlogin keychainがdefaultかつuser domain唯一の対象で、`no-timeout`だった。修正generationは
+reviewed-files digest専用directoryへ分離し、presence→合計最大120秒Keychain access rehearsal→通知→email受信確認→
+host/KILL→口座排他確認→3 GETの順とした。同一digestの失敗operationは再試行せず、旧generationをreset・削除・
+上書きしない。完全差分review、検証、commit/push後のclean mainでだけ新generationを開始する。
+manifest/runtime VETOが残ればcanary確認へ進まず、実POST、activation permit、canaryは引き続き0とする。
+
+access rehearsalではSecurityAgentが最大6回表示され得る。MacをunlockのままTerminalを前面にし、想定した
+`security` accessだけ「常に許可」を推奨する。想定外の表示は拒否してgenerationを停止する。
 
 詳細: [H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md](H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md)
