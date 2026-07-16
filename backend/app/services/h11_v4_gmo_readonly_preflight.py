@@ -7,6 +7,7 @@ responses are consumed only in process memory and are never returned.
 
 from __future__ import annotations
 
+import math
 import platform
 import subprocess
 import time
@@ -20,6 +21,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4ExternalPreparationGate,
     V4PreparationOperation,
     V4PreparationOperationPermit,
+    _attest_private_get_success_internal,
     require_external_preparation_gate,
     require_operation_permit,
 )
@@ -179,7 +181,7 @@ class V4GmoFiniteReadOnlyPreflight:
         require_operation_permit(
             self._operation_permit,
             expected_operation=V4PreparationOperation.PRIVATE_GET,
-            consume=True,
+            claim=True,
         )
         try:
             key, secret = self._credential_pair.unseal_for_internal_request_only()
@@ -196,20 +198,44 @@ class V4GmoFiniteReadOnlyPreflight:
             timeout=10.0,
         )
         owns_client = self._client is None
-        started = self._monotonic()
+        started = float(self._monotonic())
+        if not math.isfinite(started) or started < 0:
+            raise V4GmoReadOnlyPreflightError("PRIVATE_GET_CADENCE_CLOCK_INVALID")
         counts: list[int] = []
         observed_offsets: list[float] = []
         previous_request_started: float | None = None
         try:
             for index, (transport_path, signing_path) in enumerate(_READ_SEQUENCE):
                 target_offset = index * 0.25
-                now = self._monotonic()
+                now = float(self._monotonic())
+                if (
+                    not math.isfinite(now)
+                    or now < started
+                    or (
+                        previous_request_started is not None
+                        and now < previous_request_started
+                    )
+                ):
+                    raise V4GmoReadOnlyPreflightError(
+                        "PRIVATE_GET_CADENCE_CLOCK_INVALID"
+                    )
                 minimum_start = started + target_offset
                 if previous_request_started is not None:
                     minimum_start = max(minimum_start, previous_request_started + 0.25)
                 if now < minimum_start:
                     self._sleep(minimum_start - now)
-                request_started = self._monotonic()
+                request_started = float(self._monotonic())
+                if (
+                    not math.isfinite(request_started)
+                    or request_started < minimum_start
+                    or (
+                        previous_request_started is not None
+                        and request_started < previous_request_started + 0.25
+                    )
+                ):
+                    raise V4GmoReadOnlyPreflightError(
+                        "PRIVATE_GET_CADENCE_NOT_REACHED"
+                    )
                 observed_offsets.append(max(0.0, request_started - started))
                 previous_request_started = request_started
                 params = {"symbol": "USD_JPY", "count": "100"}
@@ -241,7 +267,7 @@ class V4GmoFiniteReadOnlyPreflight:
         flat = counts[1] == 0
         zero_active = counts[2] == 0
         limited_clear = flat and zero_active
-        return V4GmoReadOnlyPreflightReport(
+        report = V4GmoReadOnlyPreflightReport(
             status=(
                 "PASSED_LIMITED_USD_JPY_READ_ONLY_SNAPSHOT_NOT_CANARY_CLEAR"
                 if limited_clear
@@ -260,6 +286,11 @@ class V4GmoFiniteReadOnlyPreflight:
             canary_preflight_clear=False,
             cadence_offsets_seconds=tuple(observed_offsets),  # type: ignore[arg-type]
         )
+        if limited_clear:
+            _attest_private_get_success_internal(
+                self._operation_permit, report.to_safe_dict()
+            )
+        return report
 
     def __repr__(self) -> str:
         return "V4GmoFiniteReadOnlyPreflight(<redacted>)"

@@ -11,19 +11,29 @@ httpx transport remains activation-gated in ``h11_v4_gmo_actual_transport``.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+import hashlib
+import json
+import math
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from enum import Enum
 from typing import Any
 
 from app.h11_auto.contracts import SignalDecision
+from app.h11_auto.v4_activation_preparation import (
+    v4_reconciliation_get_offsets_seconds,
+)
 from app.h11_auto.v4_gmo_contracts import (
     V4GmoAction,
     V4GmoActionPlan,
     V4GmoBrokerSnapshot,
     V4GmoEntryStatus,
     V4GmoProtectionStatus,
+)
+from app.h11_auto.v4_gmo_persisted_authorization import (
+    V4PersistedActionAuthorization,
+    consume_persisted_action_authorization,
 )
 from app.h11_auto.v4_gmo_protection import V4GmoExactProtectionPlan
 from app.services.h11_v4_gmo_actual_transport import (
@@ -98,6 +108,8 @@ class V4GmoActualReconciliation:
     snapshot: V4GmoBrokerSnapshot
     position_bundle: V4GmoPositionBundle | None
     average_fill_price: Decimal | None
+    closed_size: int = 0
+    realized_pnl_jpy_internal: int | None = None
     source_read_count: int = 3
     raw_response_retained: bool = False
     identifier_exposed: bool = False
@@ -111,6 +123,46 @@ class V4GmoActualReconciliation:
     def __bool__(self) -> bool:
         return False
 
+    def _binding_digest_internal(self) -> str:
+        """Bind sanitized state and redacted position ownership in memory."""
+
+        parts = (
+            []
+            if self.position_bundle is None
+            else [
+                {"position_id": part.position_id, "size": part.size}
+                for part in self.position_bundle._parts
+            ]
+        )
+        canonical = json.dumps(
+            {
+                "average_fill_price": (
+                    None
+                    if self.average_fill_price is None
+                    else format(self.average_fill_price, "f")
+                ),
+                "entry_status": self.snapshot.entry_status.value,
+                "closed_size": self.closed_size,
+                "filled_size": self.snapshot.filled_size,
+                "fresh": self.snapshot.fresh,
+                "pending_entry_size": self.snapshot.pending_entry_size,
+                "position_count": self.snapshot.position_count,
+                "position_side": (
+                    None
+                    if self.snapshot.position_side is None
+                    else self.snapshot.position_side.value
+                ),
+                "positions": parts,
+                "protection_size": self.snapshot.protection_size,
+                "protection_status": self.snapshot.protection_status.value,
+                "result_known": self.snapshot.result_known,
+                "realized_pnl_jpy_internal": self.realized_pnl_jpy_internal,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
+
 
 @dataclass(frozen=True, repr=False)
 class _ExecutionRow:
@@ -119,6 +171,7 @@ class _ExecutionRow:
     settle_type: str
     side: str
     size: int
+    net_realized_pnl_jpy: Decimal
 
 
 @dataclass(frozen=True, repr=False)
@@ -143,11 +196,14 @@ def v4_gmo_client_order_id(*, cycle_ref: str, action: V4GmoAction) -> str:
         V4GmoAction.MARKET_ENTRY: "H11V4E",
         V4GmoAction.EXACT_SIZE_OCO_PROTECTION: "H11V4P",
         V4GmoAction.POSITION_SPECIFIC_EMERGENCY_EXIT: "H11V4X",
+        V4GmoAction.POSITION_SPECIFIC_TIME_EXIT: "H11V4T",
     }
     normalized = action
     if action is V4GmoAction.CANCEL_ENTRY_REMAINDER:
         normalized = V4GmoAction.MARKET_ENTRY
     elif action is V4GmoAction.CANCEL_MISMATCHED_PROTECTION:
+        normalized = V4GmoAction.EXACT_SIZE_OCO_PROTECTION
+    elif action is V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT:
         normalized = V4GmoAction.EXACT_SIZE_OCO_PROTECTION
     return prefixes[normalized] + cycle_ref[:30]
 
@@ -156,6 +212,11 @@ def v4_gmo_client_order_id(*, cycle_ref: str, action: V4GmoAction) -> str:
 class V4GmoActualAdapter:
     transport: V4GmoPrivateTransport
     _attempted: set[tuple[str, V4GmoAction]] = field(default_factory=set, init=False)
+    _last_private_get_start_monotonic: float | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
 
     def __repr__(self) -> str:
         return "V4GmoActualAdapter(<transport-redacted>)"
@@ -164,6 +225,8 @@ class V4GmoActualAdapter:
         self,
         *,
         plan: V4GmoActionPlan,
+        persisted_authorization: V4PersistedActionAuthorization,
+        now_monotonic: float,
         reconciliation: V4GmoActualReconciliation | None = None,
         protection_plan: V4GmoExactProtectionPlan | None = None,
     ) -> V4GmoPrivateOutcome:
@@ -174,6 +237,17 @@ class V4GmoActualAdapter:
             plan=plan,
             reconciliation=reconciliation,
             protection_plan=protection_plan,
+        )
+        consume_persisted_action_authorization(
+            persisted_authorization,
+            plan=plan,
+            protection_plan=protection_plan,
+            reconciliation_digest=(
+                None
+                if reconciliation is None
+                else reconciliation._binding_digest_internal()
+            ),
+            now_monotonic=now_monotonic,
         )
         self._attempted.add(key)
         try:
@@ -196,40 +270,113 @@ class V4GmoActualAdapter:
         cycle_ref: str,
         side: SignalDecision,
         requested_size: int,
+        monotonic_factory: Callable[[], float],
+        wait: Callable[[float], None],
     ) -> V4GmoActualReconciliation:
-        _validate_cycle_inputs(cycle_ref=cycle_ref, side=side, requested_size=requested_size)
+        return self.reconcile_at_fixed_cadence(
+            cycle_ref=cycle_ref,
+            side=side,
+            requested_size=requested_size,
+            monotonic_factory=monotonic_factory,
+            wait=wait,
+        )
+
+    def reconcile_at_fixed_cadence(
+        self,
+        *,
+        cycle_ref: str,
+        side: SignalDecision,
+        requested_size: int,
+        monotonic_factory: Callable[[], float],
+        wait: Callable[[float], None],
+    ) -> V4GmoActualReconciliation:
+        """Perform three authoritative GETs with >=0.25s start separation.
+
+        This actual-coordinator path applies a conservative 0.25s delay before
+        the first GET after adapter creation/restart.  It does not retry a
+        failed GET and it does not tighten the operator-frozen cadence.
+        """
+
+        _validate_cycle_inputs(
+            cycle_ref=cycle_ref,
+            side=side,
+            requested_size=requested_size,
+        )
+        offsets = v4_reconciliation_get_offsets_seconds()
+        start = float(monotonic_factory())
+        if not math.isfinite(start) or start < 0:
+            return _unknown_reconciliation()
+
+        def request_at(offset: float, request: V4GmoPrivateRequest) -> Any:
+            # A new adapter is treated as a conservative restart boundary: its
+            # first GET is delayed by one full cadence interval.  The shared
+            # field then carries the account cadence across reconciliation
+            # calls made by this runtime.
+            target = start + 0.25 + offset
+            if self._last_private_get_start_monotonic is not None:
+                target = max(
+                    target,
+                    self._last_private_get_start_monotonic + 0.25,
+                )
+            current = float(monotonic_factory())
+            if (
+                not math.isfinite(current)
+                or current < 0
+                or (
+                    self._last_private_get_start_monotonic is not None
+                    and current < self._last_private_get_start_monotonic
+                )
+            ):
+                raise V4GmoActualAdapterError(
+                    "V4_GMO_RECONCILIATION_CADENCE_CLOCK_INVALID"
+                )
+            remaining = target - current
+            if remaining > 0:
+                wait(remaining)
+            actual_start = float(monotonic_factory())
+            if (
+                not math.isfinite(actual_start)
+                or actual_start < target
+                or (
+                    self._last_private_get_start_monotonic is not None
+                    and actual_start < self._last_private_get_start_monotonic + 0.25
+                )
+            ):
+                raise V4GmoActualAdapterError(
+                    "V4_GMO_RECONCILIATION_CADENCE_NOT_REACHED"
+                )
+            self._last_private_get_start_monotonic = actual_start
+            return _envelope_data(self.transport.request(request))
+
         try:
             executions = _parse_executions(
-                _envelope_data(
-                    self.transport.request(
-                        _get_request(
-                            LATEST_EXECUTIONS_TRANSPORT_PATH,
-                            "/v1/latestExecutions",
-                            {"symbol": SYMBOL, "count": "100"},
-                        )
-                    )
+                request_at(
+                    offsets[0],
+                    _get_request(
+                        LATEST_EXECUTIONS_TRANSPORT_PATH,
+                        "/v1/latestExecutions",
+                        {"symbol": SYMBOL, "count": "100"},
+                    ),
                 )
             )
             positions = _parse_positions(
-                _envelope_data(
-                    self.transport.request(
-                        _get_request(
-                            OPEN_POSITIONS_TRANSPORT_PATH,
-                            "/v1/openPositions",
-                            {"symbol": SYMBOL, "count": "100"},
-                        )
-                    )
+                request_at(
+                    offsets[1],
+                    _get_request(
+                        OPEN_POSITIONS_TRANSPORT_PATH,
+                        "/v1/openPositions",
+                        {"symbol": SYMBOL, "count": "100"},
+                    ),
                 )
             )
             active_orders = _parse_active_orders(
-                _envelope_data(
-                    self.transport.request(
-                        _get_request(
-                            ACTIVE_ORDERS_TRANSPORT_PATH,
-                            "/v1/activeOrders",
-                            {"symbol": SYMBOL, "count": "100"},
-                        )
-                    )
+                request_at(
+                    offsets[2],
+                    _get_request(
+                        ACTIVE_ORDERS_TRANSPORT_PATH,
+                        "/v1/activeOrders",
+                        {"symbol": SYMBOL, "count": "100"},
+                    ),
                 )
             )
             return _reconcile_rows(
@@ -273,7 +420,47 @@ class V4GmoActualAdapter:
         if plan.action in (
             V4GmoAction.CANCEL_ENTRY_REMAINDER,
             V4GmoAction.CANCEL_MISMATCHED_PROTECTION,
+            V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
         ):
+            if reconciliation is None or reconciliation.snapshot.fresh is not True:
+                raise V4GmoActualAdapterError(
+                    "V4_GMO_AUTHORITATIVE_RECONCILIATION_REQUIRED"
+                )
+            snapshot = reconciliation.snapshot
+            if snapshot.result_known is not True or snapshot.position_side not in {
+                None,
+                plan.side,
+            }:
+                raise V4GmoActualAdapterError("V4_GMO_RECONCILIATION_MISMATCH")
+            if plan.action is V4GmoAction.CANCEL_ENTRY_REMAINDER:
+                valid_cancel_state = (
+                    snapshot.entry_status
+                    in {V4GmoEntryStatus.PENDING, V4GmoEntryStatus.PARTIAL}
+                    and snapshot.pending_entry_size == plan.requested_size
+                    and snapshot.pending_entry_size > 0
+                    and snapshot.position_count <= 1
+                )
+            elif plan.action is V4GmoAction.CANCEL_MISMATCHED_PROTECTION:
+                valid_cancel_state = (
+                    snapshot.position_count == 1
+                    and snapshot.filled_size > 0
+                    and snapshot.protection_size == plan.requested_size
+                    and snapshot.protection_status
+                    in {
+                        V4GmoProtectionStatus.UNDERSIZED,
+                        V4GmoProtectionStatus.OVERSIZED,
+                    }
+                )
+            else:
+                valid_cancel_state = (
+                    snapshot.position_count == 1
+                    and snapshot.filled_size > 0
+                    and snapshot.protection_size == plan.requested_size
+                    and snapshot.protection_status
+                    is V4GmoProtectionStatus.EXACT_MATCH
+                )
+            if not valid_cancel_state:
+                raise V4GmoActualAdapterError("V4_GMO_CANCEL_STATE_MISMATCH")
             return _post_request(
                 CANCEL_TRANSPORT_PATH,
                 "/v1/cancelOrders",
@@ -283,6 +470,16 @@ class V4GmoActualAdapter:
             raise V4GmoActualAdapterError("V4_GMO_POSITION_RECONCILIATION_REQUIRED")
         if reconciliation.snapshot.result_known is not True:
             raise V4GmoActualAdapterError("V4_GMO_RECONCILIATION_UNKNOWN")
+        snapshot = reconciliation.snapshot
+        if (
+            snapshot.fresh is not True
+            or snapshot.position_count != 1
+            or snapshot.position_side is not plan.side
+            or snapshot.entry_status is not V4GmoEntryStatus.FILLED
+            or snapshot.pending_entry_size != 0
+            or snapshot.filled_size != plan.requested_size
+        ):
+            raise V4GmoActualAdapterError("V4_GMO_POSITION_STATE_MISMATCH")
         if reconciliation.position_bundle.total_size != plan.requested_size:
             raise V4GmoActualAdapterError("V4_GMO_POSITION_SIZE_MISMATCH")
         settlement_side = (
@@ -292,6 +489,9 @@ class V4GmoActualAdapter:
             if protection_plan is None:
                 raise V4GmoActualAdapterError("V4_GMO_PROTECTION_PLAN_REQUIRED")
             if (
+                snapshot.protection_size != 0
+                or snapshot.protection_status is not V4GmoProtectionStatus.NONE
+                or
                 protection_plan.position_side is not plan.side
                 or protection_plan.settlement_side is not settlement_side
                 or protection_plan.exact_filled_size != plan.requested_size
@@ -310,7 +510,15 @@ class V4GmoActualAdapter:
                 ),
             }
             return _post_request(CLOSE_ORDER_TRANSPORT_PATH, "/v1/closeOrder", body)
-        if plan.action is V4GmoAction.POSITION_SPECIFIC_EMERGENCY_EXIT:
+        if plan.action in {
+            V4GmoAction.POSITION_SPECIFIC_EMERGENCY_EXIT,
+            V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,
+        }:
+            if (
+                snapshot.protection_size != 0
+                or snapshot.protection_status is not V4GmoProtectionStatus.NONE
+            ):
+                raise V4GmoActualAdapterError("V4_GMO_EMERGENCY_EXIT_STATE_MISMATCH")
             body = {
                 "symbol": SYMBOL,
                 "side": settlement_side.value,
@@ -340,15 +548,28 @@ def _reconcile_rows(
     exit_id = v4_gmo_client_order_id(
         cycle_ref=cycle_ref, action=V4GmoAction.POSITION_SPECIFIC_EMERGENCY_EXIT
     )
-    permitted_client_ids = {entry_id, protection_id, exit_id}
+    time_exit_id = v4_gmo_client_order_id(
+        cycle_ref=cycle_ref, action=V4GmoAction.POSITION_SPECIFIC_TIME_EXIT
+    )
+    permitted_client_ids = {entry_id, protection_id, exit_id, time_exit_id}
     if any(row.client_order_id not in permitted_client_ids for row in active_orders):
         return _unknown_reconciliation()
 
-    owned_position_ids = {
-        row.position_id
+    owned_open_rows = tuple(
+        row
         for row in executions
         if row.client_order_id == entry_id and row.settle_type == "OPEN"
-    }
+    )
+    if any(row.side != side.value for row in owned_open_rows):
+        return _unknown_reconciliation()
+    owned_position_sizes: dict[str, int] = {}
+    for row in owned_open_rows:
+        owned_position_sizes[row.position_id] = (
+            owned_position_sizes.get(row.position_id, 0) + row.size
+        )
+    if sum(owned_position_sizes.values()) > requested_size:
+        return _unknown_reconciliation()
+    owned_position_ids = set(owned_position_sizes)
     if positions and (
         not owned_position_ids
         or any(row.position_id not in owned_position_ids for row in positions)
@@ -370,6 +591,46 @@ def _reconcile_rows(
     average_fill_price = (
         sum((row.price * row.size for row in positions), Decimal("0")) / Decimal(filled_size)
         if filled_size
+        else None
+    )
+    close_rows = tuple(
+        row
+        for row in executions
+        if row.settle_type == "CLOSE"
+        and row.client_order_id in {protection_id, exit_id, time_exit_id}
+    )
+    expected_close_side = (
+        SignalDecision.SELL.value
+        if side is SignalDecision.BUY
+        else SignalDecision.BUY.value
+    )
+    if any(
+        row.position_id not in owned_position_ids
+        or row.side != expected_close_side
+        for row in close_rows
+    ):
+        return _unknown_reconciliation()
+    closed_size_by_position: dict[str, int] = {}
+    for row in close_rows:
+        closed_size_by_position[row.position_id] = (
+            closed_size_by_position.get(row.position_id, 0) + row.size
+        )
+    if any(
+        closed_size > owned_position_sizes[position_id]
+        for position_id, closed_size in closed_size_by_position.items()
+    ):
+        return _unknown_reconciliation()
+    closed_size = sum(row.size for row in close_rows)
+    if closed_size > requested_size:
+        return _unknown_reconciliation()
+    realized_pnl_jpy_internal = (
+        int(
+            sum(
+                (row.net_realized_pnl_jpy for row in close_rows),
+                Decimal("0"),
+            ).to_integral_value(rounding=ROUND_FLOOR)
+        )
+        if close_rows
         else None
     )
 
@@ -422,6 +683,8 @@ def _reconcile_rows(
         snapshot=snapshot,
         position_bundle=bundle,
         average_fill_price=average_fill_price,
+        closed_size=closed_size,
+        realized_pnl_jpy_internal=realized_pnl_jpy_internal,
     )
 
 
@@ -446,6 +709,13 @@ def _parse_executions(data: Any) -> tuple[_ExecutionRow, ...]:
                 settle_type=_required_choice(row, "settleType", {"OPEN", "CLOSE"}),
                 side=_required_choice(row, "side", {"BUY", "SELL"}),
                 size=_positive_int(row, "size"),
+                net_realized_pnl_jpy=(
+                    _required_decimal(row, "lossGain")
+                    + _required_decimal(row, "fee")
+                    + _required_decimal(row, "settledSwap")
+                    if str(row.get("settleType", "")).upper() == "CLOSE"
+                    else Decimal("0")
+                ),
             )
         )
     return tuple(parsed)
@@ -561,6 +831,13 @@ def _positive_int(row: Mapping[str, Any], key: str) -> int:
     if value <= 0 or value != value.to_integral_value():
         raise V4GmoActualAdapterError("V4_GMO_SIZE_FIELD_INVALID")
     return int(value)
+
+
+def _required_decimal(row: Mapping[str, Any], key: str) -> Decimal:
+    value = Decimal(_required_string(row, key))
+    if not value.is_finite():
+        raise V4GmoActualAdapterError("V4_GMO_DECIMAL_FIELD_INVALID")
+    return value
 
 
 def _number_if_numeric(value: str) -> int | str:

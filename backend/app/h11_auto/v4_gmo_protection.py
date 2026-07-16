@@ -82,8 +82,8 @@ class V4GmoExactProtectionPlan:
             raise V4GmoProtectionError("pure v4 protection plan cannot enable transport")
 
     @property
-    def plan_digest(self) -> str:
-        canonical = json.dumps(
+    def canonical_json(self) -> str:
+        return json.dumps(
             {
                 "contract_hash": self.contract_hash,
                 "exact_filled_size": self.exact_filled_size,
@@ -96,7 +96,10 @@ class V4GmoExactProtectionPlan:
             sort_keys=True,
             separators=(",", ":"),
         )
-        return hashlib.sha256(canonical.encode()).hexdigest()
+
+    @property
+    def plan_digest(self) -> str:
+        return hashlib.sha256(self.canonical_json.encode()).hexdigest()
 
 
 def build_exact_fill_oco_plan_no_post(

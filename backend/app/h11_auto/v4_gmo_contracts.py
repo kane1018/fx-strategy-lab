@@ -10,13 +10,20 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
+from zoneinfo import ZoneInfo
 
 from app.h11_auto.contracts import FormalHorizon, FormalSignal, SignalDecision
 from app.h11_auto.v4_gmo_evidence import H11_V4_GMO_CAPABILITY_EVIDENCE_HASH
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 
 V4_GMO_PROFILE_VERSION = "H11_V4_GMO_MARKET_THEN_EXACT_OCO_NO_POST_V1"
+V4_GMO_EXIT_PROFILE = "H11_V4_EXACT_OCO_POSITION_SPECIFIC_23H_EXIT_V1"
+V4_GMO_BLOCKED_HOURS_JST = (5, 6, 7, 8)
+V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST = 0
+V4_GMO_WEEKEND_DAYS_JST = (5, 6)
+V4_GMO_MAXIMUM_HOLD_SECONDS = 82_800
 
 
 class V4GmoContractError(ValueError):
@@ -28,7 +35,9 @@ class V4GmoAction(str, Enum):
     CANCEL_ENTRY_REMAINDER = "CANCEL_ENTRY_REMAINDER"
     EXACT_SIZE_OCO_PROTECTION = "EXACT_SIZE_OCO_PROTECTION"
     CANCEL_MISMATCHED_PROTECTION = "CANCEL_MISMATCHED_PROTECTION"
+    CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT = "CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT"
     POSITION_SPECIFIC_EMERGENCY_EXIT = "POSITION_SPECIFIC_EMERGENCY_EXIT"
+    POSITION_SPECIFIC_TIME_EXIT = "POSITION_SPECIFIC_TIME_EXIT"
 
 
 class V4GmoCycleState(str, Enum):
@@ -92,6 +101,11 @@ class V4GmoExecutionPolicy:
     max_loss_per_day_yen: int = 10_000
     max_loss_per_month_yen: int = 50_000
     max_consecutive_losses: int = 5
+    blocked_hours_jst: tuple[int, ...] = V4_GMO_BLOCKED_HOURS_JST
+    friday_entry_cutoff_hour_jst: int = V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST
+    weekend_days_jst: tuple[int, ...] = V4_GMO_WEEKEND_DAYS_JST
+    maximum_hold_seconds: int = V4_GMO_MAXIMUM_HOLD_SECONDS
+    exit_profile_label: str = V4_GMO_EXIT_PROFILE
     scale_in_allowed: bool = False
     hedging_allowed: bool = False
     generic_opposite_close_allowed: bool = False
@@ -127,6 +141,14 @@ class V4GmoExecutionPolicy:
             and self.max_loss_per_month_yen == 50_000,
             type(self.max_consecutive_losses) is int
             and self.max_consecutive_losses == 5,
+            self.blocked_hours_jst == V4_GMO_BLOCKED_HOURS_JST,
+            type(self.friday_entry_cutoff_hour_jst) is int
+            and self.friday_entry_cutoff_hour_jst
+            == V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST,
+            self.weekend_days_jst == V4_GMO_WEEKEND_DAYS_JST,
+            type(self.maximum_hold_seconds) is int
+            and self.maximum_hold_seconds == V4_GMO_MAXIMUM_HOLD_SECONDS,
+            self.exit_profile_label == V4_GMO_EXIT_PROFILE,
             type(self.scale_in_allowed) is bool and not self.scale_in_allowed,
             type(self.hedging_allowed) is bool and not self.hedging_allowed,
             type(self.generic_opposite_close_allowed) is bool
@@ -149,6 +171,9 @@ class V4GmoExecutionPolicy:
             {
                 "broker_native_atomic_protection_required": False,
                 "broker_capability_evidence_hash": self.broker_capability_evidence_hash,
+                "blocked_hours_jst": list(self.blocked_hours_jst),
+                "exit_profile_label": self.exit_profile_label,
+                "friday_entry_cutoff_hour_jst": self.friday_entry_cutoff_hour_jst,
                 "generic_opposite_close_allowed": False,
                 "hedging_allowed": False,
                 "max_consecutive_losses": 5,
@@ -158,6 +183,7 @@ class V4GmoExecutionPolicy:
                 "max_loss_per_trade_yen": 5_000,
                 "max_positions": 1,
                 "max_unprotected_seconds": 15,
+                "maximum_hold_seconds": self.maximum_hold_seconds,
                 "profile_version": V4_GMO_PROFILE_VERSION,
                 "protection_contract_hash": self.protection_contract_hash,
                 "requested_size": 10_000,
@@ -168,6 +194,7 @@ class V4GmoExecutionPolicy:
                 "signal_config_hash": self.signal_config_hash,
                 "strategy_version": self.strategy_version,
                 "temporary_unprotected_gap_accepted": True,
+                "weekend_days_jst": list(self.weekend_days_jst),
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -180,6 +207,19 @@ class V4GmoExecutionPolicy:
             and signal.signal_config_hash == self.signal_config_hash
             and signal.horizon is self.selected_horizon
             and signal.decision in (SignalDecision.BUY, SignalDecision.SELL)
+        )
+
+    def entry_time_allowed(self, *, now_utc: datetime) -> bool:
+        if now_utc.tzinfo is None:
+            return False
+        now_jst = now_utc.astimezone(ZoneInfo("Asia/Tokyo"))
+        return not (
+            now_jst.weekday() in self.weekend_days_jst
+            or now_jst.hour in self.blocked_hours_jst
+            or (
+                now_jst.weekday() == 4
+                and now_jst.hour >= self.friday_entry_cutoff_hour_jst
+            )
         )
 
 
@@ -352,7 +392,11 @@ def build_v4_action_plan(
         V4GmoAction.CANCEL_ENTRY_REMAINDER: "GMO_CANCEL_ENTRY_REMAINDER",
         V4GmoAction.EXACT_SIZE_OCO_PROTECTION: "GMO_EXACT_SIZE_OCO_PROTECTION",
         V4GmoAction.CANCEL_MISMATCHED_PROTECTION: "GMO_CANCEL_MISMATCHED_PROTECTION",
+        V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT: (
+            "GMO_CANCEL_PROTECTION_FOR_TIME_EXIT"
+        ),
         V4GmoAction.POSITION_SPECIFIC_EMERGENCY_EXIT: "GMO_POSITION_SPECIFIC_EXIT",
+        V4GmoAction.POSITION_SPECIFIC_TIME_EXIT: "GMO_POSITION_SPECIFIC_TIME_EXIT",
     }
     return V4GmoActionPlan(
         cycle_ref=cycle_ref,

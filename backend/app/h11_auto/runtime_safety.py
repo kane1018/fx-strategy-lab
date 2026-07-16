@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
@@ -71,6 +71,7 @@ class PhaseBRiskState:
     entries_today: int = 0
     stopped_on_jst: str | None = None
     discipline_violation_count: int = 0
+    closed_result_cycle_refs: list[str] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return False
@@ -201,6 +202,34 @@ def record_closed_result(
     return AutoRiskStopState(state.stop_state)
 
 
+def record_closed_result_once(
+    *,
+    state: PhaseBRiskState,
+    policy: PhaseBRiskPolicy,
+    cycle_day_jst: str,
+    cycle_ref: str,
+    pnl_jpy_internal: int,
+) -> tuple[AutoRiskStopState, bool]:
+    """Apply one sanitized flat result exactly once per generation cycle."""
+
+    if (
+        len(cycle_ref) != 64
+        or any(character not in "0123456789abcdef" for character in cycle_ref)
+    ):
+        raise H11AutoRuntimeSafetyError("closed result cycle is invalid")
+    _validate_risk_state(state, policy)
+    if cycle_ref in state.closed_result_cycle_refs:
+        return AutoRiskStopState(state.stop_state), False
+    stop = record_closed_result(
+        state=state,
+        policy=policy,
+        cycle_day_jst=cycle_day_jst,
+        pnl_jpy_internal=pnl_jpy_internal,
+    )
+    state.closed_result_cycle_refs.append(cycle_ref)
+    return stop, True
+
+
 def engage_risk_kill(*, state: PhaseBRiskState, cycle_day_jst: str) -> None:
     _validate_day(cycle_day_jst)
     _stop(state, AutoRiskStopState.KILLED, cycle_day_jst)
@@ -325,6 +354,18 @@ def _validate_risk_state(state: PhaseBRiskState, policy: PhaseBRiskPolicy) -> No
         for value in counters
     ):
         raise H11AutoRuntimeSafetyError("risk state counters are invalid")
+    refs = state.closed_result_cycle_refs
+    if (
+        not isinstance(refs, list)
+        or any(
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+            for value in refs
+        )
+        or len(refs) != len(set(refs))
+    ):
+        raise H11AutoRuntimeSafetyError("risk closed result refs are invalid")
 
 
 def _roll_calendar(state: PhaseBRiskState, current_day: date) -> None:

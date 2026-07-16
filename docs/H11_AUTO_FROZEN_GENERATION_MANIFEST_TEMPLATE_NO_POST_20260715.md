@@ -71,19 +71,26 @@ entry:
   maximum_attempts_per_intent: 1
   retry_allowed: false
   repost_allowed: false
+  blocked_hours_jst: [5, 6, 7, 8]
+  friday_entry_allowed: false
+  weekend_entry_allowed: false
 
 exit:
-  exit_profile_label: H11_V4_EXACT_SIZE_OCO_AND_POSITION_SPECIFIC_EXIT_V1
+  exit_profile_label: H11_V4_EXACT_OCO_POSITION_SPECIFIC_23H_EXIT_V1
   position_specific_route_required: true
   generic_close_allowed: false
   opposite_entry_as_exit_allowed: false
   maximum_attempts_per_intent: 1
   retry_allowed: false
   repost_allowed: false
-  stop_loss_contract: PENDING
-  take_profit_contract: PENDING
-  maximum_hold_seconds: PENDING
-  formal_edge_exit_enabled: PENDING_OPERATOR_FREEZE
+  stop_loss_contract: H11_V4_GMO_PROTECTION_CONTRACT_SHA256_48344AEB
+  take_profit_contract: H11_V4_GMO_PROTECTION_CONTRACT_SHA256_48344AEB
+  maximum_hold_seconds: 82800
+  time_exit_route: POSITION_SPECIFIC_MARKET_AFTER_EXACT_OCO_CANCEL
+  fresh_public_market_open_at_oco_cancel_transport_boundary_required: true
+  public_market_open_maximum_age_seconds: 2
+  market_unknown_retains_oco_and_halts: true
+  formal_edge_exit_enabled: false
 
 reconciliation:
   boot_required: true

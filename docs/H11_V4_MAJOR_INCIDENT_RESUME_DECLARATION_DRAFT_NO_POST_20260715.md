@@ -33,7 +33,27 @@ persistent_allowed_for_live=false
 - actual read-only reconciliationとaccount exclusivityをsanitized確認。
 - current host fault rehearsal全項目合格。
 - duplicate attempt、unknown halt、exact-size protection、15秒上限、risk/dead-manの独立レビューclear。
+- crash後はpending attemptとfresh 3-GETで実状態を分類し、HALTを維持したままMARKET再送を禁止する。
+- 部分約定の残entryが存在する間はOCO保護を許可せず、cancel後のfresh reconciliationで
+  pending 0とactual filled sizeを確定する。
+- frozen ATR、exact OCO plan digest、MARKET attempt timestampが同一generationへ永続bindingされている。
+- planned lossがfrozen ATR stop幅＋0.1 pip tick丸め allowance＋5.0 pips adverse-slippage仮定で
+  5,000円以下である。ただしMARKET gapの
+  上限保証ではないことをoperatorが受け入れる。
 - unowned position/orderなし、manual/private client停止、account flatのfresh確認。
+- current generation／cycle／signalへ結合したflat preflightが2秒以内で、active/unowned countが全て0。
+- MARKET side/size/cycleのpersisted intent exact-match、DB再照合one-use authorization、executor所有の
+  monotonic 15秒clock、transport直前dead-man再確認が独立レビューclear。
+- completed preparation evidenceはgeneration単位の永続one-useであり、別coordinatorまたはprocess再起動から
+  同じgenerationへ再利用できない。
+- v4 generation-bound entry-time gate（JST 5〜8時、金曜終日、週末）がMARKET直前に強制される。
+- 最大保有82,800秒（23時間）到達時の出口は、exact OCO取消、fresh reconciliation、position-specific time exitの
+  単発固定順序であり、到達前には実行できない。
+- time exitのOCO取消transport直前は、executor-owned monotonic clockで最大2秒以内の
+  公式public status `OPEN` evidenceをone-use消費する。
+  OPENを確認できない場合はOCOを維持したままpersistent HALTとする。
+- owned close executionのrealized PnLはfresh flat／expected size一致時だけcycle単位でexactly once
+  persistent risk ledgerへ反映される。
 - operatorがv4専用resume宣言をcurrent turnで明示承認。
 
 1つでも不明または不一致なら発効せず、actual POST 0のまま停止する。

@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: `HOST_NETWORK_TIME_ADMIN_PROBE_CORRECTIVE_VALIDATED_PRECANARY_VETO_REMAINS`
+Status: `PRECANARY_CORRECTIVE_VALIDATED_EXTERNAL_PREPARATION_PENDING`
 
 ## 1. Authorization boundary
 
@@ -189,12 +189,66 @@ credential読取りとnetworkへ到達しない。POST分岐のcommon hard guard
 準備用Private GETはPOST routeを持たない別のread-only preflightだけを使う。canaryに進むには、
 別授権と別レビューのactivation変更が必要である。
 
+### Independent review VETO corrective cycle
+
+architecture／safety／operationsの初回差分レビューで、pre-canary coordinatorに対するVETOが出たため、
+broker transportを有効化せず次を修正した。
+
+- persisted intentのside、size、cycleとMARKET planをexact-matchし、不一致ではattemptを記録しない。
+- current generation／cycle／signalへ結び付いたfresh flat preflightを永続化し、2秒超ではMARKETを拒否する。
+- preflightはzero position、zero active order、zero unowned position/order、clock、notification、account
+  exclusivityの固定safe factを要求する。
+- one-use authorizationはcoordinatorだけが発行し、adapter transport直前にcommitted attempt row、plan digest、
+  generation、HALTをSQLiteから再照合する。testやadapterから直接mintする経路は除去した。
+- MARKETからexact OCO確認までの15秒はexecutor所有のmonotonic clockで測り、callerは時刻を指定できない。
+- MARKET attempt／risk budget永続化後、transport直前にdead-manを再評価する。
+- cancel remainder、mismatched OCO cancel、position-specific emergency exitは、それぞれfresh authoritative
+  reconciliationの固定状態前提を満たす場合だけattemptを永続化する。
+- 部分約定後はpending entry remainderが0になり、entry statusが`FILLED`に確定するまで
+  exact-size OCOを許可しない。先に残entryを単発cancelし、fresh 3-GETで全量の実建玉を再確認する。
+- transport直前はpersisted pending markerのactionとcycleをSQLiteから再照合し、欠落または改変は
+  transport 0回で拒否する。
+- process crash後はpending markerからunknown HALTをlatchし、freshな3-GETのみで
+  `FLAT_OR_REJECTED`、`MARKET_PARTIAL_PENDING`、`FILLED_UNPROTECTED`、
+  `FILLED_PROTECTED`、`FILLED_PROTECTION_MISMATCHED`へ分類する。分類後もHALTは解除せず、
+  MARKETのretry/repostは常に禁止し、分類と一致する単発risk-reducing actionのみ許可する。
+- host KILL reportはactual runtimeをkillしたと主張せず、disposable coordinator childのkillを別fieldで記録する。
+- no-retry preparation state rootはreviewed-files digestとgeneration manifest digestの両方へ結合する。
+- preparationのpassed markerは単な完了名ではなく、operation別のsanitized clear report、
+  reviewed-files digest、generation digestの正規hashに結合する。markerだけの作成では完了証拠をmintできない。
+
+### Second independent-review VETO corrective cycle
+
+strategy／architectureの再レビューで残ったVETOに対し、broker transportを有効化せず次を追加した。
+
+- completed preparation evidenceはgeneration state rootへ結合し、最初のpreflight消費時に
+  `O_EXCL`＋file/directory `fsync`でgeneration-level consumed markerを永続化する。同じgenerationから
+  evidenceを再読込することも、事前に複数loadして別coordinatorへ渡すことも拒否する。
+- v4専用generationへ`blocked_hours_jst=(5,6,7,8)`、金曜終日・週末禁止を固定し、
+  MARKET attemptを永続化する直前のcoordinatorで強制する。Stage 1のgateをv4の証拠として流用しない。
+- 最大保有時間を82,800秒（23時間）へ固定する。到達前のtime exitは拒否し、到達後はexact OCOを単発cancel、
+  fresh reconciliation、position-specific time exitの順に限定する。各actionは別の永続one-attempt契約である。
+- time exitのexact OCO取消transport直前に、executor-owned monotonic clockで最大2秒以内の
+  公式public status `OPEN` evidenceをone-use消費する。attempt永続化中または直前callbackで2秒を超えた
+  場合もbroker transportへ進まない。
+  OPENを確認できない場合はbroker writeを行わず、OCOを維持したまま
+  persistent HALTへ移る。
+- owned close executionだけからsanitized realized PnLとclosed sizeを集計し、fresh flatかつexpected size一致時だけ
+  persistent risk ledgerへcycle単位でexactly once反映する。負の小数円は安全側へ切り下げる。
+- canary KPIを、親IFDOCOではなく`MARKET -> separate exact-size OCO <= 15 seconds`へ訂正した。
+  違反時はblind flatではなく、HALTを維持したfresh 3-GET分類と一致する単発risk-reducing actionだけを許可する。
+
+これらはfake transportでのみ検証する。actual transport constructor、hard guard、activation permitは引き続き
+無効であり、この修正だけでbroker POST可能にはならない。
+
 ## 4. Fake-first validation
 
 ```text
-focused_preparation_tests=84 passed
-h11_auto_related_tests=361 passed
-repository_app_tests=7953 passed, 2 keychain-write tests deselected
+precanary_corrective_focused_tests=108 passed
+precanary_related_h11_auto_tests=419 passed
+precanary_full_app_tests=8007 passed
+h11_auto_related_tests=414 passed
+repository_app_tests=7997 passed, disposable v3 Keychain test file 6 tests excluded
 full_ruff_app_scripts=passed
 git_diff_check=passed
 danger_scan=no_broker_POST_route_or_activation_permit_in_preparation_paths
@@ -210,29 +264,92 @@ broker_private_get=false
 broker_private_post=false
 ```
 
-## 5. Remaining safety VETO
+## 5. Remaining pre-external gates
 
 外部準備試験の前に次が必要。
 
 - current worktreeの完全差分レビュー、commit、push（授権済み、実行前）
 - working tree clean
 - `HEAD == origin/main`
-- focused／related tests、focused ruff、diff check、danger scanのclear
-- architecture／safety／operationsの3 review clear
+- focused／related／full tests、full ruff、diff check、danger scanのcurrent-diff clear
+- strategy／architecture／safetyの3 independent review clear
 - actual-preparation exact artifactとreviewed-files digest一致
+
+### 2026-07-16 pre-canary corrective implementation
+
+strict `H11_AUTO_GENERATION_V1`は変更せず、GMO relaxed v4専用の
+`H11_AUTO_GENERATION_V4_GMO_RELAXED_V1`を追加した。専用coordinatorは、次をtransportより前に
+別SQLiteへ永続化する。
+
+- complete generation manifest digest
+- implementation digest
+- operator selection digest
+- policy config hash
+- risk policy label/digest
+- dead-man policy label/digest
+- formal signal fingerprint
+- frozen ATR(24)とsignal-bound ATR digest
+- ATR stop幅、0.1 pip tick丸め allowance、5.0 pips adverse-slippage allowanceによるplanned loss
+- MARKET attempt timestamp
+- actual fillから算出したexact-size OCO plan digest
+
+planned loss gateは`10,000通貨 × (1.5 ATR stop幅 + 0.1 pip tick丸め allowance + 5.0 pips)`を
+円換算し、5,000円超をentry前に拒否する。
+これは成行の無制限gap/slippageに対する保証ではない。actual損失が5,000円を超え得るresidual riskは残り、
+初回canaryは極小・監視付きでもこの性質を変えない。
+
+Private GET reconciliationのactual-coordinator経路は、各request start間を最低0.25秒、各route 1回、
+retry 0に固定した。adapter新規生成またはrestart直後も最初のGETを0.25秒遅延するため、
+通常の開始offsetは0.25/0.50/0.75秒以降となる。一方、activation preparation専用の有限preflightは
+AGENTS.mdの別契約に従い0.00/0.25/0.50秒以上であり、runtime coordinatorの再起動cadenceと混同しない。
+host/KILL rehearsalはgeneric子プロセスに加え、transportに到達しないrehearsal pending markerを
+永続化したpre-canary coordinator子プロセスをSIGKILLする。再起動後はpending markerから
+unknown HALTが永続的にlatchされ、transport markerが生成されないことのみを確認する。
+MARKET attemptや実transport後のsecond attempt拒否をこのhost rehearsalが証明したとは扱わない。
+
+actual-shaped統合経路は、process lock、generation-bound risk/dead-man digest、fresh dead-man heartbeat、
+persistent 1日1entry gateをMARKET attempt前に確認する。MARKET attemptとrisk entry消化はtransport前に
+永続化し、adapter例外または結果不明はpersistent HALTへ移す。結果不明後も、broker状態を確定するための
+固定3-GET reconciliationと、既知の実建玉を保護・解消する単発risk-reducing actionは遮断しない。
+cancel、exact-size OCO、position-specific emergency exitもaction別attemptをtransport前に永続化し、
+同一actionの第2attemptを拒否する。クラッシュ後はpending attemptとfresh 3-GETを照合し、
+分類した実状態と一致する行動以外を拒否する。この回復処理はHALT解除やMARKET再許可を行わない。
 
 canary broker POSTの前には、外部準備とは別に次の未解決VETOもclearにする必要がある。
 
-- v4 relaxed generation manifestとvalidator schemaの一致、PENDING 0
-- implementation digest／manifest digest／operator selection digestの永続binding
-- frozen ATR persistenceとactual OCO planへのbinding
-- entry前のworst-case loss <= 5,000円判定
-- actual runtime coordinatorはPOST不能のまま組み立て、persistent attempt ledgerへ結線
-- actual v4 runtimeのprocess lock／dead-man／KILL経路のhost proof
+- frozen generation artifactとcurrent reviewed-files digestのexact一致
+- planned loss gateの5.0 pips仮定に対するoperator最終受入
+- actual v4 coordinator KILL経路のcurrent host実地proof
+- actual runtime supervisor/restartの発効（本preparation Stepではresident/launchdを追加しない）
+- actual account exclusivity confirmationと3-route Private GETのfresh clear
 - major-incident resume declarationの別承認と発効
 - post-implementation independent review clear
 
+なお、v4専用entry-time gate、82,800秒（23時間）time exit、closed PnLのcycle単位exactly-once risk反映、
+completed preparation evidenceのgeneration単位永続one-useは実装済みである。これらの実装済み事実は、
+actual runtime supervisorの発効、activation permit、broker POSTを許可するものではない。
+
+追加のcorrective cycleでは、GMO `latestExecutions`の`amount`を損益として扱わず、owned CLOSEの
+`lossGain + fee + settledSwap`だけからnet realized JPYを算出するよう修正した。CLOSEはowned OPENの
+positionId、反対side、position別累計size上限の全てに一致しなければUNKNOWN/HALTとなる。v4 coordinatorは
+entry前BID/ASK、約定平均価格、entry spread、direction-aware slippage、予測`p_up`、closed net JPY、
+net pips、勝敗を同一cycleへ永続化する。予測較正は売買操作と独立した既存PROSPECTIVE forecast ledgerを正とする。
+
+さらに、`latestExecutions`が直近1日分・最新100件というbroker保持境界であるのに対し、従来の
+86,400秒exitでは最初のtime-exit判定時にentry OPEN行が保持範囲外となり得た。このためoperatorの
+安全側変更承認に基づき、最大保有を82,800秒（23時間）へ短縮し、exit profileを新しい23H labelへ
+再凍結した。これにより排他運用中の当該entry行をbroker保持境界より前に再照合する。
+
 上記がclearになるまで、actual Keychain、通知送信、Private GETを実行してもactivation evidenceとして採用しない。
+
+### Threat model boundary
+
+本実装のcompletion digest、generation digest、SQLite markerは、通常の誤操作、二重attempt、
+process crash、結果不明に対するfail-closed証拠である。同一macOS userがローカルのコード、
+Python process、SQLite、generation/evidence JSONを悪意をもって改ざんする状況まで暗号学的に
+証明するものではない。activation evidenceの採用は、完全差分の独立レビュー、固定した
+reviewed-files digest、commit/push後のclean main、`HEAD == origin/main`、実行時digest再検証を
+すべて満たすことが前提である。
 
 ## 6. Current flags
 
@@ -259,6 +376,32 @@ ed6_generation_host_kill_passed=false
 ed6_generation_private_get_count=0
 next_generation_credential_read=false
 next_generation_external_notification_send=false
+v4_generation_schema=H11_AUTO_GENERATION_V4_GMO_RELAXED_V1
+v4_generation_pending_count=0
+v4_generation_digest_persistence=implemented_not_externally_rehearsed
+v4_frozen_atr_and_oco_digest_binding=implemented_not_externally_rehearsed
+v4_planned_loss_gate=implemented_atr_tick_rounding_plus_5_pips_assumption_not_gap_guarantee
+v4_coordinator_market_attempt_persist_before_transport=implemented_exact_plan_bound
+v4_coordinator_fresh_flat_preflight=implemented_generation_cycle_bound_max_age_2_seconds
+v4_coordinator_persisted_authorization=implemented_db_reverified_one_use
+v4_coordinator_deadline_clock=executor_owned_monotonic
+v4_coordinator_transport_boundary_dead_man=implemented
+v4_coordinator_risk_dead_man_digest_binding=implemented
+v4_coordinator_fresh_dead_man_and_persistent_risk_gate=implemented
+v4_coordinator_risk_reducing_attempt_persistence=implemented_state_precondition_bound
+v4_coordinator_kill_rehearsal=pending_marker_persisted_restart_halt_observed_no_transport
+v4_actual_get_cadence=implemented_min_0_25_inter_request_restart_first_get_delayed_no_retry
+v4_partial_fill_protection_gate=implemented_pending_zero_and_filled_required
+v4_crash_recovery_classification=implemented_fresh_three_get_halt_remains_no_market_retry
+v4_preparation_completion_proof=implemented_operation_report_plus_review_and_generation_digest
+v4_preparation_generation_consumption=implemented_persistent_o_excl_fsync_one_use
+v4_entry_time_gate=implemented_v4_generation_bound_blocked_hours_friday_weekend
+v4_maximum_hold_seconds=82800
+v4_time_exit=implemented_exact_oco_cancel_then_fresh_reconcile_then_position_specific_exit
+v4_closed_pnl_risk_binding=implemented_owned_flat_exact_size_cycle_exactly_once
+v4_realized_pnl_source=official_lossGain_plus_fee_plus_settledSwap_amount_rejected
+v4_execution_metrics=implemented_probability_quote_fill_spread_slippage_net_jpy_net_pips_win
+v4_runtime_state_root=generation_bound_canonical_paths_enforced
 credential_value_exposed=false
 activation_permit_issued=false
 resume_declaration_effective=false

@@ -25,11 +25,14 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4PreparationAttemptLedger,
     V4PreparationOperation,
     V4PreparationOperationPermit,
+    _completion_digest,
     check_v4_keychain_access_internal_only,
     check_v4_keychain_presence_only,
     confirm_account_exclusivity_exact,
     confirm_email_delivery_exact,
+    load_completed_preparation_evidence,
     load_external_preparation_gate,
+    require_operation_permit,
 )
 from app.services import h11_v4_gmo_readonly_preflight as readonly_module
 from app.services import h11_v4_notification_actual_preparation as notification_actual_module
@@ -113,6 +116,7 @@ def external_gate(
         "broker_post_authorized": False,
         "activation_permit_issued": False,
         "reviewed_files_digest": digest,
+        "generation_manifest_digest": "sha256:" + "b" * 64,
         "focused_tests_passed": True,
         "related_tests_passed": True,
         "ruff_passed": True,
@@ -132,6 +136,13 @@ def external_gate(
     )
     monkeypatch.setattr(
         guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda *, repository, implementation_digest: type(
+            "SyntheticGeneration", (), {"digest": "sha256:" + "b" * 64}
+        )(),
+    )
+    monkeypatch.setattr(
+        guard_module,
         "require_clean_main",
         lambda *, repository: object(),
     )
@@ -148,9 +159,133 @@ def _permit_for(
         permit = ledger.begin(operation)
         if operation is target:
             return ledger, permit
-        permit.consume_for(operation)
-        ledger.complete(operation, operation_permit=permit)
+        _test_only_complete(ledger, permit, operation)
     raise AssertionError("target preparation operation was not found")
+
+
+def _test_only_complete(
+    ledger: V4PreparationAttemptLedger,
+    permit: V4PreparationOperationPermit,
+    operation: V4PreparationOperation,
+) -> None:
+    """Create synthetic predecessor proof only inside fake-first tests."""
+
+    reports: dict[V4PreparationOperation, dict[str, object]] = {
+        V4PreparationOperation.PRESENCE: {
+            "total_required": 6,
+            "present_count": 6,
+            "all_present": True,
+            "values_read": False,
+        },
+        V4PreparationOperation.KEYCHAIN_ACCESS: {
+            "total_required": 6,
+            "accessible_count": 6,
+            "all_accessible": True,
+            "credential_value_exposed": False,
+        },
+        V4PreparationOperation.PUSHOVER: {
+            "pushover_application_send_count": 1,
+            "pushover_accepted": True,
+            "pushover_acknowledged": True,
+            "broker_post_count": 0,
+        },
+        V4PreparationOperation.SMTP: {
+            "email_send_count": 1,
+            "email_smtp_accepted": True,
+            "broker_post_count": 0,
+        },
+        V4PreparationOperation.EMAIL_CONFIRMATION: {
+            "exact_match": True,
+            "broker_post_authorized": False,
+            "activation_permit_issued": False,
+        },
+        V4PreparationOperation.HOST_KILL: {
+            "status": "PASSED_TEST_ONLY",
+            "disposable_coordinator_process_killed": True,
+            "coordinator_pending_marker_restart_halt_observed": True,
+            "persistent_kill_latched": True,
+            "entry_blocked_after_reload": True,
+            "broker_post_count": 0,
+        },
+        V4PreparationOperation.EXCLUSIVITY_CONFIRMATION: {
+            "exact_match": True,
+            "broker_post_authorized": False,
+            "activation_permit_issued": False,
+        },
+        V4PreparationOperation.PRIVATE_GET: {
+            "broker_get_count": 3,
+            "limited_usd_jpy_snapshot_clear": True,
+            "usd_jpy_flat": True,
+            "usd_jpy_active_orders_zero": True,
+            "cadence_offsets_seconds": (0.0, 0.25, 0.5),
+            "broker_post_count": 0,
+            "broker_write_performed": False,
+        },
+    }
+    require_operation_permit(
+        permit,
+        expected_operation=operation,
+        claim=True,
+    )
+    # Test-only fixture construction. Production code has no generic report
+    # attestation entrypoint; local code/filesystem tampering is outside the
+    # clean-commit reviewed-digest runtime boundary.
+    permit._completion_report = reports[operation]
+    permit._completion_digest = _completion_digest(
+        operation=operation,
+        safe_report=reports[operation],
+        reviewed_files_digest=permit._reviewed_files_digest,
+        generation_digest=permit._generation_digest,
+    )
+    ledger.complete(operation, operation_permit=permit)
+
+
+def test_completed_preparation_evidence_requires_all_steps_and_is_one_use(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    generation_digest = "sha256:" + "b" * 64
+    with pytest.raises(V4ActualPreparationGuardError, match="NOT_COMPLETE"):
+        load_completed_preparation_evidence(
+            external_gate=external_gate,
+            generation_digest=generation_digest,
+        )
+
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    for operation in V4PreparationOperation:
+        permit = ledger.begin(operation)
+        _test_only_complete(ledger, permit, operation)
+
+    evidence = load_completed_preparation_evidence(
+        external_gate=external_gate,
+        generation_digest=generation_digest,
+    )
+    second_preloaded = load_completed_preparation_evidence(
+        external_gate=external_gate,
+        generation_digest=generation_digest,
+    )
+    evidence.consume_for_generation(generation_digest)
+    with pytest.raises(V4ActualPreparationGuardError, match="EVIDENCE_INVALID"):
+        evidence.consume_for_generation(generation_digest)
+    with pytest.raises(V4ActualPreparationGuardError, match="EVIDENCE_INVALID"):
+        second_preloaded.consume_for_generation(generation_digest)
+    with pytest.raises(V4ActualPreparationGuardError, match="EVIDENCE_INVALID"):
+        load_completed_preparation_evidence(
+            external_gate=external_gate,
+            generation_digest=generation_digest,
+        )
+
+
+def test_marker_only_cannot_complete_any_preparation_operation(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    permit = ledger.begin(V4PreparationOperation.PRESENCE)
+    with pytest.raises(V4ActualPreparationGuardError, match="PERMIT_INVALID"):
+        ledger.complete(
+            V4PreparationOperation.PRESENCE,
+            operation_permit=permit,
+        )
+    assert not hasattr(permit, "consume_for")
 
 
 def test_presence_only_check_never_requests_keychain_value(
@@ -296,7 +431,7 @@ def test_new_digest_generation_preserves_legacy_no_retry_markers(
     ledger = V4PreparationAttemptLedger(external_gate=external_gate)
 
     assert ledger.state_root.parent == legacy_root
-    assert ledger.state_root.name == f"generation-{'a' * 64}"
+    assert ledger.state_root.name == f"generation-{'a' * 64}-{'b' * 64}"
     assert legacy_marker.read_text(encoding="utf-8") == "legacy marker retained\n"
 
 
@@ -729,6 +864,58 @@ def test_readonly_preflight_source_has_no_broker_post_route() -> None:
     assert "h11_v4_gmo_actual_transport" not in source
 
 
+def test_operation_attesters_are_confined_to_their_fixed_steps() -> None:
+    backend_root = Path(__file__).resolve().parents[3]
+    allowed_by_marker = {
+        "_attest_presence_success_" + "internal": {
+            "app/h11_auto/v4_actual_preparation_guard.py"
+        },
+        "_attest_keychain_access_success_" + "internal": {
+            "app/h11_auto/v4_actual_preparation_guard.py"
+        },
+        "_attest_email_confirmation_success_" + "internal": {
+            "app/h11_auto/v4_actual_preparation_guard.py"
+        },
+        "_attest_exclusivity_success_" + "internal": {
+            "app/h11_auto/v4_actual_preparation_guard.py"
+        },
+        "_attest_pushover_success_" + "internal": {
+            "app/h11_auto/v4_actual_preparation_guard.py",
+            "app/services/h11_v4_notification_actual_preparation.py",
+        },
+        "_attest_smtp_success_" + "internal": {
+            "app/h11_auto/v4_actual_preparation_guard.py",
+            "app/services/h11_v4_notification_actual_preparation.py",
+        },
+        "_attest_host_kill_success_" + "internal": {
+            "app/h11_auto/v4_actual_host_kill_rehearsal.py",
+            "app/h11_auto/v4_actual_preparation_guard.py",
+        },
+        "_attest_private_get_success_" + "internal": {
+            "app/h11_auto/v4_actual_preparation_guard.py",
+            "app/services/h11_v4_gmo_readonly_preflight.py",
+        },
+    }
+    for marker, allowed in allowed_by_marker.items():
+        references = {
+            path.relative_to(backend_root).as_posix()
+            for path in backend_root.rglob("*.py")
+            if marker in path.read_text(encoding="utf-8")
+        }
+        assert references == allowed
+    for marker in (
+        "_bind_fixed_operation_" + "attestation",
+        "_attest_operation_" + "success",
+        "_OPERATION_ATTESTATION_" + "ISSUERS",
+    ):
+        references = {
+            path.relative_to(backend_root).as_posix()
+            for path in backend_root.rglob("*.py")
+            if marker in path.read_text(encoding="utf-8")
+        }
+        assert references == {"app/h11_auto/v4_actual_preparation_guard.py"}
+
+
 def test_private_get_inter_request_cadence_uses_actual_request_start_time(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
@@ -755,6 +942,31 @@ def test_private_get_inter_request_cadence_uses_actual_request_start_time(
     ).run_once()
     assert request_starts == [0.0, 1.0, 1.25]
     assert report.cadence_offsets_seconds == (0.0, 1.0, 1.25)
+
+
+def test_private_get_cadence_fails_closed_when_sleep_does_not_advance_clock(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        return httpx.Response(200, json={"status": 0, "data": {"list": []}})
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PRIVATE_GET,
+    )
+    with pytest.raises(V4GmoReadOnlyPreflightError, match="CADENCE_NOT_REACHED"):
+        V4GmoFiniteReadOnlyPreflight(
+            external_gate=external_gate,
+            operation_permit=operation_permit,
+            credential_pair=FakeGmoCredentials(),
+            client=httpx.Client(transport=httpx.MockTransport(handler)),
+            monotonic_factory=lambda: 0.0,
+            sleep=lambda _seconds: None,
+        ).run_once()
+    assert calls == ["/private/v1/latestExecutions"]
 
 
 def test_pushover_failure_does_not_attempt_smtp_and_does_not_leak(
@@ -944,24 +1156,18 @@ def test_persistent_preparation_ledger_enforces_order_and_no_retry(
         V4PreparationAttemptLedger(external_gate=external_gate).begin(
             V4PreparationOperation.PRESENCE,
         )
-    presence_permit.consume_for(V4PreparationOperation.PRESENCE)
-    ledger.complete(
-        V4PreparationOperation.PRESENCE,
-        operation_permit=presence_permit,
+    _test_only_complete(
+        ledger, presence_permit, V4PreparationOperation.PRESENCE
     )
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
         ledger.begin(V4PreparationOperation.PUSHOVER)
     access_permit = ledger.begin(V4PreparationOperation.KEYCHAIN_ACCESS)
-    access_permit.consume_for(V4PreparationOperation.KEYCHAIN_ACCESS)
-    ledger.complete(
-        V4PreparationOperation.KEYCHAIN_ACCESS,
-        operation_permit=access_permit,
+    _test_only_complete(
+        ledger, access_permit, V4PreparationOperation.KEYCHAIN_ACCESS
     )
     pushover_permit = ledger.begin(V4PreparationOperation.PUSHOVER)
-    pushover_permit.consume_for(V4PreparationOperation.PUSHOVER)
-    ledger.complete(
-        V4PreparationOperation.PUSHOVER,
-        operation_permit=pushover_permit,
+    _test_only_complete(
+        ledger, pushover_permit, V4PreparationOperation.PUSHOVER
     )
     ledger.begin(V4PreparationOperation.SMTP)
 
@@ -973,11 +1179,7 @@ def test_preparation_ledger_rejects_predecessor_from_other_review_digest(
 ) -> None:
     ledger = V4PreparationAttemptLedger(external_gate=external_gate)
     permit = ledger.begin(V4PreparationOperation.PRESENCE)
-    permit.consume_for(V4PreparationOperation.PRESENCE)
-    ledger.complete(
-        V4PreparationOperation.PRESENCE,
-        operation_permit=permit,
-    )
+    _test_only_complete(ledger, permit, V4PreparationOperation.PRESENCE)
 
     artifact_path = tmp_path / guard_module.PREPARATION_ARTIFACT
     artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
@@ -1012,10 +1214,8 @@ def test_exact_operator_confirmations_do_not_authorize_broker_post(
         operation_permit=email_permit,
     )
     host_permit = ledger.begin(V4PreparationOperation.HOST_KILL)
-    host_permit.consume_for(V4PreparationOperation.HOST_KILL)
-    ledger.complete(
-        V4PreparationOperation.HOST_KILL,
-        operation_permit=host_permit,
+    _test_only_complete(
+        ledger, host_permit, V4PreparationOperation.HOST_KILL
     )
     exclusivity_permit = ledger.begin(
         V4PreparationOperation.EXCLUSIVITY_CONFIRMATION
@@ -1062,6 +1262,8 @@ def test_current_host_kill_rehearsal_kills_only_disposable_child_and_latches(
     assert report.clock_skew_within_five_seconds is True
     assert report.network_time_admin_fallback_used is False
     assert report.actual_runtime_process_killed is False
+    assert report.disposable_coordinator_process_killed is True
+    assert report.coordinator_pending_marker_restart_halt_observed is True
     assert report.broker_post_count == 0
 
 

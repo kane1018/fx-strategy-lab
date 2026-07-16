@@ -26,6 +26,8 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4ExternalPreparationGate,
     V4PreparationOperation,
     V4PreparationOperationPermit,
+    _attest_pushover_success_internal,
+    _attest_smtp_success_internal,
     require_external_preparation_gate,
     require_operation_permit,
 )
@@ -245,7 +247,7 @@ def run_actual_pushover_rehearsal_once(
     require_operation_permit(
         operation_permit,
         expected_operation=V4PreparationOperation.PUSHOVER,
-        consume=True,
+        claim=True,
     )
     if (
         acknowledgement_timeout_seconds <= 0
@@ -334,7 +336,7 @@ def run_actual_pushover_rehearsal_once(
             raise H11V4ActualNotificationError(
                 "PUSHOVER_ACK_NOT_CONFIRMED_NO_RETRY"
             )
-        return H11V4ActualPushoverReport(
+        report = H11V4ActualPushoverReport(
             status="PASSED_PUSHOVER_ACKNOWLEDGED_NO_BROKER_POST",
             keychain_items_present=True,
             credential_read_count=2,
@@ -345,6 +347,8 @@ def run_actual_pushover_rehearsal_once(
             pushover_receipt_poll_count=poll_count,
             external_notification_send_count=1,
         )
+        _attest_pushover_success_internal(operation_permit, report.to_safe_dict())
+        return report
     finally:
         if owns_client:
             client.close()
@@ -387,7 +391,7 @@ def run_actual_smtp_rehearsal_once(
     require_operation_permit(
         operation_permit,
         expected_operation=V4PreparationOperation.SMTP,
-        consume=True,
+        claim=True,
     )
     bundle = (
         credentials
@@ -451,7 +455,7 @@ def run_actual_smtp_rehearsal_once(
         raise H11V4ActualNotificationError(
             "SMTP_SESSION_CLOSE_FAILED_NO_RETRY"
         ) from None
-    return H11V4ActualSmtpReport(
+    report = H11V4ActualSmtpReport(
         status="PASSED_SMTP_ACCEPTED_AWAITING_EMAIL_OPERATOR_CONFIRMATION_NO_BROKER_POST",
         keychain_items_present=True,
         credential_read_count=2,
@@ -461,6 +465,8 @@ def run_actual_smtp_rehearsal_once(
         destination_is_smtp_username=True,
         external_notification_send_count=1,
     )
+    _attest_smtp_success_internal(operation_permit, report.to_safe_dict())
+    return report
 
 
 def _json_mapping(response: httpx.Response, error_label: str) -> Mapping[str, Any]:

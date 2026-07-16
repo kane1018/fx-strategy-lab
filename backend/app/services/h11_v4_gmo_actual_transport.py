@@ -47,7 +47,7 @@ _ALLOWED_ENDPOINTS = frozenset(
         ("POST", "/private/v1/closeOrder", "/v1/closeOrder"),
     }
 )
-_CLIENT_ORDER_ID_PATTERN = re.compile(r"^H11V4[EPX][0-9a-f]{30}$")
+_CLIENT_ORDER_ID_PATTERN = re.compile(r"^H11V4[EPXT][0-9a-f]{30}$")
 
 
 class V4GmoActualTransportError(RuntimeError):
@@ -370,7 +370,11 @@ def _validate_request_contract(
             }
             if set(body) != expected:
                 raise V4GmoActualTransportError("V4_GMO_CLOSE_BODY_INVALID")
-            _validate_common_order_fields(body, expected_prefix="X", size_required=False)
+            _validate_common_order_fields(
+                body,
+                expected_prefix={"X", "T"},
+                size_required=False,
+            )
         else:
             raise V4GmoActualTransportError("V4_GMO_CLOSE_EXECUTION_TYPE_INVALID")
         _validate_settle_positions(body.get("settlePosition"))
@@ -379,11 +383,19 @@ def _validate_request_contract(
 
 
 def _validate_common_order_fields(
-    body: Mapping[str, Any], *, expected_prefix: str, size_required: bool = True
+    body: Mapping[str, Any],
+    *,
+    expected_prefix: str | set[str],
+    size_required: bool = True,
 ) -> None:
     if body.get("symbol") != "USD_JPY" or body.get("side") not in {"BUY", "SELL"}:
         raise V4GmoActualTransportError("V4_GMO_ORDER_SCOPE_INVALID")
-    if not _valid_client_order_id(body.get("clientOrderId"), prefixes={expected_prefix}):
+    prefixes = (
+        {expected_prefix}
+        if isinstance(expected_prefix, str)
+        else expected_prefix
+    )
+    if not _valid_client_order_id(body.get("clientOrderId"), prefixes=prefixes):
         raise V4GmoActualTransportError("V4_GMO_CLIENT_ORDER_ID_INVALID")
     if size_required:
         size = _positive_decimal(body.get("size"))

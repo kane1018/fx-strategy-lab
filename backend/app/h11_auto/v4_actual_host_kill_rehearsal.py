@@ -9,8 +9,11 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 
 from app.h11_auto.runtime_safety import (
     AutoRiskStopState,
@@ -23,6 +26,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4ExternalPreparationGate,
     V4PreparationOperation,
     V4PreparationOperationPermit,
+    _attest_host_kill_success_internal,
     require_external_preparation_gate,
     require_operation_permit,
 )
@@ -56,6 +60,8 @@ class V4ActualHostKillReport:
     persistent_kill_latched: bool
     entry_blocked_after_reload: bool
     actual_runtime_process_killed: bool = False
+    disposable_coordinator_process_killed: bool = False
+    coordinator_pending_marker_restart_halt_observed: bool = False
     sleep_performed: bool = False
     reboot_performed: bool = False
     network_changed: bool = False
@@ -89,7 +95,7 @@ def run_actual_host_kill_rehearsal(
     require_operation_permit(
         operation_permit,
         expected_operation=V4PreparationOperation.HOST_KILL,
-        consume=True,
+        claim=True,
     )
     state_dir = (
         external_gate.state_root_for_internal_preparation_only() / "host_kill"
@@ -157,6 +163,12 @@ def run_actual_host_kill_rehearsal(
             child.kill()
             child.wait(timeout=5.0)
     killed = returncode == -signal.SIGKILL
+    coordinator_killed, restart_halt_observed = _coordinator_kill_probe(
+        state_dir=state_dir,
+        implementation_digest=(
+            external_gate.reviewed_digest_for_internal_preparation_only()
+        ),
+    )
 
     policy = PhaseBRiskPolicy(
         policy_label="H11_V4_ACTUAL_PREPARATION_KILL_V1",
@@ -184,10 +196,12 @@ def run_actual_host_kill_rehearsal(
         and network_time is True
         and clock_skew_within_five_seconds
         and killed
+        and coordinator_killed
+        and restart_halt_observed
         and latched
         and entry_blocked
     )
-    return V4ActualHostKillReport(
+    report = V4ActualHostKillReport(
         status=(
             "PASSED_CURRENT_HOST_GENERIC_KILL_PREPARATION_NO_BROKER_POST"
             if clear
@@ -205,7 +219,87 @@ def run_actual_host_kill_rehearsal(
         disposable_process_sigkill_observed=killed,
         persistent_kill_latched=latched,
         entry_blocked_after_reload=entry_blocked,
+        actual_runtime_process_killed=False,
+        disposable_coordinator_process_killed=coordinator_killed,
+        coordinator_pending_marker_restart_halt_observed=restart_halt_observed,
     )
+    if clear:
+        _attest_host_kill_success_internal(operation_permit, report.to_safe_dict())
+    return report
+
+
+def _coordinator_kill_probe(
+    *, state_dir: Path, implementation_digest: str
+) -> tuple[bool, bool]:
+    state_path = state_dir / "v4_actual_coordinator_kill.sqlite3"
+    transport_marker = state_dir / "v4_actual_coordinator_transport_called"
+    observed = datetime.now(UTC).isoformat()
+    child = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "scripts.h11_auto_v4_coordinator_kill_probe",
+            "--state-path",
+            str(state_path),
+            "--implementation-digest",
+            implementation_digest,
+            "--observed-at-utc",
+            observed,
+            "--mode",
+            "initial",
+            "--transport-marker",
+            str(transport_marker),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    stopped = False
+    try:
+        for _ in range(50):
+            waited_pid, wait_status = os.waitpid(
+                child.pid, os.WNOHANG | os.WUNTRACED
+            )
+            if waited_pid == child.pid and os.WIFSTOPPED(wait_status):
+                stopped = True
+                break
+            if child.poll() is not None:
+                break
+            time.sleep(0.1)
+        if not stopped:
+            raise V4ActualHostKillRehearsalError(
+                "COORDINATOR_KILL_PROCESS_NOT_READY"
+            )
+        os.kill(child.pid, signal.SIGKILL)
+        killed = child.wait(timeout=5.0) == -signal.SIGKILL
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait(timeout=5.0)
+    restarted = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.h11_auto_v4_coordinator_kill_probe",
+            "--state-path",
+            str(state_path),
+            "--implementation-digest",
+            implementation_digest,
+            "--observed-at-utc",
+            observed,
+            "--mode",
+            "restart",
+            "--transport-marker",
+            str(transport_marker),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=5.0,
+        check=False,
+    )
+    restart_halt_observed = restarted.returncode == 0 and not transport_marker.exists()
+    return killed, restart_halt_observed
 
 
 def _run_readonly_host_command(command: list[str]) -> subprocess.CompletedProcess[str]:
