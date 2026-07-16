@@ -42,7 +42,8 @@ _REVIEWED_FILES = (
     "backend/app/services/h11_v4_gmo_readonly_preflight.py",
     "backend/scripts/h11_auto_v4_actual_preparation_presence.py",
     "backend/scripts/h11_auto_v4_keychain_access_rehearsal.py",
-    "backend/scripts/h11_auto_v4_actual_notification_rehearsal.py",
+    "backend/scripts/h11_auto_v4_pushover_rehearsal.py",
+    "backend/scripts/h11_auto_v4_smtp_rehearsal.py",
     "backend/scripts/h11_auto_v4_actual_host_kill_rehearsal.py",
     "backend/scripts/h11_auto_v4_email_delivery_confirm.py",
     "backend/scripts/h11_auto_v4_exclusivity_confirm.py",
@@ -196,7 +197,8 @@ def require_external_preparation_gate(
 class V4PreparationOperation(str, Enum):
     PRESENCE = "00_presence"
     KEYCHAIN_ACCESS = "05_keychain_access"
-    NOTIFICATION = "10_notification"
+    PUSHOVER = "10_pushover"
+    SMTP = "15_smtp"
     EMAIL_CONFIRMATION = "20_email_confirmation"
     HOST_KILL = "30_host_kill"
     EXCLUSIVITY_CONFIRMATION = "40_exclusivity_confirmation"
@@ -206,8 +208,9 @@ class V4PreparationOperation(str, Enum):
 _PREVIOUS_OPERATION = {
     V4PreparationOperation.PRESENCE: None,
     V4PreparationOperation.KEYCHAIN_ACCESS: V4PreparationOperation.PRESENCE,
-    V4PreparationOperation.NOTIFICATION: V4PreparationOperation.KEYCHAIN_ACCESS,
-    V4PreparationOperation.EMAIL_CONFIRMATION: V4PreparationOperation.NOTIFICATION,
+    V4PreparationOperation.PUSHOVER: V4PreparationOperation.KEYCHAIN_ACCESS,
+    V4PreparationOperation.SMTP: V4PreparationOperation.PUSHOVER,
+    V4PreparationOperation.EMAIL_CONFIRMATION: V4PreparationOperation.SMTP,
     V4PreparationOperation.HOST_KILL: V4PreparationOperation.EMAIL_CONFIRMATION,
     V4PreparationOperation.EXCLUSIVITY_CONFIRMATION: V4PreparationOperation.HOST_KILL,
     V4PreparationOperation.PRIVATE_GET: V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,

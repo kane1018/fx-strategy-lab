@@ -310,7 +310,7 @@ AGENTS.mdへ本Step専用の限定例外を追加し、actual notificationとGMO
 retry／second attemptはprocess再起動後も禁止する。
 
 ```text
-presence -> sealed Keychain access rehearsal -> notification provider acceptance -> email receipt confirmation
+presence -> sealed Keychain access rehearsal -> Pushover send/ack -> SMTP send -> email receipt confirmation
 -> host/KILL preparation -> account exclusivity confirmation -> Private GET
 ```
 
@@ -319,6 +319,11 @@ presence -> sealed Keychain access rehearsal -> notification provider acceptance
 Keychain access rehearsalを完了させる。120秒は6 itemの合計上限である。実行時はMacをロックせず
 Terminalを前面にし、想定した`security` accessだけ「常に許可」を推奨する。最大6回表示され得るが、
 想定外のprocess・item・表示なら拒否して停止する。
+
+digest `1668d9ec...dd110`のgenerationはKeychain accessまでpassし、PushoverとSMTPを各1回attemptした。
+Pushoverは配送されたが3分以内のackはなく、operatorが後からackした。emailは未着だった。
+旧`10_notification.started.json`は保持し、同generationは再利用しない。次generationではPushoverを
+最大15分ack待機の専用operation、SMTPを固定safe failure分類付き専用operationへ分離する。
 
 SMTPのacceptはemail受信の証明ではない。Private GETのzero countはUSD/JPY限定snapshotであり、口座全体の
 排他性やcanary preflight clearを単独では証明しない。host/KILL preparationはdisposable childとpersistent
@@ -331,8 +336,10 @@ fake-firstで修正中である。
 ```text
 api_ip_restriction=DISABLED_OPERATOR_ACCEPTED_RESIDUAL_RISK
 actual_keychain_read_attempted=true
-actual_keychain_read_completed=false
-external_notification_send=false
+actual_keychain_read_completed=true
+external_notification_send_attempt_count=2
+pushover_delivered=true
+email_delivered=false
 broker_private_get=false
 broker_private_post=false
 activation_permit_issued=false

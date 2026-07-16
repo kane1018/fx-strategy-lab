@@ -3365,4 +3365,11 @@ login keychainはdefaultかつ`no-timeout`であり、Pushover/email、Private G
 禁止する。完全差分review、検証、commit/push後のclean mainでだけ新generationを開始する。
 broker POST／activation permit／canaryは引き続き0。
 
+digest `1668d9ec...dd110`のgenerationはpresence／Keychain accessをpassし、PushoverとSMTPを各1回attempt。
+Pushoverは配送後にoperatorがackしたが3分のrehearsal期限後で、emailは未着だった。同generationの
+`10_notification.started.json`は保持し、Private GET、host/KILL、broker POSTは0。
+
+次generation向けにPushoverとSMTPを別operationへ分離する。Pushoverはpreparation限定で最大15分ack、
+SMTPは1 sendと固定safe failure分類を使用し、Pushover pass前には開始しない。
+
 詳細: [H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md](H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md)

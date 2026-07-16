@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: `KEYCHAIN_ACCESS_CORRECTIVE_GENERATION_IMPLEMENTED_PENDING_REVIEW`
+Status: `SPLIT_NOTIFICATION_CORRECTIVE_GENERATION_REVIEWED_READY_FOR_EXTERNAL_REHEARSAL`
 
 ## 1. Authorization boundary
 
@@ -69,7 +69,8 @@ I/Oへ到達しない。
 ```text
 presence
 -> sealed Keychain access rehearsal
--> Pushover + SMTP
+-> Pushover send + acknowledgement
+-> SMTP email send
 -> operator email receipt confirmation
 -> current-host generic KILL preparation
 -> operator account-exclusivity confirmation
@@ -94,16 +95,32 @@ Keychain対話承認の待機をoperation全体で最大120秒に延長した。
 想定した`security`による固定item accessだけを承認し、後続の通知／Private GETで再表示させないため
 「常に許可」を推奨する。想定外のprocess・item・表示なら拒否し、そのgenerationを停止する。
 
+### Second external attempt and split-notification correction
+
+digest `1668d9ec...dd110`のgenerationではpresence 6/6、Keychain access 6/6がpassした。
+PushoverとSMTPを同一notification operationで各1回attemptした。Pushoverは09:33:05に端末へ配送されたが、
+3分のrehearsal待機内にはackされず、operatorは後に端末上でackを完了した。emailはInbox、All Mail、Spam、
+Sentのいずれにも到達しなかった。`10_notification.started.json`は保持し、このgenerationは再利用しない。
+Private GET、host/KILL、broker POSTは実行していない。
+
+次generationではPushoverとSMTPを別operation／別markerへ分離する。Pushoverは1 application sendのまま、
+preparation限定でack待機を最大15分、poll間隔を10秒とする。SMTPはPushover pass後に1回だけ実行し、
+失敗時は接続／EHLO／TLS／認証／送信／宛先／session終了の固定safe labelだけを返す。raw provider response、
+account、credential、receiptはreport、marker、exceptionへ保存しない。
+receipt GETが締切前に開始しても応答が締切後ならackを採用しない。SMTPはEHLOの戻りcode 250を明示確認し、
+全宛先拒否exceptionをgeneric送信失敗と分けて宛先失敗へ分類する。
+
 ### Notification
 
 `h11_v4_notification_actual_preparation.py`をfake-only notifierから分離した。
 
-- Pushover application sendは1回のみ。
+- Pushover application sendは専用operationで1回のみ。
 - priority 2、retry 60秒、expire 3600秒。
-- receipt GETは公式条件どおり5秒未満の間隔でpollしない。
+- receipt GETは10秒間隔、preparation限定で最大15分とする。
 - provider receipt、request ID、user key、account、credential、raw responseをreportへ出さない。
-- SMTPは`starttls`、固定host/port、宛先＝username、送信1回。
-- Pushoverが失敗してもsecondary emailを独立に1回だけ試行する。
+- SMTPは別operationで`starttls`、固定host/port、宛先＝username、送信1回。
+- PushoverがpassしなければSMTPを開始しない。
+- SMTP失敗は固定safe stage labelだけを返す。
 - SMTP成功は`SMTP accepted`までとし、実受信は別のoperator exact confirmationを必要とする。
 - broker endpoint／broker POST機能なし。
 
@@ -145,15 +162,19 @@ credential読取りとnetworkへ到達しない。POST分岐のcommon hard guard
 ## 4. Fake-first validation
 
 ```text
-focused_preparation_tests=69 passed
-h11_auto_related_tests=346 passed
-repository_app_tests=7938 passed, 2 keychain-write tests deselected
+focused_preparation_tests=78 passed
+h11_auto_related_tests=355 passed
+repository_app_tests=7947 passed, 2 keychain-write tests deselected
 full_ruff_app_scripts=passed
 git_diff_check=passed
 danger_scan=no_broker_POST_route_or_activation_permit_in_preparation_paths
 actual_keychain_read_attempted=true
-actual_keychain_read_completed=false
-external_notification_send=false
+actual_keychain_read_completed=true
+external_notification_send_attempt_count=2
+pushover_delivered=true
+pushover_acknowledged_within_rehearsal=false
+pushover_acknowledged_later_by_operator=true
+email_delivered=false
 broker_private_get=false
 broker_private_post=false
 ```
@@ -188,8 +209,11 @@ canary broker POSTの前には、外部準備とは別に次の未解決VETOもc
 actual_post=false
 broker_write=false
 broker_private_get=false
-credential_read=false
-external_notification_send=false
+historical_prior_generation_credential_read_completed=true
+historical_prior_generation_external_notification_send_attempt_count=2
+current_corrective_generation_credential_read=false
+current_corrective_generation_external_notification_send=false
+credential_value_exposed=false
 activation_permit_issued=false
 resume_declaration_effective=false
 performance_proof_status=false

@@ -1,9 +1,9 @@
 """Finite actual notification rehearsal for H-11 v4 activation preparation.
 
-This module may send exactly one Pushover message and exactly one email.  It
-cannot call a broker endpoint and never returns provider identifiers, account
-names, credential values, or raw responses.  The fake-only runtime notifier
-remains unchanged and does not import this module.
+This module exposes separate one-shot Pushover and SMTP rehearsals.  It cannot
+call a broker endpoint and never returns provider identifiers, account names,
+credential values, or raw responses.  The fake-only runtime notifier remains
+unchanged and does not import this module.
 """
 
 from __future__ import annotations
@@ -118,33 +118,37 @@ def read_notification_keychain_secret(
 class H11V4NotificationCredentialBundle:
     reader: SecretReader = read_notification_keychain_secret
 
-    def load_internal_only(
-        self,
-    ) -> tuple[
-        _SealedNotificationSecret,
-        _SealedNotificationSecret,
-        _SealedNotificationSecret,
-        _SealedNotificationSecret,
-    ]:
+    def _load_accounts_internal_only(
+        self, accounts: tuple[str, str]
+    ) -> tuple[_SealedNotificationSecret, _SealedNotificationSecret]:
         try:
             values = tuple(
                 self.reader(NOTIFICATION_KEYCHAIN_SERVICE, account)
-                for account in (
-                    PUSHOVER_TOKEN_ACCOUNT,
-                    PUSHOVER_USER_ACCOUNT,
-                    SMTP_USERNAME_ACCOUNT,
-                    SMTP_PASSWORD_ACCOUNT,
-                )
+                for account in accounts
             )
         except H11V4ActualNotificationError:
             raise
         except Exception:  # noqa: BLE001
             raise H11V4ActualNotificationError("NOTIFICATION_KEYCHAIN_READ_FAILED") from None
-        if len(values) != 4 or any(
+        if len(values) != 2 or any(
             not isinstance(value, _SealedNotificationSecret) for value in values
         ):
             raise H11V4ActualNotificationError("NOTIFICATION_KEYCHAIN_CONTRACT_INVALID")
         return values  # type: ignore[return-value]
+
+    def load_pushover_internal_only(
+        self,
+    ) -> tuple[_SealedNotificationSecret, _SealedNotificationSecret]:
+        return self._load_accounts_internal_only(
+            (PUSHOVER_TOKEN_ACCOUNT, PUSHOVER_USER_ACCOUNT)
+        )
+
+    def load_smtp_internal_only(
+        self,
+    ) -> tuple[_SealedNotificationSecret, _SealedNotificationSecret]:
+        return self._load_accounts_internal_only(
+            (SMTP_USERNAME_ACCOUNT, SMTP_PASSWORD_ACCOUNT)
+        )
 
     def __repr__(self) -> str:
         return "H11V4NotificationCredentialBundle(***)"
@@ -175,7 +179,7 @@ def _default_smtp_factory(host: str, port: int, timeout: float) -> _SmtpClient:
 
 
 @dataclass(frozen=True)
-class H11V4ActualNotificationReport:
+class H11V4ActualPushoverReport:
     status: str
     keychain_items_present: bool
     credential_read_count: int
@@ -184,6 +188,26 @@ class H11V4ActualNotificationReport:
     pushover_receipt_present: bool
     pushover_acknowledged: bool
     pushover_receipt_poll_count: int
+    external_notification_send_count: int
+    broker_get_count: int = 0
+    broker_post_count: int = 0
+    provider_identifier_exposed: bool = False
+    credential_exposed: bool = False
+    raw_response_retained: bool = False
+    activation_permit_issued: bool = False
+
+    def to_safe_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    def __bool__(self) -> bool:
+        return False
+
+
+@dataclass(frozen=True)
+class H11V4ActualSmtpReport:
+    status: str
+    keychain_items_present: bool
+    credential_read_count: int
     email_send_count: int
     email_smtp_accepted: bool
     email_delivery_operator_confirmed: bool
@@ -203,49 +227,42 @@ class H11V4ActualNotificationReport:
         return False
 
 
-def run_actual_notification_rehearsal_once(
+def run_actual_pushover_rehearsal_once(
     *,
     external_gate: V4ExternalPreparationGate,
     operation_permit: V4PreparationOperationPermit,
     credentials: H11V4NotificationCredentialBundle | None = None,
     http_client: httpx.Client | None = None,
-    smtp_factory: SmtpFactory = _default_smtp_factory,
-    acknowledgement_timeout_seconds: float = 180.0,
-    receipt_poll_interval_seconds: float = 5.0,
+    acknowledgement_timeout_seconds: float = 900.0,
+    receipt_poll_interval_seconds: float = 10.0,
     monotonic_factory: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
-) -> H11V4ActualNotificationReport:
-    """Send one emergency push and one email, then poll push acknowledgement."""
+) -> H11V4ActualPushoverReport:
+    """Send one emergency push, then poll its acknowledgement for at most 15m."""
 
     require_external_preparation_gate(external_gate)
     require_operation_permit(
         operation_permit,
-        expected_operation=V4PreparationOperation.NOTIFICATION,
+        expected_operation=V4PreparationOperation.PUSHOVER,
         consume=True,
     )
-    if acknowledgement_timeout_seconds <= 0 or receipt_poll_interval_seconds < 5.0:
+    if (
+        acknowledgement_timeout_seconds <= 0
+        or acknowledgement_timeout_seconds > 900.0
+        or receipt_poll_interval_seconds < 5.0
+    ):
         raise H11V4ActualNotificationError("NOTIFICATION_REHEARSAL_TIMING_INVALID")
     bundle = (
         credentials
         if credentials is not None
         else H11V4NotificationCredentialBundle()
     )
-    token, user, smtp_username, smtp_password = bundle.load_internal_only()
+    token, user = bundle.load_pushover_internal_only()
     token_value = token.reveal_internal_only()
     user_value = user.reveal_internal_only()
-    smtp_user_value = smtp_username.reveal_internal_only()
-    smtp_password_value = smtp_password.reveal_internal_only()
     client = http_client or httpx.Client(timeout=10.0)
     owns_client = http_client is None
-    push_sent = 0
-    email_sent = 0
     poll_count = 0
-    push_accepted = False
-    receipt_present = False
-    acknowledged = False
-    email_smtp_accepted = False
-    push_failure: str | None = None
-    email_failure: str | None = None
     try:
         request = build_h11_v4_pushover_request(
             H11V4NotificationEvent.ACTIVATION_PREPARATION_TEST
@@ -259,114 +276,188 @@ def run_actual_notification_rehearsal_once(
             "retry": str(request.retry_seconds),
             "expire": str(request.expire_seconds),
         }
-        push_sent = 1
         try:
             response = client.post(PUSHOVER_MESSAGE_URL, data=payload)
         except httpx.HTTPError:
-            push_failure = "PUSHOVER_NETWORK_FAILED_NO_RETRY"
-            receipt = None
-        else:
-            try:
-                push_payload = _json_mapping(
-                    response, "PUSHOVER_SEND_RESPONSE_INVALID"
-                )
-                receipt = push_payload.get("receipt")
-                if response.status_code != 200 or push_payload.get("status") != 1:
-                    raise H11V4ActualNotificationError(
-                        "PUSHOVER_SEND_REJECTED_NO_RETRY"
-                    )
-                push_accepted = True
-                if not isinstance(receipt, str) or not receipt:
-                    raise H11V4ActualNotificationError("PUSHOVER_RECEIPT_MISSING")
-                receipt_present = True
-            except H11V4ActualNotificationError as error:
-                push_failure = str(error)
-                receipt = None
-
-        # The secondary route is attempted independently even if Pushover fails.
-        message = EmailMessage()
-        message["Subject"] = _SAFE_TITLE
-        message["From"] = smtp_user_value
-        message["To"] = smtp_user_value
-        message.set_content(_SAFE_EMAIL_BODY)
-        email_sent = 1
-        try:
-            with smtp_factory(SMTP_HOST, SMTP_PORT, 10.0) as smtp:
-                smtp.ehlo()
-                smtp.starttls(context=ssl.create_default_context())
-                smtp.ehlo()
-                smtp.login(smtp_user_value, smtp_password_value)
-                refused_recipients = smtp.send_message(message)
-                if refused_recipients:
-                    raise H11V4ActualNotificationError(
-                        "EMAIL_SMTP_RECIPIENT_REJECTED_NO_RETRY"
-                    )
-            email_smtp_accepted = True
-        except (OSError, smtplib.SMTPException, H11V4ActualNotificationError):
-            email_failure = "EMAIL_SEND_FAILED_NO_RETRY"
-
-        if receipt is not None:
-            started = monotonic_factory()
-            try:
-                while monotonic_factory() - started < acknowledgement_timeout_seconds:
-                    sleep(receipt_poll_interval_seconds)
-                    poll_count += 1
-                    try:
-                        receipt_response = client.get(
-                            f"{PUSHOVER_RECEIPT_URL_PREFIX}{receipt}.json",
-                            params={"token": token_value},
-                        )
-                    except httpx.HTTPError:
-                        raise H11V4ActualNotificationError(
-                            "PUSHOVER_RECEIPT_NETWORK_FAILED_NO_RETRY"
-                        ) from None
-                    receipt_payload = _json_mapping(
-                        receipt_response, "PUSHOVER_RECEIPT_RESPONSE_INVALID"
-                    )
-                    if (
-                        receipt_response.status_code != 200
-                        or receipt_payload.get("status") != 1
-                    ):
-                        raise H11V4ActualNotificationError(
-                            "PUSHOVER_RECEIPT_REJECTED"
-                        )
-                    if receipt_payload.get("acknowledged") == 1:
-                        acknowledged = True
-                        break
-                    if receipt_payload.get("expired") == 1:
-                        break
-                if not acknowledged:
-                    raise H11V4ActualNotificationError(
-                        "PUSHOVER_ACK_NOT_CONFIRMED"
-                    )
-            except H11V4ActualNotificationError as error:
-                push_failure = str(error)
-
-        if push_failure is not None or email_failure is not None:
             raise H11V4ActualNotificationError(
-                "NOTIFICATION_REHEARSAL_FAILED_NO_RETRY"
+                "PUSHOVER_NETWORK_FAILED_NO_RETRY"
             ) from None
-        return H11V4ActualNotificationReport(
-            status=(
-                "PASSED_PROVIDER_ACCEPTANCE_AWAITING_EMAIL_OPERATOR_CONFIRMATION_"
-                "NO_BROKER_POST"
-            ),
+        push_payload = _json_mapping(response, "PUSHOVER_SEND_RESPONSE_INVALID")
+        receipt = push_payload.get("receipt")
+        if response.status_code != 200 or push_payload.get("status") != 1:
+            raise H11V4ActualNotificationError(
+                "PUSHOVER_SEND_REJECTED_NO_RETRY"
+            )
+        if not isinstance(receipt, str) or not receipt:
+            raise H11V4ActualNotificationError("PUSHOVER_RECEIPT_MISSING")
+
+        deadline = monotonic_factory() + acknowledgement_timeout_seconds
+        acknowledged = False
+        while True:
+            remaining_before_sleep = deadline - monotonic_factory()
+            if remaining_before_sleep <= 0:
+                break
+            sleep(min(receipt_poll_interval_seconds, remaining_before_sleep))
+            remaining_before_get = deadline - monotonic_factory()
+            if remaining_before_get <= 0:
+                break
+            poll_count += 1
+            try:
+                receipt_response = client.get(
+                    f"{PUSHOVER_RECEIPT_URL_PREFIX}{receipt}.json",
+                    params={"token": token_value},
+                    timeout=min(10.0, remaining_before_get),
+                )
+            except httpx.HTTPError:
+                raise H11V4ActualNotificationError(
+                    "PUSHOVER_RECEIPT_NETWORK_FAILED_NO_RETRY"
+                ) from None
+            if deadline - monotonic_factory() <= 0:
+                break
+            receipt_payload = _json_mapping(
+                receipt_response, "PUSHOVER_RECEIPT_RESPONSE_INVALID"
+            )
+            if (
+                receipt_response.status_code != 200
+                or receipt_payload.get("status") != 1
+            ):
+                raise H11V4ActualNotificationError(
+                    "PUSHOVER_RECEIPT_REJECTED_NO_RETRY"
+                )
+            if receipt_payload.get("acknowledged") == 1:
+                acknowledged = True
+                break
+            if receipt_payload.get("expired") == 1:
+                break
+        if not acknowledged:
+            raise H11V4ActualNotificationError(
+                "PUSHOVER_ACK_NOT_CONFIRMED_NO_RETRY"
+            )
+        return H11V4ActualPushoverReport(
+            status="PASSED_PUSHOVER_ACKNOWLEDGED_NO_BROKER_POST",
             keychain_items_present=True,
-            credential_read_count=4,
-            pushover_application_send_count=push_sent,
-            pushover_accepted=push_accepted,
-            pushover_receipt_present=receipt_present,
-            pushover_acknowledged=acknowledged,
+            credential_read_count=2,
+            pushover_application_send_count=1,
+            pushover_accepted=True,
+            pushover_receipt_present=True,
+            pushover_acknowledged=True,
             pushover_receipt_poll_count=poll_count,
-            email_send_count=email_sent,
-            email_smtp_accepted=email_smtp_accepted,
-            email_delivery_operator_confirmed=False,
-            destination_is_smtp_username=True,
-            external_notification_send_count=2,
+            external_notification_send_count=1,
         )
     finally:
         if owns_client:
             client.close()
+
+
+def _smtp_call_or_safe_error(
+    call: Callable[[], Any], *, failure_label: str
+) -> Any:
+    failed = False
+    result: Any = None
+    try:
+        result = call()
+    except (OSError, smtplib.SMTPException):
+        failed = True
+    if failed:
+        raise H11V4ActualNotificationError(failure_label) from None
+    return result
+
+
+def _require_smtp_ehlo(session: _SmtpClient) -> None:
+    result = _smtp_call_or_safe_error(
+        session.ehlo, failure_label="SMTP_EHLO_FAILED_NO_RETRY"
+    )
+    if not isinstance(result, tuple) or not result or result[0] != 250:
+        raise H11V4ActualNotificationError(
+            "SMTP_EHLO_FAILED_NO_RETRY"
+        ) from None
+
+
+def run_actual_smtp_rehearsal_once(
+    *,
+    external_gate: V4ExternalPreparationGate,
+    operation_permit: V4PreparationOperationPermit,
+    credentials: H11V4NotificationCredentialBundle | None = None,
+    smtp_factory: SmtpFactory = _default_smtp_factory,
+) -> H11V4ActualSmtpReport:
+    """Send one self-addressed SMTP test email with sanitized stage failures."""
+
+    require_external_preparation_gate(external_gate)
+    require_operation_permit(
+        operation_permit,
+        expected_operation=V4PreparationOperation.SMTP,
+        consume=True,
+    )
+    bundle = (
+        credentials
+        if credentials is not None
+        else H11V4NotificationCredentialBundle()
+    )
+    smtp_username, smtp_password = bundle.load_smtp_internal_only()
+    smtp_user_value = smtp_username.reveal_internal_only()
+    smtp_password_value = smtp_password.reveal_internal_only()
+    message = EmailMessage()
+    message["Subject"] = _SAFE_TITLE
+    message["From"] = smtp_user_value
+    message["To"] = smtp_user_value
+    message.set_content(_SAFE_EMAIL_BODY)
+
+    client = _smtp_call_or_safe_error(
+        lambda: smtp_factory(SMTP_HOST, SMTP_PORT, 10.0),
+        failure_label="SMTP_CONNECT_FAILED_NO_RETRY",
+    )
+    session = _smtp_call_or_safe_error(
+        client.__enter__, failure_label="SMTP_CONNECT_FAILED_NO_RETRY"
+    )
+    safe_error: H11V4ActualNotificationError | None = None
+    try:
+        _require_smtp_ehlo(session)
+        _smtp_call_or_safe_error(
+            lambda: session.starttls(context=ssl.create_default_context()),
+            failure_label="SMTP_TLS_FAILED_NO_RETRY",
+        )
+        _require_smtp_ehlo(session)
+        _smtp_call_or_safe_error(
+            lambda: session.login(smtp_user_value, smtp_password_value),
+            failure_label="SMTP_AUTH_FAILED_NO_RETRY",
+        )
+        try:
+            refused_recipients = session.send_message(message)
+        except smtplib.SMTPRecipientsRefused:
+            raise H11V4ActualNotificationError(
+                "SMTP_RECIPIENT_FAILED_NO_RETRY"
+            ) from None
+        except (OSError, smtplib.SMTPException):
+            raise H11V4ActualNotificationError(
+                "SMTP_SEND_FAILED_NO_RETRY"
+            ) from None
+        if refused_recipients:
+            raise H11V4ActualNotificationError(
+                "SMTP_RECIPIENT_FAILED_NO_RETRY"
+            )
+    except H11V4ActualNotificationError as error:
+        safe_error = error
+    close_failed = False
+    try:
+        client.__exit__(None, None, None)
+    except (OSError, smtplib.SMTPException):
+        close_failed = True
+    if safe_error is not None:
+        raise safe_error from None
+    if close_failed:
+        raise H11V4ActualNotificationError(
+            "SMTP_SESSION_CLOSE_FAILED_NO_RETRY"
+        ) from None
+    return H11V4ActualSmtpReport(
+        status="PASSED_SMTP_ACCEPTED_AWAITING_EMAIL_OPERATOR_CONFIRMATION_NO_BROKER_POST",
+        keychain_items_present=True,
+        credential_read_count=2,
+        email_send_count=1,
+        email_smtp_accepted=True,
+        email_delivery_operator_confirmed=False,
+        destination_is_smtp_username=True,
+        external_notification_send_count=1,
+    )
 
 
 def _json_mapping(response: httpx.Response, error_label: str) -> Mapping[str, Any]:

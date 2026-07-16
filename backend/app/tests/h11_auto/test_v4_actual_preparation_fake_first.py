@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import smtplib
 import subprocess
 import traceback
 from dataclasses import dataclass
@@ -39,7 +40,8 @@ from app.services.h11_v4_notification_actual_preparation import (
     H11V4ActualNotificationError,
     H11V4NotificationCredentialBundle,
     _SealedNotificationSecret,
-    run_actual_notification_rehearsal_once,
+    run_actual_pushover_rehearsal_once,
+    run_actual_smtp_rehearsal_once,
 )
 
 
@@ -76,8 +78,8 @@ class FakeSmtp:
     def __exit__(self, *args: object) -> None:
         del args
 
-    def ehlo(self) -> None:
-        return None
+    def ehlo(self) -> tuple[int, bytes]:
+        return 250, b"synthetic ok"
 
     def starttls(self, *, context: object) -> None:
         assert context is not None
@@ -331,7 +333,12 @@ def test_actual_external_functions_reject_forged_operation_permit(
             runner=runner,
         )
     with pytest.raises(V4ActualPreparationGuardError, match="PERMIT_INVALID"):
-        run_actual_notification_rehearsal_once(
+        run_actual_pushover_rehearsal_once(
+            external_gate=external_gate,
+            operation_permit=forged,  # type: ignore[arg-type]
+        )
+    with pytest.raises(V4ActualPreparationGuardError, match="PERMIT_INVALID"):
+        run_actual_smtp_rehearsal_once(
             external_gate=external_gate,
             operation_permit=forged,  # type: ignore[arg-type]
         )
@@ -375,7 +382,12 @@ def test_external_preparation_paths_do_not_accept_arbitrary_state_roots() -> Non
         run_actual_host_kill_rehearsal
     ).parameters
     with pytest.raises(V4ActualPreparationGuardError, match="EXTERNAL_GATE_INVALID"):
-        run_actual_notification_rehearsal_once(
+        run_actual_pushover_rehearsal_once(
+            external_gate=object(),  # type: ignore[arg-type]
+            operation_permit=object(),  # type: ignore[arg-type]
+        )
+    with pytest.raises(V4ActualPreparationGuardError, match="EXTERNAL_GATE_INVALID"):
+        run_actual_smtp_rehearsal_once(
             external_gate=object(),  # type: ignore[arg-type]
             operation_permit=object(),  # type: ignore[arg-type]
         )
@@ -426,7 +438,7 @@ def test_review_artifact_digest_mismatch_blocks_external_gate(
         load_external_preparation_gate(repository=tmp_path)
 
 
-def test_actual_notification_rehearsal_uses_one_send_per_route_and_ack_poll(
+def test_actual_pushover_rehearsal_uses_one_send_and_ack_poll(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
     reads: list[tuple[str, str]] = []
@@ -436,8 +448,6 @@ def test_actual_notification_rehearsal_uses_one_send_per_route_and_ack_poll(
         values = {
             "pushover-api-token": "synthetic-token",
             "pushover-user-key": "synthetic-user",
-            "smtp-username": "synthetic@example.invalid",
-            "smtp-app-password": "synthetic-app-password",
         }
         return _SealedNotificationSecret(values[account])
 
@@ -449,36 +459,173 @@ def test_actual_notification_rehearsal_uses_one_send_per_route_and_ack_poll(
             return httpx.Response(200, json={"status": 1, "receipt": "synthetic-receipt"})
         return httpx.Response(200, json={"status": 1, "acknowledged": 1, "expired": 0})
 
-    smtp = FakeSmtp()
     fake_time = FakeTime()
     _, operation_permit = _permit_for(
         external_gate=external_gate,
-        target=V4PreparationOperation.NOTIFICATION,
+        target=V4PreparationOperation.PUSHOVER,
     )
-    report = run_actual_notification_rehearsal_once(
+    report = run_actual_pushover_rehearsal_once(
         external_gate=external_gate,
         operation_permit=operation_permit,
         credentials=H11V4NotificationCredentialBundle(reader=reader),
         http_client=httpx.Client(transport=httpx.MockTransport(handler)),
-        smtp_factory=lambda host, port, timeout: smtp,
         acknowledgement_timeout_seconds=15,
         receipt_poll_interval_seconds=5,
         monotonic_factory=fake_time.monotonic,
         sleep=fake_time.sleep,
     )
-    assert len(reads) == 4
+    assert len(reads) == 2
     assert calls == [
         ("POST", "/1/messages.json"),
         ("GET", "/1/receipts/synthetic-receipt.json"),
     ]
     assert report.pushover_application_send_count == 1
     assert report.pushover_acknowledged is True
+    assert report.external_notification_send_count == 1
+    assert report.broker_post_count == 0
+
+
+def test_actual_smtp_rehearsal_uses_one_send_and_two_credentials(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    reads: list[tuple[str, str]] = []
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        reads.append((service, account))
+        values = {
+            "smtp-username": "synthetic@example.invalid",
+            "smtp-app-password": "synthetic-app-password",
+        }
+        return _SealedNotificationSecret(values[account])
+
+    smtp = FakeSmtp()
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.SMTP,
+    )
+    report = run_actual_smtp_rehearsal_once(
+        external_gate=external_gate,
+        operation_permit=operation_permit,
+        credentials=H11V4NotificationCredentialBundle(reader=reader),
+        smtp_factory=lambda host, port, timeout: smtp,
+    )
+
+    assert len(reads) == 2
     assert report.email_send_count == 1
     assert report.email_smtp_accepted is True
     assert report.email_delivery_operator_confirmed is False
-    assert report.external_notification_send_count == 2
+    assert report.external_notification_send_count == 1
     assert report.broker_post_count == 0
     assert smtp.tls is True and smtp.logged_in is True and smtp.sent == 1
+
+
+def test_pushover_default_ack_window_is_fifteen_minutes() -> None:
+    signature = inspect.signature(run_actual_pushover_rehearsal_once)
+    assert signature.parameters["acknowledgement_timeout_seconds"].default == 900.0
+    assert signature.parameters["receipt_poll_interval_seconds"].default == 10.0
+
+
+def test_notification_routes_are_structurally_separate() -> None:
+    pushover_signature = inspect.signature(run_actual_pushover_rehearsal_once)
+    smtp_signature = inspect.signature(run_actual_smtp_rehearsal_once)
+    assert "smtp_factory" not in pushover_signature.parameters
+    assert "http_client" not in smtp_signature.parameters
+    assert "sleep" not in smtp_signature.parameters
+
+
+def test_pushover_ack_poll_does_not_cross_total_deadline(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    values = {
+        "pushover-api-token": "synthetic-token",
+        "pushover-user-key": "synthetic-user",
+    }
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        return _SealedNotificationSecret(values[account])
+
+    get_times: list[float] = []
+    fake_time = FakeTime()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={"status": 1, "receipt": "synthetic-receipt"},
+            )
+        get_times.append(fake_time.value)
+        return httpx.Response(
+            200,
+            json={"status": 1, "acknowledged": 0, "expired": 0},
+        )
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUSHOVER,
+    )
+    with pytest.raises(
+        H11V4ActualNotificationError,
+        match="PUSHOVER_ACK_NOT_CONFIRMED_NO_RETRY",
+    ):
+        run_actual_pushover_rehearsal_once(
+            external_gate=external_gate,
+            operation_permit=operation_permit,
+            credentials=H11V4NotificationCredentialBundle(reader=reader),
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+            acknowledgement_timeout_seconds=15,
+            receipt_poll_interval_seconds=10,
+            monotonic_factory=fake_time.monotonic,
+            sleep=fake_time.sleep,
+        )
+    assert get_times == [10.0]
+    assert fake_time.value == 15.0
+
+
+def test_pushover_ack_returned_after_deadline_is_not_accepted(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    values = {
+        "pushover-api-token": "synthetic-token",
+        "pushover-user-key": "synthetic-user",
+    }
+    fake_time = FakeTime()
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        return _SealedNotificationSecret(values[account])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={"status": 1, "receipt": "synthetic-receipt"},
+            )
+        fake_time.value = 16.0
+        return httpx.Response(
+            200,
+            json={"status": 1, "acknowledged": 1, "expired": 0},
+        )
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUSHOVER,
+    )
+    with pytest.raises(
+        H11V4ActualNotificationError,
+        match="PUSHOVER_ACK_NOT_CONFIRMED_NO_RETRY",
+    ):
+        run_actual_pushover_rehearsal_once(
+            external_gate=external_gate,
+            operation_permit=operation_permit,
+            credentials=H11V4NotificationCredentialBundle(reader=reader),
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+            acknowledgement_timeout_seconds=15,
+            receipt_poll_interval_seconds=10,
+            monotonic_factory=fake_time.monotonic,
+            sleep=fake_time.sleep,
+        )
+    assert fake_time.value == 16.0
 
 
 def test_private_get_preflight_is_three_gets_spaced_and_single_use(
@@ -563,14 +710,12 @@ def test_private_get_inter_request_cadence_uses_actual_request_start_time(
     assert report.cadence_offsets_seconds == (0.0, 1.0, 1.25)
 
 
-def test_notification_secondary_email_is_attempted_after_pushover_failure(
+def test_pushover_failure_does_not_attempt_smtp_and_does_not_leak(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
     values = {
         "pushover-api-token": "secret-token-marker",
         "pushover-user-key": "secret-user-marker",
-        "smtp-username": "synthetic@example.invalid",
-        "smtp-app-password": "secret-password-marker",
     }
 
     def reader(service: str, account: str) -> _SealedNotificationSecret:
@@ -580,21 +725,19 @@ def test_notification_secondary_email_is_attempted_after_pushover_failure(
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("synthetic network failure", request=request)
 
-    smtp = FakeSmtp()
     _, operation_permit = _permit_for(
         external_gate=external_gate,
-        target=V4PreparationOperation.NOTIFICATION,
+        target=V4PreparationOperation.PUSHOVER,
     )
     with pytest.raises(
         H11V4ActualNotificationError,
-        match="NOTIFICATION_REHEARSAL_FAILED_NO_RETRY",
+        match="PUSHOVER_NETWORK_FAILED_NO_RETRY",
     ) as exc_info:
-        run_actual_notification_rehearsal_once(
+        run_actual_pushover_rehearsal_once(
             external_gate=external_gate,
             operation_permit=operation_permit,
             credentials=H11V4NotificationCredentialBundle(reader=reader),
             http_client=httpx.Client(transport=httpx.MockTransport(handler)),
-            smtp_factory=lambda host, port, timeout: smtp,
         )
     rendered = "".join(
         traceback.format_exception(
@@ -603,9 +746,144 @@ def test_notification_secondary_email_is_attempted_after_pushover_failure(
             exc_info.tb,
         )
     )
-    assert smtp.sent == 1
     for marker in values.values():
         assert marker not in rendered
+
+
+def test_smtp_auth_failure_is_safely_classified_without_secret(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    secret_marker = "smtp-secret-never-rendered"
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        value = "synthetic@example.invalid" if account == "smtp-username" else secret_marker
+        return _SealedNotificationSecret(value)
+
+    class AuthFailingSmtp(FakeSmtp):
+        def login(self, user: str, password: str) -> None:
+            del user, password
+            raise smtplib.SMTPAuthenticationError(535, b"provider detail hidden")
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.SMTP,
+    )
+    with pytest.raises(
+        H11V4ActualNotificationError,
+        match="SMTP_AUTH_FAILED_NO_RETRY",
+    ) as exc_info:
+        run_actual_smtp_rehearsal_once(
+            external_gate=external_gate,
+            operation_permit=operation_permit,
+            credentials=H11V4NotificationCredentialBundle(reader=reader),
+            smtp_factory=lambda host, port, timeout: AuthFailingSmtp(),
+        )
+    rendered = "".join(
+        traceback.format_exception(exc_info.type, exc_info.value, exc_info.tb)
+    )
+    assert secret_marker not in rendered
+    assert "provider detail hidden" not in rendered
+
+
+def test_smtp_recipient_failure_is_safely_classified(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    values = {
+        "smtp-username": "synthetic@example.invalid",
+        "smtp-app-password": "synthetic-password",
+    }
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        return _SealedNotificationSecret(values[account])
+
+    class RecipientFailingSmtp(FakeSmtp):
+        def send_message(self, message: object) -> dict[str, tuple[int, bytes]]:
+            del message
+            return {"opaque": (550, b"hidden")}
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.SMTP,
+    )
+    with pytest.raises(
+        H11V4ActualNotificationError,
+        match="SMTP_RECIPIENT_FAILED_NO_RETRY",
+    ):
+        run_actual_smtp_rehearsal_once(
+            external_gate=external_gate,
+            operation_permit=operation_permit,
+            credentials=H11V4NotificationCredentialBundle(reader=reader),
+            smtp_factory=lambda host, port, timeout: RecipientFailingSmtp(),
+        )
+
+
+def test_smtp_ehlo_non_250_is_safely_classified(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    values = {
+        "smtp-username": "synthetic@example.invalid",
+        "smtp-app-password": "synthetic-password",
+    }
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        return _SealedNotificationSecret(values[account])
+
+    class EhloFailingSmtp(FakeSmtp):
+        def ehlo(self) -> tuple[int, bytes]:
+            return 550, b"hidden"
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.SMTP,
+    )
+    with pytest.raises(
+        H11V4ActualNotificationError,
+        match="SMTP_EHLO_FAILED_NO_RETRY",
+    ):
+        run_actual_smtp_rehearsal_once(
+            external_gate=external_gate,
+            operation_permit=operation_permit,
+            credentials=H11V4NotificationCredentialBundle(reader=reader),
+            smtp_factory=lambda host, port, timeout: EhloFailingSmtp(),
+        )
+
+
+def test_smtp_recipient_exception_is_safely_classified(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    values = {
+        "smtp-username": "synthetic@example.invalid",
+        "smtp-app-password": "synthetic-password",
+    }
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        return _SealedNotificationSecret(values[account])
+
+    class RecipientExceptionSmtp(FakeSmtp):
+        def send_message(self, message: object) -> None:
+            del message
+            raise smtplib.SMTPRecipientsRefused(
+                {"opaque@example.invalid": (550, b"hidden")}
+            )
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.SMTP,
+    )
+    with pytest.raises(
+        H11V4ActualNotificationError,
+        match="SMTP_RECIPIENT_FAILED_NO_RETRY",
+    ):
+        run_actual_smtp_rehearsal_once(
+            external_gate=external_gate,
+            operation_permit=operation_permit,
+            credentials=H11V4NotificationCredentialBundle(reader=reader),
+            smtp_factory=lambda host, port, timeout: RecipientExceptionSmtp(),
+        )
 
 
 def test_persistent_preparation_ledger_enforces_order_and_no_retry(
@@ -613,7 +891,7 @@ def test_persistent_preparation_ledger_enforces_order_and_no_retry(
 ) -> None:
     ledger = V4PreparationAttemptLedger(external_gate=external_gate)
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
-        ledger.begin(V4PreparationOperation.NOTIFICATION)
+        ledger.begin(V4PreparationOperation.PUSHOVER)
     presence_permit = ledger.begin(V4PreparationOperation.PRESENCE)
     with pytest.raises(V4ActualPreparationGuardError, match="ALREADY_ATTEMPTED"):
         V4PreparationAttemptLedger(external_gate=external_gate).begin(
@@ -625,14 +903,20 @@ def test_persistent_preparation_ledger_enforces_order_and_no_retry(
         operation_permit=presence_permit,
     )
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
-        ledger.begin(V4PreparationOperation.NOTIFICATION)
+        ledger.begin(V4PreparationOperation.PUSHOVER)
     access_permit = ledger.begin(V4PreparationOperation.KEYCHAIN_ACCESS)
     access_permit.consume_for(V4PreparationOperation.KEYCHAIN_ACCESS)
     ledger.complete(
         V4PreparationOperation.KEYCHAIN_ACCESS,
         operation_permit=access_permit,
     )
-    ledger.begin(V4PreparationOperation.NOTIFICATION)
+    pushover_permit = ledger.begin(V4PreparationOperation.PUSHOVER)
+    pushover_permit.consume_for(V4PreparationOperation.PUSHOVER)
+    ledger.complete(
+        V4PreparationOperation.PUSHOVER,
+        operation_permit=pushover_permit,
+    )
+    ledger.begin(V4PreparationOperation.SMTP)
 
 
 def test_preparation_ledger_rejects_predecessor_from_other_review_digest(
@@ -661,7 +945,7 @@ def test_preparation_ledger_rejects_predecessor_from_other_review_digest(
     gate_b = load_external_preparation_gate(repository=tmp_path)
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
         V4PreparationAttemptLedger(external_gate=gate_b).begin(
-            V4PreparationOperation.NOTIFICATION
+            V4PreparationOperation.PUSHOVER
         )
 
 

@@ -3928,4 +3928,12 @@ manifest/runtime VETOが残ればcanary確認へ進まず、実POST、activation
 access rehearsalではSecurityAgentが最大6回表示され得る。MacをunlockのままTerminalを前面にし、想定した
 `security` accessだけ「常に許可」を推奨する。想定外の表示は拒否してgenerationを停止する。
 
+digest `1668d9ec...dd110`のgenerationはpresence／Keychain accessをpass後、PushoverとSMTPを各1回attemptした。
+Pushoverは配送されたがrehearsalの3分内にackされず、operatorが後からackした。emailは未着。
+`10_notification.started.json`を保持して停止し、Private GET、host/KILL、broker POSTは0。
+
+次generationではPushoverとSMTPを別markerへ分離する。固定順序はpresence→Keychain access→Pushover 1 send／
+最大15分ack→SMTP 1 send→email受信確認→host/KILL→口座排他確認→3 GET。SMTP失敗は秘密値・raw responseを
+含まない固定stage labelだけを返す。同一digestのretry、旧marker削除、broker POSTは引き続き禁止する。
+
 詳細: [H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md](H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md)
