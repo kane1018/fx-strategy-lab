@@ -348,7 +348,7 @@ def test_keychain_access_check_reads_internal_values_with_long_prompt_window(
     assert report.credential_value_exposed is False
     assert "synthetic-secret-never-reported" not in repr(report)
     assert len(calls) == 6
-    assert [timeout for _, timeout in calls] == [120.0, 110.0, 100.0, 90.0, 80.0, 70.0]
+    assert [timeout for _, timeout in calls] == [300.0, 290.0, 280.0, 270.0, 260.0, 250.0]
     assert all("-w" in command and "-g" not in command for command, _ in calls)
 
 
@@ -436,12 +436,16 @@ def test_new_digest_generation_preserves_legacy_no_retry_markers(
 
 
 def test_actual_keychain_readers_allow_interactive_prompt_time() -> None:
+    access_rehearsal_default = inspect.signature(
+        check_v4_keychain_access_internal_only
+    ).parameters["timeout_seconds"].default
     notification_default = inspect.signature(
         notification_actual_module.read_notification_keychain_secret
     ).parameters["timeout_seconds"].default
     private_get_default = inspect.signature(
         readonly_module.read_v4_gmo_readonly_keychain_secret
     ).parameters["timeout_seconds"].default
+    assert access_rehearsal_default == 300.0
     assert notification_default == 120.0
     assert private_get_default == 120.0
 

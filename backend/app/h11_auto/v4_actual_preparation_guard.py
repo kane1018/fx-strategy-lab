@@ -1027,7 +1027,7 @@ def check_v4_keychain_access_internal_only(
     *,
     operation_permit: V4PreparationOperationPermit,
     runner: KeychainValueRunner = _default_keychain_value_runner,
-    timeout_seconds: float = 120.0,
+    timeout_seconds: float = 300.0,
     clock: MonotonicClock = time.monotonic,
 ) -> V4KeychainAccessReport:
     """Read and immediately discard six fixed values without exposing content."""
