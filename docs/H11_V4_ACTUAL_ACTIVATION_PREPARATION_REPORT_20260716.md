@@ -400,6 +400,16 @@ broker_private_get_after_G010_change=0
 broker_private_post=0
 ```
 
+G010 external preparationはKeychain presence 6/6、Keychain access 6/6までclearとなり、Pushover emergency
+messageをapplicationから1回だけ送信した。operator acknowledgementは有限待機内に確認できず、
+`PUSHOVER_ACK_NOT_CONFIRMED_NO_RETRY`で停止した。G010のstarted markerは保持し、同generationでは再送しない。
+G010のSMTP、Private GET、broker POSTはいずれも0回である。
+
+operatorがPushoverを即時acknowledgeできる状態を明示したため、G011はこの履歴追記を含む新しい
+reviewed-files digestとgeneration digestへ結合する。G010と実装コードは同一で、broker query、strategy、risk、
+quantity、threshold、POST／permit／hard guard／retry契約を変更しない。G011の外部operationも固定順序・各1回・
+no-retryを維持する。
+
 ### Threat model boundary
 
 本実装のcompletion digest、generation digest、SQLite markerは、通常の誤操作、二重attempt、
