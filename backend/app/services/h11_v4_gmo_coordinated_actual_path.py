@@ -53,6 +53,7 @@ from app.services.h11_v4_gmo_actual_adapter import (
 from app.services.h11_v4_gmo_public_market_status import (
     V4GmoPublicMarketStatusError,
     V4GmoPublicMarketStatusEvidence,
+    V4GmoPublicMarketStatusTransportGuard,
 )
 
 
@@ -469,6 +470,29 @@ class V4GmoCoordinatedActualPath:
                 "V4_COORDINATED_RISK_REDUCING_ACTION_REQUIRED"
             )
         self._require_ready(action=plan.action, plan=plan)
+        public_market_status_guard: (
+            V4GmoPublicMarketStatusTransportGuard | None
+        ) = None
+        if plan.action in {
+            V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
+            V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,
+        }:
+            try:
+                if market_status_evidence is None:
+                    raise V4GmoPublicMarketStatusError(
+                        "V4_PUBLIC_MARKET_STATUS_EVIDENCE_REQUIRED"
+                    )
+                public_market_status_guard = (
+                    market_status_evidence.bind_transport_guard(
+                        generation_digest=self.generation.digest,
+                        monotonic_factory=self.monotonic_clock,
+                    )
+                )
+            except V4GmoPublicMarketStatusError:
+                self.store.engage_unknown_halt()
+                raise V4GmoCoordinatedPathError(
+                    "V4_COORDINATED_TIME_EXIT_MARKET_OPEN_REQUIRED"
+                ) from None
         reconciliation, binding_digest = self._consume_reconciliation_evidence(
             reconciliation_evidence,
             cycle_ref=plan.cycle_ref,
@@ -493,25 +517,12 @@ class V4GmoCoordinatedActualPath:
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
         try:
             self.after_persist_before_transport()
-            if plan.action is V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT:
-                try:
-                    if market_status_evidence is None:
-                        raise V4GmoPublicMarketStatusError(
-                            "V4_PUBLIC_MARKET_STATUS_EVIDENCE_REQUIRED"
-                        )
-                    market_status_evidence.require_fresh_open(
-                        generation_digest=self.generation.digest,
-                        now_monotonic=self._monotonic_now(),
-                    )
-                except V4GmoPublicMarketStatusError:
-                    raise V4GmoCoordinatedPathError(
-                        "V4_COORDINATED_TIME_EXIT_MARKET_OPEN_REQUIRED"
-                    ) from None
             outcome = self.adapter.perform_once(
                 plan=plan,
                 persisted_authorization=attempt.authorization,
                 now_monotonic=self._monotonic_now(),
                 reconciliation=reconciliation,
+                public_market_status_guard=public_market_status_guard,
             )
             self._finish_transport(plan=plan, outcome=outcome)
         except BaseException:

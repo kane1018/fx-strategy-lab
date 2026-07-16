@@ -88,8 +88,10 @@ exit:
   maximum_hold_seconds: 82800
   time_exit_route: POSITION_SPECIFIC_MARKET_AFTER_EXACT_OCO_CANCEL
   fresh_public_market_open_at_oco_cancel_transport_boundary_required: true
+  separate_fresh_public_market_open_at_position_close_transport_boundary_required: true
   public_market_open_maximum_age_seconds: 2
-  market_unknown_retains_oco_and_halts: true
+  market_unknown_before_cancel_retains_oco_and_halts: true
+  market_unknown_after_cancel_blocks_close_and_halts: true
   formal_edge_exit_enabled: false
 
 reconciliation:

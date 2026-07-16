@@ -49,9 +49,11 @@ persistent_allowed_for_live=false
 - v4 generation-bound entry-time gate（JST 5〜8時、金曜終日、週末）がMARKET直前に強制される。
 - 最大保有82,800秒（23時間）到達時の出口は、exact OCO取消、fresh reconciliation、position-specific time exitの
   単発固定順序であり、到達前には実行できない。
-- time exitのOCO取消transport直前は、executor-owned monotonic clockで最大2秒以内の
-  公式public status `OPEN` evidenceをone-use消費する。
-  OPENを確認できない場合はOCOを維持したままpersistent HALTとする。
+- time exitのOCO取消transport直前とposition-specific time exit transport直前は、
+  executor-owned monotonic clockで最大2秒以内の公式public status `OPEN` evidenceを、
+  それぞれ別のone-use evidenceとして消費する。
+  OCO取消前にOPENを確認できない場合はOCOを維持したままpersistent HALTとする。
+  OCO取消後の決済前に確認できない場合はclose transportを行わずpersistent HALTとする。
 - owned close executionのrealized PnLはfresh flat／expected size一致時だけcycle単位でexactly once
   persistent risk ledgerへ反映される。
 - operatorがv4専用resume宣言をcurrent turnで明示承認。

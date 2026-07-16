@@ -31,6 +31,58 @@ class V4GmoPublicMarketStatus(str, Enum):
 
 
 _PUBLIC_STATUS_EVIDENCE_TOKEN = object()
+_PUBLIC_STATUS_TRANSPORT_GUARD_TOKEN = object()
+
+
+class V4GmoPublicMarketStatusTransportGuard:
+    """Opaque executor-owned check invoked immediately before transport."""
+
+    __slots__ = (
+        "_token",
+        "_evidence",
+        "_generation_digest",
+        "_monotonic_factory",
+        "_used",
+    )
+
+    def __init__(
+        self,
+        *,
+        token: object,
+        evidence: V4GmoPublicMarketStatusEvidence,
+        generation_digest: str,
+        monotonic_factory: Callable[[], float],
+    ) -> None:
+        if token is not _PUBLIC_STATUS_TRANSPORT_GUARD_TOKEN:
+            raise V4GmoPublicMarketStatusError(
+                "V4_PUBLIC_MARKET_STATUS_TRANSPORT_GUARD_INVALID"
+            )
+        self._token = token
+        self._evidence = evidence
+        self._generation_digest = generation_digest
+        self._monotonic_factory = monotonic_factory
+        self._used = False
+
+    def require_fresh_open_at_transport_boundary(self) -> None:
+        if (
+            type(self) is not V4GmoPublicMarketStatusTransportGuard
+            or self._token is not _PUBLIC_STATUS_TRANSPORT_GUARD_TOKEN
+            or self._used
+        ):
+            raise V4GmoPublicMarketStatusError(
+                "V4_PUBLIC_MARKET_STATUS_TRANSPORT_GUARD_INVALID"
+            )
+        self._used = True
+        self._evidence.require_fresh_open(
+            generation_digest=self._generation_digest,
+            now_monotonic=float(self._monotonic_factory()),
+        )
+
+    def __repr__(self) -> str:
+        return "V4GmoPublicMarketStatusTransportGuard(<opaque-one-use>)"
+
+    def __bool__(self) -> bool:
+        return False
 
 
 class V4GmoPublicMarketStatusEvidence:
@@ -86,6 +138,29 @@ class V4GmoPublicMarketStatusEvidence:
             raise V4GmoPublicMarketStatusError(
                 "V4_PUBLIC_MARKET_STATUS_NOT_OPEN"
             )
+
+    def bind_transport_guard(
+        self,
+        *,
+        generation_digest: str,
+        monotonic_factory: Callable[[], float],
+    ) -> V4GmoPublicMarketStatusTransportGuard:
+        if (
+            type(self) is not V4GmoPublicMarketStatusEvidence
+            or self._token is not _PUBLIC_STATUS_EVIDENCE_TOKEN
+            or self._consumed
+            or self._generation_digest != generation_digest
+            or not callable(monotonic_factory)
+        ):
+            raise V4GmoPublicMarketStatusError(
+                "V4_PUBLIC_MARKET_STATUS_EVIDENCE_INVALID"
+            )
+        return V4GmoPublicMarketStatusTransportGuard(
+            token=_PUBLIC_STATUS_TRANSPORT_GUARD_TOKEN,
+            evidence=self,
+            generation_digest=generation_digest,
+            monotonic_factory=monotonic_factory,
+        )
 
     def __repr__(self) -> str:
         return "V4GmoPublicMarketStatusEvidence(<sanitized-one-use>)"

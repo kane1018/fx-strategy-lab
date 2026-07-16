@@ -49,6 +49,7 @@ from app.h11_auto.v4_gmo_persisted_authorization import (
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 from app.services.h11_v4_gmo_actual_adapter import (
     V4GmoActualAdapter,
+    V4GmoActualAdapterError,
     V4GmoActualReconciliation,
     V4GmoPrivateOutcome,
     v4_gmo_client_order_id,
@@ -2576,6 +2577,11 @@ def test_full_time_exit_sequence_is_fixed_and_each_write_is_once_only(
         signal_fingerprint=signal.fingerprint,
         plan=time_exit,
         reconciliation_evidence=unprotected,
+        market_status_evidence=_public_status_evidence(
+            generation_digest=_generation().digest,
+            status="OPEN",
+            monotonic=clock.monotonic,
+        ),
     ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
     assert [request.transport_path for request in transport.requests] == [
         "/private/v1/closeOrder"
@@ -2596,6 +2602,11 @@ def test_full_time_exit_sequence_is_fixed_and_each_write_is_once_only(
             signal_fingerprint=signal.fingerprint,
             plan=time_exit,
             reconciliation_evidence=duplicate_evidence,
+            market_status_evidence=_public_status_evidence(
+                generation_digest=_generation().digest,
+                status="OPEN",
+                monotonic=clock.monotonic,
+            ),
         )
     assert transport.requests == []
     lock.release()
@@ -2651,13 +2662,110 @@ def test_time_exit_non_open_or_stale_at_transport_retains_oco_and_halts(
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     with pytest.raises(
-        V4GmoCoordinatedPathError,
-        match="TIME_EXIT_MARKET_OPEN_REQUIRED",
+        V4GmoActualAdapterError,
+        match="PUBLIC_MARKET_OPEN_REQUIRED_AT_TRANSPORT_BOUNDARY",
     ):
         path.perform_risk_reducing_once(
             signal_fingerprint=signal.fingerprint,
             plan=cancel,
             reconciliation_evidence=protected,
+            market_status_evidence=_public_status_evidence(
+                generation_digest=_generation().digest,
+                status=status,
+                monotonic=clock.monotonic,
+            ),
+        )
+    assert store.unknown_halt_latched() is True
+    assert transport.requests == []
+    lock.release()
+
+
+@pytest.mark.parametrize(
+    ("status", "boundary_delay_seconds"),
+    (("CLOSE", 0.0), ("UNKNOWN", 0.0), ("OPEN", 2.1)),
+)
+def test_position_time_exit_requires_separate_fresh_open_at_transport_boundary(
+    tmp_path: Path,
+    status: str,
+    boundary_delay_seconds: float,
+) -> None:
+    signal, runtime_root, store, cycle_ref = _prepare_exact_protected_store(tmp_path)
+    lock = H11AutoProcessLock(runtime_root / "process.lock")
+    assert lock.acquire() is True
+    risk_store, risk_policy, dead_man = _runtime_safety(
+        runtime_root,
+        heartbeat_at=NOW + timedelta(seconds=82_801),
+    )
+    transport = _FakeTransport(responses=[{"status": 0}])
+    clock = _Clock(
+        wall=NOW + timedelta(seconds=82_801),
+        monotonic=82_901.0,
+    )
+    path = V4GmoCoordinatedActualPath(
+        repository=tmp_path,
+        store=store,
+        adapter=V4GmoActualAdapter(transport=transport),
+        process_lock=lock,
+        generation=_generation(),
+        risk_store=risk_store,
+        risk_policy=risk_policy,
+        dead_man_store=dead_man,
+        wall_clock=clock.wall_now,
+        monotonic_clock=clock.monotonic_now,
+        reconciliation_wait=clock.advance,
+    )
+    cancel = build_v4_action_plan(
+        cycle_ref=cycle_ref,
+        action=V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
+        side=SignalDecision.BUY,
+        requested_size=10_000,
+        protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
+    )
+    assert path.perform_risk_reducing_once(
+        signal_fingerprint=signal.fingerprint,
+        plan=cancel,
+        reconciliation_evidence=_path_protected_reconciliation(
+            path,
+            cycle_ref=cycle_ref,
+            filled_size=10_000,
+        ),
+        market_status_evidence=_public_status_evidence(
+            generation_digest=_generation().digest,
+            status="OPEN",
+            monotonic=clock.monotonic,
+        ),
+    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    assert path.recover_pending_transport_once(
+        cycle_ref=cycle_ref,
+        reconciliation_evidence=_path_filled_reconciliation(
+            path,
+            cycle_ref=cycle_ref,
+            filled_size=10_000,
+        ),
+    ).classification == "FILLED_UNPROTECTED"
+    transport.requests.clear()
+    path.after_persist_before_transport = lambda: clock.advance(
+        boundary_delay_seconds
+    )
+    time_exit = build_v4_action_plan(
+        cycle_ref=cycle_ref,
+        action=V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,
+        side=SignalDecision.BUY,
+        requested_size=10_000,
+        protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
+    )
+    with pytest.raises(
+        V4GmoActualAdapterError,
+        match="PUBLIC_MARKET_OPEN_REQUIRED_AT_TRANSPORT_BOUNDARY",
+    ):
+        path.perform_risk_reducing_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=time_exit,
+            reconciliation_evidence=_path_filled_reconciliation(
+                path,
+                cycle_ref=cycle_ref,
+                filled_size=10_000,
+            ),
             market_status_evidence=_public_status_evidence(
                 generation_digest=_generation().digest,
                 status=status,

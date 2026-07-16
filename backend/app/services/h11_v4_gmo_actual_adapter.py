@@ -42,6 +42,10 @@ from app.services.h11_v4_gmo_actual_transport import (
     V4GmoPrivateRequest,
     V4GmoPrivateTransport,
 )
+from app.services.h11_v4_gmo_public_market_status import (
+    V4GmoPublicMarketStatusError,
+    V4GmoPublicMarketStatusTransportGuard,
+)
 
 SYMBOL = "USD_JPY"
 LATEST_EXECUTIONS_TRANSPORT_PATH = "/private/v1/latestExecutions"
@@ -229,6 +233,9 @@ class V4GmoActualAdapter:
         now_monotonic: float,
         reconciliation: V4GmoActualReconciliation | None = None,
         protection_plan: V4GmoExactProtectionPlan | None = None,
+        public_market_status_guard: (
+            V4GmoPublicMarketStatusTransportGuard | None
+        ) = None,
     ) -> V4GmoPrivateOutcome:
         key = (plan.cycle_ref, plan.action)
         if key in self._attempted:
@@ -250,6 +257,25 @@ class V4GmoActualAdapter:
             now_monotonic=now_monotonic,
         )
         self._attempted.add(key)
+        market_guard_actions = {
+            V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
+            V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,
+        }
+        if plan.action in market_guard_actions:
+            if type(public_market_status_guard) is not V4GmoPublicMarketStatusTransportGuard:
+                raise V4GmoActualAdapterError(
+                    "V4_GMO_PUBLIC_MARKET_STATUS_GUARD_REQUIRED"
+                )
+            try:
+                public_market_status_guard.require_fresh_open_at_transport_boundary()
+            except V4GmoPublicMarketStatusError:
+                raise V4GmoActualAdapterError(
+                    "V4_GMO_PUBLIC_MARKET_OPEN_REQUIRED_AT_TRANSPORT_BOUNDARY"
+                ) from None
+        elif public_market_status_guard is not None:
+            raise V4GmoActualAdapterError(
+                "V4_GMO_PUBLIC_MARKET_STATUS_GUARD_UNEXPECTED"
+            )
         try:
             payload = self.transport.request(request)
         except (V4GmoActualTransportError, TimeoutError, OSError):

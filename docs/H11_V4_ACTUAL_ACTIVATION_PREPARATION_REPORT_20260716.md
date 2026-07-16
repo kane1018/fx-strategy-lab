@@ -228,11 +228,12 @@ strategy／architectureの再レビューで残ったVETOに対し、broker tran
   MARKET attemptを永続化する直前のcoordinatorで強制する。Stage 1のgateをv4の証拠として流用しない。
 - 最大保有時間を82,800秒（23時間）へ固定する。到達前のtime exitは拒否し、到達後はexact OCOを単発cancel、
   fresh reconciliation、position-specific time exitの順に限定する。各actionは別の永続one-attempt契約である。
-- time exitのexact OCO取消transport直前に、executor-owned monotonic clockで最大2秒以内の
-  公式public status `OPEN` evidenceをone-use消費する。attempt永続化中または直前callbackで2秒を超えた
-  場合もbroker transportへ進まない。
-  OPENを確認できない場合はbroker writeを行わず、OCOを維持したまま
-  persistent HALTへ移る。
+- time exitのexact OCO取消transport直前とposition-specific time exit transport直前に、
+  executor-owned monotonic clockで最大2秒以内の公式public status `OPEN` evidenceを、
+  それぞれ別のone-use evidenceとして消費する。attempt永続化中または直前callbackで2秒を超えた
+  場合も該当broker transportへ進まない。
+  OCO取消前にOPENを確認できない場合はbroker writeを行わず、OCOを維持したままpersistent HALTへ移る。
+  OCO取消後の決済前に確認できない場合はclose transportを行わずpersistent HALTへ移る。
 - owned close executionだけからsanitized realized PnLとclosed sizeを集計し、fresh flatかつexpected size一致時だけ
   persistent risk ledgerへcycle単位でexactly once反映する。負の小数円は安全側へ切り下げる。
 - canary KPIを、親IFDOCOではなく`MARKET -> separate exact-size OCO <= 15 seconds`へ訂正した。
