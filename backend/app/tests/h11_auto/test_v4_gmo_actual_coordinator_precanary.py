@@ -655,6 +655,16 @@ def test_v4_generation_is_separate_frozen_and_disabled() -> None:
         )
 
 
+def test_preflight_uses_reconciled_account_counts_not_hardcoded_zero() -> None:
+    source = inspect.getsource(V4GmoCoordinatedActualPath.record_canary_entry_preflight)
+    assert "reconciliation.unowned_position_count" in source
+    assert "reconciliation.account_active_order_count" in source
+    assert "reconciliation.unowned_active_order_count" in source
+    assert "unowned_position_count=0" not in source
+    assert "active_order_count=0" not in source
+    assert "unowned_active_order_count=0" not in source
+
+
 def test_frozen_generation_artifact_must_match_reviewed_digest(tmp_path: Path) -> None:
     generation = _generation()
     path = tmp_path / "docs/templates/h11_v4_gmo_frozen_generation.json"

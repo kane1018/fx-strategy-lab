@@ -214,9 +214,9 @@ def _test_only_complete(
         },
         V4PreparationOperation.PRIVATE_GET: {
             "broker_get_count": 3,
-            "limited_usd_jpy_snapshot_clear": True,
-            "usd_jpy_flat": True,
-            "usd_jpy_active_orders_zero": True,
+            "account_wide_snapshot_clear": True,
+            "account_flat": True,
+            "account_active_orders_zero": True,
             "cadence_offsets_seconds": (0.0, 0.25, 0.5),
             "broker_post_count": 0,
             "broker_write_performed": False,
@@ -817,10 +817,10 @@ def test_pushover_ack_returned_after_deadline_is_not_accepted(
 def test_private_get_preflight_is_three_gets_spaced_and_single_use(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
-    calls: list[tuple[str, str]] = []
+    calls: list[tuple[str, str, dict[str, str]]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        calls.append((request.method, request.url.path))
+        calls.append((request.method, request.url.path, dict(request.url.params)))
         rows = [] if request.url.path != "/private/v1/latestExecutions" else [{"x": 1}]
         return httpx.Response(200, json={"status": 0, "data": {"list": rows}})
 
@@ -839,19 +839,52 @@ def test_private_get_preflight_is_three_gets_spaced_and_single_use(
     )
     report = preflight.run_once()
     assert calls == [
-        ("GET", "/private/v1/latestExecutions"),
-        ("GET", "/private/v1/openPositions"),
-        ("GET", "/private/v1/activeOrders"),
+        (
+            "GET",
+            "/private/v1/latestExecutions",
+            {"symbol": "USD_JPY", "count": "100"},
+        ),
+        ("GET", "/private/v1/openPositions", {"count": "100"}),
+        ("GET", "/private/v1/activeOrders", {"count": "100"}),
     ]
     assert report.cadence_offsets_seconds == (0.0, 0.25, 0.5)
-    assert report.usd_jpy_flat is True
-    assert report.usd_jpy_active_orders_zero is True
-    assert report.limited_usd_jpy_snapshot_clear is True
-    assert report.account_wide_exclusivity_proven is False
+    assert report.account_flat is True
+    assert report.account_active_orders_zero is True
+    assert report.account_wide_snapshot_clear is True
     assert report.canary_preflight_clear is False
     assert report.broker_post_count == 0
     with pytest.raises(V4GmoReadOnlyPreflightError, match="SECOND_RUN_FORBIDDEN"):
         preflight.run_once()
+
+
+@pytest.mark.parametrize(
+    "occupied_path",
+    ("/private/v1/openPositions", "/private/v1/activeOrders"),
+)
+def test_private_get_preflight_account_wide_nonzero_fails_closed(
+    external_gate: V4ExternalPreparationGate,
+    occupied_path: str,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        rows = [{"redacted": True}] if request.url.path == occupied_path else []
+        return httpx.Response(200, json={"status": 0, "data": {"list": rows}})
+
+    fake_time = FakeTime()
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PRIVATE_GET,
+    )
+    report = V4GmoFiniteReadOnlyPreflight(
+        external_gate=external_gate,
+        operation_permit=operation_permit,
+        credential_pair=FakeGmoCredentials(),
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+        monotonic_factory=fake_time.monotonic,
+        sleep=fake_time.sleep,
+    ).run_once()
+    assert report.account_wide_snapshot_clear is False
+    assert report.canary_preflight_clear is False
+    assert report.broker_post_count == 0
 
 
 def test_readonly_preflight_source_has_no_broker_post_route() -> None:

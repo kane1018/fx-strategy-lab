@@ -363,6 +363,11 @@ def test_partial_fill_reconciliation_aggregates_owned_position_parts() -> None:
         "/v1/openPositions",
         "/v1/activeOrders",
     ]
+    assert [dict(request.params) for request in transport.requests] == [
+        {"symbol": "USD_JPY", "count": "100"},
+        {"count": "100"},
+        {"count": "100"},
+    ]
 
 
 def test_actual_reconciliation_path_enforces_fixed_get_cadence_without_retry() -> None:
@@ -729,6 +734,8 @@ def test_unowned_position_or_order_fails_closed_without_identifier_exposure() ->
     )
     assert result.snapshot.result_known is False
     assert result.snapshot.entry_status is V4GmoEntryStatus.UNKNOWN
+    assert result.account_position_count == 2
+    assert result.unowned_position_count == 1
     assert "9999" not in repr(result)
 
     responses = partial_responses()
@@ -747,6 +754,45 @@ def test_unowned_position_or_order_fails_closed_without_identifier_exposure() ->
         requested_size=10_000,
     )
     assert result.snapshot.result_known is False
+    assert result.account_active_order_count == 2
+    assert result.unowned_active_order_count == 1
+
+    responses = partial_responses()
+    responses[1]["data"]["list"].append(
+        {
+            "positionId": 8001,
+            "symbol": "EUR_USD",
+            "side": "SELL",
+            "size": "1000",
+            "price": "1.10000",
+        }
+    )
+    result = reconcile_fixed(
+        V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
+        cycle_ref=CYCLE_REF,
+        side=SignalDecision.BUY,
+        requested_size=10_000,
+    )
+    assert result.snapshot.result_known is False
+    assert result.unowned_position_count == 1
+
+    responses = partial_responses()
+    responses[2]["data"]["list"].append(
+        {
+            "clientOrderId": "MANUALORDER000000000000000000000002",
+            "symbol": "EUR_USD",
+            "settleType": "OPEN",
+            "size": "1000",
+        }
+    )
+    result = reconcile_fixed(
+        V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
+        cycle_ref=CYCLE_REF,
+        side=SignalDecision.BUY,
+        requested_size=10_000,
+    )
+    assert result.snapshot.result_known is False
+    assert result.unowned_active_order_count == 1
 
 
 def test_unrelated_manual_execution_history_does_not_claim_or_block_flat() -> None:
@@ -827,7 +873,7 @@ def test_actual_transport_request_is_unavailable_even_after_low_level_forgery() 
         method="GET",
         transport_path="/private/v1/openPositions",
         signing_path="/v1/openPositions",
-        params={"symbol": "USD_JPY", "count": "100"},
+        params={"count": "100"},
         body=None,
     )
     with pytest.raises(

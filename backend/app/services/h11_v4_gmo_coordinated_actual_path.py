@@ -236,9 +236,11 @@ class V4GmoCoordinatedActualPath:
                 clock_status_label="NETWORK_TIME_ENABLED_VERIFIED",
                 notification_status_label="PUSHOVER_ACK_AND_EMAIL_RECEIVED",
                 account_exclusivity_label="H11_V4_ACCOUNT_EXCLUSIVE_CURRENT_GENERATION",
-                unowned_position_count=0,
-                active_order_count=0,
-                unowned_active_order_count=0,
+                unowned_position_count=reconciliation.unowned_position_count,
+                active_order_count=reconciliation.account_active_order_count,
+                unowned_active_order_count=(
+                    reconciliation.unowned_active_order_count
+                ),
             ),
             snapshot=reconciliation.snapshot,
             position_bundle_present=reconciliation.position_bundle is not None,

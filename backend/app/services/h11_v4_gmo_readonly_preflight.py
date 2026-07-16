@@ -34,9 +34,21 @@ GMO_V4_API_SECRET_ACCOUNT = "gmo-fx-api-secret"
 KEYCHAIN_PROMPT_TIMEOUT_SECONDS = 120.0
 
 _READ_SEQUENCE = (
-    ("/private/v1/latestExecutions", "/v1/latestExecutions"),
-    ("/private/v1/openPositions", "/v1/openPositions"),
-    ("/private/v1/activeOrders", "/v1/activeOrders"),
+    (
+        "/private/v1/latestExecutions",
+        "/v1/latestExecutions",
+        (("symbol", "USD_JPY"), ("count", "100")),
+    ),
+    (
+        "/private/v1/openPositions",
+        "/v1/openPositions",
+        (("count", "100"),),
+    ),
+    (
+        "/private/v1/activeOrders",
+        "/v1/activeOrders",
+        (("count", "100"),),
+    ),
 )
 
 
@@ -130,12 +142,11 @@ class V4GmoReadOnlyPreflightReport:
     credential_read_count: int
     broker_get_count: int
     latest_executions_count: int
-    usd_jpy_open_positions_count: int
-    usd_jpy_active_orders_count: int
-    usd_jpy_flat: bool
-    usd_jpy_active_orders_zero: bool
-    limited_usd_jpy_snapshot_clear: bool
-    account_wide_exclusivity_proven: bool
+    account_open_positions_count: int
+    account_active_orders_count: int
+    account_flat: bool
+    account_active_orders_zero: bool
+    account_wide_snapshot_clear: bool
     canary_preflight_clear: bool
     cadence_offsets_seconds: tuple[float, float, float]
     raw_response_retained: bool = False
@@ -205,7 +216,11 @@ class V4GmoFiniteReadOnlyPreflight:
         observed_offsets: list[float] = []
         previous_request_started: float | None = None
         try:
-            for index, (transport_path, signing_path) in enumerate(_READ_SEQUENCE):
+            for index, (
+                transport_path,
+                signing_path,
+                parameter_pairs,
+            ) in enumerate(_READ_SEQUENCE):
                 target_offset = index * 0.25
                 now = float(self._monotonic())
                 if (
@@ -238,7 +253,7 @@ class V4GmoFiniteReadOnlyPreflight:
                     )
                 observed_offsets.append(max(0.0, request_started - started))
                 previous_request_started = request_started
-                params = {"symbol": "USD_JPY", "count": "100"}
+                params = dict(parameter_pairs)
                 headers = build_auth_headers(
                     api_key=key.reveal_internal_only(),
                     api_secret=secret.reveal_internal_only(),
@@ -266,27 +281,26 @@ class V4GmoFiniteReadOnlyPreflight:
             raise V4GmoReadOnlyPreflightError("PRIVATE_GET_SEQUENCE_INCOMPLETE")
         flat = counts[1] == 0
         zero_active = counts[2] == 0
-        limited_clear = flat and zero_active
+        account_wide_clear = flat and zero_active
         report = V4GmoReadOnlyPreflightReport(
             status=(
-                "PASSED_LIMITED_USD_JPY_READ_ONLY_SNAPSHOT_NOT_CANARY_CLEAR"
-                if limited_clear
-                else "BLOCKED_LIMITED_USD_JPY_READ_ONLY_SNAPSHOT_NOT_CLEAR"
+                "PASSED_ACCOUNT_WIDE_READ_ONLY_SNAPSHOT_NOT_CANARY_CLEAR"
+                if account_wide_clear
+                else "BLOCKED_ACCOUNT_WIDE_READ_ONLY_SNAPSHOT_NOT_CLEAR"
             ),
             keychain_items_present=True,
             credential_read_count=2,
             broker_get_count=3,
             latest_executions_count=counts[0],
-            usd_jpy_open_positions_count=counts[1],
-            usd_jpy_active_orders_count=counts[2],
-            usd_jpy_flat=flat,
-            usd_jpy_active_orders_zero=zero_active,
-            limited_usd_jpy_snapshot_clear=limited_clear,
-            account_wide_exclusivity_proven=False,
+            account_open_positions_count=counts[1],
+            account_active_orders_count=counts[2],
+            account_flat=flat,
+            account_active_orders_zero=zero_active,
+            account_wide_snapshot_clear=account_wide_clear,
             canary_preflight_clear=False,
             cadence_offsets_seconds=tuple(observed_offsets),  # type: ignore[arg-type]
         )
-        if limited_clear:
+        if account_wide_clear:
             _attest_private_get_success_internal(
                 self._operation_permit, report.to_safe_dict()
             )

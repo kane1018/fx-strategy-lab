@@ -349,8 +349,8 @@ presence -> sealed Keychain access rehearsal -> Pushover send/ack -> SMTP send -
 ```
 
 初回notificationはKeychainの5秒対話timeoutで送信前に停止した。旧no-retry markerは保持する。
-修正後は新reviewed-files digest専用generationでのみ再開し、通知前に120秒の
-Keychain access rehearsalを完了させる。120秒は6 itemの合計上限である。実行時はMacをロックせず
+修正後は新reviewed-files digest専用generationでのみ再開し、通知前に300秒の
+Keychain access rehearsalを完了させる。300秒は6 itemの合計上限である。実行時はMacをロックせず
 Terminalを前面にし、想定した`security` accessだけ「常に許可」を推奨する。最大6回表示され得るが、
 想定外のprocess・item・表示なら拒否して停止する。
 
@@ -359,8 +359,9 @@ Pushoverは配送されたが3分以内のackはなく、operatorが後からack
 旧`10_notification.started.json`は保持し、同generationは再利用しない。次generationではPushoverを
 最大15分ack待機の専用operation、SMTPを固定safe failure分類付き専用operationへ分離する。
 
-SMTPのacceptはemail受信の証明ではない。Private GETのzero countはUSD/JPY限定snapshotであり、口座全体の
-排他性やcanary preflight clearを単独では証明しない。host/KILL preparationはdisposable childとpersistent
+SMTPのacceptはemail受信の証明ではない。G010以降の準備Private GETはopenPositions／activeOrdersを
+symbol省略で口座全体snapshotとするが、2秒以内のcanary preflight clearを単独では証明しない。
+host/KILL preparationはdisposable childとpersistent
 risk KILLの証拠であり、actual v4 runtime supervisorの完全proofはcanary前の別VETOとして残す。
 
 初回事前レビューで、現worktreeがdirtyかつ`HEAD != origin/main`、完全manifest／actual runtime bindingが未完成

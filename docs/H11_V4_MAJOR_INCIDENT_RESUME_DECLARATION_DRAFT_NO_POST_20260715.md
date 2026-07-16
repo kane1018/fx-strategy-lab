@@ -123,8 +123,9 @@ OperatorはKeychain値非表示確認、Pushover/email実配送、3経路のPriv
 準備証拠をactivation permitへ変換するgeneric allow bridgeは作らない。commit/pushは別授権である。
 
 準備証拠はpersistent one-shot ledgerで固定順序を強制する。SMTP provider acceptanceだけではemail deliveryを
-clearにせず、operatorのexact receipt confirmationを別段階で必要とする。USD/JPY限定Private GET snapshotと
-operator account-exclusivity confirmationも別の事実として保持し、両者をgeneric activation booleanへ統合しない。
+clearにせず、operatorのexact receipt confirmationを別段階で必要とする。G010以降はopenPositions／activeOrdersの
+symbolを省略した口座全体snapshotとoperator account-exclusivity confirmationを別の事実として保持し、
+両者をgeneric activation booleanへ統合しない。準備snapshotは2秒以内のcanary preflight clearではない。
 
 ```text
 preparation_authorized=true

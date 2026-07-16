@@ -114,6 +114,10 @@ class V4GmoActualReconciliation:
     average_fill_price: Decimal | None
     closed_size: int = 0
     realized_pnl_jpy_internal: int | None = None
+    account_position_count: int = 0
+    account_active_order_count: int = 0
+    unowned_position_count: int = 0
+    unowned_active_order_count: int = 0
     source_read_count: int = 3
     raw_response_retained: bool = False
     identifier_exposed: bool = False
@@ -145,6 +149,8 @@ class V4GmoActualReconciliation:
                     if self.average_fill_price is None
                     else format(self.average_fill_price, "f")
                 ),
+                "account_active_order_count": self.account_active_order_count,
+                "account_position_count": self.account_position_count,
                 "entry_status": self.snapshot.entry_status.value,
                 "closed_size": self.closed_size,
                 "filled_size": self.snapshot.filled_size,
@@ -161,6 +167,8 @@ class V4GmoActualReconciliation:
                 "protection_status": self.snapshot.protection_status.value,
                 "result_known": self.snapshot.result_known,
                 "realized_pnl_jpy_internal": self.realized_pnl_jpy_internal,
+                "unowned_active_order_count": self.unowned_active_order_count,
+                "unowned_position_count": self.unowned_position_count,
             },
             sort_keys=True,
             separators=(",", ":"),
@@ -180,6 +188,7 @@ class _ExecutionRow:
 
 @dataclass(frozen=True, repr=False)
 class _PositionRow:
+    symbol: str
     position_id: str
     side: str
     size: int
@@ -188,6 +197,7 @@ class _PositionRow:
 
 @dataclass(frozen=True, repr=False)
 class _ActiveOrderRow:
+    symbol: str
     client_order_id: str
     settle_type: str
     size: int
@@ -391,7 +401,7 @@ class V4GmoActualAdapter:
                     _get_request(
                         OPEN_POSITIONS_TRANSPORT_PATH,
                         "/v1/openPositions",
-                        {"symbol": SYMBOL, "count": "100"},
+                        {"count": "100"},
                     ),
                 )
             )
@@ -401,7 +411,7 @@ class V4GmoActualAdapter:
                     _get_request(
                         ACTIVE_ORDERS_TRANSPORT_PATH,
                         "/v1/activeOrders",
-                        {"symbol": SYMBOL, "count": "100"},
+                        {"count": "100"},
                     ),
                 )
             )
@@ -578,8 +588,6 @@ def _reconcile_rows(
         cycle_ref=cycle_ref, action=V4GmoAction.POSITION_SPECIFIC_TIME_EXIT
     )
     permitted_client_ids = {entry_id, protection_id, exit_id, time_exit_id}
-    if any(row.client_order_id not in permitted_client_ids for row in active_orders):
-        return _unknown_reconciliation()
 
     owned_open_rows = tuple(
         row
@@ -596,6 +604,33 @@ def _reconcile_rows(
     if sum(owned_position_sizes.values()) > requested_size:
         return _unknown_reconciliation()
     owned_position_ids = set(owned_position_sizes)
+    unowned_positions = tuple(
+        row
+        for row in positions
+        if row.symbol != SYMBOL or row.position_id not in owned_position_ids
+    )
+    unowned_active_orders = tuple(
+        row
+        for row in active_orders
+        if row.symbol != SYMBOL or row.client_order_id not in permitted_client_ids
+    )
+    if unowned_positions or unowned_active_orders:
+        return _unknown_reconciliation(
+            account_position_count=len(positions),
+            account_active_order_count=len(active_orders),
+            unowned_position_count=len(unowned_positions),
+            unowned_active_order_count=len(unowned_active_orders),
+        )
+    positions = tuple(
+        row
+        for row in positions
+        if row.symbol == SYMBOL and row.position_id in owned_position_ids
+    )
+    active_orders = tuple(
+        row
+        for row in active_orders
+        if row.symbol == SYMBOL and row.client_order_id in permitted_client_ids
+    )
     if positions and (
         not owned_position_ids
         or any(row.position_id not in owned_position_ids for row in positions)
@@ -711,6 +746,10 @@ def _reconcile_rows(
         average_fill_price=average_fill_price,
         closed_size=closed_size,
         realized_pnl_jpy_internal=realized_pnl_jpy_internal,
+        account_position_count=len(positions),
+        account_active_order_count=len(active_orders),
+        unowned_position_count=0,
+        unowned_active_order_count=0,
     )
 
 
@@ -751,14 +790,13 @@ def _parse_positions(data: Any) -> tuple[_PositionRow, ...]:
     rows = _rows(data, endpoint="POSITIONS")
     parsed: list[_PositionRow] = []
     for row in rows:
-        if str(row.get("symbol", "")) != SYMBOL:
-            continue
         price_value = row.get("price", row.get("averagePrice"))
         price = Decimal(str(price_value))
         if price <= 0:
             raise V4GmoActualAdapterError("V4_GMO_POSITION_PRICE_INVALID")
         parsed.append(
             _PositionRow(
+                symbol=_required_string(row, "symbol"),
                 position_id=_required_string(row, "positionId"),
                 side=_required_choice(row, "side", {"BUY", "SELL"}),
                 size=_positive_int(row, "size"),
@@ -772,10 +810,9 @@ def _parse_active_orders(data: Any) -> tuple[_ActiveOrderRow, ...]:
     rows = _rows(data, endpoint="ACTIVE_ORDERS")
     parsed: list[_ActiveOrderRow] = []
     for row in rows:
-        if str(row.get("symbol", "")) != SYMBOL:
-            continue
         parsed.append(
             _ActiveOrderRow(
+                symbol=_required_string(row, "symbol"),
                 client_order_id=_required_string(row, "clientOrderId"),
                 settle_type=str(row.get("settleType", "")).upper(),
                 size=_positive_int(row, "size"),
@@ -878,7 +915,13 @@ def _validate_cycle_inputs(*, cycle_ref: str, side: SignalDecision, requested_si
         raise V4GmoActualAdapterError("V4_GMO_REQUESTED_SIZE_INVALID")
 
 
-def _unknown_reconciliation() -> V4GmoActualReconciliation:
+def _unknown_reconciliation(
+    *,
+    account_position_count: int = 0,
+    account_active_order_count: int = 0,
+    unowned_position_count: int = 0,
+    unowned_active_order_count: int = 0,
+) -> V4GmoActualReconciliation:
     return V4GmoActualReconciliation(
         snapshot=V4GmoBrokerSnapshot(
             fresh=False,
@@ -893,4 +936,8 @@ def _unknown_reconciliation() -> V4GmoActualReconciliation:
         ),
         position_bundle=None,
         average_fill_price=None,
+        account_position_count=account_position_count,
+        account_active_order_count=account_active_order_count,
+        unowned_position_count=unowned_position_count,
+        unowned_active_order_count=unowned_active_order_count,
     )

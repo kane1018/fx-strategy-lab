@@ -30,8 +30,10 @@ def main() -> int:
             external_gate=gate,
             operation_permit=operation_permit,
         ).run_once()
-        if not report.limited_usd_jpy_snapshot_clear:
-            raise V4GmoReadOnlyPreflightError("PRIVATE_GET_LIMITED_SNAPSHOT_NOT_CLEAR")
+        if not report.account_wide_snapshot_clear:
+            raise V4GmoReadOnlyPreflightError(
+                "PRIVATE_GET_ACCOUNT_WIDE_SNAPSHOT_NOT_CLEAR"
+            )
         ledger.complete(
             V4PreparationOperation.PRIVATE_GET,
             operation_permit=operation_permit,

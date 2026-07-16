@@ -593,9 +593,9 @@ def _operation_report_is_clear(
         offsets = report.get("cadence_offsets_seconds")
         return (
             report.get("broker_get_count") == 3
-            and report.get("limited_usd_jpy_snapshot_clear") is True
-            and report.get("usd_jpy_flat") is True
-            and report.get("usd_jpy_active_orders_zero") is True
+            and report.get("account_wide_snapshot_clear") is True
+            and report.get("account_flat") is True
+            and report.get("account_active_orders_zero") is True
             and isinstance(offsets, tuple | list)
             and len(offsets) == 3
             and all(isinstance(value, int | float) for value in offsets)

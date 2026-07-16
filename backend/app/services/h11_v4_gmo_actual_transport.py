@@ -317,7 +317,13 @@ def _validate_request_contract(
     body: Mapping[str, Any] | None,
 ) -> None:
     if method == "GET":
-        if set(params) != {"symbol", "count"} or params.get("symbol") != "USD_JPY":
+        if transport_path == "/private/v1/latestExecutions":
+            if (
+                set(params) != {"symbol", "count"}
+                or params.get("symbol") != "USD_JPY"
+            ):
+                raise V4GmoActualTransportError("V4_GMO_GET_PARAMETERS_INVALID")
+        elif set(params) != {"count"}:
             raise V4GmoActualTransportError("V4_GMO_GET_PARAMETERS_INVALID")
         if params.get("count") != "100":
             raise V4GmoActualTransportError("V4_GMO_GET_COUNT_INVALID")
