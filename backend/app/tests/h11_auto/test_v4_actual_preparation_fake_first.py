@@ -1342,6 +1342,53 @@ def test_network_time_state_uses_fixed_admin_readonly_fallback() -> None:
     ]
 
 
+def test_network_time_state_falls_back_when_unprivileged_probe_exits_zero_with_error() -> None:
+    admin_calls: list[list[str]] = []
+
+    def direct_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="You need administrator access to run this tool... exiting!\n",
+        )
+
+    def admin_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        admin_calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="Network Time: On\n")
+
+    state, fallback_used = host_rehearsal_module._network_time_state(
+        direct_runner,
+        admin_runner,
+    )
+
+    assert state is True
+    assert fallback_used is True
+    assert admin_calls == [list(host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND)]
+
+
+@pytest.mark.parametrize("misleading_output", ("permission\n", "cutoff\n"))
+def test_network_time_state_does_not_accept_error_suffixes(
+    misleading_output: str,
+) -> None:
+    admin_calls: list[list[str]] = []
+
+    def direct_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, stdout=misleading_output)
+
+    def admin_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        admin_calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="Network Time: Off\n")
+
+    state, fallback_used = host_rehearsal_module._network_time_state(
+        direct_runner,
+        admin_runner,
+    )
+
+    assert state is False
+    assert fallback_used is True
+    assert admin_calls == [list(host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND)]
+
+
 def test_network_time_state_skips_admin_when_direct_probe_is_clear() -> None:
     calls: list[list[str]] = []
 

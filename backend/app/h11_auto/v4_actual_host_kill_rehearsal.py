@@ -353,18 +353,25 @@ def _network_time_state(
 ) -> tuple[bool | None, bool]:
     direct_command = ["/usr/sbin/systemsetup", "-getusingnetworktime"]
     result = runner(direct_command)
-    fallback_used = False
+    direct_state = _network_time_value(result)
+    if direct_state is not None:
+        return direct_state, False
+    fallback_used = True
+    result = admin_runner(list(_ADMIN_NETWORK_TIME_COMMAND))
+    return _network_time_value(result), fallback_used
+
+
+def _network_time_value(
+    result: subprocess.CompletedProcess[str],
+) -> bool | None:
     if result.returncode != 0:
-        fallback_used = True
-        result = admin_runner(list(_ADMIN_NETWORK_TIME_COMMAND))
-    if result.returncode != 0:
-        return None, fallback_used
+        return None
     normalized = result.stdout.strip().lower()
-    if normalized.endswith("on"):
-        return True, fallback_used
-    if normalized.endswith("off"):
-        return False, fallback_used
-    return None, fallback_used
+    if normalized == "network time: on":
+        return True
+    if normalized == "network time: off":
+        return False
+    return None
 
 
 def _clock_skew_seconds(
