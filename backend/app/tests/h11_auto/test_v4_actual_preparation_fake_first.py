@@ -519,6 +519,51 @@ def test_actual_smtp_rehearsal_uses_one_send_and_two_credentials(
     assert smtp.tls is True and smtp.logged_in is True and smtp.sent == 1
 
 
+def test_smtp_tls_uses_certifi_ca_bundle(
+    external_gate: V4ExternalPreparationGate,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    values = {
+        "smtp-username": "synthetic@example.invalid",
+        "smtp-app-password": "synthetic-app-password",
+    }
+    captured: dict[str, object] = {}
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        return _SealedNotificationSecret(values[account])
+
+    def fake_create_default_context(*, cafile: str) -> object:
+        captured["cafile"] = cafile
+        return object()
+
+    monkeypatch.setattr(
+        notification_actual_module.certifi,
+        "where",
+        lambda: "/synthetic/certifi-ca.pem",
+    )
+    monkeypatch.setattr(
+        notification_actual_module.ssl,
+        "create_default_context",
+        fake_create_default_context,
+    )
+    smtp = FakeSmtp()
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.SMTP,
+    )
+    report = run_actual_smtp_rehearsal_once(
+        external_gate=external_gate,
+        operation_permit=operation_permit,
+        credentials=H11V4NotificationCredentialBundle(reader=reader),
+        smtp_factory=lambda host, port, timeout: smtp,
+    )
+
+    assert captured == {"cafile": "/synthetic/certifi-ca.pem"}
+    assert smtp.tls is True
+    assert report.email_smtp_accepted is True
+
+
 def test_pushover_default_ack_window_is_fifteen_minutes() -> None:
     signature = inspect.signature(run_actual_pushover_rehearsal_once)
     assert signature.parameters["acknowledgement_timeout_seconds"].default == 900.0

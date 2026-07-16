@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from email.message import EmailMessage
 from typing import Any, Protocol
 
+import certifi
 import httpx
 
 from app.h11_auto.v4_actual_preparation_guard import (
@@ -413,7 +414,9 @@ def run_actual_smtp_rehearsal_once(
     try:
         _require_smtp_ehlo(session)
         _smtp_call_or_safe_error(
-            lambda: session.starttls(context=ssl.create_default_context()),
+            lambda: session.starttls(
+                context=ssl.create_default_context(cafile=certifi.where())
+            ),
             failure_label="SMTP_TLS_FAILED_NO_RETRY",
         )
         _require_smtp_ehlo(session)

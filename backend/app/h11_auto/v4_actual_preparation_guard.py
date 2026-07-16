@@ -30,6 +30,7 @@ PREPARATION_STATE_RELATIVE = Path(
 )
 _REVIEWED_FILES = (
     "AGENTS.md",
+    "backend/requirements.txt",
     "backend/app/h11_auto/v4_actual_preparation_guard.py",
     "backend/app/h11_auto/v4_actual_host_kill_rehearsal.py",
     "backend/app/h11_auto/v4_gmo_engine.py",

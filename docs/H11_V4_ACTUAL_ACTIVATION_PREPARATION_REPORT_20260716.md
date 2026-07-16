@@ -2,7 +2,7 @@
 
 Date: 2026-07-16
 
-Status: `KEYCHAIN_ACCESS_CONTROL_CORRECTIVE_GENERATION_REVIEWED_READY_FOR_EXTERNAL_REHEARSAL`
+Status: `SMTP_CA_BUNDLE_CORRECTIVE_GENERATION_REVIEWED_READY_FOR_EXTERNAL_REHEARSAL`
 
 ## 1. Authorization boundary
 
@@ -118,6 +118,15 @@ Pushover、SMTP、Private GET、broker POSTはいずれも0回である。starte
 再利用しない。operatorはメール用Keychain 2件のaccess controlを確認したと明示した。次generationは
 新しいreviewed-files digestへ分離し、同じ固定順序とno-retry規則を維持する。
 
+### Fourth external attempt and SMTP CA-bundle correction
+
+access-control修正版digest `dda6af51...3693b`のgenerationではpresence 6/6、Keychain access 6/6、
+Pushover 1 application sendとoperator acknowledgementがpassした。SMTPはstarted後、メール送信前の
+STARTTLSで`SMTP_TLS_FAILED_NO_RETRY`となり停止した。SMTP passed markerはなく、Private GETとbroker POSTは
+0回である。ローカルread-only診断ではPython 3.11のdefault CA file/pathが未設定で、インストール済み
+certifi CA bundleは存在した。次generationではSMTP TLS contextへ固定certifi bundleを明示し、
+`backend/requirements.txt`もreviewed-files digestへ含める。失敗generationのmarkerは保持し再利用しない。
+
 ### Notification
 
 `h11_v4_notification_actual_preparation.py`をfake-only notifierから分離した。
@@ -170,9 +179,9 @@ credential読取りとnetworkへ到達しない。POST分岐のcommon hard guard
 ## 4. Fake-first validation
 
 ```text
-focused_preparation_tests=78 passed
-h11_auto_related_tests=355 passed
-repository_app_tests=7947 passed, 2 keychain-write tests deselected
+focused_preparation_tests=79 passed
+h11_auto_related_tests=356 passed
+repository_app_tests=7948 passed, 2 keychain-write tests deselected
 full_ruff_app_scripts=passed
 git_diff_check=passed
 danger_scan=no_broker_POST_route_or_activation_permit_in_preparation_paths
@@ -219,8 +228,13 @@ broker_write=false
 broker_private_get=false
 historical_prior_generation_credential_read_completed=true
 historical_prior_generation_external_notification_send_attempt_count=2
-latest_failed_generation_credential_read_completed=false
-latest_failed_generation_external_notification_send=false
+d503_generation_credential_read_completed=false
+d503_generation_external_notification_send=false
+latest_smtp_generation_credential_read_completed=true
+latest_smtp_generation_pushover_send_count=1
+latest_smtp_generation_pushover_acknowledged=true
+latest_smtp_generation_email_send_count=0
+latest_smtp_generation_smtp_tls_failed=true
 next_generation_credential_read=false
 next_generation_external_notification_send=false
 credential_value_exposed=false
