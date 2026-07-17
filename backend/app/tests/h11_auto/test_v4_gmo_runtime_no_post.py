@@ -89,9 +89,9 @@ def filled(*, protection: bool = False) -> V4GmoBrokerSnapshot:
         result_known=True,
         position_count=1,
         position_side=SignalDecision.BUY,
-        filled_size=10_000,
+        filled_size=1_000,
         pending_entry_size=0,
-        protection_size=10_000 if protection else 0,
+        protection_size=1_000 if protection else 0,
         entry_status=V4GmoEntryStatus.FILLED,
         protection_status=(
             V4GmoProtectionStatus.EXACT_MATCH

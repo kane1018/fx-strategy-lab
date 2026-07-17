@@ -635,7 +635,7 @@ class V4GmoActualCoordinatorStore:
                 raise V4GmoActualCoordinatorError(
                     "v4 settlement size is unavailable"
                 ) from error
-        if not 0 < size <= 10_000:
+        if not 0 < size <= 1_000:
             raise V4GmoActualCoordinatorError("v4 settlement size is invalid")
         return size
 
@@ -1511,7 +1511,7 @@ def calculate_v4_planned_loss(
     if (
         len(signal_fingerprint) != 64
         or frozen_atr_24 <= 0
-        or quantity_units != 10_000
+        or quantity_units != 1_000
         or adverse_slippage_allowance_pips < 0
     ):
         raise V4GmoActualCoordinatorError("v4 frozen risk input is invalid")

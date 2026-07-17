@@ -86,7 +86,15 @@ class V4GmoActualRuntimeDriver:
                 or initial.pending_transport
             ):
                 raise V4GmoActualRuntimeDriverError("V4_RUNTIME_DRIVER_NOT_PROTECTED")
+            # G013 contract: after protection is confirmed the foreground
+            # driver performs the 5-second heartbeat and one-use exit-marker
+            # watching ONLY. It issues zero Private GETs while protected --
+            # the operator-granted G013 exception allows read-only
+            # reconciliation once after each fixed write, never a continuous
+            # polling loop. Natural OCO settlement is recognized by the
+            # separately scheduled exit sequence, not by the driver.
             while True:
+                wait(poll_interval_seconds)
                 now = wall_clock()
                 if now.tzinfo is None:
                     raise V4GmoActualRuntimeDriverError(
@@ -111,7 +119,6 @@ class V4GmoActualRuntimeDriver:
                         exit_dispatch_claimed=result.claimed,
                         broker_post_attempt_count=result.broker_post_attempt_count,
                     )
-                wait(poll_interval_seconds)
         except BaseException as error:
             self.path.store.engage_unknown_halt()
             if isinstance(error, V4GmoActualRuntimeDriverError):

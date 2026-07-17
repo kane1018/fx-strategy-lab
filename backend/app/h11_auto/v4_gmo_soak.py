@@ -88,7 +88,7 @@ def build_v4_gmo_soak_scenarios() -> tuple[V4GmoSoakScenario, ...]:
             "FULL_FILL_PROTECTED",
             SignalDecision.BUY,
             _outcomes((entry, "ACCEPTED"), (protection, "ACCEPTED")),
-            (_position(), _position(protection_size=10_000)),
+            (_position(), _position(protection_size=1_000)),
             protected_status,
             V4GmoCycleState.POSITION_PROTECTED,
             (entry, protection),
@@ -102,9 +102,9 @@ def build_v4_gmo_soak_scenarios() -> tuple[V4GmoSoakScenario, ...]:
                 (protection, "ACCEPTED"),
             ),
             (
-                _position(filled_size=6_000, pending_entry_size=4_000),
-                _position(filled_size=6_000),
-                _position(filled_size=6_000, protection_size=6_000),
+                _position(filled_size=600, pending_entry_size=400),
+                _position(filled_size=600),
+                _position(filled_size=600, protection_size=600),
             ),
             protected_status,
             V4GmoCycleState.POSITION_PROTECTED,
@@ -123,7 +123,7 @@ def build_v4_gmo_soak_scenarios() -> tuple[V4GmoSoakScenario, ...]:
             "ENTRY_UNKNOWN_BUT_FILL_RECONCILED",
             SignalDecision.BUY,
             _outcomes((entry, "UNKNOWN"), (protection, "ACCEPTED")),
-            (_position(), _position(protection_size=10_000)),
+            (_position(), _position(protection_size=1_000)),
             protected_status,
             V4GmoCycleState.POSITION_PROTECTED,
             (entry, protection),
@@ -141,7 +141,7 @@ def build_v4_gmo_soak_scenarios() -> tuple[V4GmoSoakScenario, ...]:
             "PROTECTION_UNKNOWN_BUT_EXACT_RECONCILED",
             SignalDecision.BUY,
             _outcomes((entry, "ACCEPTED"), (protection, "UNKNOWN")),
-            (_position(), _position(protection_size=10_000)),
+            (_position(), _position(protection_size=1_000)),
             protected_status,
             V4GmoCycleState.POSITION_PROTECTED,
             (entry, protection),
@@ -170,7 +170,7 @@ def build_v4_gmo_soak_scenarios() -> tuple[V4GmoSoakScenario, ...]:
             ),
             (
                 _position(),
-                _position(protection_size=5_000),
+                _position(protection_size=500),
                 _position(),
                 V4GmoBrokerSnapshot.flat(),
             ),
@@ -188,8 +188,8 @@ def build_v4_gmo_soak_scenarios() -> tuple[V4GmoSoakScenario, ...]:
             ),
             (
                 _position(),
-                _position(protection_size=5_000),
-                _position(protection_size=5_000),
+                _position(protection_size=500),
+                _position(protection_size=500),
             ),
             halted_status,
             V4GmoCycleState.HALTED_OPERATOR_REVIEW_REQUIRED,
@@ -382,7 +382,7 @@ def _outcomes(
 
 def _position(
     *,
-    filled_size: int = 10_000,
+    filled_size: int = 1_000,
     pending_entry_size: int = 0,
     protection_size: int = 0,
 ) -> V4GmoBrokerSnapshot:
@@ -433,7 +433,7 @@ def _orphan_protection() -> V4GmoBrokerSnapshot:
         position_side=None,
         filled_size=0,
         pending_entry_size=0,
-        protection_size=10_000,
+        protection_size=1_000,
         entry_status=V4GmoEntryStatus.NONE,
         protection_status=V4GmoProtectionStatus.EXACT_MATCH,
     )

@@ -90,7 +90,7 @@ def preflight(**overrides: object) -> V4GmoPreflightSnapshot:
 
 def filled_snapshot(
     *,
-    size: int = 10_000,
+    size: int = 1_000,
     pending: int = 0,
     protection_size: int = 0,
     protection_status: V4GmoProtectionStatus = V4GmoProtectionStatus.NONE,
@@ -120,7 +120,7 @@ def fake_broker(
 
 def test_v4_policy_freezes_relaxed_but_bounded_gmo_invariants() -> None:
     frozen = policy()
-    assert frozen.requested_size == 10_000
+    assert frozen.requested_size == 1_000
     assert frozen.max_unprotected_seconds == 15
     assert frozen.temporary_unprotected_gap_accepted is True
     assert frozen.broker_native_atomic_protection_required is False
@@ -205,10 +205,10 @@ def test_action_plans_are_structurally_no_post_and_exact_size_bound() -> None:
         cycle_ref="a" * 64,
         action=V4GmoAction.EXACT_SIZE_OCO_PROTECTION,
         side=SignalDecision.BUY,
-        requested_size=4_000,
+        requested_size=400,
         protection_contract_hash="sha256:protection",
     )
-    assert plan.requested_size == 4_000
+    assert plan.requested_size == 400
     assert plan.actual_post_allowed is False
     assert plan.credential_read_allowed is False
     assert plan.network_access_allowed is False
@@ -217,7 +217,7 @@ def test_action_plans_are_structurally_no_post_and_exact_size_bound() -> None:
             cycle_ref="a" * 64,
             action=V4GmoAction.MARKET_ENTRY,
             side=SignalDecision.BUY,
-            requested_size=10_000,
+            requested_size=1_000,
             protection_contract_hash=None,
             route_safe_label="GMO_MARKET_ENTRY",
             actual_post_allowed=True,
@@ -233,9 +233,9 @@ def test_exact_fill_oco_calculation_uses_actual_fill_size_and_frozen_atr() -> No
         position_side=SignalDecision.BUY,
         reconciled_average_fill_price=Decimal("162.200"),
         frozen_signal_atr_24=Decimal("0.040"),
-        reconciled_filled_size=4_000,
+        reconciled_filled_size=400,
     )
-    assert buy.exact_filled_size == 4_000
+    assert buy.exact_filled_size == 400
     assert buy.settlement_side is SignalDecision.SELL
     assert buy.stop_loss_price == Decimal("162.140")
     assert buy.take_profit_price == Decimal("162.290")
@@ -245,7 +245,7 @@ def test_exact_fill_oco_calculation_uses_actual_fill_size_and_frozen_atr() -> No
         position_side=SignalDecision.SELL,
         reconciled_average_fill_price=Decimal("162.200"),
         frozen_signal_atr_24=Decimal("0.040"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
     )
     assert sell.settlement_side is SignalDecision.BUY
     assert sell.stop_loss_price == Decimal("162.260")
@@ -261,7 +261,7 @@ def test_full_fill_then_exact_oco_reaches_protected(tmp_path: Path) -> None:
         snapshots=[
             filled_snapshot(),
             filled_snapshot(
-                protection_size=10_000,
+                protection_size=1_000,
                 protection_status=V4GmoProtectionStatus.EXACT_MATCH,
             ),
         ],
@@ -272,8 +272,8 @@ def test_full_fill_then_exact_oco_reaches_protected(tmp_path: Path) -> None:
     )
     assert result.status is V4GmoCycleStatus.POSITION_PROTECTED_SYNTHETIC
     assert result.final_state is V4GmoCycleState.POSITION_PROTECTED
-    assert result.filled_size == 10_000
-    assert result.protected_size == 10_000
+    assert result.filled_size == 1_000
+    assert result.protected_size == 1_000
     assert result.market_entry_attempt_count == 1
     assert result.protection_attempt_count == 1
     assert result.protection_cancel_attempt_count == 0
@@ -298,11 +298,11 @@ def test_partial_fill_cancels_remainder_then_protects_exact_fill(tmp_path: Path)
             V4GmoAction.EXACT_SIZE_OCO_PROTECTION: [V4GmoSyntheticOutcome.ACCEPTED],
         },
         snapshots=[
-            filled_snapshot(size=4_000, pending=6_000),
-            filled_snapshot(size=4_000),
+            filled_snapshot(size=400, pending=600),
+            filled_snapshot(size=400),
             filled_snapshot(
-                size=4_000,
-                protection_size=4_000,
+                size=400,
+                protection_size=400,
                 protection_status=V4GmoProtectionStatus.EXACT_MATCH,
             ),
         ],
@@ -313,16 +313,16 @@ def test_partial_fill_cancels_remainder_then_protects_exact_fill(tmp_path: Path)
         signal=signal(), policy=policy(), preflight=preflight(), now_utc=NOW
     )
     assert result.status is V4GmoCycleStatus.POSITION_PROTECTED_SYNTHETIC
-    assert result.filled_size == 4_000
-    assert result.protected_size == 4_000
+    assert result.filled_size == 400
+    assert result.protected_size == 400
     assert result.action_attempt_count == 3
     assert [call.action for call in broker.calls] == [
         V4GmoAction.MARKET_ENTRY,
         V4GmoAction.CANCEL_ENTRY_REMAINDER,
         V4GmoAction.EXACT_SIZE_OCO_PROTECTION,
     ]
-    assert broker.calls[1].requested_size == 6_000
-    assert broker.calls[2].requested_size == 4_000
+    assert broker.calls[1].requested_size == 600
+    assert broker.calls[2].requested_size == 400
 
 
 def test_rejected_entry_reconciles_flat_without_retry(tmp_path: Path) -> None:
@@ -352,7 +352,7 @@ def test_unknown_entry_result_can_only_continue_after_authoritative_fill(
         snapshots=[
             filled_snapshot(),
             filled_snapshot(
-                protection_size=10_000,
+                protection_size=1_000,
                 protection_status=V4GmoProtectionStatus.EXACT_MATCH,
             ),
         ],
@@ -401,7 +401,7 @@ def test_entry_reconciliation_refuses_unexpected_existing_protection(
         outcomes={V4GmoAction.MARKET_ENTRY: [V4GmoSyntheticOutcome.ACCEPTED]},
         snapshots=[
             filled_snapshot(
-                protection_size=10_000,
+                protection_size=1_000,
                 protection_status=V4GmoProtectionStatus.EXACT_MATCH,
             )
         ],
@@ -422,8 +422,8 @@ def test_entry_reconciliation_refuses_unexpected_existing_protection(
     ("protection_status", "protection_size"),
     (
         (V4GmoProtectionStatus.NONE, 0),
-        (V4GmoProtectionStatus.UNDERSIZED, 8_000),
-        (V4GmoProtectionStatus.OVERSIZED, 12_000),
+        (V4GmoProtectionStatus.UNDERSIZED, 800),
+        (V4GmoProtectionStatus.OVERSIZED, 1_200),
     ),
 )
 def test_non_exact_protection_uses_one_position_specific_emergency_exit(
@@ -504,7 +504,7 @@ def test_unknown_protection_reconciliation_halts_without_exit_or_cancel(
         result_known=False,
         position_count=1,
         position_side=SignalDecision.BUY,
-        filled_size=10_000,
+        filled_size=1_000,
         pending_entry_size=0,
         protection_size=0,
         entry_status=V4GmoEntryStatus.FILLED,
@@ -537,7 +537,7 @@ def test_orphan_protection_is_cancelled_before_flat_is_accepted(tmp_path: Path) 
         position_side=None,
         filled_size=0,
         pending_entry_size=0,
-        protection_size=10_000,
+        protection_size=1_000,
         entry_status=V4GmoEntryStatus.FILLED,
         protection_status=V4GmoProtectionStatus.EXACT_MATCH,
     )
@@ -583,7 +583,7 @@ def test_unprotected_window_expiry_forces_emergency_exit_before_protection(
         target=V4GmoCycleState.ENTRY_FILLED_UNPROTECTED,
         event_category="TEST_ENTRY_FILLED_UNPROTECTED",
         now_utc=NOW,
-        filled_size=10_000,
+        filled_size=1_000,
         unprotected_since_utc=NOW,
     )
     broker = fake_broker(
@@ -684,7 +684,7 @@ def test_exact_protection_confirmation_rechecks_15_second_deadline(
         snapshots=[
             filled_snapshot(),
             filled_snapshot(
-                protection_size=10_000,
+                protection_size=1_000,
                 protection_status=V4GmoProtectionStatus.EXACT_MATCH,
             ),
         ],
@@ -723,7 +723,7 @@ def test_restart_after_attempt_persistence_reconciles_without_resending_market(
         snapshots=[
             filled_snapshot(),
             filled_snapshot(
-                protection_size=10_000,
+                protection_size=1_000,
                 protection_status=V4GmoProtectionStatus.EXACT_MATCH,
             ),
         ],
@@ -762,7 +762,7 @@ def test_restart_after_protection_attempt_reconciles_without_reposting(
         target=V4GmoCycleState.ENTRY_FILLED_UNPROTECTED,
         event_category="TEST_ENTRY_FILLED_UNPROTECTED",
         now_utc=NOW,
-        filled_size=10_000,
+        filled_size=1_000,
         unprotected_since_utc=NOW,
     )
     cycle = store.transition(
@@ -781,7 +781,7 @@ def test_restart_after_protection_attempt_reconciles_without_reposting(
         outcomes={},
         snapshots=[
             filled_snapshot(
-                protection_size=10_000,
+                protection_size=1_000,
                 protection_status=V4GmoProtectionStatus.EXACT_MATCH,
             )
         ],

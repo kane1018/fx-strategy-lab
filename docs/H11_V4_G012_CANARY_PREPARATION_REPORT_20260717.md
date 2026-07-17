@@ -4,6 +4,22 @@ Date: 2026-07-17
 
 Status: `IMPLEMENTED_REVIEWED_PRE_EXTERNAL_PREPARATION_NO_BROKER_POST`
 
+## 0. Final G012 outcome
+
+G012 external preparationは、Public status 1回の`OPEN`確認後、Public ticker初回GETのsanitized
+parserが公式の全銘柄list schemaに対応していなかったため停止した。raw response、価格、実IDは
+表示・保存していない。no-retry契約に従い、G012でtickerを再取得せず、Private GET、LaunchAgent導入、
+permit発行、broker POSTへ進まなかった。G012 markerは保持し、corrective G013へ流用しない。
+
+```text
+g012_public_status_get_count=1
+g012_public_ticker_get_count=1
+g012_private_get_count=0
+g012_broker_post_count=0
+g012_activation_permit_issued=false
+g012_launchagent_installed=false
+```
+
 ## 1. Authorized boundary
 
 G012の初回10,000通貨canaryについて、actual broker POST直前までの実装、有限外部準備、

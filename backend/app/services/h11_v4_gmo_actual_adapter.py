@@ -916,7 +916,7 @@ def _validate_cycle_inputs(*, cycle_ref: str, side: SignalDecision, requested_si
     v4_gmo_client_order_id(cycle_ref=cycle_ref, action=V4GmoAction.MARKET_ENTRY)
     if side not in (SignalDecision.BUY, SignalDecision.SELL):
         raise V4GmoActualAdapterError("V4_GMO_SIDE_INVALID")
-    if type(requested_size) is not int or not 0 < requested_size <= 10_000:
+    if type(requested_size) is not int or not 0 < requested_size <= 1_000:
         raise V4GmoActualAdapterError("V4_GMO_REQUESTED_SIZE_INVALID")
 
 

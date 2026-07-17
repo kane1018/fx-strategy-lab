@@ -6,6 +6,7 @@ import smtplib
 import subprocess
 import traceback
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -36,6 +37,10 @@ from app.h11_auto.v4_actual_preparation_guard import (
 )
 from app.services import h11_v4_gmo_readonly_preflight as readonly_module
 from app.services import h11_v4_notification_actual_preparation as notification_actual_module
+from app.services.h11_v4_gmo_public_preflight import (
+    V4GmoFinitePublicPreflight,
+    V4GmoPublicPreflightError,
+)
 from app.services.h11_v4_gmo_readonly_preflight import (
     V4GmoFiniteReadOnlyPreflight,
     V4GmoReadOnlyPreflightError,
@@ -212,6 +217,20 @@ def _test_only_complete(
             "broker_post_authorized": False,
             "activation_permit_issued": False,
         },
+        V4PreparationOperation.PUBLIC_GET: {
+            "public_get_count": 2,
+            "market_open": True,
+            "ticker_symbol_match": True,
+            "ticker_status_open": True,
+            "quote_fresh": True,
+            "spread_within_limit": True,
+            "quote_age_seconds": 1.0,
+            "spread_pips": "0.5",
+            "raw_response_retained": False,
+            "identifier_exposed": False,
+            "broker_post_count": 0,
+            "broker_write_performed": False,
+        },
         V4PreparationOperation.PRIVATE_GET: {
             "broker_get_count": 3,
             "account_wide_snapshot_clear": True,
@@ -238,6 +257,131 @@ def _test_only_complete(
         generation_digest=permit._generation_digest,
     )
     ledger.complete(operation, operation_permit=permit)
+
+
+def test_public_preflight_uses_official_all_symbol_schema_and_is_one_use(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    ledger, permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUBLIC_GET,
+    )
+    requested_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_paths.append(request.url.path)
+        assert request.method == "GET"
+        assert request.url.query == b""
+        if request.url.path == "/public/v1/status":
+            return httpx.Response(200, json={"status": 0, "data": {"status": "OPEN"}})
+        assert request.url.path == "/public/v1/ticker"
+        return httpx.Response(
+            200,
+            json={
+                "status": 0,
+                "data": [
+                    {
+                        "symbol": "EUR_JPY",
+                        "ask": "170.010",
+                        "bid": "170.000",
+                        "timestamp": "2026-07-17T00:00:00Z",
+                        "status": "OPEN",
+                    },
+                    {
+                        "symbol": "USD_JPY",
+                        "ask": "160.005",
+                        "bid": "160.000",
+                        "timestamp": "2026-07-17T00:00:00Z",
+                        "status": "OPEN",
+                    },
+                ],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    preflight = V4GmoFinitePublicPreflight(
+        external_gate=external_gate,
+        operation_permit=permit,
+        client=client,
+        wall_clock=lambda: datetime(2026, 7, 17, 0, 0, 1, tzinfo=UTC),
+    )
+    report = preflight.run_once()
+    assert report.public_get_count == 2
+    assert report.market_open is True
+    assert report.quote_fresh is True
+    assert report.spread_within_limit is True
+    assert report.spread_pips == "0.5"
+    assert report.raw_response_retained is False
+    assert requested_paths == ["/public/v1/status", "/public/v1/ticker"]
+    ledger.complete(V4PreparationOperation.PUBLIC_GET, operation_permit=permit)
+    with pytest.raises(V4GmoPublicPreflightError, match="SECOND_RUN"):
+        preflight.run_once()
+    client.close()
+
+
+def test_public_preflight_fails_closed_when_usd_jpy_is_missing(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    _, permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUBLIC_GET,
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/public/v1/status":
+            return httpx.Response(200, json={"status": 0, "data": {"status": "OPEN"}})
+        return httpx.Response(200, json={"status": 0, "data": []})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(V4GmoPublicPreflightError, match="SYMBOL_INVALID"):
+        V4GmoFinitePublicPreflight(
+            external_gate=external_gate,
+            operation_permit=permit,
+            client=client,
+            wall_clock=lambda: datetime(2026, 7, 17, tzinfo=UTC),
+        ).run_once()
+    client.close()
+
+
+def test_public_preflight_does_not_pass_spread_above_g013_limit(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    ledger, permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUBLIC_GET,
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/public/v1/status":
+            return httpx.Response(200, json={"status": 0, "data": {"status": "OPEN"}})
+        return httpx.Response(
+            200,
+            json={
+                "status": 0,
+                "data": [
+                    {
+                        "symbol": "USD_JPY",
+                        "ask": "160.006",
+                        "bid": "160.000",
+                        "timestamp": "2026-07-17T00:00:00Z",
+                        "status": "OPEN",
+                    }
+                ],
+            },
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    report = V4GmoFinitePublicPreflight(
+        external_gate=external_gate,
+        operation_permit=permit,
+        client=client,
+        wall_clock=lambda: datetime(2026, 7, 17, 0, 0, 1, tzinfo=UTC),
+    ).run_once()
+    assert report.status == "BLOCKED_PUBLIC_STATUS_TICKER_NOT_CLEAR"
+    assert report.spread_within_limit is False
+    with pytest.raises(V4ActualPreparationGuardError):
+        ledger.complete(V4PreparationOperation.PUBLIC_GET, operation_permit=permit)
+    client.close()
 
 
 def test_completed_preparation_evidence_requires_all_steps_and_is_one_use(

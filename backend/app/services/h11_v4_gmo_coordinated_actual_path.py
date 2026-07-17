@@ -42,6 +42,7 @@ from app.h11_auto.v4_gmo_contracts import (
     V4GmoEntryStatus,
     V4GmoExecutionPolicy,
     V4GmoProtectionStatus,
+    build_v4_action_plan,
 )
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.h11_auto.v4_gmo_protection import V4GmoExactProtectionPlan
@@ -123,9 +124,9 @@ class V4GmoCoordinatedActualPath:
         init=False,
         repr=False,
     )
-    _entry_authorizations: dict[
-        str, _V4VerifiedEntryPreflightAuthorization
-    ] = field(default_factory=dict, init=False, repr=False)
+    _entry_authorizations: dict[str, _V4VerifiedEntryPreflightAuthorization] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         state_root = v4_gmo_runtime_state_root(
@@ -214,9 +215,7 @@ class V4GmoCoordinatedActualPath:
                 account_exclusivity_label="H11_V4_ACCOUNT_EXCLUSIVE_CURRENT_GENERATION",
                 unowned_position_count=reconciliation.unowned_position_count,
                 active_order_count=reconciliation.account_active_order_count,
-                unowned_active_order_count=(
-                    reconciliation.unowned_active_order_count
-                ),
+                unowned_active_order_count=(reconciliation.unowned_active_order_count),
             ),
             snapshot=reconciliation.snapshot,
             position_bundle_present=reconciliation.position_bundle is not None,
@@ -269,6 +268,47 @@ class V4GmoCoordinatedActualPath:
             self.store.engage_unknown_halt()
             raise
 
+    def recover_pending_transport_and_carry_once(
+        self,
+        *,
+        cycle_ref: str,
+        reconciliation_evidence: V4AuthoritativeReconciliationEvidence,
+    ) -> tuple[V4PendingTransportRecovery, V4AuthoritativeReconciliationEvidence]:
+        """Resolve one action and carry that same GET snapshot to its next gate."""
+
+        if not self.process_lock.held:
+            raise V4GmoCoordinatedPathError("V4_COORDINATED_PROCESS_LOCK_REQUIRED")
+        self.store.bind_generation(self.generation)
+        now_monotonic = self._monotonic_now()
+        reconciliation, binding_digest = self._consume_reconciliation_evidence(
+            reconciliation_evidence,
+            cycle_ref=cycle_ref,
+            now_monotonic=now_monotonic,
+            maximum_age_seconds=15.0,
+        )
+        try:
+            recovery = self.store._resolve_pending_transport_from_coordinated_path(
+                issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
+                cycle_ref=cycle_ref,
+                snapshot=reconciliation.snapshot,
+                position_bundle_total=(
+                    reconciliation.position_bundle.total_size
+                    if reconciliation.position_bundle is not None
+                    else None
+                ),
+                authoritative_reconciliation_digest=binding_digest,
+                now_utc=self._wall_now(),
+            )
+        except V4GmoActualCoordinatorError:
+            self.store.engage_unknown_halt()
+            raise
+        carried = self._mint_reconciliation_evidence(
+            cycle_ref=cycle_ref,
+            reconciliation=reconciliation,
+            issued_monotonic=now_monotonic,
+        )
+        return recovery, carried
+
     def perform_market_once(
         self,
         *,
@@ -281,16 +321,12 @@ class V4GmoCoordinatedActualPath:
         self._require_ready(action=V4GmoAction.MARKET_ENTRY, plan=plan)
         policy = self._execution_policy()
         if not policy.entry_time_allowed(now_utc=now_utc):
-            raise V4GmoCoordinatedPathError(
-                "V4_COORDINATED_ENTRY_TIME_BLOCKED"
-            )
+            raise V4GmoCoordinatedPathError("V4_COORDINATED_ENTRY_TIME_BLOCKED")
         risk_state = self._require_entry_runtime_safety(
             now_utc=now_utc,
             cycle_day_jst=cycle_day_jst,
         )
-        entry_authorization = self._entry_authorizations.pop(
-            signal_fingerprint, None
-        )
+        entry_authorization = self._entry_authorizations.pop(signal_fingerprint, None)
         if entry_authorization is None:
             raise V4GmoCoordinatedPathError(
                 "V4_COORDINATED_ENTRY_AUTHORIZATION_REQUIRED"
@@ -347,9 +383,8 @@ class V4GmoCoordinatedActualPath:
             reconciliation.snapshot.fresh is not True
             or reconciliation.snapshot.result_known is not True
             or reconciliation.snapshot.position_count != 1
-            or reconciliation.snapshot.position_side is not self._signal_side(
-                signal_fingerprint
-            )
+            or reconciliation.snapshot.position_side
+            is not self._signal_side(signal_fingerprint)
             or reconciliation.average_fill_price is None
             or reconciliation.snapshot.filled_size <= 0
             or reconciliation.snapshot.pending_entry_size != 0
@@ -372,6 +407,53 @@ class V4GmoCoordinatedActualPath:
             reconciled_filled_size=reconciliation.snapshot.filled_size,
             now_utc=now_utc,
             now_monotonic=now_monotonic,
+        )
+        carried = self._mint_reconciliation_evidence(
+            cycle_ref=cycle_ref,
+            reconciliation=reconciliation,
+            issued_monotonic=now_monotonic,
+        )
+        return plan, carried
+
+    def prepare_cancel_entry_remainder_plan(
+        self,
+        *,
+        signal_fingerprint: str,
+        reconciliation_evidence: V4AuthoritativeReconciliationEvidence,
+    ) -> tuple[V4GmoActionPlan, V4AuthoritativeReconciliationEvidence]:
+        """Bind one known pending entry remainder to one distinct cancel action."""
+
+        cycle_ref = self.store.cycle_ref_for_signal_internal(signal_fingerprint)
+        now_monotonic = self._monotonic_now()
+        reconciliation, _ = self._consume_reconciliation_evidence(
+            reconciliation_evidence,
+            cycle_ref=cycle_ref,
+            now_monotonic=now_monotonic,
+            maximum_age_seconds=15.0,
+        )
+        snapshot = reconciliation.snapshot
+        if (
+            snapshot.fresh is not True
+            or snapshot.result_known is not True
+            or snapshot.entry_status
+            not in {V4GmoEntryStatus.PENDING, V4GmoEntryStatus.PARTIAL}
+            or snapshot.pending_entry_size <= 0
+            or snapshot.position_count > 1
+            or snapshot.position_side
+            not in {None, self._signal_side(signal_fingerprint)}
+            or snapshot.protection_size != 0
+            or snapshot.protection_status is not V4GmoProtectionStatus.NONE
+        ):
+            self.store.engage_unknown_halt()
+            raise V4GmoCoordinatedPathError(
+                "V4_COORDINATED_ENTRY_REMAINDER_RECONCILIATION_REQUIRED"
+            )
+        plan = build_v4_action_plan(
+            cycle_ref=cycle_ref,
+            action=V4GmoAction.CANCEL_ENTRY_REMAINDER,
+            side=self._signal_side(signal_fingerprint),
+            requested_size=snapshot.pending_entry_size,
+            protection_contract_hash=self.generation.protection_contract_hash,
         )
         carried = self._mint_reconciliation_evidence(
             cycle_ref=cycle_ref,
@@ -448,9 +530,7 @@ class V4GmoCoordinatedActualPath:
                 "V4_COORDINATED_RISK_REDUCING_ACTION_REQUIRED"
             )
         self._require_ready(action=plan.action, plan=plan)
-        public_market_status_guard: (
-            V4GmoPublicMarketStatusTransportGuard | None
-        ) = None
+        public_market_status_guard: V4GmoPublicMarketStatusTransportGuard | None = None
         if plan.action in {
             V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
             V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,
@@ -606,6 +686,64 @@ class V4GmoCoordinatedActualPath:
         self.risk_store.save(risk_state)
         return applied
 
+    def classify_protected_lifecycle_once(
+        self,
+        *,
+        signal_fingerprint: str,
+        reconciliation_evidence: V4AuthoritativeReconciliationEvidence,
+    ) -> tuple[str, V4AuthoritativeReconciliationEvidence | None]:
+        """Classify one scheduled read-only observation as protected or flat."""
+
+        if not self.process_lock.held:
+            raise V4GmoCoordinatedPathError("V4_COORDINATED_PROCESS_LOCK_REQUIRED")
+        cycle_ref = self.store.cycle_ref_for_signal_internal(signal_fingerprint)
+        now_monotonic = self._monotonic_now()
+        reconciliation, _ = self._consume_reconciliation_evidence(
+            reconciliation_evidence,
+            cycle_ref=cycle_ref,
+            now_monotonic=now_monotonic,
+            maximum_age_seconds=15.0,
+        )
+        snapshot = reconciliation.snapshot
+        expected_size = self.store.expected_closed_size_for_signal_internal(
+            signal_fingerprint
+        )
+        if (
+            snapshot.fresh is True
+            and snapshot.result_known is True
+            and snapshot.position_count == 1
+            and snapshot.position_side is self._signal_side(signal_fingerprint)
+            and snapshot.filled_size == expected_size
+            and snapshot.pending_entry_size == 0
+            and snapshot.protection_status is V4GmoProtectionStatus.EXACT_MATCH
+            and snapshot.protection_size == expected_size
+            and reconciliation.position_bundle is not None
+            and reconciliation.position_bundle.total_size == expected_size
+        ):
+            return "POSITION_EXACTLY_PROTECTED", None
+        if (
+            snapshot.fresh is True
+            and snapshot.result_known is True
+            and snapshot.position_count == 0
+            and snapshot.position_side is None
+            and snapshot.filled_size == 0
+            and snapshot.pending_entry_size == 0
+            and snapshot.protection_size == 0
+            and reconciliation.position_bundle is None
+            and reconciliation.closed_size == expected_size
+            and reconciliation.realized_pnl_jpy_internal is not None
+        ):
+            carried = self._mint_reconciliation_evidence(
+                cycle_ref=cycle_ref,
+                reconciliation=reconciliation,
+                issued_monotonic=now_monotonic,
+            )
+            return "FLAT_CLOSED", carried
+        self.store.engage_unknown_halt()
+        raise V4GmoCoordinatedPathError(
+            "V4_COORDINATED_LIFECYCLE_RECONCILIATION_INVALID"
+        )
+
     def _mint_reconciliation_evidence(
         self,
         *,
@@ -687,9 +825,7 @@ class V4GmoCoordinatedActualPath:
             or self.dead_man_store.policy.digest
             != self.generation.dead_man_policy_digest
         ):
-            raise V4GmoCoordinatedPathError(
-                "V4_COORDINATED_RUNTIME_POLICY_MISMATCH"
-            )
+            raise V4GmoCoordinatedPathError("V4_COORDINATED_RUNTIME_POLICY_MISMATCH")
 
     def _execution_policy(self) -> V4GmoExecutionPolicy:
         return V4GmoExecutionPolicy(
@@ -737,14 +873,8 @@ class V4GmoCoordinatedActualPath:
 
     def _monotonic_now(self) -> float:
         value = self.monotonic_clock()
-        if (
-            not isinstance(value, int | float)
-            or not math.isfinite(value)
-            or value < 0
-        ):
-            raise V4GmoCoordinatedPathError(
-                "V4_COORDINATED_MONOTONIC_CLOCK_INVALID"
-            )
+        if not isinstance(value, int | float) or not math.isfinite(value) or value < 0:
+            raise V4GmoCoordinatedPathError("V4_COORDINATED_MONOTONIC_CLOCK_INVALID")
         return float(value)
 
     def __repr__(self) -> str:

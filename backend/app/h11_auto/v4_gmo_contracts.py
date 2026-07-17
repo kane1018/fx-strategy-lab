@@ -102,7 +102,7 @@ class V4GmoExecutionPolicy:
     selected_horizon: FormalHorizon
     protection_contract_hash: str
     broker_capability_evidence_hash: str = H11_V4_GMO_CAPABILITY_EVIDENCE_HASH
-    requested_size: int = 10_000
+    requested_size: int = 1_000
     max_unprotected_seconds: int = 15
     max_positions: int = 1
     max_entries_per_day: int = 1
@@ -147,7 +147,7 @@ class V4GmoExecutionPolicy:
         if not isinstance(self.selected_horizon, FormalHorizon):
             raise V4GmoContractError("v4 policy horizon is invalid")
         immutable_requirements = (
-            type(self.requested_size) is int and self.requested_size == 10_000,
+            type(self.requested_size) is int and self.requested_size == 1_000,
             type(self.max_unprotected_seconds) is int
             and self.max_unprotected_seconds == 15,
             type(self.max_positions) is int and self.max_positions == 1,
@@ -219,7 +219,7 @@ class V4GmoExecutionPolicy:
                 "maximum_hold_seconds": self.maximum_hold_seconds,
                 "profile_version": V4_GMO_PROFILE_VERSION,
                 "protection_contract_hash": self.protection_contract_hash,
-                "requested_size": 10_000,
+                "requested_size": 1_000,
                 "same_action_repost_allowed": False,
                 "same_action_retry_allowed": False,
                 "scale_in_allowed": False,

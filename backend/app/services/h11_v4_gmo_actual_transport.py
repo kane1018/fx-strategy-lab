@@ -595,7 +595,7 @@ def _validate_common_order_fields(
         raise V4GmoActualTransportError("V4_GMO_CLIENT_ORDER_ID_INVALID")
     if size_required:
         size = _positive_decimal(body.get("size"))
-        if size != size.to_integral_value() or size > 10_000:
+        if size != size.to_integral_value() or size > 1_000:
             raise V4GmoActualTransportError("V4_GMO_ORDER_SIZE_INVALID")
 
 
@@ -613,7 +613,7 @@ def _validate_settle_positions(value: Any) -> None:
         if size != size.to_integral_value():
             raise V4GmoActualTransportError("V4_GMO_SETTLE_POSITION_SIZE_INVALID")
         total += size
-    if total > 10_000:
+    if total > 1_000:
         raise V4GmoActualTransportError("V4_GMO_SETTLE_POSITION_TOTAL_INVALID")
 
 

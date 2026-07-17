@@ -36,7 +36,8 @@ class V4GmoCanaryIntent:
     generation_digest: str
     cycle_ref: str
     side: str
-    size: int = 10_000
+    exact_order_sheet_digest: str
+    size: int = 1_000
     symbol: str = "USD_JPY"
     execution_type: str = "MARKET"
     action: V4GmoAction = V4GmoAction.MARKET_ENTRY
@@ -44,9 +45,10 @@ class V4GmoCanaryIntent:
     def __post_init__(self) -> None:
         if (
             not _valid_digest(self.generation_digest)
+            or not _valid_digest(self.exact_order_sheet_digest)
             or not _valid_cycle_ref(self.cycle_ref)
             or self.side not in {"BUY", "SELL"}
-            or self.size != 10_000
+            or self.size != 1_000
             or self.symbol != "USD_JPY"
             or self.execution_type != "MARKET"
             or self.action is not V4GmoAction.MARKET_ENTRY
@@ -60,6 +62,7 @@ class V4GmoCanaryIntent:
                 "action": self.action.value,
                 "cycle_ref": self.cycle_ref,
                 "execution_type": self.execution_type,
+                "exact_order_sheet_digest": self.exact_order_sheet_digest,
                 "generation_digest": self.generation_digest,
                 "side": self.side,
                 "size": self.size,
@@ -115,7 +118,7 @@ class V4CurrentTurnChallenge:
         return cls(intent_digest=intent.digest, _nonce=secrets.token_hex(16))
 
     def phrase_for_operator_internal(self) -> str:
-        return f"H11 V4 G012 CANARY {self.intent_digest[-12:]} {self._nonce}"
+        return f"H11 V4 G013 CANARY {self.intent_digest[-12:]} {self._nonce}"
 
     def __repr__(self) -> str:
         return "V4CurrentTurnChallenge(<redacted-current-turn>)"

@@ -199,9 +199,7 @@ def _runtime_safety(
     return risk_store, risk_policy, dead_man
 
 
-def _public_status_evidence(
-    *, generation_digest: str, status: str, monotonic: float
-):
+def _public_status_evidence(*, generation_digest: str, status: str, monotonic: float):
     with httpx.Client(
         transport=httpx.MockTransport(
             lambda _request: httpx.Response(
@@ -240,7 +238,7 @@ def _market_plan(
     signal: FormalSignal,
     *,
     side: SignalDecision = SignalDecision.BUY,
-    size: int = 10_000,
+    size: int = 1_000,
 ):
     return build_v4_action_plan(
         cycle_ref=store.cycle_ref_for_signal_internal(signal.fingerprint),
@@ -328,13 +326,13 @@ def _record_market(
                 result_known=True,
                 position_count=1,
                 position_side=signal.decision,
-                filled_size=10_000,
+                filled_size=1_000,
                 pending_entry_size=0,
                 protection_size=0,
                 entry_status=V4GmoEntryStatus.FILLED,
                 protection_status=V4GmoProtectionStatus.NONE,
             ),
-            position_bundle_total=10_000,
+            position_bundle_total=1_000,
             authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
             now_utc=now_utc + timedelta(milliseconds=100),
         )
@@ -362,7 +360,7 @@ def _prepare_exact_protected_store(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("160.000"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
         now_utc=entry_time_utc + timedelta(seconds=1),
         now_monotonic=102.0,
     )
@@ -371,7 +369,7 @@ def _prepare_exact_protected_store(
         cycle_ref=cycle_ref,
         action=V4GmoAction.EXACT_SIZE_OCO_PROTECTION,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     store._record_exact_protection_attempt_from_coordinated_path(
@@ -397,13 +395,13 @@ def _prepare_exact_protected_store(
             result_known=True,
             position_count=1,
             position_side=SignalDecision.BUY,
-            filled_size=10_000,
+            filled_size=1_000,
             pending_entry_size=0,
-            protection_size=10_000,
+            protection_size=1_000,
             entry_status=V4GmoEntryStatus.FILLED,
             protection_status=V4GmoProtectionStatus.EXACT_MATCH,
         ),
-        position_bundle_total=10_000,
+        position_bundle_total=1_000,
         authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
         now_utc=entry_time_utc + timedelta(seconds=2),
     )
@@ -418,8 +416,7 @@ def _test_only_entry_authorization(
 
     with sqlite3.connect(store.path) as connection:
         row = connection.execute(
-            "SELECT cycle_ref,entry_preflight_digest FROM cycles "
-            "WHERE signal_fingerprint=?",
+            "SELECT cycle_ref,entry_preflight_digest FROM cycles WHERE signal_fingerprint=?",
             (signal.fingerprint,),
         ).fetchone()
     assert row is not None
@@ -450,7 +447,7 @@ def _path_preflight(
     evidence = path.reconcile_once_fixed(
         cycle_ref=cycle_ref,
         side=signal.decision,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     if isinstance(transport, _FakeTransport | _TimeoutThenReadTransport):
         transport.requests.clear()
@@ -495,7 +492,7 @@ def _path_partial_reconciliation(
                         "symbol": "USD_JPY",
                         "side": "BUY",
                         "settleType": "OPEN",
-                        "size": "6000",
+                        "size": "600",
                     }
                 ]
             },
@@ -508,7 +505,7 @@ def _path_partial_reconciliation(
                         "positionId": 1001,
                         "symbol": "USD_JPY",
                         "side": "BUY",
-                        "size": "6000",
+                        "size": "600",
                         "price": "160.000",
                     }
                 ]
@@ -522,7 +519,7 @@ def _path_partial_reconciliation(
                         "clientOrderId": entry_id,
                         "symbol": "USD_JPY",
                         "settleType": "OPEN",
-                        "size": "10000",
+                        "size": "1000",
                     }
                 ]
             },
@@ -534,7 +531,7 @@ def _path_partial_reconciliation(
     evidence = path.reconcile_once_fixed(
         cycle_ref=cycle_ref,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     if isinstance(transport, _FakeTransport | _TimeoutThenReadTransport):
         transport.requests.clear()
@@ -588,7 +585,7 @@ def _path_filled_reconciliation(
     evidence = path.reconcile_once_fixed(
         cycle_ref=cycle_ref,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     transport.requests.clear()
     return evidence
@@ -663,7 +660,7 @@ def _path_protected_reconciliation(
     evidence = path.reconcile_once_fixed(
         cycle_ref=cycle_ref,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     transport.requests.clear()
     return evidence
@@ -705,10 +702,13 @@ def test_frozen_generation_artifact_must_match_reviewed_digest(tmp_path: Path) -
     path = tmp_path / "docs/templates/h11_v4_gmo_frozen_generation.json"
     path.parent.mkdir(parents=True)
     path.write_text(generation.canonical_json, encoding="utf-8")
-    assert load_v4_gmo_frozen_generation(
-        repository=tmp_path,
-        implementation_digest=IMPLEMENTATION_DIGEST,
-    ) == generation
+    assert (
+        load_v4_gmo_frozen_generation(
+            repository=tmp_path,
+            implementation_digest=IMPLEMENTATION_DIGEST,
+        )
+        == generation
+    )
     with pytest.raises(V4GmoGenerationError, match="implementation digest"):
         load_v4_gmo_frozen_generation(
             repository=tmp_path,
@@ -720,9 +720,7 @@ def test_coordinated_runtime_refuses_fresh_noncanonical_state_paths(
     tmp_path: Path,
 ) -> None:
     runtime_root = _runtime_root(tmp_path)
-    correct_store = V4GmoActualCoordinatorStore(
-        runtime_root / "coordinator.sqlite3"
-    )
+    correct_store = V4GmoActualCoordinatorStore(runtime_root / "coordinator.sqlite3")
     lock = H11AutoProcessLock(runtime_root / "process.lock")
     _, risk_policy, dead_man = _runtime_safety(runtime_root)
     wrong_risk_store = PhaseBRiskStore(
@@ -736,9 +734,7 @@ def test_coordinated_runtime_refuses_fresh_noncanonical_state_paths(
         V4GmoCoordinatedActualPath(
             repository=tmp_path,
             store=correct_store,
-            adapter=V4GmoActualAdapter(
-                transport=_FakeTransport(responses=[])
-            ),
+            adapter=V4GmoActualAdapter(transport=_FakeTransport(responses=[])),
             process_lock=lock,
             generation=_generation(),
             risk_store=wrong_risk_store,
@@ -752,10 +748,10 @@ def test_planned_loss_gate_counts_atr_stop_and_frozen_slippage() -> None:
     risk = calculate_v4_planned_loss(
         signal_fingerprint=signal.fingerprint,
         frozen_atr_24=Decimal("0.20"),
-        quantity_units=10_000,
+        quantity_units=1_000,
         adverse_slippage_allowance_pips=Decimal("5.0"),
     )
-    assert risk.planned_loss_bound_jpy == 3_510
+    assert risk.planned_loss_bound_jpy == 351
     assert risk.atr_digest.startswith("sha256:")
 
 
@@ -769,7 +765,7 @@ def test_intent_attempt_and_oco_are_persisted_before_transport(tmp_path: Path) -
         frozen_atr_24=Decimal("0.20"),
         now_utc=NOW,
     )
-    assert risk.planned_loss_bound_jpy == 3_510
+    assert risk.planned_loss_bound_jpy == 351
     attempt = _record_market(store, signal)
     assert attempt.transport_called is False
     assert attempt.actual_post_count == 0
@@ -777,11 +773,11 @@ def test_intent_attempt_and_oco_are_persisted_before_transport(tmp_path: Path) -
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("160.000"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
         now_utc=NOW + timedelta(seconds=10),
         now_monotonic=110.0,
     )
-    assert plan.exact_filled_size == 10_000
+    assert plan.exact_filled_size == 1_000
     assert plan.actual_post_allowed is False
     with sqlite3.connect(store.path) as connection:
         metrics = connection.execute(
@@ -794,7 +790,7 @@ def test_intent_attempt_and_oco_are_persisted_before_transport(tmp_path: Path) -
         cycle_ref=store.cycle_ref_for_signal_internal(signal.fingerprint),
         action=V4GmoAction.EXACT_SIZE_OCO_PROTECTION,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     protection_attempt = store._record_exact_protection_attempt_from_coordinated_path(
@@ -839,9 +835,7 @@ def test_restart_refuses_second_market_attempt_and_generation_change(
     with pytest.raises(V4GmoActualCoordinatorError, match="unknown halt"):
         restarted._record_market_attempt_from_coordinated_path(
             issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
-            entry_authorization=_test_only_entry_authorization(
-                restarted, signal
-            ),
+            entry_authorization=_test_only_entry_authorization(restarted, signal),
             signal_fingerprint=signal.fingerprint,
             plan=plan,
             now_utc=NOW + timedelta(seconds=2),
@@ -889,9 +883,7 @@ def test_restart_latches_unknown_when_process_dies_after_attempt_persist(
     with pytest.raises(V4GmoActualCoordinatorError, match="unknown halt"):
         restarted._record_market_attempt_from_coordinated_path(
             issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
-            entry_authorization=_test_only_entry_authorization(
-                restarted, signal
-            ),
+            entry_authorization=_test_only_entry_authorization(restarted, signal),
             signal_fingerprint=signal.fingerprint,
             plan=_market_plan(restarted, signal),
             now_utc=NOW + timedelta(seconds=1, milliseconds=100),
@@ -908,13 +900,13 @@ def test_restart_latches_unknown_when_process_dies_after_attempt_persist(
                 result_known=True,
                 position_count=1,
                 position_side=SignalDecision.BUY,
-                filled_size=10_000,
+                filled_size=1_000,
                 pending_entry_size=0,
                 protection_size=0,
                 entry_status=V4GmoEntryStatus.FILLED,
                 protection_status=V4GmoProtectionStatus.NONE,
             ),
-            10_000,
+            1_000,
             "FILLED_UNPROTECTED",
         ),
         (
@@ -923,13 +915,13 @@ def test_restart_latches_unknown_when_process_dies_after_attempt_persist(
                 result_known=True,
                 position_count=1,
                 position_side=SignalDecision.BUY,
-                filled_size=6_000,
-                pending_entry_size=4_000,
+                filled_size=600,
+                pending_entry_size=400,
                 protection_size=0,
                 entry_status=V4GmoEntryStatus.PARTIAL,
                 protection_status=V4GmoProtectionStatus.NONE,
             ),
-            6_000,
+            600,
             "MARKET_PARTIAL_PENDING",
         ),
         (V4GmoBrokerSnapshot.flat(), None, "FLAT_OR_REJECTED"),
@@ -1033,9 +1025,7 @@ def test_crashed_market_is_classified_once_without_market_reauthorization(
     with pytest.raises(V4GmoActualCoordinatorError, match="unknown halt"):
         restarted._record_market_attempt_from_coordinated_path(
             issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
-            entry_authorization=_test_only_entry_authorization(
-                restarted, signal
-            ),
+            entry_authorization=_test_only_entry_authorization(restarted, signal),
             signal_fingerprint=signal.fingerprint,
             plan=_market_plan(restarted, signal),
             now_utc=NOW + timedelta(seconds=2),
@@ -1092,9 +1082,12 @@ def test_unknown_crashed_market_recovery_keeps_pending_marker(
             now_utc=NOW + timedelta(seconds=2),
         )
     with sqlite3.connect(database) as connection:
-        assert connection.execute(
-            "SELECT 1 FROM metadata WHERE key='pending_transport_attempt'"
-        ).fetchone() is not None
+        assert (
+            connection.execute(
+                "SELECT 1 FROM metadata WHERE key='pending_transport_attempt'"
+            ).fetchone()
+            is not None
+        )
 
 
 def test_crash_recovery_requires_one_fresh_three_get_evidence(
@@ -1154,7 +1147,7 @@ def test_crash_recovery_requires_one_fresh_three_get_evidence(
     evidence = path.reconcile_once_fixed(
         cycle_ref=cycle_ref,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     recovery = path.recover_pending_transport_once(
         cycle_ref=cycle_ref,
@@ -1175,7 +1168,7 @@ def test_loss_over_limit_and_protection_after_15_seconds_are_refused(
             generation=_generation(),
             signal=signal,
             policy=_policy(),
-            frozen_atr_24=Decimal("0.40"),
+            frozen_atr_24=Decimal("4.00"),
             now_utc=NOW,
         )
 
@@ -1193,7 +1186,7 @@ def test_loss_over_limit_and_protection_after_15_seconds_are_refused(
             issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
             signal_fingerprint=accepted.fingerprint,
             reconciled_average_fill_price=Decimal("160.000"),
-            reconciled_filled_size=10_000,
+            reconciled_filled_size=1_000,
             now_utc=NOW + timedelta(seconds=17),
             now_monotonic=117.0,
         )
@@ -1215,7 +1208,7 @@ def test_negative_deadline_and_tampered_atr_are_refused(tmp_path: Path) -> None:
             issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
             signal_fingerprint=signal.fingerprint,
             reconciled_average_fill_price=Decimal("160.000"),
-            reconciled_filled_size=10_000,
+            reconciled_filled_size=1_000,
             now_utc=NOW,
             now_monotonic=100.0,
         )
@@ -1226,7 +1219,7 @@ def test_negative_deadline_and_tampered_atr_are_refused(tmp_path: Path) -> None:
             issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
             signal_fingerprint=signal.fingerprint,
             reconciled_average_fill_price=Decimal("160.000"),
-            reconciled_filled_size=10_000,
+            reconciled_filled_size=1_000,
             now_utc=NOW + timedelta(seconds=10),
             now_monotonic=110.0,
         )
@@ -1249,7 +1242,7 @@ def test_protection_attempt_rechecks_deadline_after_plan_was_persisted(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("160.000"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
         now_utc=NOW + timedelta(seconds=10),
         now_monotonic=110.0,
     )
@@ -1257,7 +1250,7 @@ def test_protection_attempt_rechecks_deadline_after_plan_was_persisted(
         cycle_ref=store.cycle_ref_for_signal_internal(signal.fingerprint),
         action=V4GmoAction.EXACT_SIZE_OCO_PROTECTION,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     with pytest.raises(V4GmoActualCoordinatorError, match="deadline"):
@@ -1290,7 +1283,7 @@ def test_integrated_path_commits_attempt_before_adapter_and_restart_cannot_send(
         cycle_ref=cycle_ref,
         action=V4GmoAction.MARKET_ENTRY,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     lock = H11AutoProcessLock(runtime_root / "process.lock")
@@ -1312,10 +1305,13 @@ def test_integrated_path_commits_attempt_before_adapter_and_restart_cannot_send(
     )
     _path_preflight(path, signal, cycle_ref)
     clock.advance(0.1)
-    assert path.perform_market_once(
-        signal_fingerprint=signal.fingerprint,
-        plan=plan,
-    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    assert (
+        path.perform_market_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=plan,
+        )
+        is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    )
     assert len(first_transport.requests) == 1
 
     restarted_transport = _FakeTransport(responses=[{"status": 0}])
@@ -1402,7 +1398,7 @@ def test_generation_preparation_evidence_cannot_preflight_second_coordinator(
     first_reconciliation = paths[0].reconcile_once_fixed(
         cycle_ref=paths[0].store.cycle_ref_for_signal_internal(signal.fingerprint),
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     paths[0].record_canary_entry_preflight(
         signal_fingerprint=signal.fingerprint,
@@ -1416,7 +1412,7 @@ def test_generation_preparation_evidence_cannot_preflight_second_coordinator(
     second_reconciliation = paths[1].reconcile_once_fixed(
         cycle_ref=paths[1].store.cycle_ref_for_signal_internal(signal.fingerprint),
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     with pytest.raises(
         preparation_guard.V4ActualPreparationGuardError,
@@ -1424,9 +1420,7 @@ def test_generation_preparation_evidence_cannot_preflight_second_coordinator(
     ):
         paths[1].record_canary_entry_preflight(
             signal_fingerprint=signal.fingerprint,
-            cycle_ref=paths[1].store.cycle_ref_for_signal_internal(
-                signal.fingerprint
-            ),
+            cycle_ref=paths[1].store.cycle_ref_for_signal_internal(signal.fingerprint),
             instruction_bid=Decimal("159.995"),
             instruction_ask=Decimal("160.000"),
             reconciliation_evidence=second_reconciliation,
@@ -1473,7 +1467,7 @@ def test_integrated_path_requires_fresh_dead_man_before_market(
         cycle_ref=store.cycle_ref_for_signal_internal(signal.fingerprint),
         action=V4GmoAction.MARKET_ENTRY,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     with pytest.raises(V4GmoCoordinatedPathError, match="DEAD_MAN_BLOCKED"):
@@ -1575,9 +1569,10 @@ def test_v4_scheduled_time_exit_is_23h_except_friday_03_45jst_start() -> None:
     assert v4_gmo_scheduled_time_exit_at(
         entry_time_utc=friday_evening_entry
     ) == datetime(2026, 7, 17, 18, 45, tzinfo=UTC)  # Sat 03:45 JST
-    assert v4_gmo_scheduled_time_exit_at(
-        entry_time_utc=datetime(2026, 7, 17, 9, 0)
-    ) is None
+    assert (
+        v4_gmo_scheduled_time_exit_at(entry_time_utc=datetime(2026, 7, 17, 9, 0))
+        is None
+    )
 
 
 def test_unknown_market_latches_halt_but_readonly_reconciliation_remains_allowed(
@@ -1615,20 +1610,23 @@ def test_unknown_market_latches_halt_but_readonly_reconciliation_remains_allowed
         cycle_ref=cycle_ref,
         action=V4GmoAction.MARKET_ENTRY,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     _path_preflight(path, signal, cycle_ref)
     clock.advance(0.1)
-    assert path.perform_market_once(
-        signal_fingerprint=signal.fingerprint,
-        plan=plan,
-    ) is V4GmoPrivateOutcome.UNKNOWN_SANITIZED
+    assert (
+        path.perform_market_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=plan,
+        )
+        is V4GmoPrivateOutcome.UNKNOWN_SANITIZED
+    )
     assert store.unknown_halt_latched() is True
     evidence = path.reconcile_once_fixed(
         cycle_ref=cycle_ref,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     assert "redacted-one-use" in repr(evidence)
     assert len(transport.requests) == 4
@@ -1652,13 +1650,13 @@ def test_exact_protection_confirmation_enforces_same_fifteen_second_deadline(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("160.000"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
         now_utc=NOW + timedelta(seconds=10),
         now_monotonic=110.0,
     )
     store.confirm_exact_protection_within_deadline(
         signal_fingerprint=signal.fingerprint,
-        confirmed_protection_size=10_000,
+        confirmed_protection_size=1_000,
         now_utc=NOW + timedelta(seconds=16),
         now_monotonic=116.0,
     )
@@ -1676,14 +1674,14 @@ def test_exact_protection_confirmation_enforces_same_fifteen_second_deadline(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("160.000"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
         now_utc=NOW + timedelta(seconds=10),
         now_monotonic=110.0,
     )
     with pytest.raises(V4GmoActualCoordinatorError, match="confirmation failed"):
         late.confirm_exact_protection_within_deadline(
             signal_fingerprint=signal.fingerprint,
-            confirmed_protection_size=10_000,
+            confirmed_protection_size=1_000,
             now_utc=NOW + timedelta(seconds=16, microseconds=1),
             now_monotonic=116.000001,
         )
@@ -1722,23 +1720,29 @@ def test_risk_reducing_cancel_is_persisted_once_before_transport(
     )
     cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
     recovery_evidence = _path_partial_reconciliation(path, cycle_ref=cycle_ref)
-    assert path.recover_pending_transport_once(
-        cycle_ref=cycle_ref,
-        reconciliation_evidence=recovery_evidence,
-    ).classification == "MARKET_PARTIAL_PENDING"
+    assert (
+        path.recover_pending_transport_once(
+            cycle_ref=cycle_ref,
+            reconciliation_evidence=recovery_evidence,
+        ).classification
+        == "MARKET_PARTIAL_PENDING"
+    )
     cancel = build_v4_action_plan(
         cycle_ref=cycle_ref,
         action=V4GmoAction.CANCEL_ENTRY_REMAINDER,
         side=SignalDecision.BUY,
-        requested_size=4_000,
+        requested_size=400,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     reconciliation_evidence = _path_partial_reconciliation(path, cycle_ref=cycle_ref)
-    assert path.perform_risk_reducing_once(
-        signal_fingerprint=signal.fingerprint,
-        plan=cancel,
-        reconciliation_evidence=reconciliation_evidence,
-    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    assert (
+        path.perform_risk_reducing_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=cancel,
+            reconciliation_evidence=reconciliation_evidence,
+        )
+        is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    )
     assert len(transport.requests) == 1
     with pytest.raises(V4GmoCoordinatedPathError, match="EVIDENCE_INVALID"):
         path.perform_risk_reducing_once(
@@ -1784,62 +1788,63 @@ def test_partial_fill_cancel_then_exact_filled_size_oco_is_authorized(
     )
     cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
     recovery_evidence = _path_partial_reconciliation(path, cycle_ref=cycle_ref)
-    assert path.recover_pending_transport_once(
+    partial_recovery, partial_carried = path.recover_pending_transport_and_carry_once(
         cycle_ref=cycle_ref,
         reconciliation_evidence=recovery_evidence,
-    ).classification == "MARKET_PARTIAL_PENDING"
-    partial_evidence = _path_partial_reconciliation(path, cycle_ref=cycle_ref)
-    cancel = build_v4_action_plan(
-        cycle_ref=cycle_ref,
-        action=V4GmoAction.CANCEL_ENTRY_REMAINDER,
-        side=SignalDecision.BUY,
-        requested_size=4_000,
-        protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
-    assert path.perform_risk_reducing_once(
+    assert partial_recovery.classification == "MARKET_PARTIAL_PENDING"
+    cancel, carried_partial = path.prepare_cancel_entry_remainder_plan(
         signal_fingerprint=signal.fingerprint,
-        plan=cancel,
-        reconciliation_evidence=partial_evidence,
-    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+        reconciliation_evidence=partial_carried,
+    )
+    assert cancel.action is V4GmoAction.CANCEL_ENTRY_REMAINDER
+    assert cancel.requested_size == 400
+    assert (
+        path.perform_risk_reducing_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=cancel,
+            reconciliation_evidence=carried_partial,
+        )
+        is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    )
 
     recovery_after_cancel = _path_filled_reconciliation(
         path,
         cycle_ref=cycle_ref,
-        filled_size=6_000,
+        filled_size=600,
     )
-    assert path.recover_pending_transport_once(
+    filled_recovery, filled_carried = path.recover_pending_transport_and_carry_once(
         cycle_ref=cycle_ref,
         reconciliation_evidence=recovery_after_cancel,
-    ).classification == "FILLED_UNPROTECTED"
-    filled_evidence = _path_filled_reconciliation(
-        path,
-        cycle_ref=cycle_ref,
-        filled_size=6_000,
     )
+    assert filled_recovery.classification == "FILLED_UNPROTECTED"
     protection, carried_evidence = path.prepare_exact_protection_plan(
         signal_fingerprint=signal.fingerprint,
-        reconciliation_evidence=filled_evidence,
+        reconciliation_evidence=filled_carried,
     )
-    assert protection.exact_filled_size == 6_000
+    assert protection.exact_filled_size == 600
     oco = build_v4_action_plan(
         cycle_ref=cycle_ref,
         action=V4GmoAction.EXACT_SIZE_OCO_PROTECTION,
         side=SignalDecision.BUY,
-        requested_size=6_000,
+        requested_size=600,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
-    assert path.perform_exact_protection_once(
-        signal_fingerprint=signal.fingerprint,
-        plan=oco,
-        protection_plan=protection,
-        reconciliation_evidence=carried_evidence,
-    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    assert (
+        path.perform_exact_protection_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=oco,
+            protection_plan=protection,
+            reconciliation_evidence=carried_evidence,
+        )
+        is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    )
     request = transport.requests[-1]
     assert request.body is not None
     assert request.body["executionType"] == "OCO"
     settle_positions = request.body["settlePosition"]
     assert isinstance(settle_positions, list)
-    assert sum(int(item["size"]) for item in settle_positions) == 6_000
+    assert sum(int(item["size"]) for item in settle_positions) == 600
     assert store.unknown_halt_latched() is True
     lock.release()
 
@@ -1878,23 +1883,29 @@ def test_protection_is_blocked_if_entry_remainder_survives_cancel(
     )
     cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
     recovery_evidence = _path_partial_reconciliation(path, cycle_ref=cycle_ref)
-    assert path.recover_pending_transport_once(
-        cycle_ref=cycle_ref,
-        reconciliation_evidence=recovery_evidence,
-    ).classification == "MARKET_PARTIAL_PENDING"
+    assert (
+        path.recover_pending_transport_once(
+            cycle_ref=cycle_ref,
+            reconciliation_evidence=recovery_evidence,
+        ).classification
+        == "MARKET_PARTIAL_PENDING"
+    )
     partial_evidence = _path_partial_reconciliation(path, cycle_ref=cycle_ref)
     cancel = build_v4_action_plan(
         cycle_ref=cycle_ref,
         action=V4GmoAction.CANCEL_ENTRY_REMAINDER,
         side=SignalDecision.BUY,
-        requested_size=4_000,
+        requested_size=400,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
-    assert path.perform_risk_reducing_once(
-        signal_fingerprint=signal.fingerprint,
-        plan=cancel,
-        reconciliation_evidence=partial_evidence,
-    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    assert (
+        path.perform_risk_reducing_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=cancel,
+            reconciliation_evidence=partial_evidence,
+        )
+        is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    )
     still_partial = _path_partial_reconciliation(path, cycle_ref=cycle_ref)
     transport.requests.clear()
     with pytest.raises(
@@ -1912,7 +1923,7 @@ def test_protection_is_blocked_if_entry_remainder_survives_cancel(
 
 @pytest.mark.parametrize(
     ("side", "size"),
-    ((SignalDecision.SELL, 10_000), (SignalDecision.BUY, 9_000)),
+    ((SignalDecision.SELL, 1_000), (SignalDecision.BUY, 900)),
 )
 def test_market_side_and_size_must_exact_match_persisted_intent(
     tmp_path: Path, side: SignalDecision, size: int
@@ -2073,11 +2084,11 @@ def test_actual_transport_fake_client_requires_committed_coordinator_proof(
         generation_digest=_generation().digest,
         cycle_ref=attempt.cycle_ref,
         side="BUY",
+        exact_order_sheet_digest="sha256:" + "c" * 64,
     )
     resume = confirm_v4_major_incident_resume_exact(
         phrase=(
-            "I APPROVE H11 V4 MAJOR INCIDENT RESUME FOR THIS REVIEWED "
-            "GENERATION ONLY"
+            "I APPROVE H11 V4 MAJOR INCIDENT RESUME FOR THIS REVIEWED GENERATION ONLY"
         ),
         generation_digest=_generation().digest,
     )
@@ -2129,7 +2140,7 @@ def test_actual_transport_fake_client_requires_committed_coordinator_proof(
             body={
                 "symbol": "USD_JPY",
                 "side": "BUY",
-                "size": "10000",
+                "size": "1000",
                 "clientOrderId": v4_gmo_client_order_id(
                     cycle_ref=attempt.cycle_ref,
                     action=V4GmoAction.MARKET_ENTRY,
@@ -2153,7 +2164,7 @@ def test_actual_transport_fake_client_requires_committed_coordinator_proof(
             body={
                 "symbol": "USD_JPY",
                 "side": "SELL",
-                "size": "9000",
+                "size": "900",
                 "clientOrderId": v4_gmo_client_order_id(
                     cycle_ref=attempt.cycle_ref,
                     action=V4GmoAction.MARKET_ENTRY,
@@ -2198,11 +2209,11 @@ def test_actual_runtime_binding_consumes_permit_on_canonical_generation_paths(
         generation_digest=_generation().digest,
         cycle_ref=cycle_ref,
         side="BUY",
+        exact_order_sheet_digest="sha256:" + "c" * 64,
     )
     resume = confirm_v4_major_incident_resume_exact(
         phrase=(
-            "I APPROVE H11 V4 MAJOR INCIDENT RESUME FOR THIS REVIEWED "
-            "GENERATION ONLY"
+            "I APPROVE H11 V4 MAJOR INCIDENT RESUME FOR THIS REVIEWED GENERATION ONLY"
         ),
         generation_digest=_generation().digest,
     )
@@ -2279,7 +2290,7 @@ def test_risk_reducing_action_refuses_state_mismatch_before_transport(
         cycle_ref=store.cycle_ref_for_signal_internal(signal.fingerprint),
         action=V4GmoAction.CANCEL_ENTRY_REMAINDER,
         side=SignalDecision.BUY,
-        requested_size=4_000,
+        requested_size=400,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     transport.responses[:0] = [
@@ -2291,7 +2302,7 @@ def test_risk_reducing_action_refuses_state_mismatch_before_transport(
     flat_evidence = path.reconcile_once_fixed(
         cycle_ref=cancel.cycle_ref,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     transport.requests.clear()
     with pytest.raises(V4GmoActualCoordinatorError, match="mismatch"):
@@ -2439,7 +2450,7 @@ def test_risk_reducing_action_requires_authoritative_matching_state(
         cycle_ref=store.cycle_ref_for_signal_internal(signal.fingerprint),
         action=V4GmoAction.CANCEL_ENTRY_REMAINDER,
         side=SignalDecision.BUY,
-        requested_size=4_000,
+        requested_size=400,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     with pytest.raises(V4GmoActualCoordinatorError, match="mismatch"):
@@ -2479,7 +2490,7 @@ def test_flat_result_updates_persistent_risk_exactly_once(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("150.000"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
         now_utc=NOW + timedelta(seconds=2),
         now_monotonic=102.0,
     )
@@ -2505,7 +2516,7 @@ def test_flat_result_updates_persistent_risk_exactly_once(
                             "symbol": "USD_JPY",
                             "side": "BUY",
                             "settleType": "OPEN",
-                            "size": "10000",
+                            "size": "1000",
                             "amount": "0",
                             "lossGain": "0",
                             "fee": "0",
@@ -2517,7 +2528,7 @@ def test_flat_result_updates_persistent_risk_exactly_once(
                             "symbol": "USD_JPY",
                             "side": "SELL",
                             "settleType": "CLOSE",
-                            "size": "10000",
+                            "size": "1000",
                             "amount": "-1234.25",
                             "lossGain": "-1200.25",
                             "fee": "-30",
@@ -2551,23 +2562,29 @@ def test_flat_result_updates_persistent_risk_exactly_once(
     evidence = path.reconcile_once_fixed(
         cycle_ref=cycle_ref,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
-    assert path.record_flat_closed_result_once(
-        signal_fingerprint=signal.fingerprint,
-        reconciliation_evidence=evidence,
-    ) is True
+    assert (
+        path.record_flat_closed_result_once(
+            signal_fingerprint=signal.fingerprint,
+            reconciliation_evidence=evidence,
+        )
+        is True
+    )
 
     transport.responses.extend(flat_close_responses())
     second = path.reconcile_once_fixed(
         cycle_ref=cycle_ref,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
-    assert path.record_flat_closed_result_once(
-        signal_fingerprint=signal.fingerprint,
-        reconciliation_evidence=second,
-    ) is False
+    assert (
+        path.record_flat_closed_result_once(
+            signal_fingerprint=signal.fingerprint,
+            reconciliation_evidence=second,
+        )
+        is False
+    )
     state = risk_store.load()
     assert state.daily_loss_jpy_internal == 1_235
     assert state.monthly_loss_jpy_internal == 1_235
@@ -2577,7 +2594,7 @@ def test_flat_result_updates_persistent_risk_exactly_once(
         closed_metrics = connection.execute(
             "SELECT realized_pnl_jpy,net_pips,trade_won FROM cycles"
         ).fetchone()
-    assert closed_metrics == (-1235, "-12.35", 0)
+    assert closed_metrics == (-1235, "-123.5", 0)
     lock.release()
 
 
@@ -2599,7 +2616,7 @@ def test_amount_only_flat_result_is_unknown_and_latches_halt(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("150.000"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
         now_utc=NOW + timedelta(seconds=2),
         now_monotonic=102.0,
     )
@@ -2624,7 +2641,7 @@ def test_amount_only_flat_result_is_unknown_and_latches_halt(
                             "symbol": "USD_JPY",
                             "side": "BUY",
                             "settleType": "OPEN",
-                            "size": "10000",
+                            "size": "1000",
                             "amount": "0",
                         },
                         {
@@ -2633,7 +2650,7 @@ def test_amount_only_flat_result_is_unknown_and_latches_halt(
                             "symbol": "USD_JPY",
                             "side": "SELL",
                             "settleType": "CLOSE",
-                            "size": "10000",
+                            "size": "1000",
                             "amount": "-1234.25",
                         },
                     ]
@@ -2667,7 +2684,7 @@ def test_amount_only_flat_result_is_unknown_and_latches_halt(
         path.reconcile_once_fixed(
             cycle_ref=cycle_ref,
             side=SignalDecision.BUY,
-            requested_size=10_000,
+            requested_size=1_000,
         )
     assert store.unknown_halt_latched() is True
     assert risk_store.load().daily_loss_jpy_internal == 0
@@ -2691,7 +2708,7 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("150.000"),
-        reconciled_filled_size=10_000,
+        reconciled_filled_size=1_000,
         now_utc=NOW + timedelta(seconds=2),
         now_monotonic=102.0,
     )
@@ -2700,7 +2717,7 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
         cycle_ref=cycle_ref,
         action=V4GmoAction.EXACT_SIZE_OCO_PROTECTION,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     store._record_exact_protection_attempt_from_coordinated_path(
@@ -2723,9 +2740,9 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
         result_known=True,
         position_count=1,
         position_side=SignalDecision.BUY,
-        filled_size=10_000,
+        filled_size=1_000,
         pending_entry_size=0,
-        protection_size=10_000,
+        protection_size=1_000,
         entry_status=V4GmoEntryStatus.FILLED,
         protection_status=V4GmoProtectionStatus.EXACT_MATCH,
     )
@@ -2733,7 +2750,7 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         cycle_ref=cycle_ref,
         snapshot=exact_snapshot,
-        position_bundle_total=10_000,
+        position_bundle_total=1_000,
         authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
         now_utc=NOW + timedelta(seconds=3),
     )
@@ -2741,7 +2758,7 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
         cycle_ref=cycle_ref,
         action=V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     with pytest.raises(V4GmoActualCoordinatorError, match="state mismatch"):
@@ -2750,7 +2767,7 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
             signal_fingerprint=signal.fingerprint,
             plan=cancel,
             snapshot=exact_snapshot,
-            position_bundle_total=10_000,
+            position_bundle_total=1_000,
             authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
             now_utc=NOW + timedelta(seconds=82_800),
         )
@@ -2759,7 +2776,7 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
         signal_fingerprint=signal.fingerprint,
         plan=cancel,
         snapshot=exact_snapshot,
-        position_bundle_total=10_000,
+        position_bundle_total=1_000,
         authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
         now_utc=NOW + timedelta(seconds=82_801),
     )
@@ -2778,7 +2795,7 @@ def test_friday_time_exit_uses_saturday_03_45jst_sequence_start(
         cycle_ref=cycle_ref,
         action=V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     exact_snapshot = V4GmoBrokerSnapshot(
@@ -2786,9 +2803,9 @@ def test_friday_time_exit_uses_saturday_03_45jst_sequence_start(
         result_known=True,
         position_count=1,
         position_side=SignalDecision.BUY,
-        filled_size=10_000,
+        filled_size=1_000,
         pending_entry_size=0,
-        protection_size=10_000,
+        protection_size=1_000,
         entry_status=V4GmoEntryStatus.FILLED,
         protection_status=V4GmoProtectionStatus.EXACT_MATCH,
     )
@@ -2799,7 +2816,7 @@ def test_friday_time_exit_uses_saturday_03_45jst_sequence_start(
             signal_fingerprint=signal.fingerprint,
             plan=cancel,
             snapshot=exact_snapshot,
-            position_bundle_total=10_000,
+            position_bundle_total=1_000,
             authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
             now_utc=sequence_start - timedelta(microseconds=1),
         )
@@ -2808,7 +2825,7 @@ def test_friday_time_exit_uses_saturday_03_45jst_sequence_start(
         signal_fingerprint=signal.fingerprint,
         plan=cancel,
         snapshot=exact_snapshot,
-        position_bundle_total=10_000,
+        position_bundle_total=1_000,
         authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
         now_utc=sequence_start,
     )
@@ -2848,24 +2865,27 @@ def test_full_time_exit_sequence_is_fixed_and_each_write_is_once_only(
         cycle_ref=cycle_ref,
         action=V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     protected = _path_protected_reconciliation(
         path,
         cycle_ref=cycle_ref,
-        filled_size=10_000,
+        filled_size=1_000,
     )
-    assert path.perform_risk_reducing_once(
-        signal_fingerprint=signal.fingerprint,
-        plan=cancel,
-        reconciliation_evidence=protected,
-        market_status_evidence=_public_status_evidence(
-            generation_digest=_generation().digest,
-            status="OPEN",
-            monotonic=clock.monotonic,
-        ),
-    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    assert (
+        path.perform_risk_reducing_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=cancel,
+            reconciliation_evidence=protected,
+            market_status_evidence=_public_status_evidence(
+                generation_digest=_generation().digest,
+                status="OPEN",
+                monotonic=clock.monotonic,
+            ),
+        )
+        is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    )
     assert [request.transport_path for request in transport.requests] == [
         "/private/v1/cancelOrders"
     ]
@@ -2873,47 +2893,53 @@ def test_full_time_exit_sequence_is_fixed_and_each_write_is_once_only(
     after_cancel = _path_filled_reconciliation(
         path,
         cycle_ref=cycle_ref,
-        filled_size=10_000,
+        filled_size=1_000,
     )
-    assert path.recover_pending_transport_once(
-        cycle_ref=cycle_ref,
-        reconciliation_evidence=after_cancel,
-    ).classification == "FILLED_UNPROTECTED"
+    assert (
+        path.recover_pending_transport_once(
+            cycle_ref=cycle_ref,
+            reconciliation_evidence=after_cancel,
+        ).classification
+        == "FILLED_UNPROTECTED"
+    )
     time_exit = build_v4_action_plan(
         cycle_ref=cycle_ref,
         action=V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     unprotected = _path_filled_reconciliation(
         path,
         cycle_ref=cycle_ref,
-        filled_size=10_000,
+        filled_size=1_000,
     )
-    assert path.perform_risk_reducing_once(
-        signal_fingerprint=signal.fingerprint,
-        plan=time_exit,
-        reconciliation_evidence=unprotected,
-        market_status_evidence=_public_status_evidence(
-            generation_digest=_generation().digest,
-            status="OPEN",
-            monotonic=clock.monotonic,
-        ),
-    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    assert (
+        path.perform_risk_reducing_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=time_exit,
+            reconciliation_evidence=unprotected,
+            market_status_evidence=_public_status_evidence(
+                generation_digest=_generation().digest,
+                status="OPEN",
+                monotonic=clock.monotonic,
+            ),
+        )
+        is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    )
     assert [request.transport_path for request in transport.requests] == [
         "/private/v1/closeOrder"
     ]
     assert transport.requests[0].body is not None
     assert transport.requests[0].body["executionType"] == "MARKET"
     assert transport.requests[0].body["settlePosition"] == [
-        {"positionId": 1001, "size": "10000"}
+        {"positionId": 1001, "size": "1000"}
     ]
 
     duplicate_evidence = _path_filled_reconciliation(
         path,
         cycle_ref=cycle_ref,
-        filled_size=10_000,
+        filled_size=1_000,
     )
     with pytest.raises(V4GmoActualCoordinatorError, match="second v4"):
         path.perform_risk_reducing_once(
@@ -2936,7 +2962,7 @@ def test_foreground_driver_reads_real_coordinator_snapshot_and_dispatches(
     signal, runtime_root, store, _cycle_ref = _prepare_exact_protected_store(tmp_path)
     store.confirm_exact_protection_within_deadline(
         signal_fingerprint=signal.fingerprint,
-        confirmed_protection_size=10_000,
+        confirmed_protection_size=1_000,
         now_utc=NOW + timedelta(seconds=3),
         now_monotonic=103.0,
     )
@@ -3024,20 +3050,18 @@ def test_time_exit_non_open_or_stale_at_transport_retains_oco_and_halts(
         wall_clock=clock.wall_now,
         monotonic_clock=clock.monotonic_now,
         reconciliation_wait=clock.advance,
-        after_persist_before_transport=lambda: clock.advance(
-            boundary_delay_seconds
-        ),
+        after_persist_before_transport=lambda: clock.advance(boundary_delay_seconds),
     )
     protected = _path_protected_reconciliation(
         path,
         cycle_ref=cycle_ref,
-        filled_size=10_000,
+        filled_size=1_000,
     )
     cancel = build_v4_action_plan(
         cycle_ref=cycle_ref,
         action=V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     with pytest.raises(
@@ -3097,40 +3121,44 @@ def test_position_time_exit_requires_separate_fresh_open_at_transport_boundary(
         cycle_ref=cycle_ref,
         action=V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
-    assert path.perform_risk_reducing_once(
-        signal_fingerprint=signal.fingerprint,
-        plan=cancel,
-        reconciliation_evidence=_path_protected_reconciliation(
-            path,
-            cycle_ref=cycle_ref,
-            filled_size=10_000,
-        ),
-        market_status_evidence=_public_status_evidence(
-            generation_digest=_generation().digest,
-            status="OPEN",
-            monotonic=clock.monotonic,
-        ),
-    ) is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
-    assert path.recover_pending_transport_once(
-        cycle_ref=cycle_ref,
-        reconciliation_evidence=_path_filled_reconciliation(
-            path,
-            cycle_ref=cycle_ref,
-            filled_size=10_000,
-        ),
-    ).classification == "FILLED_UNPROTECTED"
-    transport.requests.clear()
-    path.after_persist_before_transport = lambda: clock.advance(
-        boundary_delay_seconds
+    assert (
+        path.perform_risk_reducing_once(
+            signal_fingerprint=signal.fingerprint,
+            plan=cancel,
+            reconciliation_evidence=_path_protected_reconciliation(
+                path,
+                cycle_ref=cycle_ref,
+                filled_size=1_000,
+            ),
+            market_status_evidence=_public_status_evidence(
+                generation_digest=_generation().digest,
+                status="OPEN",
+                monotonic=clock.monotonic,
+            ),
+        )
+        is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
     )
+    assert (
+        path.recover_pending_transport_once(
+            cycle_ref=cycle_ref,
+            reconciliation_evidence=_path_filled_reconciliation(
+                path,
+                cycle_ref=cycle_ref,
+                filled_size=1_000,
+            ),
+        ).classification
+        == "FILLED_UNPROTECTED"
+    )
+    transport.requests.clear()
+    path.after_persist_before_transport = lambda: clock.advance(boundary_delay_seconds)
     time_exit = build_v4_action_plan(
         cycle_ref=cycle_ref,
         action=V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     with pytest.raises(
@@ -3143,7 +3171,7 @@ def test_position_time_exit_requires_separate_fresh_open_at_transport_boundary(
             reconciliation_evidence=_path_filled_reconciliation(
                 path,
                 cycle_ref=cycle_ref,
-                filled_size=10_000,
+                filled_size=1_000,
             ),
             market_status_evidence=_public_status_evidence(
                 generation_digest=_generation().digest,

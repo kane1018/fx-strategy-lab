@@ -1,0 +1,118 @@
+# H-11 v4 G013 Corrective Canary Activation Report
+
+Date: 2026-07-17
+
+Status: `IMPLEMENTED_VALIDATED_PRE_EXTERNAL_PREPARATION_NO_BROKER_POST`
+
+## 1. Purpose
+
+G012のno-retry証拠を保持したまま、公式GMO FX ticker schemaへ対応するcorrective generationを
+G013として新設する。Public GETをone-use preparation ledgerへ追加し、完全review・commit/push・
+clean main後に外部準備を最初から実行する。
+
+## 2. Official ticker contract correction
+
+- `GET /public/v1/ticker`はsymbol queryを送らず、全銘柄listを返す。
+- list内から`symbol == USD_JPY`の行がexactly oneであることを要求する。
+- status、bid、ask、timestampはprocess memory内だけで検証する。
+- 永続reportはmarket open、quote fresh、spread pips等のsanitized aggregateに限定する。
+- status 1回+ticker 1回の合計2 GETで、retry、second attemptを持たない。
+- actual sessionでは正式signal生成用に当日M1とH1のPublic klinesを各1回だけ取得する。M1から凍結済み
+  `SHORT_V1`の30分方向を再計算し、H1の最新24本のcompleted true range平均をATR(24)として固定する。
+- activeな未完成M1/H1 barはfail-closedで拒否する。使用したcompleted M1/H1 OHLC列とmodel config hashから
+  `input_provenance_digest`を生成し、exact注文sheetとcurrent-turn challengeへ結合する。Public candle本体は
+  gitignore済み`backend/market_data/`だけに保存し、report、Git、chatには出さない。
+- final entry quoteは5秒以内、USD/JPY spreadは0.5pips以下を必須とする。
+- exact注文sheet作成時にreference status+tickerを各1回取得し、表示したreference BID/ASKもsheet digestへ
+  結合する。confirmation後のfinal status+tickerも各1回だけ取得し、reference midpointから5.0pipsを超えて
+  動いていた場合はPOSTせず停止する。
+- formal M1/H1、reference quote、final quoteは別々のgeneration-bound operationとして、各I/O前に
+  `O_EXCL` markerを確定する。同generationで同じpurposeのGETを再試行できない。
+
+## 3. Corrective preparation sequence
+
+```text
+00 presence
+05 sealed Keychain access
+10 Pushover send + acknowledgement
+15 SMTP send
+20 fresh email receipt confirmation
+30 current-host / disposable KILL
+40 fresh account exclusivity confirmation
+45 Public status+ticker GET
+50 latestExecutions/openPositions/activeOrders GET
+60 monitor-only LaunchAgent install/restart evidence
+```
+
+各operationはexternal I/O前にgeneration-bound started markerを`O_EXCL`で保存する。失敗・不明時は
+同generationで再試行しない。
+
+## 4. Frozen canary contract
+
+```text
+generation=H11_AUTO_30M_20260717_G013
+strategy=SHORT_V1
+horizon=30m
+symbol=USD_JPY
+size=1000
+entry=MARKET
+entry_window_jst=Friday_09:00_inclusive_to_21:00_exclusive
+exit_sequence=minimum(entry_plus_23h,Saturday_03:45_JST)
+weekend_flat_target=Saturday_04:00_JST
+maximum_unprotected_seconds=15
+maximum_entry_spread_pips=0.5
+maximum_reference_deviation_pips=5.0
+atr_24=latest_24_completed_H1_true_range_mean
+same_action_retry=false
+same_action_repost=false
+```
+
+正式signalが`BUY`/`SELL`かつ期限内の場合だけ、方向をそのままexact intentへ固定する。Codexは方向、
+数量、symbol、execution typeを推測・変更しない。
+
+## 5. Actual canary boundary
+
+外部準備、fresh Public/Private preflight、risk/dead-man/process lock、major-incident resumeのfresh入力、
+exact注文sheet確認後のfresh current-turn challengeがすべてclearの場合だけ、generation-bound permitを
+一度発行できる。entry MARKETとexact-size protection OCOは別actionであり、各action最大1 attemptとする。
+operator入力の直前状態を信頼せず、permit発行直前にclean main、`HEAD == origin/main`、reviewed-files digest、
+generation digest、completed preparation evidenceを再読込・再照合する。不一致時はconfirmationを消費せず停止する。
+正式30分signalは準備時だけでなくPOST直前にも観測から120秒以内であることを再検査する。
+MARKETが結果既知の部分約定/pendingの場合は、fresh reconciliationで確認した未約定残だけを
+`cancelOrders`で最大1 attempt取消する。取消結果が既知かつpending=0の場合だけ、実約定量と同じOCOへ
+進む。結果不明、取消拒否、pending残存、または15秒以内にexact OCO確認不能の場合はpersistent HALTとし、
+追加writeを行わない。
+
+各fixed write後のPrivate reconciliationは1 sequenceだけとする。その同じsnapshotからtransport結果を確定し、
+次actionのexact数量を作り、one-use evidenceを引き渡す。追加GETで同じ状態を取り直さない。POST直前には
+Friday entry windowも再確認し、21:00 JST到達後はsignalが期限内でもentryを拒否する。注文sheetはfrozen
+session内で保持し、permit発行前とfinal quote前にsheet SHA-256、formal signal、reference quote、risk幅を
+再照合する。
+
+保護成立後のforeground driverは5秒heartbeatとone-use exit marker監視だけを行い、Private GETをpollしない。
+各fixed write後のauthoritative reconciliationは1回だけで、その同じevidenceをclassificationと永続記録へ渡す。
+自然なOCO決済によるflatの認識は、別途scheduleされたexit sequenceの固定actionに伴うreconciliationでのみ
+行う（継続的なscheduled observationはoperator授権のG013例外「各fixed write後1回」を超えるため実装しない）。
+
+actual canary runnerは`python -m scripts.h11_auto_v4_g013_actual_canary`で、exact注文sheetを表示後、fresh
+major-incident resume phraseとfresh current-turn challengeの完全一致入力を同一process内で要求する。
+challengeはside/size/symbol/execution typeだけでなく、表示したexact注文sheet全体のSHA-256 digestにも
+結合される。operator入力はhidden readでecho・保存しない。
+challengeは通常stdoutやファイルに出さず、非表示入力プロンプト内に一時表示する。
+
+## 6. Current safety flags
+
+```text
+actual_post=false
+broker_write=false
+broker_post_count=0
+activation_permit_issued=false
+major_incident_resume_effective=false
+current_turn_confirmation_consumed=false
+credential_value_exposure=false
+raw_response_exposure=false
+real_id_exposure=false
+performance_proof_status=false
+live_ready=false
+unattended_live_supported=false
+```

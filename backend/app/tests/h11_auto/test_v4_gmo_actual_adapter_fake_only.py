@@ -88,7 +88,7 @@ class FakeCredentialPair:
 def action_plan(
     action: V4GmoAction,
     *,
-    size: int = 10_000,
+    size: int = 1_000,
     side: SignalDecision = SignalDecision.BUY,
 ):
     return build_v4_action_plan(
@@ -147,7 +147,7 @@ def partial_responses() -> list[dict[str, Any]]:
                         "symbol": "USD_JPY",
                         "side": "BUY",
                         "settleType": "OPEN",
-                        "size": "4000",
+                        "size": "400",
                     },
                     {
                         "clientOrderId": entry_client_id(),
@@ -155,7 +155,7 @@ def partial_responses() -> list[dict[str, Any]]:
                         "symbol": "USD_JPY",
                         "side": "BUY",
                         "settleType": "OPEN",
-                        "size": "2000",
+                        "size": "200",
                     },
                 ]
             },
@@ -168,14 +168,14 @@ def partial_responses() -> list[dict[str, Any]]:
                         "positionId": 1001,
                         "symbol": "USD_JPY",
                         "side": "BUY",
-                        "size": "4000",
+                        "size": "400",
                         "price": "150.000",
                     },
                     {
                         "positionId": 1002,
                         "symbol": "USD_JPY",
                         "side": "BUY",
-                        "size": "2000",
+                        "size": "200",
                         "price": "150.006",
                     },
                 ]
@@ -189,7 +189,7 @@ def partial_responses() -> list[dict[str, Any]]:
                         "clientOrderId": entry_client_id(),
                         "symbol": "USD_JPY",
                         "settleType": "OPEN",
-                        "size": "10000",
+                        "size": "1000",
                     }
                 ]
             },
@@ -226,7 +226,7 @@ def test_signing_uses_official_short_path_and_redacts_repr() -> None:
         body={
             "symbol": "USD_JPY",
             "side": "BUY",
-            "size": "10000",
+            "size": "1000",
             "clientOrderId": entry_client_id(),
             "executionType": "MARKET",
         },
@@ -281,7 +281,7 @@ def test_market_entry_and_cancel_use_deterministic_client_order_id() -> None:
     assert market.body == {
         "symbol": "USD_JPY",
         "side": "BUY",
-        "size": "10000",
+        "size": "1000",
         "clientOrderId": entry_client_id(),
         "executionType": "MARKET",
     }
@@ -292,10 +292,10 @@ def test_market_entry_and_cancel_use_deterministic_client_order_id() -> None:
         ),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     cancel = adapter._build_action_request(
-        plan=action_plan(V4GmoAction.CANCEL_ENTRY_REMAINDER, size=4_000),
+        plan=action_plan(V4GmoAction.CANCEL_ENTRY_REMAINDER, size=400),
         reconciliation=cancel_reconciliation,
         protection_plan=None,
     )
@@ -327,7 +327,7 @@ def test_transport_request_contract_rejects_extra_or_wrong_v4_fields() -> None:
             body={
                 "symbol": "USD_JPY",
                 "side": "BUY",
-                "size": "10000",
+                "size": "1000",
                 "clientOrderId": entry_client_id(),
                 "executionType": "MARKET",
                 "unexpected": "forbidden",
@@ -342,7 +342,7 @@ def test_transport_request_contract_rejects_extra_or_wrong_v4_fields() -> None:
             body={
                 "symbol": "USD_JPY",
                 "side": "BUY",
-                "size": "10000",
+                "size": "1000",
                 "clientOrderId": protection_client_id(),
                 "executionType": "MARKET",
             },
@@ -355,17 +355,17 @@ def test_partial_fill_reconciliation_aggregates_owned_position_parts() -> None:
         V4GmoActualAdapter(transport=transport),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     assert result.snapshot.result_known is True
     assert result.snapshot.position_count == 1
-    assert result.snapshot.filled_size == 6_000
-    assert result.snapshot.pending_entry_size == 4_000
+    assert result.snapshot.filled_size == 600
+    assert result.snapshot.pending_entry_size == 400
     assert result.snapshot.entry_status is V4GmoEntryStatus.PARTIAL
     assert result.snapshot.protection_status is V4GmoProtectionStatus.NONE
     assert result.average_fill_price == Decimal("150.002")
     assert result.position_bundle is not None
-    assert result.position_bundle.total_size == 6_000
+    assert result.position_bundle.total_size == 600
     assert "1001" not in repr(result)
     assert "1002" not in repr(result.position_bundle)
     assert result.raw_response_retained is False
@@ -397,7 +397,7 @@ def test_actual_reconciliation_path_enforces_fixed_get_cadence_without_retry() -
     result = V4GmoActualAdapter(transport=transport).reconcile_at_fixed_cadence(
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         monotonic_factory=monotonic,
         wait=wait,
     )
@@ -436,7 +436,7 @@ def test_fixed_get_cadence_does_not_compress_after_slow_first_get() -> None:
     ).reconcile_at_fixed_cadence(
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         monotonic_factory=monotonic,
         wait=wait,
     )
@@ -450,7 +450,7 @@ def test_fixed_get_cadence_fails_closed_when_wait_does_not_advance_clock() -> No
     result = V4GmoActualAdapter(transport=transport).reconcile_at_fixed_cadence(
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         monotonic_factory=lambda: 100.0,
         wait=lambda _seconds: None,
     )
@@ -480,7 +480,7 @@ def test_fixed_get_cadence_is_shared_across_back_to_back_reconciliation() -> Non
         result = adapter.reconcile_at_fixed_cadence(
             cycle_ref=CYCLE_REF,
             side=SignalDecision.BUY,
-            requested_size=10_000,
+            requested_size=1_000,
             monotonic_factory=lambda: clock[0],
             wait=wait,
         )
@@ -500,7 +500,7 @@ def test_fixed_get_cadence_fails_closed_on_monotonic_clock_regression() -> None:
     result = V4GmoActualAdapter(transport=transport).reconcile_at_fixed_cadence(
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         monotonic_factory=lambda: next(readings),
         wait=lambda _seconds: None,
     )
@@ -515,18 +515,18 @@ def test_exact_oco_and_position_specific_exit_use_reconciled_bundle() -> None:
         V4GmoActualAdapter(transport=reconcile_transport),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     protection = build_exact_fill_oco_plan_no_post(
         position_side=SignalDecision.BUY,
         reconciled_average_fill_price=Decimal("150.002"),
         frozen_signal_atr_24=Decimal("0.100"),
-        reconciled_filled_size=6_000,
+        reconciled_filled_size=600,
     )
     adapter = V4GmoActualAdapter(transport=FakePrivateTransport(responses=[]))
 
     oco = adapter._build_action_request(
-        plan=action_plan(V4GmoAction.EXACT_SIZE_OCO_PROTECTION, size=6_000),
+        plan=action_plan(V4GmoAction.EXACT_SIZE_OCO_PROTECTION, size=600),
         reconciliation=reconciliation,
         protection_plan=protection,
     )
@@ -536,12 +536,12 @@ def test_exact_oco_and_position_specific_exit_use_reconciled_bundle() -> None:
     assert oco.body["side"] == "SELL"
     assert oco.body["clientOrderId"] == protection_client_id()
     assert oco.body["settlePosition"] == [
-        {"positionId": 1001, "size": "4000"},
-        {"positionId": 1002, "size": "2000"},
+        {"positionId": 1001, "size": "400"},
+        {"positionId": 1002, "size": "200"},
     ]
 
     close = adapter._build_action_request(
-        plan=action_plan(V4GmoAction.POSITION_SPECIFIC_EMERGENCY_EXIT, size=6_000),
+        plan=action_plan(V4GmoAction.POSITION_SPECIFIC_EMERGENCY_EXIT, size=600),
         reconciliation=reconciliation,
         protection_plan=None,
     )
@@ -574,7 +574,7 @@ def test_flat_reconciliation_reports_owned_realized_pnl_without_ids() -> None:
                         "symbol": "USD_JPY",
                         "side": "BUY",
                         "settleType": "OPEN",
-                        "size": "10000",
+                        "size": "1000",
                         "amount": "0",
                         "lossGain": "0",
                         "fee": "0",
@@ -586,7 +586,7 @@ def test_flat_reconciliation_reports_owned_realized_pnl_without_ids() -> None:
                         "symbol": "USD_JPY",
                         "side": "SELL",
                         "settleType": "CLOSE",
-                        "size": "10000",
+                        "size": "1000",
                         "amount": "-1234.25",
                         "lossGain": "-1200.25",
                         "fee": "-30",
@@ -602,12 +602,12 @@ def test_flat_reconciliation_reports_owned_realized_pnl_without_ids() -> None:
         V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
 
     assert result.snapshot.result_known is True
     assert result.snapshot.position_count == 0
-    assert result.closed_size == 10_000
+    assert result.closed_size == 1_000
     assert result.realized_pnl_jpy_internal == -1235
     assert "1001" not in repr(result)
 
@@ -624,7 +624,7 @@ def test_delivery_amount_alone_is_not_accepted_as_realized_pnl() -> None:
                         "symbol": "USD_JPY",
                         "side": "BUY",
                         "settleType": "OPEN",
-                        "size": "10000",
+                        "size": "1000",
                         "amount": "0",
                     },
                     {
@@ -633,7 +633,7 @@ def test_delivery_amount_alone_is_not_accepted_as_realized_pnl() -> None:
                         "symbol": "USD_JPY",
                         "side": "SELL",
                         "settleType": "CLOSE",
-                        "size": "10000",
+                        "size": "1000",
                         "amount": "-1234.25",
                     },
                 ]
@@ -646,7 +646,7 @@ def test_delivery_amount_alone_is_not_accepted_as_realized_pnl() -> None:
         V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
 
     assert result.snapshot.result_known is False
@@ -666,7 +666,7 @@ def test_close_execution_requires_owned_position_opposite_side_and_size() -> Non
                             "symbol": "USD_JPY",
                             "side": "BUY",
                             "settleType": "OPEN",
-                            "size": "10000",
+                            "size": "1000",
                             "amount": "0",
                         },
                         {
@@ -691,14 +691,14 @@ def test_close_execution_requires_owned_position_opposite_side_and_size() -> Non
             V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
             cycle_ref=CYCLE_REF,
             side=SignalDecision.BUY,
-            requested_size=10_000,
+            requested_size=1_000,
         )
 
     wrong_position = result_for(
-        position_id=2002, side="SELL", close_size="10000"
+        position_id=2002, side="SELL", close_size="1000"
     )
     wrong_side = result_for(
-        position_id=1001, side="BUY", close_size="10000"
+        position_id=1001, side="BUY", close_size="1000"
     )
     oversized = result_for(
         position_id=1001, side="SELL", close_size="10001"
@@ -718,13 +718,13 @@ def test_exact_protection_reconciliation_treats_two_oco_legs_as_one_size() -> No
                     "clientOrderId": protection_client_id(),
                     "symbol": "USD_JPY",
                     "settleType": "CLOSE",
-                    "size": "6000",
+                    "size": "600",
                 },
                 {
                     "clientOrderId": protection_client_id(),
                     "symbol": "USD_JPY",
                     "settleType": "CLOSE",
-                    "size": "6000",
+                    "size": "600",
                 },
             ]
         },
@@ -733,10 +733,10 @@ def test_exact_protection_reconciliation_treats_two_oco_legs_as_one_size() -> No
         V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     assert result.snapshot.pending_entry_size == 0
-    assert result.snapshot.protection_size == 6_000
+    assert result.snapshot.protection_size == 600
     assert result.snapshot.protection_status is V4GmoProtectionStatus.EXACT_MATCH
     assert result.snapshot.entry_status is V4GmoEntryStatus.FILLED
 
@@ -748,7 +748,7 @@ def test_unowned_position_or_order_fails_closed_without_identifier_exposure() ->
         V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     assert result.snapshot.result_known is False
     assert result.snapshot.entry_status is V4GmoEntryStatus.UNKNOWN
@@ -762,14 +762,14 @@ def test_unowned_position_or_order_fails_closed_without_identifier_exposure() ->
             "clientOrderId": "MANUALORDER000000000000000000000001",
             "symbol": "USD_JPY",
             "settleType": "OPEN",
-            "size": "10000",
+            "size": "1000",
         }
     )
     result = reconcile_fixed(
         V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     assert result.snapshot.result_known is False
     assert result.account_active_order_count == 2
@@ -789,7 +789,7 @@ def test_unowned_position_or_order_fails_closed_without_identifier_exposure() ->
         V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     assert result.snapshot.result_known is False
     assert result.unowned_position_count == 1
@@ -807,7 +807,7 @@ def test_unowned_position_or_order_fails_closed_without_identifier_exposure() ->
         V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     assert result.snapshot.result_known is False
     assert result.unowned_active_order_count == 1
@@ -824,7 +824,7 @@ def test_unrelated_manual_execution_history_does_not_claim_or_block_flat() -> No
                         "symbol": "USD_JPY",
                         "side": "SELL",
                         "settleType": "CLOSE",
-                        "size": "10000",
+                        "size": "1000",
                     }
                 ]
             },
@@ -836,7 +836,7 @@ def test_unrelated_manual_execution_history_does_not_claim_or_block_flat() -> No
         V4GmoActualAdapter(transport=FakePrivateTransport(responses=responses)),
         cycle_ref=CYCLE_REF,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
     )
     assert result.snapshot == result.snapshot.flat()
 

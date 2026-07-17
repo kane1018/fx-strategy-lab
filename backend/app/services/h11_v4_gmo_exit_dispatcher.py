@@ -1,4 +1,4 @@
-"""Finite generation-bound time-exit dispatcher for H-11 v4 G012.
+"""Finite generation-bound time-exit dispatcher for H-11 v4 G013.
 
 The monitor-only supervisor never imports this module.  A future activated
 runtime may call this dispatcher once after the supervisor emits the reviewed
@@ -100,15 +100,14 @@ class V4GmoExitDispatcher:
                 side=side,
                 requested_size=requested_size,
             )
-            self.path.recover_pending_transport_once(
-                cycle_ref=cycle_ref,
-                reconciliation_evidence=cancel_recovery_evidence,
+            cancel_recovery, close_action_evidence = (
+                self.path.recover_pending_transport_and_carry_once(
+                    cycle_ref=cycle_ref,
+                    reconciliation_evidence=cancel_recovery_evidence,
+                )
             )
-            close_evidence = self.path.reconcile_once_fixed(
-                cycle_ref=cycle_ref,
-                side=side,
-                requested_size=requested_size,
-            )
+            if cancel_recovery.classification != "FILLED_UNPROTECTED":
+                raise V4GmoExitDispatcherError("V4_EXIT_CANCEL_RECONCILIATION_INVALID")
             close_plan = build_v4_action_plan(
                 cycle_ref=cycle_ref,
                 action=V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,
@@ -119,7 +118,7 @@ class V4GmoExitDispatcher:
             close_outcome = self.path.perform_risk_reducing_once(
                 signal_fingerprint=signal_fingerprint,
                 plan=close_plan,
-                reconciliation_evidence=close_evidence,
+                reconciliation_evidence=close_action_evidence,
                 market_status_evidence=public_close_reader.read_once(),
             )
             if close_outcome is not V4GmoPrivateOutcome.ACCEPTED_SANITIZED:
@@ -129,15 +128,14 @@ class V4GmoExitDispatcher:
                 side=side,
                 requested_size=requested_size,
             )
-            self.path.recover_pending_transport_once(
-                cycle_ref=cycle_ref,
-                reconciliation_evidence=close_recovery_evidence,
+            close_recovery, flat_evidence = (
+                self.path.recover_pending_transport_and_carry_once(
+                    cycle_ref=cycle_ref,
+                    reconciliation_evidence=close_recovery_evidence,
+                )
             )
-            flat_evidence = self.path.reconcile_once_fixed(
-                cycle_ref=cycle_ref,
-                side=side,
-                requested_size=requested_size,
-            )
+            if close_recovery.classification != "FLAT_OR_REJECTED":
+                raise V4GmoExitDispatcherError("V4_EXIT_CLOSE_RECONCILIATION_INVALID")
             flat = self.path.record_flat_closed_result_once(
                 signal_fingerprint=signal_fingerprint,
                 reconciliation_evidence=flat_evidence,
@@ -206,7 +204,9 @@ class V4GmoExitDispatcher:
         try:
             descriptor = os.open(path, flags, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                handle.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+                handle.write(
+                    json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+                )
                 handle.flush()
                 os.fsync(handle.fileno())
             directory = os.open(path.parent, os.O_RDONLY)
@@ -219,7 +219,9 @@ class V4GmoExitDispatcher:
                 "V4_EXIT_DISPATCH_ALREADY_CLAIMED_NO_RETRY"
             ) from error
         except OSError as error:
-            raise V4GmoExitDispatcherError("V4_EXIT_DISPATCH_MARKER_WRITE_FAILED") from error
+            raise V4GmoExitDispatcherError(
+                "V4_EXIT_DISPATCH_MARKER_WRITE_FAILED"
+            ) from error
 
     def __repr__(self) -> str:
         return "V4GmoExitDispatcher(<generation-bound-one-shot>)"

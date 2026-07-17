@@ -155,9 +155,7 @@ def test_launchagent_is_monitor_only_and_finite_restart_is_testable(
         return subprocess.CompletedProcess(command, 0, "", "")
 
     result = install_and_restart_v4_gmo_monitor_launchagent(
-        plist_path=(
-            tmp_path / "LaunchAgents" / f"{V4_GMO_MONITOR_LABEL}.plist"
-        ),
+        plist_path=(tmp_path / "LaunchAgents" / f"{V4_GMO_MONITOR_LABEL}.plist"),
         plist_content=content,
         user_id=501,
         runner=runner,
@@ -180,7 +178,11 @@ def _exit_dispatch_path(root: Path, *, generation_digest: str) -> MagicMock:
         digest=generation_digest,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
-    path.reconcile_once_fixed.side_effect = [object() for _ in range(5)]
+    path.reconcile_once_fixed.side_effect = [object() for _ in range(3)]
+    path.recover_pending_transport_and_carry_once.side_effect = [
+        (SimpleNamespace(classification="FILLED_UNPROTECTED"), object()),
+        (SimpleNamespace(classification="FLAT_OR_REJECTED"), object()),
+    ]
     path.perform_risk_reducing_once.side_effect = [
         V4GmoPrivateOutcome.ACCEPTED_SANITIZED,
         V4GmoPrivateOutcome.ACCEPTED_SANITIZED,
@@ -223,9 +225,9 @@ def test_exit_dispatcher_claims_once_and_runs_fixed_cancel_close_sequence(
     assert result.claimed is True
     assert result.flat_reconciled is True
     assert result.broker_post_attempt_count == 2
-    assert path.reconcile_once_fixed.call_count == 5
+    assert path.reconcile_once_fixed.call_count == 3
     assert path.perform_risk_reducing_once.call_count == 2
-    assert path.recover_pending_transport_once.call_count == 2
+    assert path.recover_pending_transport_and_carry_once.call_count == 2
     assert cancel_reader.read_once.call_count == 1
     assert close_reader.read_once.call_count == 1
     assert (root / "exit-sequence-dispatch-completed.json").is_file()
@@ -324,6 +326,52 @@ def test_foreground_driver_consumes_monitor_marker_with_same_runtime_lock(
     assert result.broker_post_attempt_count == 2
     dispatcher.dispatch_once.assert_called_once()
     path.dead_man_store.heartbeat.assert_called_once()
+
+
+def test_foreground_driver_observes_local_flat_without_private_polling(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "state"
+    root.mkdir()
+    path = MagicMock()
+    path.store.path = root / "coordinator.sqlite3"
+    path.process_lock = SimpleNamespace(held=True)
+    path.generation = SimpleNamespace(digest=_generation().digest)
+    protected = SimpleNamespace(
+        entry_attempted_at_utc=FRIDAY_ENTRY,
+        flat_reconciled=False,
+        protection_confirmed=True,
+        pending_transport=False,
+        unknown_halt_latched=False,
+    )
+    locally_recorded_flat = SimpleNamespace(
+        entry_attempted_at_utc=FRIDAY_ENTRY,
+        flat_reconciled=True,
+        protection_confirmed=True,
+        pending_transport=False,
+        unknown_halt_latched=False,
+    )
+    path.store.monitor_snapshot_safe.side_effect = [protected, locally_recorded_flat]
+    dispatcher = MagicMock()
+    dispatcher.path = path
+    waits: list[float] = []
+    driver = V4GmoActualRuntimeDriver(
+        coordinated_path=path,
+        dispatcher=dispatcher,
+    )
+
+    result = driver.run_until_flat(
+        wall_clock=lambda: datetime(2026, 7, 17, 18, 45, tzinfo=UTC),
+        wait=waits.append,
+    )
+
+    assert result.flat_reconciled is True
+    assert result.exit_dispatch_claimed is False
+    assert result.broker_post_attempt_count == 0
+    assert waits == [5.0]
+    path.reconcile_once_fixed.assert_not_called()
+    path.record_flat_closed_result_once.assert_not_called()
+    dispatcher.dispatch_once.assert_not_called()
 
 
 def test_exit_dispatch_claim_fsyncs_parent_directory_before_io() -> None:

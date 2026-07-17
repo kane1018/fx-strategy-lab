@@ -86,6 +86,7 @@ def _intent() -> V4GmoCanaryIntent:
         generation_digest=GENERATION_DIGEST,
         cycle_ref=CYCLE_REF,
         side="BUY",
+        exact_order_sheet_digest="sha256:" + "c" * 64,
     )
 
 
@@ -141,7 +142,7 @@ def test_activated_runtime_scope_cannot_be_constructed_by_caller() -> None:
             cycle_ref=CYCLE_REF,
             intent_digest="sha256:" + "c" * 64,
             side="BUY",
-            size=10_000,
+            size=1_000,
             symbol="USD_JPY",
             execution_type="MARKET",
             entry_expires_monotonic=30.0,
@@ -169,7 +170,7 @@ def test_actual_transport_refuses_post_without_db_backed_final_proof(
         body={
             "symbol": "USD_JPY",
             "side": "BUY",
-            "size": "10000",
+            "size": "1000",
             "clientOrderId": "H11V4E" + CYCLE_REF[:30],
             "executionType": "MARKET",
         },
@@ -203,7 +204,7 @@ def test_post_unparseable_result_latches_halt_once_without_resend(
         body={
             "symbol": "USD_JPY",
             "side": "BUY",
-            "size": "10000",
+            "size": "1000",
             "clientOrderId": "H11V4E" + CYCLE_REF[:30],
             "executionType": "MARKET",
         },
@@ -212,7 +213,7 @@ def test_post_unparseable_result_latches_halt_once_without_resend(
         cycle_ref=CYCLE_REF,
         action=V4GmoAction.MARKET_ENTRY,
         side=SignalDecision.BUY,
-        requested_size=10_000,
+        requested_size=1_000,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
     proof = V4PersistedTransportAuthorization(

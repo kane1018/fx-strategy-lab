@@ -1,4 +1,4 @@
-"""Install and restart the reviewed monitor-only G012 LaunchAgent."""
+"""Install and restart the reviewed monitor-only G013 LaunchAgent."""
 
 from __future__ import annotations
 

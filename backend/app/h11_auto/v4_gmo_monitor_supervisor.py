@@ -1,4 +1,4 @@
-"""Monitor-only resident supervisor for the H-11 v4 G012 canary.
+"""Monitor-only resident supervisor for the H-11 v4 G013 canary.
 
 It emits only safe local markers and latches the coordinator HALT when a
 protection or weekend-flat deadline is missed.

@@ -1,4 +1,4 @@
-"""LaunchAgent rendering and finite lifecycle operations for the G012 monitor."""
+"""LaunchAgent rendering and finite lifecycle operations for the G013 monitor."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 
-V4_GMO_MONITOR_LABEL = "com.fxstrategylab.h11v4.g012.monitor"
+V4_GMO_MONITOR_LABEL = "com.fxstrategylab.h11v4.g013.monitor"
 
 
 class V4GmoLaunchdError(RuntimeError):

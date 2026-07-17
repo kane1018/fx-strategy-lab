@@ -108,7 +108,7 @@ class V4GmoFrozenGeneration:
             self.signal_config_hash == selections.signal_config_hash,
             self.selected_horizon == selections.selected_horizon.value,
             self.symbol == "USD_JPY",
-            self.quantity_units == 10_000,
+            self.quantity_units == 1_000,
             self.account_ownership == selections.account_ownership.value,
             self.temporary_unprotected_gap_accepted is True,
             self.maximum_unprotected_seconds == 15,

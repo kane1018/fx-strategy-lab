@@ -49,12 +49,20 @@ _REVIEWED_FILES = (
     "backend/app/h11_auto/v4_gmo_monitor_supervisor.py",
     "backend/app/h11_auto/v4_gmo_launchd.py",
     "backend/app/h11_auto/v4_gmo_runtime.py",
+    "backend/app/h11_auto/formal_signal_feed.py",
+    "backend/app/h11_auto/signal_adapter.py",
     "backend/app/h11_auto/runtime_safety.py",
+    "backend/app/h11_manual/contracts.py",
+    "backend/app/h11_manual/data.py",
+    "backend/app/h11_manual/short_model.py",
     "backend/app/private_api/auth.py",
     "backend/app/security/real_broker_post_hard_guard.py",
     "backend/app/services/h11_v4_gmo_actual_adapter.py",
     "backend/app/services/h11_v4_gmo_coordinated_actual_path.py",
     "backend/app/services/h11_v4_gmo_public_market_status.py",
+    "backend/app/services/h11_v4_gmo_public_preflight.py",
+    "backend/app/services/h11_v4_gmo_formal_canary_source.py",
+    "backend/app/services/h11_v4_gmo_g013_canary.py",
     "backend/app/services/h11_v4_gmo_actual_transport.py",
     "backend/app/services/h11_v4_gmo_actual_runtime_binding.py",
     "backend/app/services/h11_v4_gmo_actual_runtime_driver.py",
@@ -62,6 +70,7 @@ _REVIEWED_FILES = (
     "backend/app/services/h11_v4_notification_binding_no_post.py",
     "backend/app/services/h11_v4_notification_actual_preparation.py",
     "backend/app/services/h11_v4_gmo_readonly_preflight.py",
+    "backend/app/shadow/gmo_public.py",
     "backend/scripts/h11_auto_v4_actual_preparation_presence.py",
     "backend/scripts/h11_auto_v4_keychain_access_rehearsal.py",
     "backend/scripts/h11_auto_v4_pushover_rehearsal.py",
@@ -71,9 +80,12 @@ _REVIEWED_FILES = (
     "backend/scripts/h11_auto_v4_email_delivery_confirm.py",
     "backend/scripts/h11_auto_v4_exclusivity_confirm.py",
     "backend/scripts/h11_auto_v4_private_get_preflight.py",
+    "backend/scripts/h11_auto_v4_public_get_preflight.py",
+    "backend/scripts/h11_auto_v4_g013_actual_canary.py",
     "backend/scripts/h11_auto_v4_monitor_supervisor.py",
     "backend/scripts/h11_auto_v4_install_monitor_launchagent.py",
     "backend/app/tests/h11_auto/test_v4_actual_preparation_fake_first.py",
+    "backend/app/tests/h11_auto/test_v4_gmo_g013_fake_only.py",
     "backend/app/tests/h11_auto/test_v4_gmo_actual_coordinator_precanary.py",
     "backend/app/tests/h11_auto/test_v4_gmo_actual_adapter_fake_only.py",
     "backend/app/tests/h11_auto/test_v4_gmo_relaxed_no_post.py",
@@ -84,6 +96,7 @@ _REVIEWED_FILES = (
     "backend/app/tests/test_h11_v3_runtime_safety_no_post.py",
     "docs/H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md",
     "docs/H11_V4_G012_CANARY_PREPARATION_REPORT_20260717.md",
+    "docs/H11_V4_G013_CANARY_ACTIVATION_REPORT_20260717.md",
     "docs/H11_AUTO_OPERATOR_DECISION_SHEET_NO_POST_20260715.md",
     "docs/H11_V4_MAJOR_INCIDENT_RESUME_DECLARATION_DRAFT_NO_POST_20260715.md",
     "docs/H11_AUTO_FROZEN_GENERATION_MANIFEST_TEMPLATE_NO_POST_20260715.md",
@@ -318,6 +331,7 @@ class V4PreparationOperation(str, Enum):
     EMAIL_CONFIRMATION = "20_email_confirmation"
     HOST_KILL = "30_host_kill"
     EXCLUSIVITY_CONFIRMATION = "40_exclusivity_confirmation"
+    PUBLIC_GET = "45_public_get"
     PRIVATE_GET = "50_private_get"
 
 
@@ -329,7 +343,8 @@ _PREVIOUS_OPERATION = {
     V4PreparationOperation.EMAIL_CONFIRMATION: V4PreparationOperation.SMTP,
     V4PreparationOperation.HOST_KILL: V4PreparationOperation.EMAIL_CONFIRMATION,
     V4PreparationOperation.EXCLUSIVITY_CONFIRMATION: V4PreparationOperation.HOST_KILL,
-    V4PreparationOperation.PRIVATE_GET: V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
+    V4PreparationOperation.PUBLIC_GET: V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
+    V4PreparationOperation.PRIVATE_GET: V4PreparationOperation.PUBLIC_GET,
 }
 
 
@@ -532,6 +547,14 @@ def _attest_private_get_success_internal(
     )
 
 
+def _attest_public_get_success_internal(
+    permit: V4PreparationOperationPermit, safe_report: dict[str, object]
+) -> None:
+    _attest_operation_success(
+        permit, operation=V4PreparationOperation.PUBLIC_GET, safe_report=safe_report
+    )
+
+
 def _completion_digest(
     *,
     operation: V4PreparationOperation,
@@ -600,6 +623,19 @@ def _operation_report_is_clear(
             and report.get("persistent_kill_latched") is True
             and report.get("entry_blocked_after_reload") is True
             and report.get("broker_post_count") == 0
+        )
+    if operation is V4PreparationOperation.PUBLIC_GET:
+        return (
+            report.get("public_get_count") == 2
+            and report.get("market_open") is True
+            and report.get("ticker_symbol_match") is True
+            and report.get("ticker_status_open") is True
+            and report.get("quote_fresh") is True
+            and report.get("spread_within_limit") is True
+            and report.get("raw_response_retained") is False
+            and report.get("identifier_exposed") is False
+            and report.get("broker_post_count") == 0
+            and report.get("broker_write_performed") is False
         )
     if operation is V4PreparationOperation.PRIVATE_GET:
         offsets = report.get("cadence_offsets_seconds")

@@ -17,7 +17,7 @@ H11_V4_GMO_PROTECTION_SPEC = {
     "stop_loss_atr_multiplier": "1.50",
     "take_profit_r_multiple": "1.50",
     "tick_size": "0.001",
-    "max_intended_size": 10_000,
+    "max_intended_size": 1_000,
     "same_action_retry_allowed": False,
     "same_action_repost_allowed": False,
     "actual_post_allowed": False,
@@ -35,7 +35,7 @@ def _calculate_protection_contract_hash() -> str:
 
 
 H11_V4_GMO_PROTECTION_CONTRACT_HASH = (
-    "sha256:48344aeb590a4b024879e34de5a8897a74d2d301b542b032407776c6ffa1e0d7"
+    "sha256:2b2a5d8669737177050260e46904723d69bd956b9893447efdcced2e6aae1518"
 )
 
 
@@ -68,7 +68,7 @@ class V4GmoExactProtectionPlan:
         )
         if self.settlement_side is not expected_settlement:
             raise V4GmoProtectionError("v4 protection settlement side is invalid")
-        if not 0 < self.exact_filled_size <= 10_000:
+        if not 0 < self.exact_filled_size <= 1_000:
             raise V4GmoProtectionError("v4 protection size is outside the frozen bound")
         if self.take_profit_price <= 0 or self.stop_loss_price <= 0:
             raise V4GmoProtectionError("v4 protection prices must be positive")
@@ -116,7 +116,7 @@ def build_exact_fill_oco_plan_no_post(
         raise V4GmoProtectionError("position side must be BUY or SELL")
     if reconciled_average_fill_price <= 0 or frozen_signal_atr_24 <= 0:
         raise V4GmoProtectionError("fill price and frozen ATR must be positive")
-    if type(reconciled_filled_size) is not int or not 0 < reconciled_filled_size <= 10_000:
+    if type(reconciled_filled_size) is not int or not 0 < reconciled_filled_size <= 1_000:
         raise V4GmoProtectionError("reconciled fill size is outside the frozen bound")
     risk_width = frozen_signal_atr_24 * Decimal(
         H11_V4_GMO_PROTECTION_SPEC["stop_loss_atr_multiplier"]

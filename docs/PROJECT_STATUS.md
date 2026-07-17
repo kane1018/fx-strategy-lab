@@ -7,6 +7,20 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0AG. H-11 v4 G013 数量改定 10,000→1,000通貨（2026-07-17・no-POST・operator指示）
+
+- operatorは初回actual canaryの数量を10,000通貨から**1,000通貨**へ改定した（証拠金所要と
+  1トレード損失感応度を1/10へ下げる保守方向の変更。1pip≒10円、最低必要証拠金目安≒9,000円）。
+- 予算（5,000/10,000/50,000円・5連敗・1 entry/日）、実行profile、exit schedule、その他の
+  安全条件は不変。GMOのAPI最小数量はUSD_JPY 100通貨のため、1,000通貨はbroker制約内。
+- 変更に伴い次を新数量で再凍結: `protection_contract_hash=sha256:2b2a5d86…`、
+  `policy_config_hash=sha256:58a9a63e…`、generation template（quantity_units=1000・
+  G013ラベル維持・新implementation_digest/世代digest）。AGENTS.mdのG013例外文言も
+  1,000通貨へ改定済み。
+- テスト側は約160箇所のサイズリテラルを1/10へ再スケール（JPY予算・秒・EUR_USD unowned
+  検出値は不変を機械確認）。h11_auto 475件・full backend 8,063件パス。
+- 過去セクション（0AB/0AC等）の「10,000通貨」記述は当時の承認記録としてそのまま保持する。
+
 ## 0AD. H-11 v4 Friday-limited v2 refreeze（2026-07-17・no-POST）
 
 - operatorは金曜終日禁止を廃止し、金曜09:00以上21:00未満のentryと土曜04:00 JSTのflat目標を選択。
@@ -17,7 +31,8 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   各write直前の2秒以内public status `OPEN`、unknown HALT、retry/repost禁止を維持。
 - profile/config/generationが変わるためG011外部準備証拠は新profileへ流用しない。旧markerは保持し、G012を
   新digestで検証・review・commit/push後に最初から準備する。
-- actual POST、activation permit、hard guard、risk budget、10,000通貨、1 entry/日は変更なし。
+- actual POST、activation permit、hard guard、risk budget、1 entry/日は変更なし
+  （数量は2026-07-17に10,000→1,000通貨へ改定。§0AG参照）。
 
 ## 0AE. H-11 v4 G012 canary直前実装（2026-07-17・broker POST禁止）
 
