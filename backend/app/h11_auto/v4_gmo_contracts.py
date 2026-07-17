@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from zoneinfo import ZoneInfo
 
@@ -18,11 +18,20 @@ from app.h11_auto.contracts import FormalHorizon, FormalSignal, SignalDecision
 from app.h11_auto.v4_gmo_evidence import H11_V4_GMO_CAPABILITY_EVIDENCE_HASH
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 
-V4_GMO_PROFILE_VERSION = "H11_V4_GMO_MARKET_THEN_EXACT_OCO_NO_POST_V1"
-V4_GMO_EXIT_PROFILE = "H11_V4_EXACT_OCO_POSITION_SPECIFIC_23H_EXIT_V1"
+V4_GMO_PROFILE_VERSION = (
+    "H11_V4_GMO_MARKET_THEN_EXACT_OCO_FRIDAY_LIMITED_NO_POST_V2"
+)
+V4_GMO_EXIT_PROFILE = (
+    "H11_V4_EXACT_OCO_POSITION_SPECIFIC_23H_FRIDAY_04JST_EXIT_V2"
+)
 V4_GMO_BLOCKED_HOURS_JST = (5, 6, 7, 8)
-V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST = 0
+V4_GMO_FRIDAY_ENTRY_START_HOUR_JST = 9
+V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST = 21
 V4_GMO_WEEKEND_DAYS_JST = (5, 6)
+V4_GMO_WEEKEND_FLAT_WEEKDAY_JST = 5
+V4_GMO_WEEKEND_FLAT_HOUR_JST = 4
+V4_GMO_WEEKEND_EXIT_SEQUENCE_START_HOUR_JST = 3
+V4_GMO_WEEKEND_EXIT_SEQUENCE_START_MINUTE_JST = 45
 V4_GMO_MAXIMUM_HOLD_SECONDS = 82_800
 
 
@@ -102,8 +111,17 @@ class V4GmoExecutionPolicy:
     max_loss_per_month_yen: int = 50_000
     max_consecutive_losses: int = 5
     blocked_hours_jst: tuple[int, ...] = V4_GMO_BLOCKED_HOURS_JST
+    friday_entry_start_hour_jst: int = V4_GMO_FRIDAY_ENTRY_START_HOUR_JST
     friday_entry_cutoff_hour_jst: int = V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST
     weekend_days_jst: tuple[int, ...] = V4_GMO_WEEKEND_DAYS_JST
+    weekend_flat_weekday_jst: int = V4_GMO_WEEKEND_FLAT_WEEKDAY_JST
+    weekend_flat_hour_jst: int = V4_GMO_WEEKEND_FLAT_HOUR_JST
+    weekend_exit_sequence_start_hour_jst: int = (
+        V4_GMO_WEEKEND_EXIT_SEQUENCE_START_HOUR_JST
+    )
+    weekend_exit_sequence_start_minute_jst: int = (
+        V4_GMO_WEEKEND_EXIT_SEQUENCE_START_MINUTE_JST
+    )
     maximum_hold_seconds: int = V4_GMO_MAXIMUM_HOLD_SECONDS
     exit_profile_label: str = V4_GMO_EXIT_PROFILE
     scale_in_allowed: bool = False
@@ -142,10 +160,24 @@ class V4GmoExecutionPolicy:
             type(self.max_consecutive_losses) is int
             and self.max_consecutive_losses == 5,
             self.blocked_hours_jst == V4_GMO_BLOCKED_HOURS_JST,
+            type(self.friday_entry_start_hour_jst) is int
+            and self.friday_entry_start_hour_jst
+            == V4_GMO_FRIDAY_ENTRY_START_HOUR_JST,
             type(self.friday_entry_cutoff_hour_jst) is int
             and self.friday_entry_cutoff_hour_jst
             == V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST,
             self.weekend_days_jst == V4_GMO_WEEKEND_DAYS_JST,
+            type(self.weekend_flat_weekday_jst) is int
+            and self.weekend_flat_weekday_jst
+            == V4_GMO_WEEKEND_FLAT_WEEKDAY_JST,
+            type(self.weekend_flat_hour_jst) is int
+            and self.weekend_flat_hour_jst == V4_GMO_WEEKEND_FLAT_HOUR_JST,
+            type(self.weekend_exit_sequence_start_hour_jst) is int
+            and self.weekend_exit_sequence_start_hour_jst
+            == V4_GMO_WEEKEND_EXIT_SEQUENCE_START_HOUR_JST,
+            type(self.weekend_exit_sequence_start_minute_jst) is int
+            and self.weekend_exit_sequence_start_minute_jst
+            == V4_GMO_WEEKEND_EXIT_SEQUENCE_START_MINUTE_JST,
             type(self.maximum_hold_seconds) is int
             and self.maximum_hold_seconds == V4_GMO_MAXIMUM_HOLD_SECONDS,
             self.exit_profile_label == V4_GMO_EXIT_PROFILE,
@@ -173,6 +205,7 @@ class V4GmoExecutionPolicy:
                 "broker_capability_evidence_hash": self.broker_capability_evidence_hash,
                 "blocked_hours_jst": list(self.blocked_hours_jst),
                 "exit_profile_label": self.exit_profile_label,
+                "friday_entry_start_hour_jst": self.friday_entry_start_hour_jst,
                 "friday_entry_cutoff_hour_jst": self.friday_entry_cutoff_hour_jst,
                 "generic_opposite_close_allowed": False,
                 "hedging_allowed": False,
@@ -194,6 +227,14 @@ class V4GmoExecutionPolicy:
                 "signal_config_hash": self.signal_config_hash,
                 "strategy_version": self.strategy_version,
                 "temporary_unprotected_gap_accepted": True,
+                "weekend_flat_hour_jst": self.weekend_flat_hour_jst,
+                "weekend_flat_weekday_jst": self.weekend_flat_weekday_jst,
+                "weekend_exit_sequence_start_hour_jst": (
+                    self.weekend_exit_sequence_start_hour_jst
+                ),
+                "weekend_exit_sequence_start_minute_jst": (
+                    self.weekend_exit_sequence_start_minute_jst
+                ),
                 "weekend_days_jst": list(self.weekend_days_jst),
             },
             sort_keys=True,
@@ -213,14 +254,42 @@ class V4GmoExecutionPolicy:
         if now_utc.tzinfo is None:
             return False
         now_jst = now_utc.astimezone(ZoneInfo("Asia/Tokyo"))
-        return not (
-            now_jst.weekday() in self.weekend_days_jst
-            or now_jst.hour in self.blocked_hours_jst
-            or (
-                now_jst.weekday() == 4
-                and now_jst.hour >= self.friday_entry_cutoff_hour_jst
+        if now_jst.weekday() in self.weekend_days_jst:
+            return False
+        if now_jst.weekday() == 4:
+            return (
+                self.friday_entry_start_hour_jst
+                <= now_jst.hour
+                < self.friday_entry_cutoff_hour_jst
             )
-        )
+        return now_jst.hour not in self.blocked_hours_jst
+
+    def scheduled_time_exit_at(self, *, entry_time_utc: datetime) -> datetime | None:
+        return v4_gmo_scheduled_time_exit_at(entry_time_utc=entry_time_utc)
+
+
+def v4_gmo_scheduled_time_exit_at(*, entry_time_utc: datetime) -> datetime | None:
+    """Return the frozen normal/Friday deadline without consulting wall time."""
+
+    if entry_time_utc.tzinfo is None:
+        return None
+    entry_utc = entry_time_utc.astimezone(UTC)
+    normal_deadline = entry_utc + timedelta(seconds=V4_GMO_MAXIMUM_HOLD_SECONDS)
+    entry_jst = entry_utc.astimezone(ZoneInfo("Asia/Tokyo"))
+    if entry_jst.weekday() != 4:
+        return normal_deadline
+    weekend_exit_sequence_start_jst = (entry_jst + timedelta(days=1)).replace(
+        hour=V4_GMO_WEEKEND_EXIT_SEQUENCE_START_HOUR_JST,
+        minute=V4_GMO_WEEKEND_EXIT_SEQUENCE_START_MINUTE_JST,
+        second=0,
+        microsecond=0,
+    )
+    if (
+        weekend_exit_sequence_start_jst.weekday()
+        != V4_GMO_WEEKEND_FLAT_WEEKDAY_JST
+    ):
+        return None
+    return min(normal_deadline, weekend_exit_sequence_start_jst.astimezone(UTC))
 
 
 @dataclass(frozen=True)

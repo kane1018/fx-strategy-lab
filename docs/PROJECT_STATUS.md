@@ -7,6 +7,18 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0AD. H-11 v4 Friday-limited v2 refreeze（2026-07-17・no-POST）
+
+- operatorは金曜終日禁止を廃止し、金曜09:00以上21:00未満のentryと土曜04:00 JSTのflat目標を選択。
+- 月〜木の通常最大保有82,800秒（23時間）は維持。金曜entryは通常期限と土曜03:45の早い方で
+  exit sequenceを開始し、04:00時点で未flatなら再試行せずpersistent HALTする。
+- 03:45開始境界は実装済み。03:45自動dispatcherと04:00 target monitorは次のactivation実装まで未発効。
+- exitは既存のexact OCO取消→fresh reconciliation→position-specific closeを各one-attemptで行い、
+  各write直前の2秒以内public status `OPEN`、unknown HALT、retry/repost禁止を維持。
+- profile/config/generationが変わるためG011外部準備証拠は新profileへ流用しない。旧markerは保持し、G012を
+  新digestで検証・review・commit/push後に最初から準備する。
+- actual POST、activation permit、hard guard、risk budget、10,000通貨、1 entry/日は変更なし。
+
 ## 0AC. H-11 v4 initial supervised canary evidence policy（2026-07-16・方針承認のみ）
 
 - operatorは、初回監視付き10,000通貨live canaryを、actual activeOrders OCO rowsと約定後15秒以内の

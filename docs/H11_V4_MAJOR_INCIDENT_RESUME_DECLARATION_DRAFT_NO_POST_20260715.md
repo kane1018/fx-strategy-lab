@@ -46,9 +46,13 @@ persistent_allowed_for_live=false
   monotonic 15秒clock、transport直前dead-man再確認が独立レビューclear。
 - completed preparation evidenceはgeneration単位の永続one-useであり、別coordinatorまたはprocess再起動から
   同じgenerationへ再利用できない。
-- v4 generation-bound entry-time gate（JST 5〜8時、金曜終日、週末）がMARKET直前に強制される。
-- 最大保有82,800秒（23時間）到達時の出口は、exact OCO取消、fresh reconciliation、position-specific time exitの
-  単発固定順序であり、到達前には実行できない。
+- v4 generation-bound entry-time gateは、月〜木のJST 5〜8時、金曜09:00未満／21:00以降、土日を
+  MARKET直前に拒否する。
+- 通常は最大保有82,800秒（23時間）、金曜entryは通常期限と土曜03:45 JSTの早い方をexit-sequence
+  startとし、土曜04:00 JSTをflat目標とする。開始期限到達時の出口は、exact OCO取消、fresh reconciliation、
+  position-specific time exitの単発固定順序であり、到達前には実行できない。04:00時点でflatを
+  確認できない場合は自動再試行せずpersistent HALTする。この宣言を発効する前に、03:45自動dispatcherと
+  04:00 target monitorが実装・独立review clearでなければならない。
 - time exitのOCO取消transport直前とposition-specific time exit transport直前は、
   executor-owned monotonic clockで最大2秒以内の公式public status `OPEN` evidenceを、
   それぞれ別のone-use evidenceとして消費する。

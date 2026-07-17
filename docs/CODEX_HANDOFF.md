@@ -3937,3 +3937,21 @@ Pushoverは配送されたがrehearsalの3分内にackされず、operatorが後
 含まない固定stage labelだけを返す。同一digestのretry、旧marker削除、broker POSTは引き続き禁止する。
 
 詳細: [H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md](H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md)
+
+## H-11 v4 Friday-Limited v2 Refreeze Handoff（2026-07-17・no-POST）
+
+Operatorは、金曜終日entry禁止を金曜09:00以上21:00未満へ変更し、金曜entryのexit-sequence startを
+`min(entry attempt + 82,800秒, 土曜03:45 JST)`、flat目標を土曜04:00 JSTへ固定する方針を選択した。月〜木の通常23時間、
+土日entry禁止、JST 05:00〜08:59 blockは維持する。
+
+土曜03:45からのweekend flatは、既存のexact OCO cancel→fresh reconciliation→position-specific closeの
+各one-attemptだけを使用する。各write直前に別の2秒以内public status `OPEN` evidenceを要求し、unknown時は
+retry/repostせずpersistent HALTする。04:00時点でflatを確認できなければOCOを維持できる場合は維持し、
+自動再試行しない。generic opposite close、買い増し、両建ては引き続き禁止。
+
+03:45開始境界はcoordinatorへ実装済みだが、03:45自動dispatcherと04:00 target monitorは未発効であり、
+次のactivation実装・独立reviewを必須とする。
+
+これは新profile/config/generationであるため、完走済みG011のKeychain/notification/host/Private GET証拠を
+G012へ流用しない。G011のno-retry markerは保持する。G012は完全検証、独立review、commit/push、clean main、
+HEAD一致後に有限準備を最初から行う。actual POST、activation permit、hard guardは変更・発効しない。

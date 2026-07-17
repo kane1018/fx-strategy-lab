@@ -132,11 +132,25 @@ def test_v4_policy_freezes_relaxed_but_bounded_gmo_invariants() -> None:
     assert frozen.same_action_repost_allowed is False
     assert frozen.max_positions == 1
     assert frozen.max_entries_per_day == 1
+    assert frozen.friday_entry_start_hour_jst == 9
+    assert frozen.friday_entry_cutoff_hour_jst == 21
+    assert frozen.weekend_flat_weekday_jst == 5
+    assert frozen.weekend_flat_hour_jst == 4
+    assert frozen.weekend_exit_sequence_start_hour_jst == 3
+    assert frozen.weekend_exit_sequence_start_minute_jst == 45
     assert frozen.config_hash.startswith("sha256:")
     with pytest.raises(V4GmoContractError, match="cannot be changed"):
         policy(max_unprotected_seconds=16)
     with pytest.raises(V4GmoContractError, match="cannot be changed"):
         policy(same_action_retry_allowed=True)
+    with pytest.raises(V4GmoContractError, match="cannot be changed"):
+        policy(friday_entry_start_hour_jst=8)
+    with pytest.raises(V4GmoContractError, match="cannot be changed"):
+        policy(friday_entry_cutoff_hour_jst=22)
+    with pytest.raises(V4GmoContractError, match="cannot be changed"):
+        policy(weekend_flat_hour_jst=5)
+    with pytest.raises(V4GmoContractError, match="cannot be changed"):
+        policy(weekend_exit_sequence_start_minute_jst=50)
     with pytest.raises(V4GmoContractError, match="evidence hash"):
         policy(broker_capability_evidence_hash="sha256:changed")
 

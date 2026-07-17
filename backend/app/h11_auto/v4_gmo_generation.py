@@ -21,15 +21,20 @@ from app.h11_auto.v4_gmo_contracts import (
     V4_GMO_BLOCKED_HOURS_JST,
     V4_GMO_EXIT_PROFILE,
     V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST,
+    V4_GMO_FRIDAY_ENTRY_START_HOUR_JST,
     V4_GMO_MAXIMUM_HOLD_SECONDS,
     V4_GMO_PROFILE_VERSION,
     V4_GMO_WEEKEND_DAYS_JST,
+    V4_GMO_WEEKEND_EXIT_SEQUENCE_START_HOUR_JST,
+    V4_GMO_WEEKEND_EXIT_SEQUENCE_START_MINUTE_JST,
+    V4_GMO_WEEKEND_FLAT_HOUR_JST,
+    V4_GMO_WEEKEND_FLAT_WEEKDAY_JST,
     V4GmoExecutionPolicy,
 )
 from app.h11_auto.v4_gmo_evidence import H11_V4_GMO_CAPABILITY_EVIDENCE_HASH
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 
-V4_GMO_GENERATION_SCHEMA = "H11_AUTO_GENERATION_V4_GMO_RELAXED_V1"
+V4_GMO_GENERATION_SCHEMA = "H11_AUTO_GENERATION_V4_GMO_FRIDAY_LIMITED_V2"
 V4_GMO_GENERATION_STATUS = "OPERATOR_FROZEN_NOT_ACTIVATED"
 V4_GMO_GENERATION_ARTIFACT = Path(
     "docs/templates/h11_v4_gmo_frozen_generation.json"
@@ -68,8 +73,13 @@ class V4GmoFrozenGeneration:
     monthly_loss_limit_jpy: int
     maximum_consecutive_losses: int
     blocked_hours_jst: tuple[int, ...]
+    friday_entry_start_hour_jst: int
     friday_entry_cutoff_hour_jst: int
     weekend_days_jst: tuple[int, ...]
+    weekend_flat_weekday_jst: int
+    weekend_flat_hour_jst: int
+    weekend_exit_sequence_start_hour_jst: int
+    weekend_exit_sequence_start_minute_jst: int
     maximum_hold_seconds: int
     exit_profile_label: str
     dead_man_policy_label: str
@@ -111,9 +121,17 @@ class V4GmoFrozenGeneration:
             self.monthly_loss_limit_jpy == 50_000,
             self.maximum_consecutive_losses == 5,
             self.blocked_hours_jst == V4_GMO_BLOCKED_HOURS_JST,
+            self.friday_entry_start_hour_jst
+            == V4_GMO_FRIDAY_ENTRY_START_HOUR_JST,
             self.friday_entry_cutoff_hour_jst
             == V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST,
             self.weekend_days_jst == V4_GMO_WEEKEND_DAYS_JST,
+            self.weekend_flat_weekday_jst == V4_GMO_WEEKEND_FLAT_WEEKDAY_JST,
+            self.weekend_flat_hour_jst == V4_GMO_WEEKEND_FLAT_HOUR_JST,
+            self.weekend_exit_sequence_start_hour_jst
+            == V4_GMO_WEEKEND_EXIT_SEQUENCE_START_HOUR_JST,
+            self.weekend_exit_sequence_start_minute_jst
+            == V4_GMO_WEEKEND_EXIT_SEQUENCE_START_MINUTE_JST,
             self.maximum_hold_seconds == V4_GMO_MAXIMUM_HOLD_SECONDS,
             self.exit_profile_label == V4_GMO_EXIT_PROFILE,
             self.dead_man_policy_label == "H11_AUTO_DEAD_MAN_15_60_V1",
@@ -197,8 +215,17 @@ def build_v4_gmo_frozen_generation(
         monthly_loss_limit_jpy=policy.max_loss_per_month_yen,
         maximum_consecutive_losses=policy.max_consecutive_losses,
         blocked_hours_jst=policy.blocked_hours_jst,
+        friday_entry_start_hour_jst=policy.friday_entry_start_hour_jst,
         friday_entry_cutoff_hour_jst=policy.friday_entry_cutoff_hour_jst,
         weekend_days_jst=policy.weekend_days_jst,
+        weekend_flat_weekday_jst=policy.weekend_flat_weekday_jst,
+        weekend_flat_hour_jst=policy.weekend_flat_hour_jst,
+        weekend_exit_sequence_start_hour_jst=(
+            policy.weekend_exit_sequence_start_hour_jst
+        ),
+        weekend_exit_sequence_start_minute_jst=(
+            policy.weekend_exit_sequence_start_minute_jst
+        ),
         maximum_hold_seconds=policy.maximum_hold_seconds,
         exit_profile_label=policy.exit_profile_label,
         dead_man_policy_label=dead_man_policy.policy_label,

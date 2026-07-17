@@ -34,6 +34,7 @@ from app.h11_auto.v4_gmo_contracts import (
     V4GmoExecutionPolicy,
     V4GmoProtectionStatus,
     build_v4_action_plan,
+    v4_gmo_scheduled_time_exit_at,
 )
 from app.h11_auto.v4_gmo_generation import (
     V4_GMO_GENERATION_SCHEMA,
@@ -124,14 +125,14 @@ def _policy() -> V4GmoExecutionPolicy:
     )
 
 
-def _signal() -> FormalSignal:
+def _signal(*, observed_at_utc: datetime = NOW) -> FormalSignal:
     selected = V4ApprovedOperatorSelections()
     return FormalSignal(
         strategy_version=selected.strategy_version,
         signal_config_hash=selected.signal_config_hash,
         horizon=FormalHorizon.MINUTES_30,
-        observed_at_utc=NOW,
-        valid_until_utc=NOW + timedelta(minutes=1),
+        observed_at_utc=observed_at_utc,
+        valid_until_utc=observed_at_utc + timedelta(minutes=1),
         decision=SignalDecision.BUY,
         probability_up=Decimal("0.61"),
     )
@@ -311,8 +312,11 @@ def _record_market(
 
 def _prepare_exact_protected_store(
     tmp_path: Path,
+    *,
+    entry_time_utc: datetime = NOW + timedelta(seconds=1),
 ) -> tuple[FormalSignal, Path, V4GmoActualCoordinatorStore, str]:
-    signal = _signal()
+    observed_at_utc = entry_time_utc - timedelta(seconds=1)
+    signal = _signal(observed_at_utc=observed_at_utc)
     runtime_root = _runtime_root(tmp_path)
     store = V4GmoActualCoordinatorStore(runtime_root / "coordinator.sqlite3")
     store.prepare_entry_intent(
@@ -320,15 +324,15 @@ def _prepare_exact_protected_store(
         signal=signal,
         policy=_policy(),
         frozen_atr_24=Decimal("0.20"),
-        now_utc=NOW,
+        now_utc=observed_at_utc,
     )
-    _record_market(store, signal)
+    _record_market(store, signal, now_utc=entry_time_utc)
     protection = store._persist_exact_protection_plan_from_coordinated_path(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
         signal_fingerprint=signal.fingerprint,
         reconciled_average_fill_price=Decimal("160.000"),
         reconciled_filled_size=10_000,
-        now_utc=NOW + timedelta(seconds=2),
+        now_utc=entry_time_utc + timedelta(seconds=1),
         now_monotonic=102.0,
     )
     cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
@@ -345,7 +349,7 @@ def _prepare_exact_protected_store(
         plan=protection_action,
         protection_plan=protection,
         reconciliation_digest=RECONCILIATION_DIGEST,
-        now_utc=NOW + timedelta(seconds=2),
+        now_utc=entry_time_utc + timedelta(seconds=1),
         now_monotonic=102.0,
     )
     store._record_transport_outcome_from_coordinated_path(
@@ -370,7 +374,7 @@ def _prepare_exact_protected_store(
         ),
         position_bundle_total=10_000,
         authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
-        now_utc=NOW + timedelta(seconds=3),
+        now_utc=entry_time_utc + timedelta(seconds=2),
     )
     return signal, runtime_root, store, cycle_ref
 
@@ -1510,9 +1514,11 @@ def test_integrated_market_refuses_blocked_jst_hour_before_transport(
     ("now_utc", "expected"),
     (
         (datetime(2026, 7, 16, 20, 0, tzinfo=UTC), False),  # Fri 05:00 JST
+        (datetime(2026, 7, 16, 15, 0, tzinfo=UTC), False),  # Fri 00:00 JST
+        (datetime(2026, 7, 17, 0, 0, tzinfo=UTC), True),  # Fri 09:00 JST
+        (datetime(2026, 7, 17, 11, 59, tzinfo=UTC), True),  # Fri 20:59 JST
         (datetime(2026, 7, 17, 12, 0, tzinfo=UTC), False),  # Fri 21:00 JST
         (datetime(2026, 7, 18, 3, 0, tzinfo=UTC), False),  # Sat 12:00 JST
-        (datetime(2026, 7, 17, 0, 0, tzinfo=UTC), False),  # Fri 09:00 JST
         (datetime(2026, 7, 16, 11, 59, tzinfo=UTC), True),  # Thu 20:59 JST
         (datetime(2026, 7, 20, 1, 0, tzinfo=UTC), True),  # Mon 10:00 JST
     ),
@@ -1522,6 +1528,25 @@ def test_v4_generation_bound_entry_time_policy_covers_all_frozen_boundaries(
     expected: bool,
 ) -> None:
     assert _policy().entry_time_allowed(now_utc=now_utc) is expected
+
+
+def test_v4_scheduled_time_exit_is_23h_except_friday_03_45jst_start() -> None:
+    thursday_entry = datetime(2026, 7, 16, 3, 0, tzinfo=UTC)  # Thu 12 JST
+    friday_morning_entry = datetime(2026, 7, 17, 0, 0, tzinfo=UTC)  # Fri 09 JST
+    friday_evening_entry = datetime(2026, 7, 17, 11, 0, tzinfo=UTC)  # Fri 20 JST
+
+    assert v4_gmo_scheduled_time_exit_at(
+        entry_time_utc=thursday_entry
+    ) == thursday_entry + timedelta(seconds=82_800)
+    assert v4_gmo_scheduled_time_exit_at(
+        entry_time_utc=friday_morning_entry
+    ) == datetime(2026, 7, 17, 18, 45, tzinfo=UTC)  # Sat 03:45 JST
+    assert v4_gmo_scheduled_time_exit_at(
+        entry_time_utc=friday_evening_entry
+    ) == datetime(2026, 7, 17, 18, 45, tzinfo=UTC)  # Sat 03:45 JST
+    assert v4_gmo_scheduled_time_exit_at(
+        entry_time_utc=datetime(2026, 7, 17, 9, 0)
+    ) is None
 
 
 def test_unknown_market_latches_halt_but_readonly_reconciliation_remains_allowed(
@@ -2503,6 +2528,55 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
         position_bundle_total=10_000,
         authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
         now_utc=NOW + timedelta(seconds=82_801),
+    )
+    assert attempt.action == V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT.value
+
+
+def test_friday_time_exit_uses_saturday_03_45jst_sequence_start(
+    tmp_path: Path,
+) -> None:
+    friday_entry = datetime(2026, 7, 17, 0, 0, tzinfo=UTC)  # Fri 09 JST
+    signal, _, store, cycle_ref = _prepare_exact_protected_store(
+        tmp_path,
+        entry_time_utc=friday_entry,
+    )
+    cancel = build_v4_action_plan(
+        cycle_ref=cycle_ref,
+        action=V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
+        side=SignalDecision.BUY,
+        requested_size=10_000,
+        protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
+    )
+    exact_snapshot = V4GmoBrokerSnapshot(
+        fresh=True,
+        result_known=True,
+        position_count=1,
+        position_side=SignalDecision.BUY,
+        filled_size=10_000,
+        pending_entry_size=0,
+        protection_size=10_000,
+        entry_status=V4GmoEntryStatus.FILLED,
+        protection_status=V4GmoProtectionStatus.EXACT_MATCH,
+    )
+    sequence_start = datetime(2026, 7, 17, 18, 45, tzinfo=UTC)  # Sat 03:45 JST
+    with pytest.raises(V4GmoActualCoordinatorError, match="state mismatch"):
+        store._record_risk_reducing_attempt_from_coordinated_path(
+            issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
+            signal_fingerprint=signal.fingerprint,
+            plan=cancel,
+            snapshot=exact_snapshot,
+            position_bundle_total=10_000,
+            authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
+            now_utc=sequence_start - timedelta(microseconds=1),
+        )
+    attempt = store._record_risk_reducing_attempt_from_coordinated_path(
+        issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
+        signal_fingerprint=signal.fingerprint,
+        plan=cancel,
+        snapshot=exact_snapshot,
+        position_bundle_total=10_000,
+        authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
+        now_utc=sequence_start,
     )
     assert attempt.action == V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT.value
 

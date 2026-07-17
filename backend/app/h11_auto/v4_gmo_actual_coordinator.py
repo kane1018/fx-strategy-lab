@@ -21,13 +21,13 @@ from pathlib import Path
 
 from app.h11_auto.contracts import FormalSignal, SignalDecision
 from app.h11_auto.v4_gmo_contracts import (
-    V4_GMO_MAXIMUM_HOLD_SECONDS,
     V4GmoAction,
     V4GmoActionPlan,
     V4GmoBrokerSnapshot,
     V4GmoEntryStatus,
     V4GmoExecutionPolicy,
     V4GmoProtectionStatus,
+    v4_gmo_scheduled_time_exit_at,
 )
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.h11_auto.v4_gmo_persisted_authorization import (
@@ -988,9 +988,13 @@ class V4GmoActualCoordinatorStore:
                     attempted_at = datetime.fromisoformat(
                         str(row["market_attempted_at_utc"])
                     ).astimezone(UTC)
+                    scheduled_exit = v4_gmo_scheduled_time_exit_at(
+                        entry_time_utc=attempted_at
+                    )
                     if (
-                        now_utc.astimezone(UTC) - attempted_at
-                    ).total_seconds() < V4_GMO_MAXIMUM_HOLD_SECONDS:
+                        scheduled_exit is None
+                        or now_utc.astimezone(UTC) < scheduled_exit
+                    ):
                         valid_state = False
                 if not valid_state:
                     raise V4GmoActualCoordinatorError(
