@@ -11,6 +11,7 @@ from app.h11_auto.v4_gmo_contracts import V4GmoAction, V4GmoActionPlan
 from app.h11_auto.v4_gmo_protection import V4GmoExactProtectionPlan
 
 _ISSUER_TOKEN = object()
+_TRANSPORT_TOKEN = object()
 
 
 class V4PersistedAuthorizationError(RuntimeError):
@@ -57,6 +58,45 @@ class V4PersistedActionAuthorization:
         return False
 
 
+class V4PersistedTransportAuthorization:
+    """One-use transport-bound proof minted only after DB re-verification."""
+
+    __slots__ = (
+        "_token",
+        "_cycle_ref",
+        "_action",
+        "_plan_digest",
+        "_request_binding_digest",
+        "_consumed",
+    )
+
+    def __init__(
+        self,
+        *,
+        token: object,
+        plan: V4GmoActionPlan,
+        request_binding_digest: str,
+    ) -> None:
+        if token is not _TRANSPORT_TOKEN or not _valid_digest(
+            request_binding_digest
+        ):
+            raise V4PersistedAuthorizationError(
+                "V4_PERSISTED_TRANSPORT_AUTHORIZATION_INVALID"
+            )
+        self._token = token
+        self._cycle_ref = plan.cycle_ref
+        self._action = plan.action
+        self._plan_digest = persisted_plan_digest(plan)
+        self._request_binding_digest = request_binding_digest
+        self._consumed = False
+
+    def __repr__(self) -> str:
+        return "V4PersistedTransportAuthorization(<redacted-one-use-db-bound>)"
+
+    def __bool__(self) -> bool:
+        return False
+
+
 def _issue_persisted_action_authorization(
     *,
     plan: V4GmoActionPlan,
@@ -85,8 +125,9 @@ def consume_persisted_action_authorization(
     plan: V4GmoActionPlan,
     protection_plan: V4GmoExactProtectionPlan | None,
     reconciliation_digest: str | None,
+    request_binding_digest: str,
     now_monotonic: float,
-) -> None:
+) -> V4PersistedTransportAuthorization:
     """Exact-match, DB-reverify, and consume immediately before transport."""
 
     if (
@@ -95,6 +136,7 @@ def consume_persisted_action_authorization(
         or authorization._consumed
         or authorization._plan_digest != persisted_plan_digest(plan)
         or authorization._reconciliation_digest != reconciliation_digest
+        or not _valid_digest(request_binding_digest)
         or not _valid_monotonic(now_monotonic)
     ):
         raise V4PersistedAuthorizationError("V4_PERSISTED_AUTHORIZATION_INVALID")
@@ -122,6 +164,43 @@ def consume_persisted_action_authorization(
             "V4_PERSISTED_COMMIT_REVERIFY_FAILED"
         )
     authorization._consumed = True
+    return V4PersistedTransportAuthorization(
+        token=_TRANSPORT_TOKEN,
+        plan=plan,
+        request_binding_digest=request_binding_digest,
+    )
+
+
+def consume_persisted_transport_authorization(
+    authorization: V4PersistedTransportAuthorization,
+    *,
+    cycle_ref: str,
+    allowed_actions: tuple[V4GmoAction, ...],
+    request_binding_digest: str,
+) -> None:
+    """Consume the final DB-backed proof at the actual transport boundary."""
+
+    if (
+        not isinstance(authorization, V4PersistedTransportAuthorization)
+        or getattr(authorization, "_token", None) is not _TRANSPORT_TOKEN
+        or authorization._consumed
+        or authorization._cycle_ref != cycle_ref
+        or authorization._action not in allowed_actions
+        or authorization._request_binding_digest != request_binding_digest
+    ):
+        raise V4PersistedAuthorizationError(
+            "V4_PERSISTED_TRANSPORT_AUTHORIZATION_INVALID"
+        )
+    authorization._consumed = True
+
+
+def _valid_digest(value: object) -> bool:
+    if not isinstance(value, str) or not value.startswith("sha256:"):
+        return False
+    normalized = value.removeprefix("sha256:")
+    return len(normalized) == 64 and all(
+        character in "0123456789abcdef" for character in normalized
+    )
 
 
 def persisted_plan_digest(plan: V4GmoActionPlan) -> str:

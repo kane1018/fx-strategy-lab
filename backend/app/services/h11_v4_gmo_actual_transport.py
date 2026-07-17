@@ -1,10 +1,10 @@
-"""H-11 GMO relaxed v4 Private API transport (activation absent).
+"""H-11 GMO relaxed v4 Private API transport (activation gated).
 
 This module contains the reviewed actual-shaped transport boundary: sealed
 Keychain loading, GMO HMAC signing, and an httpx request implementation.  It is
-structurally unconstructible in the current build because no v4 activation
-permit can be created.  Fake adapter tests use an injected fake transport and
-never call Keychain or the network.
+constructible only from a generation/cycle-bound one-use activation permit.
+The production permit is not issued by preparation code. Fake tests use an
+injected client and never call Keychain or the network.
 
 The distinction between ``transport_path`` (``/private/v1/...``) and
 ``signing_path`` (``/v1/...``) follows the official GMO FX examples and is
@@ -13,6 +13,7 @@ validated for every request.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 import re
@@ -27,7 +28,21 @@ from typing import Any, Protocol
 import httpx
 
 from app.h11_auto.v4_activation_preparation import (
+    V4CadenceMethod,
     V4PrivateApiCadenceGate,
+)
+from app.h11_auto.v4_gmo_canary_activation import (
+    V4ActivatedRuntimeScope,
+    V4GmoActualActivationPermit,
+    V4GmoCanaryActivationError,
+    consume_v4_gmo_actual_activation_permit,
+    require_v4_activated_runtime_scope_internal,
+)
+from app.h11_auto.v4_gmo_contracts import V4GmoAction
+from app.h11_auto.v4_gmo_persisted_authorization import (
+    V4PersistedAuthorizationError,
+    V4PersistedTransportAuthorization,
+    consume_persisted_transport_authorization,
 )
 from app.private_api.auth import build_auth_headers
 from app.security.real_broker_post_hard_guard import assert_real_broker_post_allowed
@@ -52,14 +67,6 @@ _CLIENT_ORDER_ID_PATTERN = re.compile(r"^H11V4[EPXT][0-9a-f]{30}$")
 
 class V4GmoActualTransportError(RuntimeError):
     """Fixed safe transport failure. Messages never contain response data."""
-
-
-class V4GmoActualActivationPermit:
-    """Unconstructible marker until a separately authorized activation step."""
-
-    def __new__(cls) -> V4GmoActualActivationPermit:
-        del cls
-        raise V4GmoActualTransportError("V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED")
 
 
 @dataclass(frozen=True, repr=False)
@@ -224,6 +231,23 @@ class V4GmoPrivateRequest:
         return False
 
 
+def v4_gmo_private_request_binding_digest(request: V4GmoPrivateRequest) -> str:
+    if not isinstance(request, V4GmoPrivateRequest):
+        raise V4GmoActualTransportError("V4_GMO_REQUEST_INVALID")
+    canonical = json.dumps(
+        {
+            "body": None if request.body is None else dict(request.body),
+            "method": request.method,
+            "params": dict(request.params),
+            "signing_path": request.signing_path,
+            "transport_path": request.transport_path,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
+
+
 @dataclass(frozen=True, repr=False)
 class V4GmoSignedPrivateRequest:
     request: V4GmoPrivateRequest
@@ -237,7 +261,14 @@ class V4GmoSignedPrivateRequest:
 
 
 class V4GmoPrivateTransport(Protocol):
-    def request(self, request: V4GmoPrivateRequest) -> V4GmoPrivateEnvelope: ...
+    def request(
+        self,
+        request: V4GmoPrivateRequest,
+        *,
+        persisted_transport_authorization: (
+            V4PersistedTransportAuthorization | None
+        ) = None,
+    ) -> V4GmoPrivateEnvelope: ...
 
 
 @dataclass(frozen=True, repr=False)
@@ -268,7 +299,7 @@ class V4GmoSignedRequestFactory:
 
 
 class V4GmoHttpxPrivateTransport:
-    """Actual-capable transport whose activation permit is absent in this build."""
+    """Generation/cycle-bound transport with no retry or repost path."""
 
     def __init__(
         self,
@@ -278,35 +309,194 @@ class V4GmoHttpxPrivateTransport:
         client: httpx.Client | None = None,
         cadence_gate: V4PrivateApiCadenceGate | None = None,
         monotonic_factory: Callable[[], float] = time.monotonic,
+        unknown_post_callback: Callable[[], None] | None = None,
     ) -> None:
-        del (
-            activation_permit,
-            signed_request_factory,
-            client,
-            cadence_gate,
-            monotonic_factory,
-        )
-        # The current build has no activation factory.  Refuse the entire
-        # actual transport constructor instead of trusting a Python type check,
-        # which can be bypassed with object.__new__(PermitType).
-        raise V4GmoActualTransportError("V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED")
+        try:
+            scope = consume_v4_gmo_actual_activation_permit(
+                activation_permit,
+                now_monotonic=monotonic_factory(),
+            )
+        except (V4GmoCanaryActivationError, TypeError, ValueError) as error:
+            raise V4GmoActualTransportError(
+                "V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED"
+            ) from error
+        if not isinstance(signed_request_factory, V4GmoSignedRequestFactory):
+            raise V4GmoActualTransportError("V4_GMO_SIGNER_INVALID")
+        self._scope: V4ActivatedRuntimeScope = scope
+        self._signed_request_factory = signed_request_factory
+        self._client = client if client is not None else httpx.Client()
+        self._owns_client = client is None
+        self._cadence_gate = cadence_gate or V4PrivateApiCadenceGate()
+        self._monotonic_factory = monotonic_factory
+        self._post_keys: set[str] = set()
+        self._market_close_attempted = False
+        if not callable(unknown_post_callback):
+            raise V4GmoActualTransportError("V4_GMO_UNKNOWN_POST_CALLBACK_REQUIRED")
+        self._unknown_post_callback = unknown_post_callback
 
     def __repr__(self) -> str:
         return "V4GmoHttpxPrivateTransport(<activation-gated>)"
 
-    def request(self, request: V4GmoPrivateRequest) -> V4GmoPrivateEnvelope:
-        # Keep the call boundary unavailable as well as the constructor.  This
-        # prevents object.__new__(TransportType) plus injected attributes from
-        # becoming an activation substitute in the preparation-only build.
+    def request(
+        self,
+        request: V4GmoPrivateRequest,
+        *,
+        persisted_transport_authorization: (
+            V4PersistedTransportAuthorization | None
+        ) = None,
+    ) -> V4GmoPrivateEnvelope:
+        try:
+            scope = require_v4_activated_runtime_scope_internal(self._scope)
+        except (AttributeError, V4GmoCanaryActivationError) as error:
+            raise V4GmoActualTransportError(
+                "V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED"
+            ) from error
+        if not isinstance(request, V4GmoPrivateRequest):
+            raise V4GmoActualTransportError("V4_GMO_REQUEST_INVALID")
+        now = self._monotonic_factory()
+        method = (
+            V4CadenceMethod.PRIVATE_GET
+            if request.method == "GET"
+            else V4CadenceMethod.PRIVATE_POST
+        )
+        if not self._cadence_gate.admit(method=method, now_monotonic=now):
+            raise V4GmoActualTransportError("V4_GMO_PRIVATE_CADENCE_BLOCKED")
         if request.method == "POST":
-            # The common hard guard stays in the POST call boundary even while
-            # activation is unavailable.  A future activation change must keep
-            # this per-call guard and receive a separate operator review.
-            assert_real_broker_post_allowed(allow=False)
-        raise V4GmoActualTransportError("V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED")
+            request_binding_digest = v4_gmo_private_request_binding_digest(request)
+            post_key, allowed_actions = self._require_bound_post_once(request)
+            try:
+                consume_persisted_transport_authorization(
+                    persisted_transport_authorization,
+                    cycle_ref=scope.cycle_ref,
+                    allowed_actions=allowed_actions,
+                    request_binding_digest=request_binding_digest,
+                )
+            except V4PersistedAuthorizationError as error:
+                raise V4GmoActualTransportError(
+                    "V4_GMO_PERSISTED_TRANSPORT_AUTHORIZATION_REQUIRED"
+                ) from error
+            self._post_keys.add(post_key)
+            if (
+                V4GmoAction.MARKET_ENTRY in allowed_actions
+                and (
+                    now > scope.entry_expires_monotonic
+                    or request.body is None
+                    or request.body.get("side") != scope.side
+                    or request.body.get("size") != str(scope.size)
+                    or request.body.get("symbol") != scope.symbol
+                    or request.body.get("executionType") != scope.execution_type
+                )
+            ):
+                raise V4GmoActualTransportError(
+                    "V4_GMO_CURRENT_TURN_ENTRY_SCOPE_EXPIRED_OR_MISMATCHED"
+                )
+        elif persisted_transport_authorization is not None:
+            raise V4GmoActualTransportError(
+                "V4_GMO_PERSISTED_TRANSPORT_AUTHORIZATION_UNEXPECTED"
+            )
+        signed = self._signed_request_factory.build(request)
+        try:
+            if request.method == "POST":
+                assert_real_broker_post_allowed(allow=True)
+            response = self._client.request(
+                request.method,
+                GMO_V4_PRIVATE_BASE_URL + request.transport_path,
+                params=dict(request.params),
+                headers=dict(signed.headers),
+                content=(request.body_json if request.method == "POST" else None),
+                timeout=5.0,
+            )
+            payload = response.json()
+            if not isinstance(payload, Mapping):
+                raise V4GmoActualTransportError("V4_GMO_PRIVATE_RESULT_UNKNOWN")
+            envelope = V4GmoPrivateEnvelope.from_injected_payload(payload)
+        except Exception as error:  # noqa: BLE001
+            if request.method == "POST":
+                try:
+                    self._unknown_post_callback()
+                except Exception:  # noqa: BLE001
+                    pass
+            raise V4GmoActualTransportError("V4_GMO_PRIVATE_RESULT_UNKNOWN") from error
+        return envelope
+
+    def _require_bound_post_once(
+        self, request: V4GmoPrivateRequest
+    ) -> tuple[str, tuple[V4GmoAction, ...]]:
+        client_key = _post_key(request)
+        action_key = f"{request.transport_path}|{client_key}"
+        if action_key in self._post_keys or not _request_matches_cycle(
+            request,
+            cycle_ref=self._scope.cycle_ref,
+        ):
+            raise V4GmoActualTransportError("V4_GMO_SAME_ACTION_SECOND_ATTEMPT_FORBIDDEN")
+        prefix = client_key[:1]
+        entry_key = "/private/v1/order|E" + self._scope.cycle_ref[:30]
+        protection_key = "/private/v1/closeOrder|P" + self._scope.cycle_ref[:30]
+        if prefix == "E" and request.transport_path == "/private/v1/order":
+            if self._post_keys:
+                raise V4GmoActualTransportError("V4_GMO_POST_SEQUENCE_INVALID")
+            allowed_actions = (V4GmoAction.MARKET_ENTRY,)
+        elif prefix == "E":
+            if entry_key not in self._post_keys:
+                raise V4GmoActualTransportError("V4_GMO_POST_SEQUENCE_INVALID")
+            allowed_actions = (V4GmoAction.CANCEL_ENTRY_REMAINDER,)
+        elif prefix == "P":
+            if entry_key not in self._post_keys:
+                raise V4GmoActualTransportError("V4_GMO_POST_SEQUENCE_INVALID")
+            if (
+                request.transport_path == "/private/v1/cancelOrders"
+                and protection_key not in self._post_keys
+            ):
+                raise V4GmoActualTransportError("V4_GMO_POST_SEQUENCE_INVALID")
+            allowed_actions = (
+                (V4GmoAction.EXACT_SIZE_OCO_PROTECTION,)
+                if request.transport_path == "/private/v1/closeOrder"
+                else (
+                    V4GmoAction.CANCEL_MISMATCHED_PROTECTION,
+                    V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,
+                )
+            )
+        elif prefix in {"X", "T"}:
+            if entry_key not in self._post_keys or self._market_close_attempted:
+                raise V4GmoActualTransportError("V4_GMO_POST_SEQUENCE_INVALID")
+            self._market_close_attempted = True
+            allowed_actions = (
+                (
+                    V4GmoAction.POSITION_SPECIFIC_EMERGENCY_EXIT,
+                )
+                if prefix == "X"
+                else (V4GmoAction.POSITION_SPECIFIC_TIME_EXIT,)
+            )
+        else:
+            raise V4GmoActualTransportError("V4_GMO_POST_SEQUENCE_INVALID")
+        return action_key, allowed_actions
+
+    def close(self) -> None:
+        if self._owns_client:
+            self._client.close()
 
     def __bool__(self) -> bool:
         return False
+
+
+def _post_key(request: V4GmoPrivateRequest) -> str:
+    if request.transport_path == "/private/v1/cancelOrders":
+        values = None if request.body is None else request.body.get("clientOrderIds")
+        if not isinstance(values, list) or len(values) != 1 or not isinstance(values[0], str):
+            raise V4GmoActualTransportError("V4_GMO_POST_SCOPE_INVALID")
+        return values[0][5:]
+    client_order_id = None if request.body is None else request.body.get("clientOrderId")
+    if not isinstance(client_order_id, str):
+        raise V4GmoActualTransportError("V4_GMO_POST_SCOPE_INVALID")
+    return client_order_id[5:]
+
+
+def _request_matches_cycle(request: V4GmoPrivateRequest, *, cycle_ref: str) -> bool:
+    try:
+        key = _post_key(request)
+    except V4GmoActualTransportError:
+        return False
+    return len(key) == 31 and key[0] in {"E", "P", "X", "T"} and key[1:] == cycle_ref[:30]
 
 
 def _validate_request_contract(

@@ -90,6 +90,25 @@ class V4PendingTransportRecovery:
         return False
 
 
+@dataclass(frozen=True, repr=False)
+class V4CoordinatorMonitorSnapshot:
+    generation_bound: bool
+    cycle_present: bool
+    entry_attempted_at_utc: datetime | None
+    flat_reconciled: bool
+    protection_confirmed: bool
+    time_exit_cancel_attempted: bool
+    time_exit_close_attempted: bool
+    pending_transport: bool
+    unknown_halt_latched: bool
+
+    def __repr__(self) -> str:
+        return "V4CoordinatorMonitorSnapshot(<safe-aggregate>)"
+
+    def __bool__(self) -> bool:
+        return False
+
+
 @dataclass(frozen=True)
 class V4CanaryEntryPreflightEvidence:
     """Exact sanitized facts required immediately before a MARKET attempt."""
@@ -1371,6 +1390,59 @@ class V4GmoActualCoordinatorStore:
                 "INSERT INTO metadata(key,value) VALUES('unknown_halt_latched','true') "
                 "ON CONFLICT(key) DO UPDATE SET value='true'"
             )
+
+    def monitor_snapshot_safe(self) -> V4CoordinatorMonitorSnapshot:
+        """Read only non-identifying state needed by the resident supervisor."""
+
+        with self._connect() as connection:
+            generation = connection.execute(
+                "SELECT 1 FROM metadata WHERE key='generation_digest'"
+            ).fetchone()
+            rows = connection.execute(
+                "SELECT market_attempted_at_utc,realized_pnl_jpy FROM cycles"
+            ).fetchall()
+            protection = connection.execute(
+                "SELECT 1 FROM metadata WHERE key='protection_confirmed_at_utc'"
+            ).fetchone()
+            pending = connection.execute(
+                "SELECT 1 FROM metadata WHERE key='pending_transport_attempt'"
+            ).fetchone()
+            halt = connection.execute(
+                "SELECT value FROM metadata WHERE key='unknown_halt_latched'"
+            ).fetchone()
+            attempts = {
+                str(row["action"])
+                for row in connection.execute("SELECT action FROM attempts").fetchall()
+            }
+        if len(rows) > 1:
+            raise V4GmoActualCoordinatorError("v4 canary cycle count invalid")
+        attempted_at: datetime | None = None
+        flat_reconciled = False
+        if rows:
+            raw_attempted = rows[0]["market_attempted_at_utc"]
+            if raw_attempted is not None:
+                try:
+                    attempted_at = datetime.fromisoformat(str(raw_attempted)).astimezone(UTC)
+                except ValueError as error:
+                    raise V4GmoActualCoordinatorError(
+                        "v4 monitor timestamp invalid"
+                    ) from error
+            flat_reconciled = rows[0]["realized_pnl_jpy"] is not None
+        return V4CoordinatorMonitorSnapshot(
+            generation_bound=generation is not None,
+            cycle_present=bool(rows),
+            entry_attempted_at_utc=attempted_at,
+            flat_reconciled=flat_reconciled,
+            protection_confirmed=protection is not None,
+            time_exit_cancel_attempted=(
+                V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT.value in attempts
+            ),
+            time_exit_close_attempted=(
+                V4GmoAction.POSITION_SPECIFIC_TIME_EXIT.value in attempts
+            ),
+            pending_transport=pending is not None,
+            unknown_halt_latched=halt is not None and halt["value"] == "true",
+        )
 
     def unknown_halt_latched(self) -> bool:
         with self._connect() as connection:

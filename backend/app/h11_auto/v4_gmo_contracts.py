@@ -292,6 +292,27 @@ def v4_gmo_scheduled_time_exit_at(*, entry_time_utc: datetime) -> datetime | Non
     return min(normal_deadline, weekend_exit_sequence_start_jst.astimezone(UTC))
 
 
+def v4_gmo_weekend_flat_target_at(
+    *, entry_time_utc: datetime
+) -> datetime | None:
+    """Return the frozen Saturday 04:00 JST flat target for Friday entries."""
+
+    if entry_time_utc.tzinfo is None:
+        return None
+    entry_jst = entry_time_utc.astimezone(ZoneInfo("Asia/Tokyo"))
+    if entry_jst.weekday() != 4:
+        return None
+    target_jst = (entry_jst + timedelta(days=1)).replace(
+        hour=V4_GMO_WEEKEND_FLAT_HOUR_JST,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    if target_jst.weekday() != V4_GMO_WEEKEND_FLAT_WEEKDAY_JST:
+        return None
+    return target_jst.astimezone(UTC)
+
+
 @dataclass(frozen=True)
 class V4GmoPreflightSnapshot:
     boot_reconciled: bool

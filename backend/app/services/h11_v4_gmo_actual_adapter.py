@@ -41,6 +41,7 @@ from app.services.h11_v4_gmo_actual_transport import (
     V4GmoPrivateEnvelope,
     V4GmoPrivateRequest,
     V4GmoPrivateTransport,
+    v4_gmo_private_request_binding_digest,
 )
 from app.services.h11_v4_gmo_public_market_status import (
     V4GmoPublicMarketStatusError,
@@ -255,7 +256,7 @@ class V4GmoActualAdapter:
             reconciliation=reconciliation,
             protection_plan=protection_plan,
         )
-        consume_persisted_action_authorization(
+        transport_authorization = consume_persisted_action_authorization(
             persisted_authorization,
             plan=plan,
             protection_plan=protection_plan,
@@ -264,6 +265,7 @@ class V4GmoActualAdapter:
                 if reconciliation is None
                 else reconciliation._binding_digest_internal()
             ),
+            request_binding_digest=v4_gmo_private_request_binding_digest(request),
             now_monotonic=now_monotonic,
         )
         self._attempted.add(key)
@@ -287,7 +289,10 @@ class V4GmoActualAdapter:
                 "V4_GMO_PUBLIC_MARKET_STATUS_GUARD_UNEXPECTED"
             )
         try:
-            payload = self.transport.request(request)
+            payload = self.transport.request(
+                request,
+                persisted_transport_authorization=transport_authorization,
+            )
         except (V4GmoActualTransportError, TimeoutError, OSError):
             return V4GmoPrivateOutcome.UNKNOWN_SANITIZED
         try:

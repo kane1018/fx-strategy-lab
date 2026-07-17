@@ -3,6 +3,20 @@
 Codex が新しいタスクを安全に開始するための要約済み文脈。詳細な現在地は
 [PROJECT_STATUS.md](PROJECT_STATUS.md)、固定ルールは [`../AGENTS.md`](../AGENTS.md) を参照する。
 
+## H-11 v4 G012 Canary-Preparation Handoff（2026-07-17・broker POST禁止）
+
+OperatorはG012について、generation-bound one-use permitとactual runtime binding、monitor-only resident
+supervisor、LaunchAgent導入、G012外部準備をbroker POST直前まで進めることを承認した。実装はpermit単独で
+transportを呼べず、coordinatorへ先行commitされたDB-backed one-use action proofも要求する。
+
+resident supervisorは15秒safe heartbeat、15秒protection deadline、土曜03:45 dispatch-required marker、
+土曜04:00 flat-miss persistent HALTだけを扱い、credential、Private API、broker read/writeを持たない。
+G012はG011 evidenceを再利用せず、完全review、commit/push、clean main後に外部準備を最初から行う。
+major-incident resume、fresh current-turn confirmation、activation permit、broker POSTは別の最終gateであり、
+本Stepでは代行・発効・再利用しない。
+
+正: [G012 preparation report](H11_V4_G012_CANARY_PREPARATION_REPORT_20260717.md)
+
 ## H-11 v4 Activation Preparation Handoff（fake-only / no-POST, 2026-07-15）
 
 operatorは30分`SHORT_V1`、risk 5,000/10,000/50,000円、5連敗、1 entry/日、heartbeat 15秒・stale

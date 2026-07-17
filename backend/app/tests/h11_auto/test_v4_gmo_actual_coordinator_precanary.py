@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -27,6 +28,13 @@ from app.h11_auto.v4_gmo_actual_coordinator import (
     _V4VerifiedEntryPreflightAuthorization,
     calculate_v4_planned_loss,
 )
+from app.h11_auto.v4_gmo_canary_activation import (
+    V4CurrentTurnChallenge,
+    V4GmoCanaryIntent,
+    confirm_v4_current_turn_exact,
+    confirm_v4_major_incident_resume_exact,
+    issue_v4_gmo_actual_activation_permit,
+)
 from app.h11_auto.v4_gmo_contracts import (
     V4GmoAction,
     V4GmoBrokerSnapshot,
@@ -46,6 +54,7 @@ from app.h11_auto.v4_gmo_generation import (
 )
 from app.h11_auto.v4_gmo_persisted_authorization import (
     V4PersistedAuthorizationError,
+    consume_persisted_action_authorization,
 )
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 from app.services.h11_v4_gmo_actual_adapter import (
@@ -55,15 +64,25 @@ from app.services.h11_v4_gmo_actual_adapter import (
     V4GmoPrivateOutcome,
     v4_gmo_client_order_id,
 )
+from app.services.h11_v4_gmo_actual_runtime_binding import (
+    bind_v4_gmo_actual_runtime,
+)
+from app.services.h11_v4_gmo_actual_runtime_driver import V4GmoActualRuntimeDriver
 from app.services.h11_v4_gmo_actual_transport import (
+    V4GmoActualTransportError,
+    V4GmoHttpxPrivateTransport,
     V4GmoPrivateEnvelope,
     V4GmoPrivateRequest,
+    V4GmoSealedSecret,
+    V4GmoSignedRequestFactory,
+    v4_gmo_private_request_binding_digest,
 )
 from app.services.h11_v4_gmo_coordinated_actual_path import (
     V4GmoCoordinatedActualPath,
     V4GmoCoordinatedPathError,
     v4_gmo_runtime_state_root,
 )
+from app.services.h11_v4_gmo_exit_dispatcher import V4GmoExitDispatchResult
 from app.services.h11_v4_gmo_public_market_status import (
     V4GmoPublicMarketStatusError,
     V4GmoPublicMarketStatusReader,
@@ -95,7 +114,13 @@ class _FakeTransport:
     responses: list[dict[str, Any]]
     requests: list[V4GmoPrivateRequest] = field(default_factory=list)
 
-    def request(self, request: V4GmoPrivateRequest) -> V4GmoPrivateEnvelope:
+    def request(
+        self,
+        request: V4GmoPrivateRequest,
+        *,
+        persisted_transport_authorization: object | None = None,
+    ) -> V4GmoPrivateEnvelope:
+        del persisted_transport_authorization
         self.requests.append(request)
         return V4GmoPrivateEnvelope.from_injected_payload(self.responses.pop(0))
 
@@ -105,7 +130,13 @@ class _TimeoutThenReadTransport:
     requests: list[V4GmoPrivateRequest] = field(default_factory=list)
     calls: int = 0
 
-    def request(self, request: V4GmoPrivateRequest) -> V4GmoPrivateEnvelope:
+    def request(
+        self,
+        request: V4GmoPrivateRequest,
+        *,
+        persisted_transport_authorization: object | None = None,
+    ) -> V4GmoPrivateEnvelope:
+        del persisted_transport_authorization
         self.requests.append(request)
         self.calls += 1
         if request.method == "POST":
@@ -2010,6 +2041,209 @@ def test_persisted_authorization_issuer_is_coordinator_only() -> None:
     }
 
 
+def test_actual_transport_fake_client_requires_committed_coordinator_proof(
+    tmp_path: Path,
+) -> None:
+    signal = _signal()
+    runtime_root = _runtime_root(tmp_path)
+    store = V4GmoActualCoordinatorStore(runtime_root / "coordinator.sqlite3")
+    store.prepare_entry_intent(
+        generation=_generation(),
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    entry_authorization = _record_flat_preflight(
+        store,
+        signal,
+        now_utc=NOW + timedelta(milliseconds=900),
+        now_monotonic=100.9,
+    )
+    plan = _market_plan(store, signal)
+    attempt = store._record_market_attempt_from_coordinated_path(
+        issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
+        entry_authorization=entry_authorization,
+        signal_fingerprint=signal.fingerprint,
+        plan=plan,
+        now_utc=NOW + timedelta(seconds=1),
+        now_monotonic=101.0,
+    )
+    intent = V4GmoCanaryIntent(
+        generation_digest=_generation().digest,
+        cycle_ref=attempt.cycle_ref,
+        side="BUY",
+    )
+    resume = confirm_v4_major_incident_resume_exact(
+        phrase=(
+            "I APPROVE H11 V4 MAJOR INCIDENT RESUME FOR THIS REVIEWED "
+            "GENERATION ONLY"
+        ),
+        generation_digest=_generation().digest,
+    )
+    challenge = V4CurrentTurnChallenge.create(intent=intent)
+    current = confirm_v4_current_turn_exact(
+        typed_phrase=challenge.phrase_for_operator_internal(),
+        challenge=challenge,
+        intent=intent,
+    )
+    permit = issue_v4_gmo_actual_activation_permit(
+        intent=intent,
+        resume_proof=resume,
+        current_turn_proof=current,
+        repository=tmp_path,
+        now_monotonic=101.2,
+    )
+
+    @dataclass(frozen=True)
+    class FakeCredentials:
+        def unseal_for_internal_request_only(
+            self,
+        ) -> tuple[V4GmoSealedSecret, V4GmoSealedSecret]:
+            return V4GmoSealedSecret("fake-key"), V4GmoSealedSecret("fake-secret")
+
+    calls = 0
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(200, json={"status": 0, "data": {}})
+
+    clock = iter((101.3, 102.5, 103.7, 104.9))
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        transport = V4GmoHttpxPrivateTransport(
+            activation_permit=permit,
+            signed_request_factory=V4GmoSignedRequestFactory(
+                credential_pair=FakeCredentials(),
+                timestamp_factory=lambda: "1700000000000",
+            ),
+            client=client,
+            monotonic_factory=lambda: next(clock),
+            unknown_post_callback=store.engage_unknown_halt,
+        )
+        request = V4GmoPrivateRequest(
+            method="POST",
+            transport_path="/private/v1/order",
+            signing_path="/v1/order",
+            params={},
+            body={
+                "symbol": "USD_JPY",
+                "side": "BUY",
+                "size": "10000",
+                "clientOrderId": v4_gmo_client_order_id(
+                    cycle_ref=attempt.cycle_ref,
+                    action=V4GmoAction.MARKET_ENTRY,
+                ),
+                "executionType": "MARKET",
+            },
+        )
+        final_transport_proof = consume_persisted_action_authorization(
+            attempt.authorization,
+            plan=plan,
+            protection_plan=None,
+            reconciliation_digest=None,
+            request_binding_digest=v4_gmo_private_request_binding_digest(request),
+            now_monotonic=101.1,
+        )
+        tampered_request = V4GmoPrivateRequest(
+            method="POST",
+            transport_path="/private/v1/order",
+            signing_path="/v1/order",
+            params={},
+            body={
+                "symbol": "USD_JPY",
+                "side": "SELL",
+                "size": "9000",
+                "clientOrderId": v4_gmo_client_order_id(
+                    cycle_ref=attempt.cycle_ref,
+                    action=V4GmoAction.MARKET_ENTRY,
+                ),
+                "executionType": "MARKET",
+            },
+        )
+        with pytest.raises(V4GmoActualTransportError, match="AUTHORIZATION_REQUIRED"):
+            transport.request(
+                tampered_request,
+                persisted_transport_authorization=final_transport_proof,
+            )
+        assert calls == 0
+        transport.request(
+            request,
+            persisted_transport_authorization=final_transport_proof,
+        )
+        assert calls == 1
+        with pytest.raises(V4GmoActualTransportError, match="SECOND_ATTEMPT"):
+            transport.request(
+                request,
+                persisted_transport_authorization=final_transport_proof,
+            )
+        assert calls == 1
+
+
+def test_actual_runtime_binding_consumes_permit_on_canonical_generation_paths(
+    tmp_path: Path,
+) -> None:
+    signal = _signal()
+    runtime_root = _runtime_root(tmp_path)
+    store = V4GmoActualCoordinatorStore(runtime_root / "coordinator.sqlite3")
+    store.prepare_entry_intent(
+        generation=_generation(),
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
+    intent = V4GmoCanaryIntent(
+        generation_digest=_generation().digest,
+        cycle_ref=cycle_ref,
+        side="BUY",
+    )
+    resume = confirm_v4_major_incident_resume_exact(
+        phrase=(
+            "I APPROVE H11 V4 MAJOR INCIDENT RESUME FOR THIS REVIEWED "
+            "GENERATION ONLY"
+        ),
+        generation_digest=_generation().digest,
+    )
+    challenge = V4CurrentTurnChallenge.create(intent=intent)
+    current = confirm_v4_current_turn_exact(
+        typed_phrase=challenge.phrase_for_operator_internal(),
+        challenge=challenge,
+        intent=intent,
+    )
+    permit = issue_v4_gmo_actual_activation_permit(
+        intent=intent,
+        resume_proof=resume,
+        current_turn_proof=current,
+        repository=tmp_path,
+        now_monotonic=50.0,
+    )
+
+    @dataclass(frozen=True)
+    class FakeCredentials:
+        def unseal_for_internal_request_only(
+            self,
+        ) -> tuple[V4GmoSealedSecret, V4GmoSealedSecret]:
+            return V4GmoSealedSecret("fake-key"), V4GmoSealedSecret("fake-secret")
+
+    with httpx.Client(
+        transport=httpx.MockTransport(lambda _request: httpx.Response(500))
+    ) as client:
+        binding = bind_v4_gmo_actual_runtime(
+            repository=tmp_path,
+            generation=_generation(),
+            activation_permit=permit,
+            credential_pair=FakeCredentials(),
+            client=client,
+            monotonic_factory=lambda: 50.1,
+        )
+        assert binding.process_lock.held is True
+        assert (runtime_root / "activation-runtime-bound.json").is_file()
+        binding.close()
+        assert binding.process_lock.held is False
+
+
 def test_risk_reducing_action_refuses_state_mismatch_before_transport(
     tmp_path: Path,
 ) -> None:
@@ -2693,6 +2927,67 @@ def test_full_time_exit_sequence_is_fixed_and_each_write_is_once_only(
             ),
         )
     assert transport.requests == []
+    lock.release()
+
+
+def test_foreground_driver_reads_real_coordinator_snapshot_and_dispatches(
+    tmp_path: Path,
+) -> None:
+    signal, runtime_root, store, _cycle_ref = _prepare_exact_protected_store(tmp_path)
+    store.confirm_exact_protection_within_deadline(
+        signal_fingerprint=signal.fingerprint,
+        confirmed_protection_size=10_000,
+        now_utc=NOW + timedelta(seconds=3),
+        now_monotonic=103.0,
+    )
+    lock = H11AutoProcessLock(runtime_root / "process.lock")
+    assert lock.acquire() is True
+    risk_store, risk_policy, dead_man = _runtime_safety(
+        runtime_root,
+        heartbeat_at=NOW + timedelta(seconds=82_801),
+    )
+    clock = _Clock(
+        wall=NOW + timedelta(seconds=82_801),
+        monotonic=82_901.0,
+    )
+    path = V4GmoCoordinatedActualPath(
+        repository=tmp_path,
+        store=store,
+        adapter=V4GmoActualAdapter(transport=_FakeTransport(responses=[])),
+        process_lock=lock,
+        generation=_generation(),
+        risk_store=risk_store,
+        risk_policy=risk_policy,
+        dead_man_store=dead_man,
+        wall_clock=clock.wall_now,
+        monotonic_clock=clock.monotonic_now,
+        reconciliation_wait=clock.advance,
+    )
+    (runtime_root / "exit-sequence-dispatch-required.json").write_text(
+        "{}\n", encoding="utf-8"
+    )
+    dispatcher = MagicMock()
+    dispatcher.path = path
+    dispatcher.dispatch_once.return_value = V4GmoExitDispatchResult(
+        claimed=True,
+        protection_cancel_accepted=True,
+        position_close_accepted=True,
+        flat_reconciled=True,
+        broker_post_attempt_count=2,
+    )
+    driver = V4GmoActualRuntimeDriver(
+        coordinated_path=path,
+        dispatcher=dispatcher,
+    )
+
+    result = driver.run_until_flat(
+        public_reader_factory=MagicMock(side_effect=[MagicMock(), MagicMock()]),
+        wall_clock=clock.wall_now,
+        wait=lambda _seconds: None,
+    )
+
+    assert result.flat_reconciled is True
+    dispatcher.dispatch_once.assert_called_once()
     lock.release()
 
 

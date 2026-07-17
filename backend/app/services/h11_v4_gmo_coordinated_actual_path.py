@@ -45,6 +45,7 @@ from app.h11_auto.v4_gmo_contracts import (
 )
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.h11_auto.v4_gmo_protection import V4GmoExactProtectionPlan
+from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from app.services.h11_v4_gmo_actual_adapter import (
     V4GmoActualAdapter,
     V4GmoActualReconciliation,
@@ -62,31 +63,6 @@ class V4GmoCoordinatedPathError(RuntimeError):
 
 
 _RECONCILIATION_EVIDENCE_TOKEN = object()
-V4_GMO_RUNTIME_STATE_RELATIVE = Path(
-    "backend/market_data/h11_v4_gmo_actual_runtime"
-)
-
-
-def v4_gmo_runtime_state_root(
-    *, repository: Path, generation_digest: str
-) -> Path:
-    """Return the only permitted persistent state root for one generation."""
-
-    prefix = "sha256:"
-    normalized = generation_digest.removeprefix(prefix)
-    if (
-        not generation_digest.startswith(prefix)
-        or len(normalized) != 64
-        or any(character not in "0123456789abcdef" for character in normalized)
-    ):
-        raise V4GmoCoordinatedPathError(
-            "V4_COORDINATED_GENERATION_DIGEST_INVALID"
-        )
-    return (
-        repository.resolve()
-        / V4_GMO_RUNTIME_STATE_RELATIVE
-        / f"generation-{normalized}"
-    )
 
 
 class V4AuthoritativeReconciliationEvidence:

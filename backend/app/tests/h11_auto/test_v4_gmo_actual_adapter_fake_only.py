@@ -48,7 +48,13 @@ class FakePrivateTransport:
     responses: list[dict[str, Any]]
     requests: list[V4GmoPrivateRequest] = field(default_factory=list)
 
-    def request(self, request: V4GmoPrivateRequest) -> V4GmoPrivateEnvelope:
+    def request(
+        self,
+        request: V4GmoPrivateRequest,
+        *,
+        persisted_transport_authorization: object | None = None,
+    ) -> V4GmoPrivateEnvelope:
+        del persisted_transport_authorization
         self.requests.append(request)
         if not self.responses:
             raise V4GmoActualTransportError("FAKE_RESPONSE_MISSING")
@@ -59,7 +65,13 @@ class FakePrivateTransport:
 class TimeoutPrivateTransport:
     calls: int = 0
 
-    def request(self, request: V4GmoPrivateRequest) -> V4GmoPrivateEnvelope:
+    def request(
+        self,
+        request: V4GmoPrivateRequest,
+        *,
+        persisted_transport_authorization: object | None = None,
+    ) -> V4GmoPrivateEnvelope:
+        del persisted_transport_authorization
         del request
         self.calls += 1
         raise TimeoutError("synthetic timeout")
@@ -192,7 +204,7 @@ def filled_responses() -> list[dict[str, Any]]:
 
 
 def test_activation_permit_is_structurally_unavailable() -> None:
-    with pytest.raises(V4GmoActualTransportError, match="NOT_ISSUED"):
+    with pytest.raises(TypeError):
         V4GmoActualActivationPermit()
 
     forged = object.__new__(V4GmoActualActivationPermit)
@@ -400,7 +412,13 @@ def test_fixed_get_cadence_does_not_compress_after_slow_first_get() -> None:
 
     @dataclass
     class SlowFirstTransport(FakePrivateTransport):
-        def request(self, request: V4GmoPrivateRequest) -> V4GmoPrivateEnvelope:
+        def request(
+            self,
+            request: V4GmoPrivateRequest,
+            *,
+            persisted_transport_authorization: object | None = None,
+        ) -> V4GmoPrivateEnvelope:
+            del persisted_transport_authorization
             starts.append(clock[0])
             result = super().request(request)
             if len(starts) == 1:
@@ -861,12 +879,12 @@ def test_actual_adapter_is_isolated_and_has_no_logging_env_or_runtime_binding() 
     )
 
 
-def test_actual_transport_request_is_unavailable_even_after_low_level_forgery() -> None:
+def test_actual_transport_requires_permit_and_db_backed_boundary_proof() -> None:
     source = inspect.getsource(transport_module.V4GmoHttpxPrivateTransport.request)
-    assert "assert_real_broker_post_allowed(allow=False)" in source
+    assert "assert_real_broker_post_allowed(allow=True)" in source
     assert "V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED" in source
-    assert "self._factory.build" not in source
-    assert "self._client.request" not in source
+    assert "consume_persisted_transport_authorization" in source
+    assert "self._client.request" in source
 
     forged = object.__new__(transport_module.V4GmoHttpxPrivateTransport)
     get_request = transport_module.V4GmoPrivateRequest(

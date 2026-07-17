@@ -19,6 +19,16 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   新digestで検証・review・commit/push後に最初から準備する。
 - actual POST、activation permit、hard guard、risk budget、10,000通貨、1 entry/日は変更なし。
 
+## 0AE. H-11 v4 G012 canary直前実装（2026-07-17・broker POST禁止）
+
+- generation/cycle-bound one-use permit、fresh resume/current-turn proof、canonical actual runtime bindingを実装。
+- coordinator DB-backed one-use action proofがないactual transport直接呼出しを拒否する。
+- monitor-only supervisorは15秒heartbeat、protection deadline、03:45 dispatch-required、04:00 HALTを管理し、
+  credential、Private API、broker writeを持たない。
+- G012専用LaunchAgentのrenderer/install/restart経路を実装。導入は完全review・commit/push後に限定する。
+- 現在は実装review済みであり、permit/resumeは未発行、broker POST count=0。
+- 参照: [G012 preparation report](H11_V4_G012_CANARY_PREPARATION_REPORT_20260717.md)。
+
 ## 0AC. H-11 v4 initial supervised canary evidence policy（2026-07-16・方針承認のみ）
 
 - operatorは、初回監視付き10,000通貨live canaryを、actual activeOrders OCO rowsと約定後15秒以内の
