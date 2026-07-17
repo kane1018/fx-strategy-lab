@@ -1,16 +1,16 @@
 {
   "activation_permit_issued": false,
-  "architecture_review_clear": false,
+  "architecture_review_clear": true,
   "broker_post_authorized": false,
   "danger_scan_passed": true,
   "diff_check_passed": true,
   "focused_tests_passed": true,
-  "generation_manifest_digest": "sha256:b9324e1a141d310cb0aa32d5684f338b433c3568500a72a2d6456308a13f02c3",
-  "operations_review_clear": false,
+  "generation_manifest_digest": "sha256:c9d27bd1a7336868573ec2701f77a2aa13d525f340508060f682faa8eb806ff9",
+  "operations_review_clear": true,
   "related_tests_passed": true,
-  "reviewed_files_digest": "sha256:7dda0da4176673619320aa928c68368762e83d23a1a5f0f0ac90b11ad5bd9bcc",
+  "reviewed_files_digest": "sha256:7f76c7643a4f63d67779eef850d55cc292c8032385e94523ab08096652d9397b",
   "ruff_passed": true,
-  "safety_review_clear": false,
+  "safety_review_clear": true,
   "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
   "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST"
 }
