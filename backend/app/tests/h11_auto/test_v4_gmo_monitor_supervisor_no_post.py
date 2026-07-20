@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import plistlib
 import sqlite3
 import subprocess
@@ -20,6 +21,7 @@ from app.h11_auto.v4_gmo_contracts import V4GmoExecutionPolicy
 from app.h11_auto.v4_gmo_generation import build_v4_gmo_frozen_generation
 from app.h11_auto.v4_gmo_launchd import (
     V4_GMO_MONITOR_LABEL,
+    V4GmoLaunchdError,
     install_and_restart_v4_gmo_monitor_launchagent,
     render_v4_gmo_monitor_launchagent,
 )
@@ -87,6 +89,18 @@ def test_monitor_source_has_no_broker_or_credential_dependency() -> None:
         assert marker not in source
 
 
+def test_monitor_entrypoint_checks_pinned_digests_before_supervisor() -> None:
+    import scripts.h11_auto_v4_monitor_supervisor as module
+
+    source = inspect.getsource(module)
+    reviewed_check = source.index("MONITOR_REVIEWED_FILES_DIGEST_MISMATCH")
+    generation_check = source.index("MONITOR_GENERATION_DIGEST_MISMATCH")
+    supervisor_start = source.index("V4GmoMonitorSupervisor(")
+    assert reviewed_check < generation_check < supervisor_start
+    assert 'parser.add_argument("--expected-reviewed-files-digest"' in source
+    assert 'parser.add_argument("--expected-generation-digest"' in source
+
+
 def test_monitor_marks_0345_dispatch_and_latches_0400_flat_miss(
     tmp_path: Path,
 ) -> None:
@@ -135,23 +149,51 @@ def test_launchagent_is_monitor_only_and_finite_restart_is_testable(
 ) -> None:
     repository = tmp_path / "repo"
     (repository / "backend").mkdir(parents=True)
+    generation = _generation()
     content = render_v4_gmo_monitor_launchagent(
         repository=repository,
-        generation=_generation(),
+        generation=generation,
         python_executable=Path(sys.executable),
     )
     payload = plistlib.loads(content)
     joined = " ".join(payload["ProgramArguments"])
+    arguments = payload["ProgramArguments"]
     assert payload["Label"] == V4_GMO_MONITOR_LABEL
     assert payload["RunAtLoad"] is True
-    assert payload["KeepAlive"] is True
+    assert payload["KeepAlive"] is False
     assert "h11_auto_v4_monitor_supervisor" in joined
+    assert arguments[arguments.index("--expected-reviewed-files-digest") + 1] == (
+        IMPLEMENTATION_DIGEST
+    )
+    assert arguments[arguments.index("--expected-generation-digest") + 1] == (
+        generation.digest
+    )
     for forbidden in ("credential", "api-key", "order", "POST", "secret"):
         assert forbidden not in joined
     calls: list[list[str]] = []
+    state_root = v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=generation.digest,
+    )
+    heartbeat_path = state_root / "supervisor-heartbeat.json"
+    print_count = 0
 
     def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        nonlocal print_count
         calls.append(command)
+        if command[1] == "print":
+            print_count += 1
+            return subprocess.CompletedProcess(
+                command,
+                113 if print_count == 1 else 0,
+                "",
+                "not found" if print_count == 1 else "",
+            )
+        if command[1] == "bootstrap":
+            _write_safe_monitor_heartbeat(
+                heartbeat_path,
+                generation_digest=generation.digest,
+            )
         return subprocess.CompletedProcess(command, 0, "", "")
 
     result = install_and_restart_v4_gmo_monitor_launchagent(
@@ -159,11 +201,146 @@ def test_launchagent_is_monitor_only_and_finite_restart_is_testable(
         plist_content=content,
         user_id=501,
         runner=runner,
+        heartbeat_path=heartbeat_path,
+        expected_generation_digest=generation.digest,
     )
     assert result.installed is True
     assert result.restarted is True
     assert result.actual_post_count == 0
-    assert [command[1] for command in calls] == ["bootstrap", "kickstart"]
+    assert result.heartbeat_generation_digest_match is True
+    assert [command[1] for command in calls] == ["print", "bootstrap", "print"]
+    assert all("kickstart" not in command for command in calls)
+
+
+def test_launchagent_boots_out_existing_exact_service_once_before_bootstrap(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repo"
+    (repository / "backend").mkdir(parents=True)
+    generation = _generation()
+    content = render_v4_gmo_monitor_launchagent(
+        repository=repository,
+        generation=generation,
+        python_executable=Path(sys.executable),
+    )
+    heartbeat_path = (
+        v4_gmo_runtime_state_root(
+            repository=repository,
+            generation_digest=generation.digest,
+        )
+        / "supervisor-heartbeat.json"
+    )
+    calls: list[list[str]] = []
+
+    def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command[1] == "bootstrap":
+            _write_safe_monitor_heartbeat(
+                heartbeat_path,
+                generation_digest=generation.digest,
+            )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    result = install_and_restart_v4_gmo_monitor_launchagent(
+        plist_path=(tmp_path / "LaunchAgents" / f"{V4_GMO_MONITOR_LABEL}.plist"),
+        plist_content=content,
+        user_id=501,
+        runner=runner,
+        heartbeat_path=heartbeat_path,
+        expected_generation_digest=generation.digest,
+    )
+
+    assert result.previous_service_present is True
+    assert result.previous_service_booted_out is True
+    assert [command[1] for command in calls] == [
+        "print",
+        "bootout",
+        "bootstrap",
+        "print",
+    ]
+
+
+def _write_safe_monitor_heartbeat(path: Path, *, generation_digest: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "actual_post_count": 0,
+                "broker_read": False,
+                "broker_write": False,
+                "cycle_present": False,
+                "generation_bound": False,
+                "generation_digest": generation_digest,
+                "observed_at_utc": datetime.now(UTC).isoformat(),
+                "status": "WAITING_FOR_CANONICAL_RUNTIME",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_launchagent_rejects_unknown_service_state_before_mutation(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repo"
+    (repository / "backend").mkdir(parents=True)
+    generation = _generation()
+    content = render_v4_gmo_monitor_launchagent(
+        repository=repository,
+        generation=generation,
+        python_executable=Path(sys.executable),
+    )
+    calls: list[list[str]] = []
+
+    def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 1, "", "hidden")
+
+    with pytest.raises(V4GmoLaunchdError, match="SERVICE_STATE_UNKNOWN"):
+        install_and_restart_v4_gmo_monitor_launchagent(
+            plist_path=(
+                tmp_path / "LaunchAgents" / f"{V4_GMO_MONITOR_LABEL}.plist"
+            ),
+            plist_content=content,
+            user_id=501,
+            runner=runner,
+            heartbeat_path=tmp_path / "state" / "supervisor-heartbeat.json",
+            expected_generation_digest=generation.digest,
+        )
+    assert [command[1] for command in calls] == ["print"]
+
+
+def test_launchagent_rejects_prebootstrap_heartbeat(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repo"
+    (repository / "backend").mkdir(parents=True)
+    generation = _generation()
+    content = render_v4_gmo_monitor_launchagent(
+        repository=repository,
+        generation=generation,
+        python_executable=Path(sys.executable),
+    )
+    heartbeat_path = tmp_path / "state" / "supervisor-heartbeat.json"
+    _write_safe_monitor_heartbeat(
+        heartbeat_path,
+        generation_digest=generation.digest,
+    )
+    monotonic_values = iter((0.0, 0.0, 21.0))
+
+    with pytest.raises(V4GmoLaunchdError, match="HEARTBEAT_NOT_CLEAR"):
+        install_and_restart_v4_gmo_monitor_launchagent(
+            plist_path=(
+                tmp_path / "LaunchAgents" / f"{V4_GMO_MONITOR_LABEL}.plist"
+            ),
+            plist_content=content,
+            user_id=501,
+            runner=lambda command: subprocess.CompletedProcess(command, 0, "", ""),
+            heartbeat_path=heartbeat_path,
+            expected_generation_digest=generation.digest,
+            monotonic_clock=lambda: next(monotonic_values),
+            wait=lambda _seconds: None,
+        )
 
 
 def _exit_dispatch_path(root: Path, *, generation_digest: str) -> MagicMock:

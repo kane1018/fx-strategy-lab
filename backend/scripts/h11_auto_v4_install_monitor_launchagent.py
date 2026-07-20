@@ -6,15 +6,26 @@ import argparse
 import os
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
-from app.h11_auto.v4_actual_preparation_guard import reviewed_files_digest
+from app.h11_auto.v4_actual_preparation_guard import (
+    V4ActualPreparationGuardError,
+    V4PreparationAttemptLedger,
+    V4PreparationOperation,
+    _attest_monitor_launchagent_success_internal,
+    load_external_preparation_gate,
+    require_operation_permit,
+    reviewed_files_digest,
+)
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from app.h11_auto.v4_gmo_launchd import (
     V4_GMO_MONITOR_LABEL,
+    V4GmoLaunchdError,
     install_and_restart_v4_gmo_monitor_launchagent,
     render_v4_gmo_monitor_launchagent,
 )
+from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -45,12 +56,45 @@ def main() -> int:
     plist_path = (
         Path.home() / "Library" / "LaunchAgents" / f"{V4_GMO_MONITOR_LABEL}.plist"
     )
-    result = install_and_restart_v4_gmo_monitor_launchagent(
-        plist_path=plist_path,
-        plist_content=content,
-        user_id=os.getuid(),
-        runner=_run,
+    state_root = v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=generation.digest,
     )
+    try:
+        external_gate = load_external_preparation_gate(repository=repository)
+        ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+        operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
+        operation_permit = ledger.begin(operation)
+        require_operation_permit(
+            operation_permit,
+            expected_operation=operation,
+            claim=True,
+        )
+        result = install_and_restart_v4_gmo_monitor_launchagent(
+            plist_path=plist_path,
+            plist_content=content,
+            user_id=os.getuid(),
+            runner=_run,
+            heartbeat_path=state_root / "supervisor-heartbeat.json",
+            expected_generation_digest=generation.digest,
+            wall_clock=lambda: datetime.now(UTC),
+        )
+        safe_report = result.to_safe_dict()
+        _attest_monitor_launchagent_success_internal(
+            operation_permit,
+            safe_report,
+        )
+        ledger.complete(operation, operation_permit=operation_permit)
+    except (
+        V4ActualPreparationGuardError,
+        V4GmoLaunchdError,
+        subprocess.TimeoutExpired,
+    ):
+        print(
+            "status=MONITOR_LAUNCHAGENT_BLOCKED_NO_RETRY "
+            "broker_write=false actual_post_count=0"
+        )
+        return 2
     print(
         "status=INSTALLED_RESTARTED_MONITOR_ONLY "
         f"broker_write={str(result.broker_write).lower()} "

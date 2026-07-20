@@ -12,7 +12,6 @@ import httpx
 import pandas as pd
 import pytest
 
-from app.h11_auto import v4_actual_preparation_guard as guard_module
 from app.h11_auto.contracts import FormalHorizon, FormalSignal, SignalDecision
 from app.h11_auto.v4_activation_preparation import V4ApprovedOperatorSelections
 from app.h11_auto.v4_gmo_canary_activation import V4GmoCanaryIntent
@@ -371,7 +370,9 @@ def test_g013_exact_order_sheet_is_rehashed_before_execution() -> None:
 
 
 def test_g013_review_digest_includes_formal_direction_adapter() -> None:
-    assert "backend/app/h11_auto/signal_adapter.py" in guard_module._REVIEWED_FILES
+    from h11_v4_reviewed_digest import REVIEWED_FILES
+
+    assert "backend/app/h11_auto/signal_adapter.py" in REVIEWED_FILES
 
 
 def test_g013_prepermit_refresh_rechecks_implementation_digest(

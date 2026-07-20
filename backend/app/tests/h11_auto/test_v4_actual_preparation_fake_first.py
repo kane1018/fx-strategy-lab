@@ -243,6 +243,21 @@ def _test_only_complete(
             "broker_post_count": 0,
             "broker_write_performed": False,
         },
+        V4PreparationOperation.MONITOR_LAUNCHAGENT: {
+            "installed": True,
+            "bootstrapped": True,
+            "restarted": True,
+            "service_running": True,
+            "heartbeat_fresh": True,
+            "heartbeat_generation_digest_match": True,
+            "heartbeat_waiting_for_canonical_runtime": True,
+            "heartbeat_broker_read": False,
+            "heartbeat_broker_write": False,
+            "actual_post_count": 0,
+            "raw_output_retained": False,
+            "previous_service_present": False,
+            "previous_service_booted_out": False,
+        },
     }
     require_operation_permit(
         permit,

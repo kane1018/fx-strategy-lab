@@ -121,3 +121,24 @@ G013の外部準備ゲートを止めるものではない。
 - Final independent review: Architecture CLEAR; Safety CLEAR; Operations CLEAR.
 - State: prior failed generation markers retained; new digest-bound preparation root absent; `actual_post_authorized=false`; `broker_post_authorized=false`; activation permit not issued; broker POST count remains zero.
 - External operations for this corrective generation: none. Fresh external preparation must restart from operation 00 after an authorized commit/push produces clean `main` with `HEAD == origin/main`.
+
+## 2026-07-20 LaunchAgent lifecycle corrective generation
+
+- Cause: operation 60 used `KeepAlive=true`, could accept a pre-bootstrap heartbeat, treated unknown `launchctl print` failures as service absence, and did not completely bind monitor imports to the reviewed-files digest.
+- Correction: `KeepAlive=false`; exact-service print accepts only loaded or fixed not-found; one bootout maximum, one bootstrap maximum, no kickstart; post-bootstrap service state and newly updated heartbeat are both mandatory.
+- Ledger: `60_monitor_launchagent` is the required final preparation operation and persists its no-retry started marker before lifecycle mutation.
+- Digest boundary: the stdlib-only digest implementation moved to `backend/h11_v4_reviewed_digest.py`; application imports occur only after the first comparison and are followed by a second comparison. Static closure found 21 local modules and zero omissions from the 78-file reviewed set.
+- First independent review: Architecture/Safety/Operations VETO for automatic restart, stale heartbeat acceptance, incomplete import closure, and unknown service-state handling.
+- Second independent review: Architecture/Safety VETO because importing the digest module still executed `app.h11_auto` before the first comparison; Operations CLEAR.
+- Final independent review: no findings; Architecture CLEAR; Safety CLEAR; Operations CLEAR.
+- Validation: focused 63 passed; H-11 auto 482 passed; full backend 8,070 passed excluding the pre-existing macOS test-only Keychain integration; two existing pandas FutureWarnings only. Full Ruff, `git diff --check`, danger scan, and independent digest recomputation were clear.
+- Final post-test-adjustment independent review: no findings; Architecture CLEAR; Safety CLEAR; Operations CLEAR.
+- Prior failed generations and their no-retry markers remain unchanged; broker POST count remains zero.
+
+```text
+generation=H11_AUTO_30M_20260717_G013
+reviewed_files_digest=sha256:f93a4158bd2b5a12f3da005cca6f2a9018c47e328c8f0f2957494630eb21040a
+generation_digest=sha256:e367642474dccbf547e5bdfdc08ff1d2655bd095e8dbb837a15ab842c439492b
+frozen_contract=SHORT_V1/USD_JPY/30m/1000/MARKET
+actual_post_authorized=false / broker_post_count=0
+```

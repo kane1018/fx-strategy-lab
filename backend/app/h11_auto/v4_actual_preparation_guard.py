@@ -14,6 +14,10 @@ from enum import Enum
 from pathlib import Path
 
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
+from h11_v4_reviewed_digest import (
+    V4ReviewedDigestError,
+    compute_reviewed_files_digest,
+)
 
 
 class V4ActualPreparationGuardError(RuntimeError):
@@ -29,78 +33,6 @@ PREPARATION_ARTIFACT = Path(
 )
 PREPARATION_STATE_RELATIVE = Path(
     "backend/market_data/h11_v4_actual_preparation"
-)
-_REVIEWED_FILES = (
-    "AGENTS.md",
-    "backend/requirements.txt",
-    "backend/app/h11_auto/v4_actual_preparation_guard.py",
-    "backend/app/h11_auto/v4_actual_host_kill_rehearsal.py",
-    "backend/app/h11_auto/contracts.py",
-    "backend/app/h11_auto/v4_activation_preparation.py",
-    "backend/app/h11_auto/v4_gmo_actual_coordinator.py",
-    "backend/app/h11_auto/v4_gmo_canary_activation.py",
-    "backend/app/h11_auto/v4_gmo_contracts.py",
-    "backend/app/h11_auto/v4_gmo_engine.py",
-    "backend/app/h11_auto/v4_gmo_generation.py",
-    "backend/app/h11_auto/v4_gmo_persisted_authorization.py",
-    "backend/app/h11_auto/v4_gmo_persistence.py",
-    "backend/app/h11_auto/v4_gmo_protection.py",
-    "backend/app/h11_auto/v4_gmo_runtime_paths.py",
-    "backend/app/h11_auto/v4_gmo_monitor_supervisor.py",
-    "backend/app/h11_auto/v4_gmo_launchd.py",
-    "backend/app/h11_auto/v4_gmo_runtime.py",
-    "backend/app/h11_auto/formal_signal_feed.py",
-    "backend/app/h11_auto/signal_adapter.py",
-    "backend/app/h11_auto/runtime_safety.py",
-    "backend/app/h11_manual/contracts.py",
-    "backend/app/h11_manual/data.py",
-    "backend/app/h11_manual/short_model.py",
-    "backend/app/private_api/auth.py",
-    "backend/app/security/real_broker_post_hard_guard.py",
-    "backend/app/services/h11_v4_gmo_actual_adapter.py",
-    "backend/app/services/h11_v4_gmo_coordinated_actual_path.py",
-    "backend/app/services/h11_v4_gmo_public_market_status.py",
-    "backend/app/services/h11_v4_gmo_public_preflight.py",
-    "backend/app/services/h11_v4_gmo_formal_canary_source.py",
-    "backend/app/services/h11_v4_gmo_g013_canary.py",
-    "backend/app/services/h11_v4_gmo_actual_transport.py",
-    "backend/app/services/h11_v4_gmo_actual_runtime_binding.py",
-    "backend/app/services/h11_v4_gmo_actual_runtime_driver.py",
-    "backend/app/services/h11_v4_gmo_exit_dispatcher.py",
-    "backend/app/services/h11_v4_notification_binding_no_post.py",
-    "backend/app/services/h11_v4_notification_actual_preparation.py",
-    "backend/app/services/h11_v4_gmo_readonly_preflight.py",
-    "backend/app/shadow/gmo_public.py",
-    "backend/scripts/h11_auto_v4_actual_preparation_presence.py",
-    "backend/scripts/h11_auto_v4_keychain_access_rehearsal.py",
-    "backend/scripts/h11_auto_v4_pushover_rehearsal.py",
-    "backend/scripts/h11_auto_v4_smtp_rehearsal.py",
-    "backend/scripts/h11_auto_v4_actual_host_kill_rehearsal.py",
-    "backend/scripts/h11_auto_v4_coordinator_kill_probe.py",
-    "backend/scripts/h11_auto_v4_email_delivery_confirm.py",
-    "backend/scripts/h11_auto_v4_exclusivity_confirm.py",
-    "backend/scripts/h11_auto_v4_private_get_preflight.py",
-    "backend/scripts/h11_auto_v4_public_get_preflight.py",
-    "backend/scripts/h11_auto_v4_g013_actual_canary.py",
-    "backend/scripts/h11_auto_v4_monitor_supervisor.py",
-    "backend/scripts/h11_auto_v4_install_monitor_launchagent.py",
-    "backend/app/tests/h11_auto/test_v4_actual_preparation_fake_first.py",
-    "backend/app/tests/h11_auto/test_v4_gmo_g013_fake_only.py",
-    "backend/app/tests/h11_auto/test_v4_gmo_actual_coordinator_precanary.py",
-    "backend/app/tests/h11_auto/test_v4_gmo_actual_adapter_fake_only.py",
-    "backend/app/tests/h11_auto/test_v4_gmo_relaxed_no_post.py",
-    "backend/app/tests/h11_auto/test_v4_gmo_g012_activation_fake_only.py",
-    "backend/app/tests/h11_auto/test_v4_gmo_monitor_supervisor_no_post.py",
-    "backend/app/tests/h11_auto/test_v4_notification_binding_fake_only.py",
-    "backend/app/tests/test_h11_stage1_paper_wiring_no_post.py",
-    "backend/app/tests/test_h11_v3_runtime_safety_no_post.py",
-    "docs/H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md",
-    "docs/H11_V4_G012_CANARY_PREPARATION_REPORT_20260717.md",
-    "docs/H11_V4_G013_CANARY_ACTIVATION_REPORT_20260717.md",
-    "docs/H11_AUTO_OPERATOR_DECISION_SHEET_NO_POST_20260715.md",
-    "docs/H11_V4_MAJOR_INCIDENT_RESUME_DECLARATION_DRAFT_NO_POST_20260715.md",
-    "docs/H11_AUTO_FROZEN_GENERATION_MANIFEST_TEMPLATE_NO_POST_20260715.md",
-    "docs/OPERATOR_V4_EDGE_IMPLEMENTATION_PROPOSAL_NO_POST_20260716.md",
 )
 _GATE_TOKEN = object()
 _PERMIT_TOKEN = object()
@@ -333,6 +265,7 @@ class V4PreparationOperation(str, Enum):
     EXCLUSIVITY_CONFIRMATION = "40_exclusivity_confirmation"
     PUBLIC_GET = "45_public_get"
     PRIVATE_GET = "50_private_get"
+    MONITOR_LAUNCHAGENT = "60_monitor_launchagent"
 
 
 _PREVIOUS_OPERATION = {
@@ -345,6 +278,7 @@ _PREVIOUS_OPERATION = {
     V4PreparationOperation.EXCLUSIVITY_CONFIRMATION: V4PreparationOperation.HOST_KILL,
     V4PreparationOperation.PUBLIC_GET: V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
     V4PreparationOperation.PRIVATE_GET: V4PreparationOperation.PUBLIC_GET,
+    V4PreparationOperation.MONITOR_LAUNCHAGENT: V4PreparationOperation.PRIVATE_GET,
 }
 
 
@@ -555,6 +489,16 @@ def _attest_public_get_success_internal(
     )
 
 
+def _attest_monitor_launchagent_success_internal(
+    permit: V4PreparationOperationPermit, safe_report: dict[str, object]
+) -> None:
+    _attest_operation_success(
+        permit,
+        operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
+        safe_report=safe_report,
+    )
+
+
 def _completion_digest(
     *,
     operation: V4PreparationOperation,
@@ -651,6 +595,24 @@ def _operation_report_is_clear(
             and float(offsets[2]) - float(offsets[1]) + 1e-9 >= 0.25
             and report.get("broker_post_count") == 0
             and report.get("broker_write_performed") is False
+        )
+    if operation is V4PreparationOperation.MONITOR_LAUNCHAGENT:
+        return (
+            report.get("installed") is True
+            and report.get("bootstrapped") is True
+            and report.get("restarted") is True
+            and report.get("service_running") is True
+            and report.get("heartbeat_fresh") is True
+            and report.get("heartbeat_generation_digest_match") is True
+            and report.get("heartbeat_waiting_for_canonical_runtime") is True
+            and report.get("heartbeat_broker_read") is False
+            and report.get("heartbeat_broker_write") is False
+            and report.get("actual_post_count") == 0
+            and report.get("raw_output_retained") is False
+            and (
+                report.get("previous_service_present") is False
+                or report.get("previous_service_booted_out") is True
+            )
         )
     return False
 
@@ -924,17 +886,12 @@ def confirm_account_exclusivity_exact(
 
 
 def reviewed_files_digest(*, repository: Path) -> str:
-    digest = hashlib.sha256()
-    root = repository.resolve()
-    for relative in _REVIEWED_FILES:
-        path = root / relative
-        if not path.is_file() or path.is_symlink():
-            raise V4ActualPreparationGuardError("PREPARATION_REVIEWED_FILE_INVALID")
-        digest.update(relative.encode())
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return f"sha256:{digest.hexdigest()}"
+    try:
+        return compute_reviewed_files_digest(repository=repository)
+    except V4ReviewedDigestError as error:
+        raise V4ActualPreparationGuardError(
+            "PREPARATION_REVIEWED_FILE_INVALID"
+        ) from error
 
 
 def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparationGate:

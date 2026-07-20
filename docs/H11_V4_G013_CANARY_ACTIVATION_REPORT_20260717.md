@@ -41,6 +41,36 @@ one-use host operationへ進む。月曜から木曜は既存policyどおりbloc
 entry可能であり、本日2026-07-20月曜のために曜日/risk/order contractを緩和しない。Fridayの09:00-21:00
 制限、1,000通貨、SHORT_V1、USD_JPY、30分、MARKET、全no-retry条件も維持する。
 
+### 1.3 2026-07-20 LaunchAgent lifecycle corrective generation
+
+前項generationは`60 monitor-only LaunchAgent`でplist installとbootstrap後、`launchctl kickstart -k`が
+15秒以内にreturnせず停止した。read-only reconciliationではservice runningとfresh
+`WAITING_FOR_CANONICAL_RUNTIME` heartbeatを確認したが、同generationは結果不明のため再実行せず、
+markerとserviceを変更せず保持する。
+
+corrective lifecycleは`60_monitor_launchagent`をgeneration-bound preparation ledgerの必須最終operationへ
+追加し、外部mutation前にno-retry started markerを確定する。exact labelの既存serviceが存在する場合だけ
+bootoutを最大1 attempt、その後RunAtLoad plistのbootstrapを最大1 attempt実行する。kickstartは使用しない。
+新generation専用runtime pathのheartbeatが20秒以内にfreshとなり、generation digest一致、
+`WAITING_FOR_CANONICAL_RUNTIME`、broker read/write false、POST count 0の場合だけpassed markerを作る。
+timeout、bootout/bootstrap失敗、heartbeat不一致・staleはpersistent stopとし、同generationで再試行しない。
+
+review中の2026-07-20 12:20:44 JSTに新generation runtime rootが予期せず生成され、
+12:29:34 JSTに既存serviceが同generation digestのheartbeatを生成した。sanitized確認で
+broker read/writeはfalse、broker POST countは0だった。exact labelへのcontainment `bootout`初回は
+`Operation not permitted`で失敗したため、同generationでは再試行せず、runtime stateを削除・変更・
+resetしない。次generationのplistはexpected reviewed-files digestとgeneration digestを固定し、
+entrypointは両者をruntime root作成前に検証する。
+
+初回の独立reviewは、automatic `KeepAlive`、pre-bootstrap heartbeat受理、monitorのtransitive dependencyの
+digest漏れ、`launchctl print`のunknownをabsent扱いする点をVETOした。correctiveで`KeepAlive=false`、
+bootstrap開始後のheartbeat更新とpost-bootstrap service確認、not-found以外のnonzero fail-closed、
+stdlib-only pre-import digest照合とtransitive monitor dependencyのdigest追加を実装した。
+二回目の独立reviewはdigest module自体が`app.h11_auto`配下にあり、初回照合前にpackage initializerが
+実行される点をVETOした。correctiveでdigest moduleをbackend top-levelへ移し、初回照合前のproject
+importをstdlib-only moduleだけに限定した。後段で実行されるpackage initializerとfake boundaryも
+reviewed-files digestへ追加し、application import後の再照合を維持する。
+
 ## 2. Official ticker contract correction
 
 - `GET /public/v1/ticker`はsymbol queryを送らず、全銘柄listを返す。

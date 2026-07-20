@@ -32,6 +32,7 @@ class V4GmoMonitorSupervisorError(RuntimeError):
 class V4GmoMonitorTick:
     observed_at_utc: str
     status: str
+    generation_digest: str
     generation_bound: bool
     cycle_present: bool
     exit_dispatch_required: bool
@@ -73,6 +74,7 @@ class V4GmoMonitorSupervisor:
             tick = V4GmoMonitorTick(
                 observed_at_utc=now_utc.isoformat(),
                 status="WAITING_FOR_CANONICAL_RUNTIME",
+                generation_digest=self.generation.digest,
                 generation_bound=False,
                 cycle_present=False,
                 exit_dispatch_required=False,
@@ -127,6 +129,7 @@ class V4GmoMonitorSupervisor:
         tick = V4GmoMonitorTick(
             observed_at_utc=now_utc.isoformat(),
             status=status,
+            generation_digest=self.generation.digest,
             generation_bound=snapshot.generation_bound,
             cycle_present=snapshot.cycle_present,
             exit_dispatch_required=dispatch_required,
