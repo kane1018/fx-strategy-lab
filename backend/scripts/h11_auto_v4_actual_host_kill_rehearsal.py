@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import sys
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -23,7 +26,21 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 JST = ZoneInfo("Asia/Tokyo")
 
 
-def main() -> int:
+def _parse_args(argv: Sequence[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the one-use H-11 v4 current-host and persistent KILL "
+            "preparation proof"
+        )
+    )
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    parser.parse_args(arguments)
+    if arguments:
+        parser.error("this operation accepts no arguments")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    _parse_args(argv)
     try:
         require_clean_main(repository=REPOSITORY)
         gate = load_external_preparation_gate(repository=REPOSITORY)

@@ -53,6 +53,9 @@ from app.services.h11_v4_notification_actual_preparation import (
     run_actual_pushover_rehearsal_once,
     run_actual_smtp_rehearsal_once,
 )
+from scripts import (
+    h11_auto_v4_actual_host_kill_rehearsal as host_rehearsal_script,
+)
 
 
 @dataclass(frozen=True)
@@ -1622,6 +1625,33 @@ def test_host_command_runners_use_separate_finite_timeouts(
         (host_rehearsal_module._SNTP_CLOCK_COMMAND, 15.0),
         (host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND, 120.0),
     ]
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_exit_code"),
+    ((["--help"], 0), (["--unknown"], 2), (["--"], 2)),
+)
+def test_host_rehearsal_cli_meta_arguments_never_start_preparation(
+    argv: list[str],
+    expected_exit_code: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preparation_calls: list[str] = []
+
+    def forbidden_clean_main(**_kwargs: object) -> None:
+        preparation_calls.append("clean-main")
+
+    monkeypatch.setattr(
+        host_rehearsal_script,
+        "require_clean_main",
+        forbidden_clean_main,
+    )
+
+    with pytest.raises(SystemExit) as raised:
+        host_rehearsal_script.main(argv)
+
+    assert raised.value.code == expected_exit_code
+    assert preparation_calls == []
 
 
 def test_admin_host_runner_rejects_every_nonfixed_command() -> None:

@@ -107,3 +107,17 @@ permit、preflight結果を流用しない。
 
 non-blocking指摘は本レビューの対象外（operator側の任意クリーンアップ）として記録するのみとし、
 G013の外部準備ゲートを止めるものではない。
+
+## 2026-07-20 host runner CLI corrective generation
+
+- Cause: invoking the host runner with `--help` previously bypassed argument parsing and consumed `30_host_kill.started.json` before stopping.
+- Correction: parse argv before clean-main, gate load, ledger construction, and ledger begin; every non-empty argv, including `--help`, an unknown option, and lone `--`, exits before preparation state can be created.
+- Scope: no trading-day, risk, order, quantity, signal, retry, permit, broker-write, or hard-guard behavior changed.
+- Monday policy: Monday through Thursday remain eligible except 05:00-09:00 JST; Friday remains 09:00-21:00 JST; weekends remain blocked.
+- Reviewed-files digest: `sha256:5e5e237bd40ba79e6acfbec44a01f2b2feabe9e7d97d2e28305bc73ef16ad176`.
+- Generation digest: `sha256:ab987ee71335356d4ed4c42ab0221a165d9a3288219049102416dcb5066aff32`.
+- Validation: focused host/network tests `11 passed`; full H-11 auto suite `477 passed`; full backend excluding the pre-existing v3 test-only Keychain integration `8065 passed`; corrective argv regression `3 passed`; Ruff clear; `git diff --check` clear; danger scan clear.
+- First independent review: Architecture/Safety/Operations VETO because lone `--` was accepted; corrected without reusing or modifying prior markers.
+- Final independent review: Architecture CLEAR; Safety CLEAR; Operations CLEAR.
+- State: prior failed generation markers retained; new digest-bound preparation root absent; `actual_post_authorized=false`; `broker_post_authorized=false`; activation permit not issued; broker POST count remains zero.
+- External operations for this corrective generation: none. Fresh external preparation must restart from operation 00 after an authorized commit/push produces clean `main` with `HEAD == origin/main`.
