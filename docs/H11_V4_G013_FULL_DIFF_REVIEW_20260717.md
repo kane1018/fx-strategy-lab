@@ -142,3 +142,17 @@ generation_digest=sha256:e367642474dccbf547e5bdfdc08ff1d2655bd095e8dbb837a15ab84
 frozen_contract=SHORT_V1/USD_JPY/30m/1000/MARKET
 actual_post_authorized=false / broker_post_count=0
 ```
+
+## 2026-07-20 Pushover acknowledgement timeout corrective generation
+
+- prior reviewed generation retained `10_pushover.started` with no passed marker; no marker was deleted, changed, or reset
+- SMTP, Public GET, Private GET, LaunchAgent, signal, quote, permit, and broker POST were not started for the failed generation
+- operator reported that the next fresh Pushover emergency notification can now be acknowledged; this operational readiness statement is not a major-incident resume input, current-turn confirmation, or order authorization
+- correction is documentation-only and binds the next attempt to a new reviewed-files digest and generation digest
+- reviewed-files digest: `sha256:d2032115b525fc601031b7396ac3a911e15588b791e1553e2fb68d01a381c3b6`
+- generation digest: `sha256:8edbf34d28d421ce427bd27d2c7528b84cd15321750857563a0b39cd1a497a4a`
+- focused validation: `82 passed`; two existing pandas `FutureWarning` notices only
+- Ruff, `git diff --check`, independent digest recomputation: clear
+- independent review: `ARCHITECTURE: CLEAR`, `SAFETY: CLEAR`, `OPERATIONS: CLEAR`
+- fixed contract remains `H11_AUTO_30M_20260717_G013`, `SHORT_V1`, `USD_JPY`, `30m`, 1,000 units, `MARKET`
+- `actual_post_authorized=false`, `broker_post_authorized=false`, `activation_permit_issued=false`, broker POST count `0`
