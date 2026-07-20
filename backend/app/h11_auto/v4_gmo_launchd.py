@@ -100,7 +100,7 @@ def install_and_restart_v4_gmo_monitor_launchagent(
     wall_clock: WallClock = lambda: datetime.now(UTC),
     monotonic_clock: MonotonicClock = time.monotonic,
     wait: Wait = time.sleep,
-    heartbeat_timeout_seconds: float = 20.0,
+    heartbeat_timeout_seconds: float = 50.0,
 ) -> V4GmoLaunchdResult:
     """Replace the exact monitor service once and prove a fresh safe heartbeat."""
 

@@ -51,7 +51,7 @@ markerとserviceを変更せず保持する。
 corrective lifecycleは`60_monitor_launchagent`をgeneration-bound preparation ledgerの必須最終operationへ
 追加し、外部mutation前にno-retry started markerを確定する。exact labelの既存serviceが存在する場合だけ
 bootoutを最大1 attempt、その後RunAtLoad plistのbootstrapを最大1 attempt実行する。kickstartは使用しない。
-新generation専用runtime pathのheartbeatが20秒以内にfreshとなり、generation digest一致、
+新generation専用runtime pathのheartbeatが50秒以内にfreshとなり、generation digest一致、
 `WAITING_FOR_CANONICAL_RUNTIME`、broker read/write false、POST count 0の場合だけpassed markerを作る。
 timeout、bootout/bootstrap失敗、heartbeat不一致・staleはpersistent stopとし、同generationで再試行しない。
 
@@ -242,3 +242,20 @@ unattended_live_supported=false
 - This correction does not alter direction thresholds, risk, quantity, order type, permit, or broker transport.
 - External preparation, Private API, credential access, notifications, LaunchAgent, and broker POST were not
   performed during investigation or implementation. All old G012/G013/preview markers remain unchanged.
+
+## 2026-07-20 operation 60 heartbeat-window corrective generation
+
+- Generations `94a96eb2…` and `0e716008…` (the R2 official-ATR generation) both completed operations 00-50
+  and then stopped at `MONITOR_LAUNCHAGENT_BLOCKED_NO_RETRY`. State evidence (loaded plist bound to the
+  generation digest, running supervisor, fresh `WAITING_FOR_CANONICAL_RUNTIME` heartbeat) shows bootout and
+  bootstrap succeeded; only the install-side wait for the first fresh heartbeat expired.
+- Root cause: the resident supervisor's cold start (launchd exec + interpreter start + two full
+  reviewed-files digest computations + application import) exceeded the fixed 20-second install heartbeat
+  window on those runs, while earlier generations `d2032115…`/`e9b9efdf…` won the same race under 20 s.
+- Corrective: raise the install-side `heartbeat_timeout_seconds` default from 20 to 50 seconds. The
+  post-import second digest re-check still runs before `run_forever` emits the heartbeat, so the tamper
+  gate is unchanged; the installer merely waits longer for that already-verified heartbeat, still bounded
+  by the ≤60-second freshness check. No early-heartbeat / audit-flag mechanism is introduced.
+- Scope: `v4_gmo_launchd.py` default, this report, and the AGENTS.md operation-60 note (20→50 s). The
+  no-retry ledger flow, operation-60 clear condition, permit chain, and broker transport are not touched.
+  Broker POST count remains zero; failed markers on prior generations remain immutable.

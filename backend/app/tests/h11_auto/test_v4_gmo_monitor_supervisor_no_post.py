@@ -326,7 +326,9 @@ def test_launchagent_rejects_prebootstrap_heartbeat(
         heartbeat_path,
         generation_digest=generation.digest,
     )
-    monotonic_values = iter((0.0, 0.0, 21.0))
+    # Clock must cross the 50s install heartbeat window (default) to reach the
+    # deadline and reject the pre-bootstrap heartbeat.
+    monotonic_values = iter((0.0, 0.0, 51.0))
 
     with pytest.raises(V4GmoLaunchdError, match="HEARTBEAT_NOT_CLEAR"):
         install_and_restart_v4_gmo_monitor_launchagent(
