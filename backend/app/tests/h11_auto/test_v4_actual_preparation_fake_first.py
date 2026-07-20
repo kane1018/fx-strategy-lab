@@ -1692,3 +1692,79 @@ def test_preparation_ledger_rejects_symlink_fixed_state_before_resolve(
         V4ActualPreparationGuardError, match="STATE_SYMLINK_FORBIDDEN"
     ):
         V4PreparationAttemptLedger(external_gate=external_gate)
+
+
+def _one_usd_jpy_ticker_handler(timestamp: str) -> object:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/public/v1/status":
+            return httpx.Response(200, json={"status": 0, "data": {"status": "OPEN"}})
+        return httpx.Response(
+            200,
+            json={
+                "status": 0,
+                "data": [
+                    {
+                        "symbol": "USD_JPY",
+                        "ask": "160.005",
+                        "bid": "160.000",
+                        "timestamp": timestamp,
+                        "status": "OPEN",
+                    }
+                ],
+            },
+        )
+
+    return handler
+
+
+def test_public_preflight_tolerates_behind_clock_within_op30_skew(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    ledger, permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUBLIC_GET,
+    )
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            _one_usd_jpy_ticker_handler("2026-07-17T00:00:02Z")
+        )
+    )
+    # Local clock is 2s BEHIND the quote timestamp (age = -2s): a clock-skew
+    # artifact within op30's +/-5s tolerance, not a stale quote.
+    report = V4GmoFinitePublicPreflight(
+        external_gate=external_gate,
+        operation_permit=permit,
+        client=client,
+        wall_clock=lambda: datetime(2026, 7, 17, 0, 0, 0, tzinfo=UTC),
+    ).run_once()
+    assert report.quote_age_seconds == -2.0
+    assert report.quote_fresh is True
+    assert report.status == "PASSED_PUBLIC_STATUS_TICKER_SANITIZED_NO_BROKER_POST"
+    ledger.complete(V4PreparationOperation.PUBLIC_GET, operation_permit=permit)
+    client.close()
+
+
+def test_public_preflight_still_rejects_quote_beyond_clock_skew_window(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    _, permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUBLIC_GET,
+    )
+    client = httpx.Client(
+        transport=httpx.MockTransport(
+            _one_usd_jpy_ticker_handler("2026-07-17T00:00:07Z")
+        )
+    )
+    # age = -7s exceeds the +/-5s window -> not fresh -> blocked (gross clock
+    # error, which op30 would also fail). The staleness upper bound is unchanged.
+    report = V4GmoFinitePublicPreflight(
+        external_gate=external_gate,
+        operation_permit=permit,
+        client=client,
+        wall_clock=lambda: datetime(2026, 7, 17, 0, 0, 0, tzinfo=UTC),
+    ).run_once()
+    assert report.quote_age_seconds == -7.0
+    assert report.quote_fresh is False
+    assert report.status == "BLOCKED_PUBLIC_STATUS_TICKER_NOT_CLEAR"
+    client.close()

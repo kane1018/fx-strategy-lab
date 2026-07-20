@@ -825,3 +825,63 @@ def test_public_operation_ledger_cycle_key_retries_next_slot_only(
     # An unsafe cycle_key is rejected before any marker is written.
     with pytest.raises(V4GmoPublicPreflightError, match="CYCLE_KEY_INVALID"):
         ledger.claim_once(formal, cycle_key="../escape")
+
+
+def test_g013_final_quote_tolerates_behind_clock_within_skew(
+    tmp_path: Path,
+) -> None:
+    ledger = V4GmoG013PublicOperationLedger(
+        state_root=tmp_path / "runtime",
+        generation_digest="sha256:" + "a" * 64,
+    )
+
+    def _handler(timestamp: str):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/public/v1/status":
+                return httpx.Response(
+                    200, json={"status": 0, "data": {"status": "OPEN"}}
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "status": 0,
+                    "data": [
+                        {
+                            "symbol": "USD_JPY",
+                            "ask": "160.005",
+                            "bid": "160.000",
+                            "timestamp": timestamp,
+                            "status": "OPEN",
+                        }
+                    ],
+                },
+            )
+
+        return handler
+
+    # age = -2s (local clock behind) is within the +/-5s window -> fresh.
+    fresh_client = httpx.Client(
+        transport=httpx.MockTransport(_handler("2026-07-17T00:00:02Z"))
+    )
+    quote = read_g013_final_quote_once(
+        operation_ledger=ledger,
+        operation=V4GmoG013PublicOperation.REFERENCE_QUOTE,
+        client=fresh_client,
+        wall_clock=lambda: datetime(2026, 7, 17, 0, 0, 0, tzinfo=UTC),
+    )
+    assert quote.quote_fresh is True
+    fresh_client.close()
+
+    # age = -7s exceeds +/-5s -> the POST-phase gate still blocks (staleness cap
+    # unchanged; a genuinely-wrong clock is rejected here and by op30).
+    stale_client = httpx.Client(
+        transport=httpx.MockTransport(_handler("2026-07-17T00:00:07Z"))
+    )
+    with pytest.raises(V4GmoPublicPreflightError, match="FINAL_QUOTE_GATE_BLOCKED"):
+        read_g013_final_quote_once(
+            operation_ledger=ledger,
+            operation=V4GmoG013PublicOperation.FINAL_QUOTE,
+            client=stale_client,
+            wall_clock=lambda: datetime(2026, 7, 17, 0, 0, 0, tzinfo=UTC),
+        )
+    stale_client.close()

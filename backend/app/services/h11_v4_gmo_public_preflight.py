@@ -32,6 +32,13 @@ GMO_V4_PUBLIC_STATUS_PATH = "/public/v1/status"
 GMO_V4_PUBLIC_TICKER_PATH = "/public/v1/ticker"
 GMO_V4_PUBLIC_SYMBOL = "USD_JPY"
 MAXIMUM_QUOTE_AGE_SECONDS = 5.0
+# A quote whose exchange timestamp is up to this many seconds AHEAD of the local
+# clock (i.e. a negative age) is a clock-skew artifact, not a stale quote. The
+# op30 host rehearsal already accepts up to +/-5s of NTP skew, so freshness
+# tolerates the same behind-clock range. The staleness upper bound
+# (MAXIMUM_QUOTE_AGE_SECONDS) is unchanged, so a genuinely old quote is still
+# rejected and no stale price ever reaches a gate.
+MAXIMUM_QUOTE_CLOCK_SKEW_SECONDS = 5.0
 G013_MAXIMUM_ENTRY_SPREAD_PIPS = Decimal("0.5")
 
 
@@ -203,7 +210,10 @@ class V4GmoFinitePublicPreflight:
         if now.tzinfo is None:
             raise V4GmoPublicPreflightError("PUBLIC_GET_CLOCK_INVALID")
         age = (now.astimezone(UTC) - ticker.timestamp.astimezone(UTC)).total_seconds()
-        fresh = math.isfinite(age) and 0.0 <= age <= MAXIMUM_QUOTE_AGE_SECONDS
+        fresh = (
+            math.isfinite(age)
+            and -MAXIMUM_QUOTE_CLOCK_SKEW_SECONDS <= age <= MAXIMUM_QUOTE_AGE_SECONDS
+        )
         spread = (ticker.ask - ticker.bid) / Decimal("0.01")
         if spread < 0:
             raise V4GmoPublicPreflightError("PUBLIC_GET_TICKER_INVALID")
@@ -330,7 +340,10 @@ def read_g013_final_quote_once(
     if now.tzinfo is None:
         raise V4GmoPublicPreflightError("G013_FINAL_QUOTE_CLOCK_INVALID")
     age = (now.astimezone(UTC) - ticker.timestamp.astimezone(UTC)).total_seconds()
-    fresh = math.isfinite(age) and 0 <= age <= MAXIMUM_QUOTE_AGE_SECONDS
+    fresh = (
+        math.isfinite(age)
+        and -MAXIMUM_QUOTE_CLOCK_SKEW_SECONDS <= age <= MAXIMUM_QUOTE_AGE_SECONDS
+    )
     spread = (ticker.ask - ticker.bid) / Decimal("0.01")
     quote = V4GmoG013FinalQuote(
         bid=ticker.bid,
