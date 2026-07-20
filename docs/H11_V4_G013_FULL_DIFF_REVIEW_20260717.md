@@ -207,6 +207,26 @@ Final independent review after both corrective rounds:
 - reviewed-files digest: `sha256:b10aac41724c4fd32bbc4aaa32361a65dffe6e374d30e5da8defa981273ff862`
 - generation digest: `sha256:8d5a44932a79fbc8caa4aa066dcf08d3603efd45b5829574cbb06a132f22816b`
 
+## 2026-07-20 GUI-capable host invocation corrective review
+
+- Failed generation stopped at `30_host_kill` with `network_time_enabled=null`; all failed markers and the
+  persistent HALT remain unchanged. Downstream external operations and broker GET/POST were not run.
+- Root cause is operational invocation from the normal Codex sandbox, not a relaxed or missing host gate.
+  The fixed read-only administrator command and exact `Network Time: On/Off` parser remain unchanged.
+- Corrective procedure requires the exact no-argument host CLI to run once from a GUI-capable escalated Codex
+  context after fresh generation-specific operator approval.
+- New-generation preparation restarts at `00_presence`; no prior Keychain, notification, email confirmation,
+  host, Public/Private GET, or operator evidence is reused.
+- Pre-implementation review: Architecture CLEAR / Safety CLEAR / Operations VETO for an initial operation-10
+  restart proposal. The reviewed procedure was corrected to operation 00 before implementation.
+- Validation: H-11 `534 passed` with two existing pandas FutureWarnings only; Ruff, `git diff --check`,
+  danger scan, and independent digest recomputation are clear.
+- Reviewed-files digest: `sha256:ebc5813336c8857d4100bb4a39a7cc3571296e4fb66722c7edc256e996f53d37`.
+- Generation digest: `sha256:94a96eb2c4f33db8a8621e553b2e1d1145fe80066853077e9cbb170aca143fd0`.
+- Final independent review after correcting operation 10 to operation 00: no blocking findings;
+  Architecture CLEAR / Safety CLEAR / Operations CLEAR.
+- `activation_permit_issued=false`, `broker_post_authorized=false`, broker POST count remains 0.
+
 ## 2026-07-20 fresh-Public exact-window corrective generation
 
 - Root cause: the prior formal refresh could persist an active M1 candle into the legacy local cache; the
