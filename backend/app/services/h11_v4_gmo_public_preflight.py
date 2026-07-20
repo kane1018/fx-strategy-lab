@@ -39,6 +39,27 @@ class V4GmoPublicPreflightError(RuntimeError):
     """Fixed safe public-preflight failure."""
 
 
+def g013_public_cycle_key(now_utc: datetime) -> str:
+    """Deterministic per-minute slot key for retryable PREPARE-phase public GETs.
+
+    A STAY signal or a blocked reference quote consumes only the per-slot marker
+    for that minute, so the canary can be re-run on the next completed M1 minute
+    within the same generation without re-running external preparation. It never
+    relaxes the one-use FINAL_QUOTE, coordinator cycle, activation permit, or the
+    entry/OCO broker-write no-retry markers.
+    """
+
+    return now_utc.astimezone(UTC).strftime("%Y%m%dT%H%MZ")
+
+
+def _valid_cycle_key(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and 1 <= len(value) <= 20
+        and all(character in "0123456789TZ" for character in value)
+    )
+
+
 class V4GmoG013PublicOperation(str, Enum):
     """Distinct generation-bound public operations; none is a retry."""
 
@@ -65,16 +86,30 @@ class V4GmoG013PublicOperationLedger:
         root.mkdir(parents=True, exist_ok=True)
         object.__setattr__(self, "state_root", root)
 
-    def claim_once(self, operation: V4GmoG013PublicOperation) -> None:
+    def claim_once(
+        self,
+        operation: V4GmoG013PublicOperation,
+        *,
+        cycle_key: str | None = None,
+    ) -> None:
+        # cycle_key=None keeps the historical one-per-generation claim. A caller
+        # that passes a per-minute cycle_key makes the claim one-use *per slot*
+        # so a STAY/blocked-quote run can retry on the next minute without a new
+        # generation; the broker-write no-retry markers are unaffected.
         if type(operation) is not V4GmoG013PublicOperation:  # noqa: E721
             raise V4GmoPublicPreflightError("G013_PUBLIC_OPERATION_INVALID")
-        path = self.state_root / f"g013-public-{operation.value}-attempted.json"
+        if cycle_key is not None and not _valid_cycle_key(cycle_key):
+            raise V4GmoPublicPreflightError("G013_PUBLIC_CYCLE_KEY_INVALID")
+        suffix = "" if cycle_key is None else f"-{cycle_key}"
+        path = self.state_root / f"g013-public-{operation.value}{suffix}-attempted.json"
         payload = (
             '{"generation_digest":"'
             + self.generation_digest
             + '","operation":"'
             + operation.value
-            + '","status":"ATTEMPTED_NO_RETRY"}\n'
+            + '","cycle_key":'
+            + ("null" if cycle_key is None else '"' + cycle_key + '"')
+            + ',"status":"ATTEMPTED_NO_RETRY"}\n'
         )
         try:
             descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -271,10 +306,16 @@ def read_g013_final_quote_once(
     operation: V4GmoG013PublicOperation,
     client: httpx.Client | None = None,
     wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    cycle_key: str | None = None,
 ) -> V4GmoG013FinalQuote:
-    """Read one final status+ticker pair for G013; never retry or write."""
+    """Read one final status+ticker pair for G013; never retry or write.
 
-    operation_ledger.claim_once(operation)
+    The PREPARE-phase REFERENCE_QUOTE caller passes a per-minute cycle_key so a
+    blocked quote can retry next minute; the POST-phase FINAL_QUOTE caller omits
+    it and stays one-use per generation.
+    """
+
+    operation_ledger.claim_once(operation, cycle_key=cycle_key)
     selected = client or httpx.Client(timeout=5.0)
     owns_client = client is None
     try:

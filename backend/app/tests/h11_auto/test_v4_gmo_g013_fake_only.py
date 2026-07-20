@@ -31,6 +31,7 @@ from app.services.h11_v4_gmo_public_preflight import (
     V4GmoG013PublicOperation,
     V4GmoG013PublicOperationLedger,
     V4GmoPublicPreflightError,
+    g013_public_cycle_key,
     read_g013_final_quote_once,
 )
 from app.shadow.models import Candle
@@ -791,3 +792,36 @@ def test_g013_prepermit_refresh_failure_prevents_confirmation_and_permit(
     confirm_resume.assert_not_called()
     confirm_current.assert_not_called()
     issue_permit.assert_not_called()
+
+
+def test_public_operation_ledger_cycle_key_retries_next_slot_only(
+    tmp_path: Path,
+) -> None:
+    ledger = V4GmoG013PublicOperationLedger(
+        state_root=tmp_path / "runtime",
+        generation_digest="sha256:" + "a" * 64,
+    )
+    formal = V4GmoG013PublicOperation.FORMAL_CANDLES
+    slot_a = g013_public_cycle_key(datetime(2026, 7, 20, 17, 30, tzinfo=UTC))
+    slot_b = g013_public_cycle_key(datetime(2026, 7, 20, 17, 31, tzinfo=UTC))
+    assert slot_a != slot_b
+
+    # Same minute-slot is still strictly one-use (no double public GET/minute).
+    ledger.claim_once(formal, cycle_key=slot_a)
+    with pytest.raises(V4GmoPublicPreflightError, match="ALREADY_ATTEMPTED"):
+        ledger.claim_once(formal, cycle_key=slot_a)
+
+    # The next minute-slot is a fresh claim: a STAY run retries next minute
+    # within the same generation without re-running external preparation.
+    ledger.claim_once(formal, cycle_key=slot_b)
+
+    # A cycle_key-less claim (FINAL_QUOTE / POST-phase) stays one-use per
+    # generation and is independent of the per-slot signal markers.
+    final = V4GmoG013PublicOperation.FINAL_QUOTE
+    ledger.claim_once(final)
+    with pytest.raises(V4GmoPublicPreflightError, match="ALREADY_ATTEMPTED"):
+        ledger.claim_once(final)
+
+    # An unsafe cycle_key is rejected before any marker is written.
+    with pytest.raises(V4GmoPublicPreflightError, match="CYCLE_KEY_INVALID"):
+        ledger.claim_once(formal, cycle_key="../escape")

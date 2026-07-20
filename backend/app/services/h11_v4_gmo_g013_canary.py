@@ -63,6 +63,7 @@ from app.services.h11_v4_gmo_public_preflight import (
     V4GmoG013FinalQuote,
     V4GmoG013PublicOperation,
     V4GmoG013PublicOperationLedger,
+    g013_public_cycle_key,
     read_g013_final_quote_once,
 )
 
@@ -218,6 +219,7 @@ def prepare_g013_canary_session(
     reference_quote = read_g013_final_quote_once(
         operation_ledger=public_operation_ledger,
         operation=V4GmoG013PublicOperation.REFERENCE_QUOTE,
+        cycle_key=g013_public_cycle_key(current),
     )
     store = V4GmoActualCoordinatorStore(state_root / "coordinator.sqlite3")
     risk = store.prepare_entry_intent(

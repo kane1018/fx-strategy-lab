@@ -35,6 +35,7 @@ from app.h11_manual.short_model import ShortModelArtifact, predict_short_model
 from app.services.h11_v4_gmo_public_preflight import (
     V4GmoG013PublicOperation,
     V4GmoG013PublicOperationLedger,
+    g013_public_cycle_key,
 )
 from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
 from app.shadow.models import Candle
@@ -239,8 +240,14 @@ def refresh_g013_formal_canary_input(
 ) -> V4GmoFormalCanaryInput:
     """Fetch current-day M1 and H1 exactly once each, then build the input."""
 
-    operation_ledger.claim_once(V4GmoG013PublicOperation.FORMAL_CANDLES)
     current = (now_utc or datetime.now(UTC)).astimezone(UTC)
+    # Per-minute slot: a STAY signal consumes only this minute's marker, so the
+    # canary can be re-run next minute within the same generation. FINAL_QUOTE,
+    # the coordinator cycle, and the entry/OCO no-retry stay one-use.
+    operation_ledger.claim_once(
+        V4GmoG013PublicOperation.FORMAL_CANDLES,
+        cycle_key=g013_public_cycle_key(current),
+    )
     # Derive the formal ATR(24) only from the official h1_bid.csv basis
     # (current-day fresh H1 saved below + official completed history). The
     # development/stage supplemental H1 caches are excluded here so the live
