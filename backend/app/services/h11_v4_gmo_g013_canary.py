@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from app.h11_auto.contracts import FormalHorizon
+from app.h11_auto.contracts import FormalHorizon, FormalSignal
 from app.h11_auto.v4_actual_preparation_guard import (
     V4CompletedPreparationEvidence,
     load_completed_preparation_evidence,
@@ -222,17 +222,27 @@ def prepare_g013_canary_session(
         cycle_key=g013_public_cycle_key(current),
     )
     store = V4GmoActualCoordinatorStore(state_root / "coordinator.sqlite3")
-    risk = store.prepare_entry_intent(
+    # Validate and price the entry to build the exact order sheet, but do NOT reserve
+    # the single cycle yet.  The cycle is reserved only after the operator's exact
+    # resume + current-turn confirmations succeed (see reserve_entry_cycle in the run
+    # phase), so a mistyped or timed-out confirmation leaves the generation reusable.
+    risk = store.evaluate_entry_intent(
         generation=generation,
         signal=formal_input.signal,
         policy=policy,
         frozen_atr_24=formal_input.frozen_atr_24,
         now_utc=current,
     )
+    # No cycle is reserved yet at order-sheet build time, so require the supervisor to be
+    # alive, generation-bound, broker-quiet, and observing a clean (no-cycle) coordinator.
     _require_fresh_monitor_heartbeat(
         state_root=state_root,
+        require_cycle_present=False,
     )
-    cycle_ref = store.cycle_ref_for_signal_internal(formal_input.signal.fingerprint)
+    cycle_ref = store.cycle_ref_for_signal_pure(
+        generation=generation,
+        signal_fingerprint=formal_input.signal.fingerprint,
+    )
     sheet = V4GmoG013OrderSheet(
         generation_label=generation.generation_label,
         strategy_version=generation.strategy_version,
@@ -302,6 +312,43 @@ def run_g013_actual_canary_after_exact_confirmation(
         challenge=session.challenge,
         intent=session.intent,
     )
+    # Both exact confirmations succeeded: the operator has authorised THIS exact entry.
+    # Only now commit — re-check the signal is still postable, then atomically reserve
+    # the single per-generation cycle. Any failure up to here (mistyped/timed-out
+    # confirmation, or a signal that aged out during operator input) reserves no cycle,
+    # so the generation stays reusable. reserve_entry_cycle still blocks fail-closed once
+    # a cycle exists, so an entry POST is never reserved twice.
+    _ensure_signal_postable(
+        generation=session.generation,
+        signal=session.formal_input.signal,
+        now_utc=datetime.now(UTC),
+    )
+    state_root = v4_gmo_runtime_state_root(
+        repository=session.repository,
+        generation_digest=session.generation.digest,
+    )
+    # Before reserving, re-confirm the dead-man supervisor is alive, generation-bound and
+    # broker-quiet on a still-clean coordinator. A supervisor that died during operator
+    # input is caught here, before any cycle is written, leaving the generation reusable
+    # rather than burned.
+    _require_fresh_monitor_heartbeat(
+        state_root=state_root,
+        require_cycle_present=False,
+    )
+    session.store.reserve_entry_cycle(
+        generation=session.generation,
+        signal=session.formal_input.signal,
+        policy=_execution_policy(session.generation),
+        frozen_atr_24=session.formal_input.frozen_atr_24,
+        now_utc=datetime.now(UTC),
+    )
+    # The single cycle now exists: require the resident dead-man supervisor to have
+    # observed it (cycle_present is True) and still be fresh and broker-quiet before the
+    # entry POST, so the position is monitored the instant it opens.
+    _require_fresh_monitor_heartbeat(
+        state_root=state_root,
+        require_cycle_present=True,
+    )
     permit = issue_v4_gmo_actual_activation_permit(
         intent=session.intent,
         resume_proof=resume,
@@ -353,6 +400,32 @@ def _refresh_session_evidence_before_permit(
     return refreshed
 
 
+def _ensure_signal_postable(
+    *,
+    generation: V4GmoFrozenGeneration,
+    signal: FormalSignal,
+    now_utc: datetime,
+) -> None:
+    """Fail closed unless the frozen 30m signal is still postable at ``now_utc``.
+
+    Enforced identically both immediately before the single cycle is reserved (so a
+    signal that ages out during operator input reserves no cycle and leaves the
+    generation reusable) and again inside the bound run as the final pre-POST gate.
+    """
+
+    if now_utc.tzinfo is None:
+        raise V4GmoG013CanaryError("G013_CLOCK_INVALID_BEFORE_POST")
+    now = now_utc.astimezone(UTC)
+    signal_age_seconds = (now - signal.observed_at_utc).total_seconds()
+    if (
+        signal.horizon is not FormalHorizon.MINUTES_30
+        or not 0 <= signal_age_seconds <= MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS
+        or now >= signal.valid_until_utc
+        or not _execution_policy(generation).entry_time_allowed(now_utc=now)
+    ):
+        raise V4GmoG013CanaryError("G013_SIGNAL_EXPIRED_BEFORE_POST")
+
+
 def _run_bound_g013_canary(
     *,
     session: V4GmoG013PreparedSession,
@@ -362,18 +435,9 @@ def _run_bound_g013_canary(
 ) -> V4GmoG013CanaryResult:
     path = binding.coordinated_path
     signal = session.formal_input.signal
-    current = wall_clock()
-    if current.tzinfo is None:
-        raise V4GmoG013CanaryError("G013_CLOCK_INVALID_BEFORE_POST")
-    current = current.astimezone(UTC)
-    signal_age_seconds = (current - signal.observed_at_utc).total_seconds()
-    if (
-        signal.horizon is not FormalHorizon.MINUTES_30
-        or not 0 <= signal_age_seconds <= MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS
-        or current >= signal.valid_until_utc
-        or not _execution_policy(session.generation).entry_time_allowed(now_utc=current)
-    ):
-        raise V4GmoG013CanaryError("G013_SIGNAL_EXPIRED_BEFORE_POST")
+    _ensure_signal_postable(
+        generation=session.generation, signal=signal, now_utc=wall_clock()
+    )
     _require_exact_session_binding(session)
     quote = read_g013_final_quote_once(
         operation_ledger=session.public_operation_ledger,
@@ -622,7 +686,18 @@ def _require_final_quote_near_reference(
         raise V4GmoG013CanaryError("G013_REFERENCE_QUOTE_MOVED_POST_BLOCKED")
 
 
-def _require_fresh_monitor_heartbeat(*, state_root: Path, timeout_seconds: float = 20.0) -> None:
+def _require_fresh_monitor_heartbeat(
+    *, state_root: Path, require_cycle_present: bool, timeout_seconds: float = 20.0
+) -> None:
+    """Require a fresh, generation-bound, broker-quiet resident-supervisor heartbeat.
+
+    ``require_cycle_present`` selects the coordinator state the supervisor must be
+    observing: ``False`` at order-sheet build time (no cycle is reserved yet, so the
+    coordinator must be clean), and ``True`` after the single cycle is reserved and
+    before the entry POST (the dead-man supervisor must already be tracking the cycle so
+    the position is monitored the instant it opens).
+    """
+
     deadline = time.monotonic() + timeout_seconds
     heartbeat_path = state_root / "supervisor-heartbeat.json"
     while time.monotonic() < deadline:
@@ -636,7 +711,7 @@ def _require_fresh_monitor_heartbeat(*, state_root: Path, timeout_seconds: float
         if (
             0 <= age <= 60
             and payload.get("generation_bound") is True
-            and payload.get("cycle_present") is True
+            and payload.get("cycle_present") is require_cycle_present
             and payload.get("broker_read") is False
             and payload.get("broker_write") is False
             and payload.get("actual_post_count") == 0

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -827,6 +828,176 @@ def test_g013_prepermit_refresh_failure_prevents_confirmation_and_permit(
         )
     confirm_resume.assert_not_called()
     confirm_current.assert_not_called()
+    issue_permit.assert_not_called()
+
+
+def test_g013_run_reserves_no_cycle_when_resume_confirmation_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A mistyped resume phrase raises before the cycle is reserved, so no cycle is written
+    # and the generation stays reusable for the next actionable signal.
+    reserve = MagicMock()
+    issue_permit = MagicMock()
+    session = SimpleNamespace(
+        _use=SimpleNamespace(consume_once=lambda: None),
+        store=SimpleNamespace(reserve_entry_cycle=reserve),
+        generation=SimpleNamespace(digest="sha256:" + "a" * 64),
+        formal_input=SimpleNamespace(signal=object(), frozen_atr_24=Decimal("0.1")),
+        intent=object(),
+        repository=Path("/nonexistent"),
+    )
+    monkeypatch.setattr(canary_module, "_require_exact_session_binding", lambda _session: None)
+    monkeypatch.setattr(canary_module, "_refresh_session_evidence_before_permit", lambda s: s)
+    monkeypatch.setattr(
+        canary_module,
+        "confirm_v4_major_incident_resume_exact",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("resume-mismatch")),
+    )
+    monkeypatch.setattr(canary_module, "issue_v4_gmo_actual_activation_permit", issue_permit)
+    with pytest.raises(RuntimeError, match="resume-mismatch"):
+        canary_module.run_g013_actual_canary_after_exact_confirmation(
+            session=cast(canary_module.V4GmoG013PreparedSession, session),
+            major_incident_resume_phrase="wrong",
+            current_turn_phrase="unused",
+        )
+    reserve.assert_not_called()
+    issue_permit.assert_not_called()
+
+
+def test_g013_run_reserves_cycle_after_confirmations_before_permit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # After both exact confirmations succeed, the run re-checks the signal is postable and
+    # THEN reserves the single cycle, before issuing the permit / any POST.
+    order: list[str] = []
+    session = SimpleNamespace(
+        _use=SimpleNamespace(consume_once=lambda: None),
+        store=SimpleNamespace(reserve_entry_cycle=lambda **_kwargs: order.append("reserve")),
+        generation=SimpleNamespace(digest="sha256:" + "a" * 64),
+        formal_input=SimpleNamespace(signal=object(), frozen_atr_24=Decimal("0.1")),
+        intent=object(),
+        challenge=object(),
+        repository=Path("/nonexistent"),
+    )
+    monkeypatch.setattr(canary_module, "_require_exact_session_binding", lambda _session: None)
+    monkeypatch.setattr(canary_module, "_refresh_session_evidence_before_permit", lambda s: s)
+    monkeypatch.setattr(
+        canary_module, "confirm_v4_major_incident_resume_exact", lambda **_kwargs: object()
+    )
+    monkeypatch.setattr(
+        canary_module, "confirm_v4_current_turn_exact", lambda **_kwargs: object()
+    )
+    monkeypatch.setattr(
+        canary_module, "_ensure_signal_postable", lambda **_kwargs: order.append("postable")
+    )
+    monkeypatch.setattr(canary_module, "_execution_policy", lambda _generation: SimpleNamespace())
+    monkeypatch.setattr(
+        canary_module,
+        "_require_fresh_monitor_heartbeat",
+        lambda **_kwargs: order.append("heartbeat"),
+    )
+    monkeypatch.setattr(
+        canary_module,
+        "issue_v4_gmo_actual_activation_permit",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            canary_module.V4GmoG013CanaryError("STOP_AFTER_RESERVE")
+        ),
+    )
+    with pytest.raises(canary_module.V4GmoG013CanaryError, match="STOP_AFTER_RESERVE"):
+        canary_module.run_g013_actual_canary_after_exact_confirmation(
+            session=cast(canary_module.V4GmoG013PreparedSession, session),
+            major_incident_resume_phrase="ok",
+            current_turn_phrase="ok",
+        )
+    # postable re-check, pre-reserve supervisor liveness, cycle reservation, then the
+    # post-reserve supervisor gate — all before the permit / any POST.
+    assert order == ["postable", "heartbeat", "reserve", "heartbeat"]
+
+
+def test_require_fresh_monitor_heartbeat_matches_cycle_present_requirement(
+    tmp_path: Path,
+) -> None:
+    # The prepare-phase gate (no cycle yet) requires cycle_present is False; the
+    # post-reserve gate requires the supervisor to have observed the cycle (True).
+    state_root = tmp_path / "state"
+    state_root.mkdir()
+    heartbeat_path = state_root / "supervisor-heartbeat.json"
+
+    def _write(*, cycle_present: bool) -> None:
+        heartbeat_path.write_text(
+            json.dumps(
+                {
+                    "observed_at_utc": datetime.now(UTC).isoformat(),
+                    "generation_bound": True,
+                    "cycle_present": cycle_present,
+                    "broker_read": False,
+                    "broker_write": False,
+                    "actual_post_count": 0,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    _write(cycle_present=False)
+    canary_module._require_fresh_monitor_heartbeat(
+        state_root=state_root, require_cycle_present=False, timeout_seconds=1.0
+    )
+    with pytest.raises(canary_module.V4GmoG013CanaryError, match="MONITOR_HEARTBEAT_NOT_CLEAR"):
+        canary_module._require_fresh_monitor_heartbeat(
+            state_root=state_root, require_cycle_present=True, timeout_seconds=1.0
+        )
+    _write(cycle_present=True)
+    canary_module._require_fresh_monitor_heartbeat(
+        state_root=state_root, require_cycle_present=True, timeout_seconds=1.0
+    )
+    with pytest.raises(canary_module.V4GmoG013CanaryError, match="MONITOR_HEARTBEAT_NOT_CLEAR"):
+        canary_module._require_fresh_monitor_heartbeat(
+            state_root=state_root, require_cycle_present=False, timeout_seconds=1.0
+        )
+
+
+def test_g013_run_reserves_no_cycle_when_signal_ages_out_before_reserve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Real _ensure_signal_postable: if the signal ages past the postable window during
+    # operator input, the run raises before reserving — generation stays reusable.
+    reserve = MagicMock()
+    issue_permit = MagicMock()
+    selected = V4ApprovedOperatorSelections()
+    aged_signal = FormalSignal(
+        strategy_version=selected.strategy_version,
+        signal_config_hash=selected.signal_config_hash,
+        horizon=FormalHorizon.MINUTES_30,
+        observed_at_utc=datetime(2000, 1, 1, tzinfo=UTC),
+        valid_until_utc=datetime(2000, 1, 1, 0, 30, tzinfo=UTC),
+        decision=SignalDecision.BUY,
+        probability_up=Decimal("0.61"),
+    )
+    session = SimpleNamespace(
+        _use=SimpleNamespace(consume_once=lambda: None),
+        store=SimpleNamespace(reserve_entry_cycle=reserve),
+        generation=SimpleNamespace(digest="sha256:" + "a" * 64),
+        formal_input=SimpleNamespace(signal=aged_signal, frozen_atr_24=Decimal("0.1")),
+        intent=object(),
+        challenge=object(),
+        repository=Path("/nonexistent"),
+    )
+    monkeypatch.setattr(canary_module, "_require_exact_session_binding", lambda _session: None)
+    monkeypatch.setattr(canary_module, "_refresh_session_evidence_before_permit", lambda s: s)
+    monkeypatch.setattr(
+        canary_module, "confirm_v4_major_incident_resume_exact", lambda **_kwargs: object()
+    )
+    monkeypatch.setattr(
+        canary_module, "confirm_v4_current_turn_exact", lambda **_kwargs: object()
+    )
+    monkeypatch.setattr(canary_module, "issue_v4_gmo_actual_activation_permit", issue_permit)
+    with pytest.raises(canary_module.V4GmoG013CanaryError, match="SIGNAL_EXPIRED_BEFORE_POST"):
+        canary_module.run_g013_actual_canary_after_exact_confirmation(
+            session=cast(canary_module.V4GmoG013PreparedSession, session),
+            major_incident_resume_phrase="ok",
+            current_turn_phrase="ok",
+        )
+    reserve.assert_not_called()
     issue_permit.assert_not_called()
 
 

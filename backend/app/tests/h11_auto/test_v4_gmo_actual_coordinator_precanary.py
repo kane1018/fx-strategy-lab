@@ -816,6 +816,83 @@ def test_intent_attempt_and_oco_are_persisted_before_transport(tmp_path: Path) -
         )
 
 
+def test_evaluate_entry_intent_prices_without_reserving_a_cycle(tmp_path: Path) -> None:
+    # evaluate validates and prices the entry for the order sheet but writes NO cycle,
+    # so an operator who then mistypes/times out a confirmation leaves the generation
+    # reusable.  reserve, called only after the exact confirmations succeed, then writes
+    # exactly the cycle the pure cycle_ref predicted.
+    signal = _signal()
+    store = V4GmoActualCoordinatorStore(tmp_path / "coordinator.sqlite3")
+    risk = store.evaluate_entry_intent(
+        generation=_generation(),
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    assert risk.planned_loss_bound_jpy == 351
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 0
+    pure_ref = store.cycle_ref_for_signal_pure(
+        generation=_generation(), signal_fingerprint=signal.fingerprint
+    )
+    reserved = store.reserve_entry_cycle(
+        generation=_generation(),
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    assert reserved.planned_loss_bound_jpy == risk.planned_loss_bound_jpy
+    assert store.cycle_ref_for_signal_internal(signal.fingerprint) == pure_ref
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 1
+
+
+def test_reserve_entry_cycle_blocks_any_second_cycle(tmp_path: Path) -> None:
+    # The single-cycle guard is unchanged: once ANY cycle is reserved (i.e. an entry POST
+    # has been committed to), no second cycle can be reserved for the generation, even for
+    # a different, later actionable signal.
+    store = V4GmoActualCoordinatorStore(tmp_path / "coordinator.sqlite3")
+    store.reserve_entry_cycle(
+        generation=_generation(),
+        signal=_signal(),
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    later = _signal(observed_at_utc=NOW + timedelta(seconds=30))
+    assert later.fingerprint != _signal().fingerprint
+    with pytest.raises(V4GmoActualCoordinatorError, match="already has a cycle"):
+        store.reserve_entry_cycle(
+            generation=_generation(),
+            signal=later,
+            policy=_policy(),
+            frozen_atr_24=Decimal("0.20"),
+            now_utc=NOW + timedelta(seconds=30),
+        )
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 1
+
+
+def test_evaluate_entry_intent_fails_closed_on_unknown_halt(tmp_path: Path) -> None:
+    # A latched unknown halt (e.g. a prior unknown transport result) still blocks even the
+    # non-reserving evaluate path, so no order sheet is built after an ambiguous POST.
+    store = V4GmoActualCoordinatorStore(tmp_path / "coordinator.sqlite3")
+    store.bind_generation(_generation())
+    store.engage_unknown_halt()
+    with pytest.raises(V4GmoActualCoordinatorError, match="unknown halt"):
+        store.evaluate_entry_intent(
+            generation=_generation(),
+            signal=_signal(),
+            policy=_policy(),
+            frozen_atr_24=Decimal("0.20"),
+            now_utc=NOW,
+        )
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 0
+
+
 def test_restart_refuses_second_market_attempt_and_generation_change(
     tmp_path: Path,
 ) -> None:

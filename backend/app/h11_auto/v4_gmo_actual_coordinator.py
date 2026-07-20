@@ -280,7 +280,7 @@ class V4GmoActualCoordinatorStore:
             elif dict(existing) != values:
                 raise V4GmoActualCoordinatorError("v4 generation binding mismatch")
 
-    def prepare_entry_intent(
+    def _validate_and_price_entry(
         self,
         *,
         generation: V4GmoFrozenGeneration,
@@ -289,6 +289,13 @@ class V4GmoActualCoordinatorStore:
         frozen_atr_24: Decimal,
         now_utc: datetime,
     ) -> V4FrozenSignalRisk:
+        """Bind, validate every entry precondition, and price the frozen risk.
+
+        Performs NO cycle reservation.  Shared by the dry-run ``evaluate`` path
+        (order-sheet build, before any operator confirmation) and the committing
+        ``reserve`` path (after the operator's exact confirmations succeed).
+        """
+
         self.bind_generation(generation)
         if self.unknown_halt_latched():
             raise V4GmoActualCoordinatorError("v4 unknown halt is latched")
@@ -310,6 +317,58 @@ class V4GmoActualCoordinatorStore:
         )
         if risk.planned_loss_bound_jpy > policy.max_loss_per_trade_yen:
             raise V4GmoActualCoordinatorError("v4 planned loss exceeds operator limit")
+        return risk
+
+    def evaluate_entry_intent(
+        self,
+        *,
+        generation: V4GmoFrozenGeneration,
+        signal: FormalSignal,
+        policy: V4GmoExecutionPolicy,
+        frozen_atr_24: Decimal,
+        now_utc: datetime,
+    ) -> V4FrozenSignalRisk:
+        """Validate and price an entry WITHOUT reserving the single cycle.
+
+        Used to build the exact order sheet before the operator confirms.  Because
+        no cycle row is written, an operator who then mistypes or times out a
+        confirmation leaves the generation reusable for the next actionable signal.
+        The single-cycle guard remains fully intact and is enforced later, only when
+        :meth:`reserve_entry_cycle` actually commits to an entry POST.
+        """
+
+        return self._validate_and_price_entry(
+            generation=generation,
+            signal=signal,
+            policy=policy,
+            frozen_atr_24=frozen_atr_24,
+            now_utc=now_utc,
+        )
+
+    def reserve_entry_cycle(
+        self,
+        *,
+        generation: V4GmoFrozenGeneration,
+        signal: FormalSignal,
+        policy: V4GmoExecutionPolicy,
+        frozen_atr_24: Decimal,
+        now_utc: datetime,
+    ) -> V4FrozenSignalRisk:
+        """Atomically reserve the single per-generation cycle, then return its risk.
+
+        Re-runs every precondition inside the same call and blocks fail-closed if a
+        cycle already exists (``SELECT 1 FROM cycles``) — so at most one cycle is ever
+        reserved for a generation, and once a cycle exists (i.e. an entry POST has been
+        committed to) it can never be superseded, even by a later actionable signal.
+        """
+
+        risk = self._validate_and_price_entry(
+            generation=generation,
+            signal=signal,
+            policy=policy,
+            frozen_atr_24=frozen_atr_24,
+            now_utc=now_utc,
+        )
         cycle_ref = _cycle_ref(generation.digest, signal.fingerprint)
         timestamp = _timestamp(now_utc)
         try:
@@ -343,6 +402,30 @@ class V4GmoActualCoordinatorStore:
         except sqlite3.IntegrityError as error:
             raise V4GmoActualCoordinatorError("duplicate v4 entry intent refused") from error
         return risk
+
+    def prepare_entry_intent(
+        self,
+        *,
+        generation: V4GmoFrozenGeneration,
+        signal: FormalSignal,
+        policy: V4GmoExecutionPolicy,
+        frozen_atr_24: Decimal,
+        now_utc: datetime,
+    ) -> V4FrozenSignalRisk:
+        """Validate, price, and reserve the single cycle in one call.
+
+        Retained for callers that evaluate and commit together (the coordinator kill
+        probe and every pre-canary coordinator test).  Behaviourally identical to the
+        prior implementation: it delegates to :meth:`reserve_entry_cycle`.
+        """
+
+        return self.reserve_entry_cycle(
+            generation=generation,
+            signal=signal,
+            policy=policy,
+            frozen_atr_24=frozen_atr_24,
+            now_utc=now_utc,
+        )
 
     def _record_entry_preflight_from_coordinated_path(
         self,
@@ -592,6 +675,18 @@ class V4GmoActualCoordinatorStore:
                 cycle_ref=cycle_ref,
                 action=V4GmoAction.MARKET_ENTRY,
             )
+
+    def cycle_ref_for_signal_pure(
+        self, *, generation: V4GmoFrozenGeneration, signal_fingerprint: str
+    ) -> str:
+        """Deterministic cycle_ref for a signal WITHOUT requiring a reserved cycle.
+
+        Lets the order sheet be built before a cycle is reserved.  Returns exactly the
+        same value the reserved row would carry, so ``reserve_entry_cycle`` and the
+        runtime lookup (:meth:`cycle_ref_for_signal_internal`) stay consistent.
+        """
+
+        return _cycle_ref(generation.digest, signal_fingerprint)
 
     def cycle_ref_for_signal_internal(self, signal_fingerprint: str) -> str:
         with self._connect() as connection:
