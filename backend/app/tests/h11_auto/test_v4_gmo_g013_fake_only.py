@@ -187,11 +187,18 @@ def test_formal_refresh_claims_once_and_uses_completed_public_bars(
 
     repository_type = source_module.CandleRepository
     monkeypatch.setattr(source_module, "GmoPublicMarketDataClient", _FakePublicClient)
-    monkeypatch.setattr(
-        source_module,
-        "CandleRepository",
-        lambda root: repository_type(root, supplemental_h1_paths=()),
-    )
+    captured_supplemental_h1_paths: list[tuple[Path, ...]] = []
+
+    def _capturing_repository(
+        root: Path, supplemental_h1_paths: tuple[Path, ...]
+    ) -> object:
+        # No default: if production regresses to CandleRepository(data_root)
+        # (re-including the DEV/STAGE supplemental caches), the omitted keyword
+        # raises TypeError here instead of a false-passing capture of ().
+        captured_supplemental_h1_paths.append(supplemental_h1_paths)
+        return repository_type(root, supplemental_h1_paths=supplemental_h1_paths)
+
+    monkeypatch.setattr(source_module, "CandleRepository", _capturing_repository)
     monkeypatch.setattr(
         source_module.ShortModelArtifact,
         "load",
@@ -210,6 +217,9 @@ def test_formal_refresh_claims_once_and_uses_completed_public_bars(
     assert sleeps == [G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS]
     assert result.signal.observed_at_utc == datetime(2026, 7, 17, 3, 0, tzinfo=UTC)
     assert result.frozen_atr_24 == Decimal("0.04")
+    # R2: the formal ATR basis excludes the development/stage supplemental H1
+    # caches; only the official h1_bid.csv history participates.
+    assert captured_supplemental_h1_paths == [()]
     persisted_m1 = pd.read_csv(tmp_path / "data" / "usdjpy_m1_bid.csv")
     assert pd.to_datetime(persisted_m1["time_utc"], utc=True).max() == pd.Timestamp(
         "2026-07-17T03:00:00Z"

@@ -241,7 +241,11 @@ def refresh_g013_formal_canary_input(
 
     operation_ledger.claim_once(V4GmoG013PublicOperation.FORMAL_CANDLES)
     current = (now_utc or datetime.now(UTC)).astimezone(UTC)
-    repository = CandleRepository(data_root)
+    # Derive the formal ATR(24) only from the official h1_bid.csv basis
+    # (current-day fresh H1 saved below + official completed history). The
+    # development/stage supplemental H1 caches are excluded here so the live
+    # risk width never depends on non-official or stale historical bars.
+    repository = CandleRepository(data_root, supplemental_h1_paths=())
     client = GmoPublicMarketDataClient()
     date_label = current.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y%m%d")
     try:
