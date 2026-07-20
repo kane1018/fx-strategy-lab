@@ -77,5 +77,33 @@ reviewed_files_digest=sha256:7f76c7643a4f63d67779eef850d55cc292c8032385e94523ab0
 generation_digest=sha256:c9d27bd1a7336868573ec2701f77a2aa13d525f340508060f682faa8eb806ff9
 ```
 
+## 2026-07-20 host rehearsal corrective generation review
+
+旧G013 generationの`30_host_kill`は`READ_ONLY_HOST_CHECK_FAILED`で停止し、旧state rootは
+`30_host_kill.started.json`を含めて保持した。旧markerの削除、変更、reset、証拠流用は行っていない。
+safe markerは失敗commandを永続化しないため一意の事後特定はできないが、個別read-only probeと実装契約から、
+DNS/接続時間を含むSNTPが非管理者wrapperの固定5秒を一時的に超え得る点を最小corrective対象とした。
+
+- 実装: `sntp -t 2 time.apple.com`のwrapper timeoutだけを有限15秒へ変更。
+- 不変: `pmset`と直接`systemsetup`は5秒、管理者read-only fallbackは120秒。
+- 不変: fail-closed safe label、same-generation no-retry、broker POST hard deny。
+- focused host/network-time: 9 passed。
+- h11_auto: 475 passed（pandas FutureWarning 2件は既存non-blocking）。
+- full backend: 8,063 passed（既存v3 test-only Keychain統合testを境界どおり除外）。
+- ruff、`git diff --check`、danger scan: clear。
+- 独立read-only review: Architecture CLEAR / Safety CLEAR / Operations CLEAR。
+- non-blocking LOW: direct `systemsetup`の5秒を専用assertしていないが、同じdefault branchの5秒はpmset testで固定。
+
+```text
+generation=H11_AUTO_30M_20260717_G013
+reviewed_files_digest=sha256:1bbedc947856af6102c62a8fcc44176042fc51c8ccb509075ef6d8f366f34475
+generation_digest=sha256:6adf77c70be1c4344eb5e2001f17f952f81552cbcfaaa9e9e3c20399934e3fda
+actual_post=0 / broker_post_authorized=false / activation_permit_issued=false
+```
+
+同じG013 labelでもdigestで旧失敗generationと分離された新規generationである。外部準備はcommit/push後の
+clean mainでpresenceから最初から行い、旧Keychain、通知、Public/Private GET、signal、quote、operator入力、
+permit、preflight結果を流用しない。
+
 non-blocking指摘は本レビューの対象外（operator側の任意クリーンアップ）として記録するのみとし、
 G013の外部準備ゲートを止めるものではない。

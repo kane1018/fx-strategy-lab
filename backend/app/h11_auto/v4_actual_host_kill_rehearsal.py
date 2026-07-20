@@ -42,6 +42,9 @@ _ADMIN_NETWORK_TIME_COMMAND = (
     'do shell script "/usr/sbin/systemsetup -getusingnetworktime" '
     "with administrator privileges",
 )
+_SNTP_CLOCK_COMMAND = ("/usr/bin/sntp", "-t", "2", "time.apple.com")
+_READONLY_HOST_COMMAND_TIMEOUT_SECONDS = 5.0
+_SNTP_WRAPPER_TIMEOUT_SECONDS = 15.0
 
 
 @dataclass(frozen=True)
@@ -303,12 +306,17 @@ def _coordinator_kill_probe(
 
 
 def _run_readonly_host_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+    timeout_seconds = (
+        _SNTP_WRAPPER_TIMEOUT_SECONDS
+        if tuple(command) == _SNTP_CLOCK_COMMAND
+        else _READONLY_HOST_COMMAND_TIMEOUT_SECONDS
+    )
     try:
         return subprocess.run(
             command,
             capture_output=True,
             text=True,
-            timeout=5.0,
+            timeout=timeout_seconds,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
@@ -379,7 +387,7 @@ def _clock_skew_seconds(
 ) -> float | None:
     """Return only an absolute aggregate; never retain the time-server response."""
 
-    result = runner(["/usr/bin/sntp", "-t", "2", "time.apple.com"])
+    result = runner(list(_SNTP_CLOCK_COMMAND))
     if result.returncode != 0:
         return None
     match = re.search(r"(?:^|\s)([+-]\d+(?:\.\d+)?)", result.stdout)

@@ -1610,12 +1610,16 @@ def test_host_command_runners_use_separate_finite_timeouts(
 
     monkeypatch.setattr(host_rehearsal_module.subprocess, "run", fake_run)
     host_rehearsal_module._run_readonly_host_command(["pmset", "-g", "batt"])
+    host_rehearsal_module._run_readonly_host_command(
+        list(host_rehearsal_module._SNTP_CLOCK_COMMAND)
+    )
     host_rehearsal_module._run_readonly_admin_host_command(
         list(host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND)
     )
 
     assert observed == [
         (("pmset", "-g", "batt"), 5.0),
+        (host_rehearsal_module._SNTP_CLOCK_COMMAND, 15.0),
         (host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND, 120.0),
     ]
 

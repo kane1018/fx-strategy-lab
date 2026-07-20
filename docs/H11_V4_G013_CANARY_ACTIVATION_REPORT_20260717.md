@@ -10,6 +10,24 @@ G012のno-retry証拠を保持したまま、公式GMO FX ticker schemaへ対応
 G013として新設する。Public GETをone-use preparation ledgerへ追加し、完全review・commit/push・
 clean main後に外部準備を最初から実行する。
 
+### 1.1 2026-07-20 host rehearsal corrective generation
+
+旧G013 generationのexternal preparationは、`30_host_kill`で
+`READ_ONLY_HOST_CHECK_FAILED`となった。旧generationのstarted/passed markerは削除、変更、resetせず、
+以降のKeychain、notification、Public/Private GET、broker POSTへ進まない。
+
+sanitized read-only調査では`pmset -g batt`、直接の
+`systemsetup -getusingnetworktime`、`sntp -t 2 time.apple.com`を分離した。直接の`systemsetup`は
+想定どおり管理者権限不足を返し、管理者read-only fallbackは別の120秒timeout契約である。一方、
+非管理者command wrapperはすべて5秒固定で、DNS/接続時間を含むSNTPだけが内部2秒制限とは別に
+wrapper timeoutへ到達し得た。safe markerは失敗commandを永続化しないため事後の一意特定はできないが、
+観測可能な契約上の最小correctiveとしてSNTP wrapperだけを有限15秒へ変更する。`pmset`と直接
+`systemsetup`の5秒、管理者fallbackの120秒、fail-closed、same-generation no-retryは維持する。
+
+修正後は新しいreviewed-files digestとgeneration digestを焼成し、旧generationの外部証拠を一切
+流用しない。generation labelは本限定例外の`H11_AUTO_30M_20260717_G013`を維持するが、digestで分離された
+新規generationとして完全reviewと外部準備を最初から要求する。
+
 ## 2. Official ticker contract correction
 
 - `GET /public/v1/ticker`はsymbol queryを送らず、全銘柄listを返す。
