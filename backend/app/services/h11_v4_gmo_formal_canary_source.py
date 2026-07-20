@@ -9,6 +9,8 @@ module has no Private API, credential, order, or broker-write surface.
 from __future__ import annotations
 
 import hashlib
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -39,6 +41,7 @@ from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
 MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS = 120.0
 G013_ATR_TIMEFRAME = "H1_COMPLETED_TRUE_RANGE_MEAN_24"
 G013_FORMAL_PUBLIC_GET_COUNT = 2
+G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS = 0.25
 
 
 class V4GmoFormalCanarySourceError(RuntimeError):
@@ -230,6 +233,7 @@ def refresh_g013_formal_canary_input(
     operation_ledger: V4GmoG013PublicOperationLedger,
     data_root: Path = DEFAULT_DATA_ROOT,
     now_utc: datetime | None = None,
+    sleeper: Callable[[float], None] = time.sleep,
 ) -> V4GmoFormalCanaryInput:
     """Fetch current-day M1 and H1 exactly once each, then build the input."""
 
@@ -239,14 +243,23 @@ def refresh_g013_formal_canary_input(
     client = GmoPublicMarketDataClient()
     date_label = current.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y%m%d")
     try:
-        m1_candles = client.fetch_candles(
-            "USD_JPY", "M1", limit=0, price_type="BID", date=date_label
-        )
-        h1_candles = client.fetch_candles(
-            "USD_JPY", "H1", limit=0, price_type="BID", date=date_label
-        )
-    except GmoPublicError as error:
-        raise V4GmoFormalCanarySourceError("G013_PUBLIC_CANDLE_REFRESH_FAILED_NO_RETRY") from error
+        try:
+            m1_candles = client.fetch_candles(
+                "USD_JPY", "M1", limit=0, price_type="BID", date=date_label
+            )
+        except GmoPublicError as error:
+            raise V4GmoFormalCanarySourceError(
+                "G013_PUBLIC_M1_CANDLE_REFRESH_FAILED_NO_RETRY"
+            ) from error
+        sleeper(G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS)
+        try:
+            h1_candles = client.fetch_candles(
+                "USD_JPY", "H1", limit=0, price_type="BID", date=date_label
+            )
+        except GmoPublicError as error:
+            raise V4GmoFormalCanarySourceError(
+                "G013_PUBLIC_H1_CANDLE_REFRESH_FAILED_NO_RETRY"
+            ) from error
     finally:
         client.client.close()
     try:

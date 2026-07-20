@@ -190,3 +190,11 @@ performance_proof_status=false
 live_ready=false
 unattended_live_supported=false
 ```
+
+### 1.5 2026-07-20 Public candle refresh corrective generation
+
+- The prior generation completed external preparation through operation 60, then stopped with `G013_PUBLIC_CANDLE_REFRESH_FAILED_NO_RETRY` before a formal signal, exact order sheet, permit, or broker write existed.
+- Its `formal-candles` attempt marker and all earlier no-retry markers remain immutable. The Mac subsequently stopped; no old runtime, LaunchAgent state, signal, quote, Private GET, notification result, or operator confirmation is reusable.
+- Read-only investigation found that the prior implementation collapsed both Public M1 and H1 failures into one code and made the two GETs without an explicit cadence boundary. The retained sanitized marker cannot establish which request or safe failure class occurred.
+- The corrective implementation keeps exactly one M1 GET and one H1 GET, adds one fixed 0.25-second gap between them, and emits interval-specific sanitized no-retry failures. It does not add retry, fallback date, credential use, Private API access, or broker write.
+- The order contract remains `H11_AUTO_30M_20260717_G013`, `SHORT_V1`, `USD_JPY`, `30m`, 1,000 units, `MARKET`. Broker POST count remains zero.

@@ -156,3 +156,17 @@ actual_post_authorized=false / broker_post_count=0
 - independent review: `ARCHITECTURE: CLEAR`, `SAFETY: CLEAR`, `OPERATIONS: CLEAR`
 - fixed contract remains `H11_AUTO_30M_20260717_G013`, `SHORT_V1`, `USD_JPY`, `30m`, 1,000 units, `MARKET`
 - `actual_post_authorized=false`, `broker_post_authorized=false`, `activation_permit_issued=false`, broker POST count `0`
+
+## 2026-07-20 Public formal candle refresh corrective review
+
+- prior generation `formal-candles` remains `ATTEMPTED_NO_RETRY`; no old state or marker was deleted, changed, reset, or reused
+- prior run stopped before formal signal, exact order sheet, permit, or broker write; broker POST count remained `0`
+- corrective source performs exactly one M1 GET, one fixed 0.25-second gap, and one H1 GET; it has no loop, retry, fallback date, credential use, Private API, or broker write
+- M1 and H1 failures now emit distinct fixed sanitized no-retry codes without retaining or displaying raw responses
+- fixed contract remains `H11_AUTO_30M_20260717_G013`, `SHORT_V1`, `USD_JPY`, `30m`, 1,000 units, `MARKET`
+- focused fake validation: `21 passed`; H11 full suite: `484 passed`; two existing pandas `FutureWarning` notices only
+- backend Ruff, `git diff --check`, danger scan, and independent digest recomputation: clear
+- reviewed-files digest: `sha256:e9b9efdf967264bac1a4facd48b6a7d10c840a3d3669cbae96d311fdc0120989`
+- generation digest: `sha256:c8f82b635d3d82036c3fbd0f18a62c52c584920a28b163c3e9326ba279f940a4`
+- independent review: `ARCHITECTURE: CLEAR`, `SAFETY: CLEAR`, `OPERATIONS: CLEAR`
+- `actual_post_authorized=false`, `broker_post_authorized=false`, `activation_permit_issued=false`, broker POST count `0`

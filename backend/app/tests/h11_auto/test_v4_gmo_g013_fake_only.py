@@ -21,6 +21,7 @@ from app.services import h11_v4_gmo_g013_canary as canary_module
 from app.services.h11_v4_gmo_actual_adapter import V4GmoPrivateOutcome
 from app.services.h11_v4_gmo_formal_canary_source import (
     G013_ATR_TIMEFRAME,
+    G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS,
     V4GmoFormalCanarySourceError,
     build_g013_formal_canary_input,
     refresh_g013_formal_canary_input,
@@ -192,12 +193,15 @@ def test_formal_refresh_claims_once_and_uses_completed_public_bars(
     )
     monkeypatch.setattr(source_module, "predict_short_model", lambda *args: 0.61)
     ledger = _public_ledger(tmp_path / "ledger")
+    sleeps: list[float] = []
     result = refresh_g013_formal_canary_input(
         operation_ledger=ledger,
         data_root=tmp_path / "data",
         now_utc=now,
+        sleeper=sleeps.append,
     )
     assert _FakePublicClient.calls == ["M1", "H1"]
+    assert sleeps == [G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS]
     assert result.signal.observed_at_utc == datetime(2026, 7, 17, 3, 0, tzinfo=UTC)
     assert result.frozen_atr_24 == Decimal("0.04")
     with pytest.raises(V4GmoPublicPreflightError, match="ALREADY_ATTEMPTED"):
@@ -207,6 +211,56 @@ def test_formal_refresh_claims_once_and_uses_completed_public_bars(
             now_utc=now,
         )
     assert _FakePublicClient.calls == ["M1", "H1"]
+
+
+@pytest.mark.parametrize(
+    ("failed_interval", "expected_code", "expected_calls", "expected_sleeps"),
+    [
+        (
+            "M1",
+            "G013_PUBLIC_M1_CANDLE_REFRESH_FAILED_NO_RETRY",
+            ["M1"],
+            [],
+        ),
+        (
+            "H1",
+            "G013_PUBLIC_H1_CANDLE_REFRESH_FAILED_NO_RETRY",
+            ["M1", "H1"],
+            [G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS],
+        ),
+    ],
+)
+def test_formal_refresh_classifies_failed_interval_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    failed_interval: str,
+    expected_code: str,
+    expected_calls: list[str],
+    expected_sleeps: list[float],
+) -> None:
+    class _FailingPublicClient:
+        calls: list[str] = []
+
+        def __init__(self) -> None:
+            self.client = SimpleNamespace(close=lambda: None)
+
+        def fetch_candles(self, _symbol: str, interval: str, **_kwargs: object) -> list[Candle]:
+            self.calls.append(interval)
+            if interval == failed_interval:
+                raise source_module.GmoPublicError("sanitized fake failure")
+            return []
+
+    monkeypatch.setattr(source_module, "GmoPublicMarketDataClient", _FailingPublicClient)
+    sleeps: list[float] = []
+    with pytest.raises(V4GmoFormalCanarySourceError, match=expected_code):
+        refresh_g013_formal_canary_input(
+            operation_ledger=_public_ledger(tmp_path / "ledger"),
+            data_root=tmp_path / "data",
+            now_utc=datetime(2026, 7, 20, 5, 0, tzinfo=UTC),
+            sleeper=sleeps.append,
+        )
+    assert _FailingPublicClient.calls == expected_calls
+    assert sleeps == expected_sleeps
 
 
 def _quote_client(*, spread_pips: str) -> httpx.Client:
