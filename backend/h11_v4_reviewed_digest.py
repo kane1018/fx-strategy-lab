@@ -6,11 +6,18 @@ import hashlib
 from pathlib import Path
 
 REVIEWED_FILES = (
+    "backend/app/services/h11_v4_gmo_signal_preview.py",
+    "backend/scripts/h11_auto_v4_g013_signal_preview.py",
+    "backend/app/tests/h11_auto/test_v4_gmo_g013_signal_preview_no_post.py",
     "AGENTS.md",
     "backend/requirements.txt",
     "backend/h11_v4_reviewed_digest.py",
     "backend/scripts/__init__.py",
     "backend/app/__init__.py",
+    "backend/app/services/__init__.py",
+    "backend/app/shadow/__init__.py",
+    "backend/app/shadow/models.py",
+    "backend/app/h11_manual/__init__.py",
     "backend/app/h11_auto/__init__.py",
     "backend/app/h11_auto/v4_actual_preparation_guard.py",
     "backend/app/h11_auto/v4_actual_host_kill_rehearsal.py",

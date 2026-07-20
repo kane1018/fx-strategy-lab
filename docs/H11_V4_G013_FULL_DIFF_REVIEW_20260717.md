@@ -170,3 +170,41 @@ actual_post_authorized=false / broker_post_count=0
 - generation digest: `sha256:c8f82b635d3d82036c3fbd0f18a62c52c584920a28b163c3e9326ba279f940a4`
 - independent review: `ARCHITECTURE: CLEAR`, `SAFETY: CLEAR`, `OPERATIONS: CLEAR`
 - `actual_post_authorized=false`, `broker_post_authorized=false`, `activation_permit_issued=false`, broker POST count `0`
+# 2026-07-20 G013 signal-preview review addendum
+
+Scope: manual Public-only non-authorizing preview before costly external preparation.
+
+- Old G012/G013 no-retry markers are immutable and excluded from this change.
+- The preview has a separate reviewed/generation/slot-bound `O_EXCL` attempt marker.
+- It performs one M1 Public request and has no retry, loop, fallback date, H1, Private, credential,
+  notification, launchd, permit, or broker-write dependency.
+- It returns no direction, probability, price, raw data, or authorization-capable object.
+- Actual canary ordering and its one-use formal M1+H1 operation remain unchanged.
+
+Pre-implementation independent review:
+
+- `ARCHITECTURE: CLEAR`
+- `SAFETY: CLEAR`
+- `OPERATIONS: CLEAR`
+
+First final review: `ARCHITECTURE/SAFETY/OPERATIONS: VETO`. Corrective requirements were
+digest import closure, immutable local-input binding, exception-context sanitization, and UTC/current-bar
+handling. The generation remained disabled and no external operation or broker POST occurred.
+
+Second final review: `ARCHITECTURE/SAFETY: VETO`, `OPERATIONS: CLEAR`. The remaining issue was
+a model-file TOCTOU gap between hashing bytes and path-based loading. The corrective parser constructs and
+validates the artifact directly from the exact captured bytes; no external operation or broker POST occurred.
+
+Final independent review after both corrective rounds:
+
+- no remaining blocking findings
+- `ARCHITECTURE: CLEAR`
+- `SAFETY: CLEAR`
+- `OPERATIONS: CLEAR`
+- focused preview/G013 validation: `35 passed`
+- full H11 validation after final digest regeneration: `532 passed`
+- full Ruff, danger scan, and `git diff --check`: clear
+- reviewed-files digest: `sha256:b10aac41724c4fd32bbc4aaa32361a65dffe6e374d30e5da8defa981273ff862`
+- generation digest: `sha256:8d5a44932a79fbc8caa4aa066dcf08d3603efd45b5829574cbb06a132f22816b`
+- `actual_post_authorized=false`, `broker_post_authorized=false`,
+  `activation_permit_issued=false`, broker POST count `0`

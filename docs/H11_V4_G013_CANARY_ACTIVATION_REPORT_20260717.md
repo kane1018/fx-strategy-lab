@@ -198,3 +198,17 @@ unattended_live_supported=false
 - Read-only investigation found that the prior implementation collapsed both Public M1 and H1 failures into one code and made the two GETs without an explicit cadence boundary. The retained sanitized marker cannot establish which request or safe failure class occurred.
 - The corrective implementation keeps exactly one M1 GET and one H1 GET, adds one fixed 0.25-second gap between them, and emits interval-specific sanitized no-retry failures. It does not add retry, fallback date, credential use, Private API access, or broker write.
 - The order contract remains `H11_AUTO_30M_20260717_G013`, `SHORT_V1`, `USD_JPY`, `30m`, 1,000 units, `MARKET`. Broker POST count remains zero.
+# 2026-07-20 Public-only non-authorizing signal preview improvement
+
+- The prior G013 formal signal operation stopped safely at `G013_FORMAL_SIGNAL_STAY`.
+- Its no-retry marker remains preserved; no permit, order sheet, or broker POST was produced.
+- A separate manual preview lane now uses exactly one Public M1 request per completed slot.
+- Preview output is limited to an actionable-candidate boolean and freshness/safety fields.
+- Preview does not expose or persist direction, probability, prices, candles, raw responses, or IDs.
+- Preview never reads credentials or Private API and never touches notifications, LaunchAgent, permit,
+  actual preparation state, actual runtime state, or the formal-candles operation.
+- A positive preview is not authorization and cannot be reused by the actual canary. The actual path still
+  requires fresh external preparation and independently obtains M1+H1 for its formal 30-minute signal.
+- Historical local aggregate observation motivating the change: actionable frequency was 25.54% over all
+  eligible rows and 15.07% over the latest 1,440 eligible rows. This is workflow evidence only, not
+  performance or profitability evidence.
