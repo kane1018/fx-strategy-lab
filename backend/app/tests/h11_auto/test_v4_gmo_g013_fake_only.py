@@ -101,7 +101,8 @@ def test_formal_canary_source_blocks_stay_and_stale(
     monkeypatch.setattr(source_module, "predict_short_model", lambda *args: 0.61)
     with pytest.raises(V4GmoFormalCanarySourceError, match="SIGNAL_STALE"):
         build_g013_formal_canary_input(
-            m1=_frame(end_utc=now - timedelta(minutes=3), count=40, minutes=1),
+            # 最新確定M1が6分(360s)前 = MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS(300s)超でstale。
+            m1=_frame(end_utc=now - timedelta(minutes=6), count=40, minutes=1),
             h1=h1,
             artifact=_artifact_stub(),
             now_utc=now,
@@ -659,7 +660,9 @@ def test_g013_orchestrator_uses_one_entry_optional_cancel_and_one_oco(
     ]
 
 
-def test_g013_orchestrator_rechecks_120_second_signal_age_before_any_post() -> None:
+def test_g013_orchestrator_rechecks_300_second_signal_age_before_any_post() -> None:
+    # 観測(00:00:00)から301秒後はMAXIMUM_FORMAL_SIGNAL_AGE_SECONDS(300s)を超え、
+    # POST直前の再検査で期限切れ扱いになり一切のPOSTを行わない。
     path = _FakePath(["FILLED_UNPROTECTED", "FILLED_PROTECTED"])
     binding = SimpleNamespace(coordinated_path=path)
     with pytest.raises(canary_module.V4GmoG013CanaryError, match="SIGNAL_EXPIRED"):
@@ -667,11 +670,44 @@ def test_g013_orchestrator_rechecks_120_second_signal_age_before_any_post() -> N
             session=_fake_session(),
             binding=binding,
             on_protected=None,
-            wall_clock=lambda: datetime(2099, 1, 1, 0, 2, 1, tzinfo=UTC),
+            wall_clock=lambda: datetime(2099, 1, 1, 0, 5, 1, tzinfo=UTC),
         )
     assert "market" not in path.calls
     assert "cancel" not in path.calls
     assert "oco" not in path.calls
+
+
+def test_g013_orchestrator_admits_signal_within_widened_300_second_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 観測から240秒後は旧窓(120s)では期限切れだったが、新窓(300s)では十分freshとして
+    # 通過し、signal-age gateがmarket entryを妨げないことを実証する回帰。
+    path = _FakePath(["FILLED_UNPROTECTED", "FILLED_PROTECTED"])
+    binding = SimpleNamespace(
+        coordinated_path=path,
+        build_foreground_lifecycle_driver=lambda: SimpleNamespace(
+            run_until_flat=lambda: SimpleNamespace(flat_reconciled=True)
+        ),
+    )
+    monkeypatch.setattr(
+        canary_module,
+        "_execution_policy",
+        lambda generation: SimpleNamespace(entry_time_allowed=lambda **kwargs: True),
+    )
+    monkeypatch.setattr(canary_module, "_require_exact_session_binding", lambda session: None)
+    monkeypatch.setattr(
+        canary_module,
+        "read_g013_final_quote_once",
+        lambda **kwargs: SimpleNamespace(bid=Decimal("160.000"), ask=Decimal("160.005")),
+    )
+    result = canary_module._run_bound_g013_canary(
+        session=_fake_session(),
+        binding=binding,
+        on_protected=None,
+        wall_clock=lambda: datetime(2099, 1, 1, 0, 4, 0, tzinfo=UTC),
+    )
+    assert result.entry_post_attempt_count == 1
+    assert path.calls.count("market") == 1
 
 
 def test_g013_orchestrator_rechecks_entry_window_before_public_or_private_io(

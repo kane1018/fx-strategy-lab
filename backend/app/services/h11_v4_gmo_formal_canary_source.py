@@ -40,7 +40,12 @@ from app.services.h11_v4_gmo_public_preflight import (
 from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
 from app.shadow.models import Candle
 
-MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS = 120.0
+# 準備時とPOST直前の双方で、正式30分signalが観測(最新確定M1)から何秒以内かを検査する上限。
+# 120秒では、M1確定待ち+公開/参照GETで先頭~70秒を消費した後の人間確認に実効~50秒しか残らず
+# 実務上のtimeout(operator入力のstdin待ち select 300秒)より先にsignal窓が切れて期限切れになった。
+# 300秒へ緩和し、fetch消費後も人間に~230秒を確保する。30分horizonの1/6で方向signalとして十分fresh。
+# POST直前の価格移動はreference↔final quoteのdeviation<=5pipsで別途fail-closedに保護される。
+MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS = 300.0
 G013_ATR_TIMEFRAME = "H1_COMPLETED_TRUE_RANGE_MEAN_24"
 G013_FORMAL_PUBLIC_GET_COUNT = 2
 G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS = 0.25

@@ -38,7 +38,10 @@ from app.shadow.gmo_public import Candle, GmoPublicMarketDataClient
 G013_PREVIEW_STATE_RELATIVE = Path("backend/market_data/h11_v4_g013_signal_preview")
 G013_PREVIEW_MODEL_RELATIVE = Path("backend/market_data/h11_manual/short_model_artifact.json")
 G013_PREVIEW_PUBLICATION_DELAY_SECONDS = 10
-G013_PREVIEW_MAXIMUM_SIGNAL_AGE_SECONDS = 120
+# 非authorizing(POSTしない)previewのsignal鮮度上限。本番POST経路の
+# MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS(300s)と同一意味に揃え、previewだけが先にstale表示して
+# operatorを混乱させないようにする。previewはPOST権限を持たないため安全側の独立値のまま。
+G013_PREVIEW_MAXIMUM_SIGNAL_AGE_SECONDS = 300
 _PREREQUISITE_TOKEN = object()
 
 
