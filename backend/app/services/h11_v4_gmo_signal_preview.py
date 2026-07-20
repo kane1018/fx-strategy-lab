@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import math
 import os
@@ -37,7 +36,6 @@ from app.h11_manual.short_model import (
 from app.shadow.gmo_public import Candle, GmoPublicMarketDataClient
 
 G013_PREVIEW_STATE_RELATIVE = Path("backend/market_data/h11_v4_g013_signal_preview")
-G013_PREVIEW_LOCAL_M1_RELATIVE = Path("backend/market_data/h11_manual/usdjpy_m1_bid.csv")
 G013_PREVIEW_MODEL_RELATIVE = Path("backend/market_data/h11_manual/short_model_artifact.json")
 G013_PREVIEW_PUBLICATION_DELAY_SECONDS = 10
 G013_PREVIEW_MAXIMUM_SIGNAL_AGE_SECONDS = 120
@@ -198,7 +196,7 @@ def _claim_slot(
     state_root: Path,
     slot_utc: datetime,
     prerequisite: _PreviewPrerequisite,
-    local_input_digest: str,
+    model_input_digest: str,
 ) -> None:
     marker = state_root / f"slot-{slot_utc.strftime('%Y%m%dT%H%MZ')}-attempted.json"
     payload = json.dumps(
@@ -208,7 +206,7 @@ def _claim_slot(
             "reviewed_files_digest": prerequisite.reviewed_files_digest,
             "generation_manifest_digest": prerequisite.generation.digest,
             "completed_m1_slot_utc": slot_utc.isoformat(),
-            "local_input_digest": local_input_digest,
+            "model_input_digest": model_input_digest,
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -263,6 +261,8 @@ def _normalize_frame(frame: pd.DataFrame, *, source: str) -> pd.DataFrame:
         raise G013SignalPreviewError(f"G013_PREVIEW_{source}_DATA_INVALID")
     duplicate = result[result.duplicated("time_utc", keep=False)]
     if not duplicate.empty:
+        if source == "REMOTE":
+            raise G013SignalPreviewError("G013_PREVIEW_REMOTE_DATA_INVALID")
         grouped = duplicate.groupby("time_utc")[["open", "high", "low", "close"]].nunique()
         if bool((grouped > 1).any(axis=None)):
             raise G013SignalPreviewError(f"G013_PREVIEW_{source}_DUPLICATE_CONFLICT")
@@ -282,17 +282,6 @@ def _public_frame(candles: list[Candle]) -> pd.DataFrame:
             for candle in candles
         ]
     )
-
-
-def _merge_in_memory(*, local: pd.DataFrame, remote: pd.DataFrame) -> pd.DataFrame:
-    overlap = local.merge(remote, on="time_utc", suffixes=("_local", "_remote"))
-    for column in ("open", "high", "low", "close"):
-        if not overlap.empty and not bool(
-            (overlap[f"{column}_local"] == overlap[f"{column}_remote"]).all()
-        ):
-            raise G013SignalPreviewError("G013_PREVIEW_LOCAL_REMOTE_CONFLICT")
-    local_only = local[~local["time_utc"].isin(remote["time_utc"])]
-    return pd.concat((local_only, remote), ignore_index=True).sort_values("time_utc")
 
 
 def _digest_bytes(value: bytes) -> str:
@@ -321,57 +310,52 @@ def _artifact_from_captured_bytes(value: bytes) -> ShortModelArtifact:
     return artifact
 
 
-def _read_local_inputs(
+def _read_model_input(
     *, repository: Path, expected_model_config_hash: str
-) -> tuple[pd.DataFrame, ShortModelArtifact, str, Path, Path]:
-    local_path = repository / G013_PREVIEW_LOCAL_M1_RELATIVE
+) -> tuple[ShortModelArtifact, str, Path]:
     model_path = repository / G013_PREVIEW_MODEL_RELATIVE
-    if (
-        not local_path.is_file()
-        or local_path.is_symlink()
-        or not model_path.is_file()
-        or model_path.is_symlink()
-    ):
+    if not model_path.is_file() or model_path.is_symlink():
         raise G013SignalPreviewError("G013_PREVIEW_LOCAL_INPUT_INVALID")
     failed = False
-    local_bytes = b""
     model_bytes = b""
-    local: pd.DataFrame | None = None
     artifact: ShortModelArtifact | None = None
     try:
-        local_bytes = local_path.read_bytes()
         model_bytes = model_path.read_bytes()
-        local = _normalize_frame(pd.read_csv(io.BytesIO(local_bytes)), source="LOCAL")
         artifact = _artifact_from_captured_bytes(model_bytes)
     except Exception:
         failed = True
-    if failed or local is None or artifact is None:
+    if failed or artifact is None:
         raise G013SignalPreviewError("G013_PREVIEW_LOCAL_INPUT_INVALID")
     if artifact.config_hash != expected_model_config_hash:
         raise G013SignalPreviewError("G013_PREVIEW_MODEL_CONFIG_MISMATCH")
-    local_input_digest = _digest_bytes(
-        (_digest_bytes(local_bytes) + "|" + _digest_bytes(model_bytes)).encode()
-    )
-    return local, artifact, local_input_digest, local_path, model_path
+    return artifact, _digest_bytes(model_bytes), model_path
 
 
-def _require_local_inputs_unchanged(
-    *, local_path: Path, model_path: Path, expected_digest: str
-) -> None:
+def _require_model_input_unchanged(*, model_path: Path, expected_digest: str) -> None:
     failed = False
     actual_digest = ""
     try:
-        actual_digest = _digest_bytes(
-            (
-                _digest_bytes(local_path.read_bytes())
-                + "|"
-                + _digest_bytes(model_path.read_bytes())
-            ).encode()
-        )
+        actual_digest = _digest_bytes(model_path.read_bytes())
     except OSError:
         failed = True
     if failed or actual_digest != expected_digest:
-        raise G013SignalPreviewError("G013_PREVIEW_LOCAL_INPUT_CHANGED")
+        raise G013SignalPreviewError("G013_PREVIEW_MODEL_INPUT_CHANGED")
+
+
+def _exact_remote_m1_window(*, remote: pd.DataFrame, slot: datetime) -> pd.DataFrame:
+    completed = remote[remote["time_utc"] <= slot].reset_index(drop=True)
+    if len(completed) < 31:
+        raise G013SignalPreviewError("G013_PREVIEW_REMOTE_HISTORY_INSUFFICIENT")
+    window = completed.tail(31).reset_index(drop=True)
+    timestamps = pd.to_datetime(window["time_utc"], utc=True, errors="coerce")
+    if (
+        timestamps.isna().any()
+        or timestamps.duplicated().any()
+        or timestamps.iloc[-1].to_pydatetime().astimezone(UTC) != slot
+        or not bool((timestamps.diff().iloc[1:] == pd.Timedelta(minutes=1)).all())
+    ):
+        raise G013SignalPreviewError("G013_PREVIEW_REMOTE_WINDOW_INVALID")
+    return window
 
 
 def _actionable(probability: object) -> bool:
@@ -407,7 +391,7 @@ def run_g013_signal_preview(
     if not policy.entry_time_allowed(now_utc=current):
         raise G013SignalPreviewError("G013_PREVIEW_ENTRY_WINDOW_BLOCKED")
     slot = _completed_slot(current)
-    local, artifact, local_input_digest, local_path, model_path = _read_local_inputs(
+    artifact, model_input_digest, model_path = _read_model_input(
         repository=repository,
         expected_model_config_hash=prerequisite.generation.signal_config_hash,
     )
@@ -416,7 +400,7 @@ def run_g013_signal_preview(
         state_root=state_root,
         slot_utc=slot,
         prerequisite=prerequisite,
-        local_input_digest=local_input_digest,
+        model_input_digest=model_input_digest,
     )
 
     client: GmoPublicMarketDataClient | None = None
@@ -443,20 +427,15 @@ def run_g013_signal_preview(
         raise G013SignalPreviewError("G013_PREVIEW_PUBLIC_GET_FAILED_NO_RETRY")
 
     remote = _normalize_frame(_public_frame(candles), source="REMOTE")
-    remote = remote[remote["time_utc"] <= slot].reset_index(drop=True)
-    if slot not in set(remote["time_utc"]):
-        raise G013SignalPreviewError("G013_PREVIEW_REMOTE_SLOT_INVALID")
+    model_frame = _exact_remote_m1_window(remote=remote, slot=slot)
     age = (current - slot).total_seconds()
     if age < 0 or age > G013_PREVIEW_MAXIMUM_SIGNAL_AGE_SECONDS:
         raise G013SignalPreviewError("G013_PREVIEW_SIGNAL_STALE")
 
-    _require_local_inputs_unchanged(
-        local_path=local_path,
+    _require_model_input_unchanged(
         model_path=model_path,
-        expected_digest=local_input_digest,
+        expected_digest=model_input_digest,
     )
-    frame = _merge_in_memory(local=local, remote=remote)
-    model_frame = frame.reset_index(drop=True)
     row_indexes = model_frame.index[model_frame["time_utc"] == slot].tolist()
     if len(row_indexes) != 1:
         raise G013SignalPreviewError("G013_PREVIEW_REMOTE_SLOT_INVALID")

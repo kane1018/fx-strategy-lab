@@ -37,11 +37,13 @@ from app.services.h11_v4_gmo_public_preflight import (
     V4GmoG013PublicOperationLedger,
 )
 from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
+from app.shadow.models import Candle
 
 MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS = 120.0
 G013_ATR_TIMEFRAME = "H1_COMPLETED_TRUE_RANGE_MEAN_24"
 G013_FORMAL_PUBLIC_GET_COUNT = 2
 G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS = 0.25
+G013_FORMAL_M1_WINDOW_ROWS = 31
 
 
 class V4GmoFormalCanarySourceError(RuntimeError):
@@ -263,18 +265,23 @@ def refresh_g013_formal_canary_input(
     finally:
         client.client.close()
     try:
-        m1 = pd.concat(
-            [load_candle_csv(repository.m1_path), candles_to_frame(m1_candles)],
+        fresh_m1_completed, m1 = _fresh_exact_m1_window(
+            candles=m1_candles,
+            now_utc=current,
+        )
+        m1_cache = pd.concat(
+            [load_candle_csv(repository.m1_path), fresh_m1_completed],
             ignore_index=True,
         )
-        h1 = pd.concat(
+        h1_cache = pd.concat(
             [load_candle_csv(repository.h1_path), candles_to_frame(h1_candles)],
             ignore_index=True,
         )
-        save_candle_csv(repository.m1_path, m1)
-        save_candle_csv(repository.h1_path, h1)
+        m1_cache = repository._completed(m1_cache, minutes=1, now=current)
+        h1_cache = repository._completed(h1_cache, minutes=60, now=current)
+        save_candle_csv(repository.m1_path, m1_cache)
+        save_candle_csv(repository.h1_path, h1_cache)
         artifact = ShortModelArtifact.load(data_root / "short_model_artifact.json")
-        m1 = repository.load_m1(now=current)
         h1 = repository.load_h1(now=current)
     except (OSError, ValueError) as error:
         raise V4GmoFormalCanarySourceError("G013_FORMAL_LOCAL_INPUT_INVALID") from error
@@ -285,6 +292,37 @@ def refresh_g013_formal_canary_input(
         now_utc=current,
         public_candle_refresh_performed=True,
     )
+
+
+def _fresh_exact_m1_window(
+    *, candles: list[Candle], now_utc: datetime
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    try:
+        raw_times = pd.to_datetime(
+            [candle.time for candle in candles], utc=True, errors="raise"
+        )
+        frame = candles_to_frame(candles)
+    except (TypeError, ValueError) as error:
+        raise V4GmoFormalCanarySourceError("G013_FORMAL_M1_WINDOW_INVALID") from error
+    if len(frame) != len(candles) or raw_times.duplicated().any():
+        raise V4GmoFormalCanarySourceError("G013_FORMAL_M1_WINDOW_INVALID")
+    expected_slot = now_utc.astimezone(UTC).replace(second=0, microsecond=0) - timedelta(
+        minutes=1
+    )
+    timestamps = pd.to_datetime(frame["time_utc"], utc=True, errors="coerce")
+    completed = frame[timestamps + pd.Timedelta(minutes=1) <= now_utc].reset_index(drop=True)
+    if len(completed) < G013_FORMAL_M1_WINDOW_ROWS:
+        raise V4GmoFormalCanarySourceError("G013_FORMAL_HISTORY_INSUFFICIENT")
+    window = completed.tail(G013_FORMAL_M1_WINDOW_ROWS).reset_index(drop=True)
+    window_times = pd.to_datetime(window["time_utc"], utc=True, errors="coerce")
+    if (
+        window_times.isna().any()
+        or window_times.duplicated().any()
+        or window_times.iloc[-1].to_pydatetime().astimezone(UTC) != expected_slot
+        or not bool((window_times.diff().iloc[1:] == pd.Timedelta(minutes=1)).all())
+    ):
+        raise V4GmoFormalCanarySourceError("G013_FORMAL_M1_WINDOW_INVALID")
+    return completed, window
 
 
 def _completed_h1_atr_24(frame: pd.DataFrame) -> Decimal:

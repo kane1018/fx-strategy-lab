@@ -141,6 +141,12 @@ def test_formal_refresh_claims_once_and_uses_completed_public_bars(
         count=40,
         minutes=1,
     )
+    active_m1 = _frame(
+        end_utc=datetime(2026, 7, 17, 3, 1, tzinfo=UTC),
+        count=1,
+        minutes=1,
+    )
+    m1_response = pd.concat((m1_frame, active_m1), ignore_index=True)
     h1_frame = _frame(
         end_utc=datetime(2026, 7, 17, 2, 0, tzinfo=UTC),
         count=25,
@@ -167,7 +173,7 @@ def test_formal_refresh_claims_once_and_uses_completed_public_bars(
             assert price_type == "BID"
             assert date == "20260717"
             self.calls.append(interval)
-            frame = m1_frame if interval == "M1" else h1_frame
+            frame = m1_response if interval == "M1" else h1_frame
             return [
                 Candle(
                     time=str(row.time_utc),
@@ -204,6 +210,10 @@ def test_formal_refresh_claims_once_and_uses_completed_public_bars(
     assert sleeps == [G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS]
     assert result.signal.observed_at_utc == datetime(2026, 7, 17, 3, 0, tzinfo=UTC)
     assert result.frozen_atr_24 == Decimal("0.04")
+    persisted_m1 = pd.read_csv(tmp_path / "data" / "usdjpy_m1_bid.csv")
+    assert pd.to_datetime(persisted_m1["time_utc"], utc=True).max() == pd.Timestamp(
+        "2026-07-17T03:00:00Z"
+    )
     with pytest.raises(V4GmoPublicPreflightError, match="ALREADY_ATTEMPTED"):
         refresh_g013_formal_canary_input(
             operation_ledger=ledger,
@@ -211,6 +221,40 @@ def test_formal_refresh_claims_once_and_uses_completed_public_bars(
             now_utc=now,
         )
     assert _FakePublicClient.calls == ["M1", "H1"]
+
+
+def test_formal_m1_window_rejects_gap_duplicate_and_wrong_end_slot() -> None:
+    now = datetime(2026, 7, 17, 3, 1, 30, tzinfo=UTC)
+    slot = datetime(2026, 7, 17, 3, 0, tzinfo=UTC)
+
+    def candles(frame: pd.DataFrame) -> list[Candle]:
+        return [
+            Candle(
+                time=str(row.time_utc),
+                open=float(row.open),
+                high=float(row.high),
+                low=float(row.low),
+                close=float(row.close),
+            )
+            for row in frame.itertuples(index=False)
+        ]
+
+    valid = _frame(end_utc=slot, count=31, minutes=1)
+    _, window = source_module._fresh_exact_m1_window(
+        candles=candles(valid), now_utc=now
+    )
+    assert len(window) == 31
+
+    gap = _frame(end_utc=slot, count=32, minutes=1).drop(index=15).reset_index(drop=True)
+    duplicate = pd.concat((valid, valid.tail(1)), ignore_index=True)
+    wrong_end = _frame(end_utc=slot - timedelta(minutes=1), count=31, minutes=1)
+    for invalid in (gap, duplicate, wrong_end):
+        with pytest.raises(
+            V4GmoFormalCanarySourceError, match="G013_FORMAL_M1_WINDOW_INVALID"
+        ):
+            source_module._fresh_exact_m1_window(
+                candles=candles(invalid), now_utc=now
+            )
 
 
 @pytest.mark.parametrize(

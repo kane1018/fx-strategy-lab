@@ -212,3 +212,15 @@ unattended_live_supported=false
 - Historical local aggregate observation motivating the change: actionable frequency was 25.54% over all
   eligible rows and 15.07% over the latest 1,440 eligible rows. This is workflow evidence only, not
   performance or profitability evidence.
+
+## 2026-07-20 active-M1 cache corrective generation
+
+- The first preview generation stopped at `G013_PREVIEW_LOCAL_REMOTE_CONFLICT`; its slot marker is retained.
+- Sanitized read-only evidence showed the local cache's last M1 row was written 31.78 seconds before that
+  candle completed. No raw remote response was retained and no same-slot retry occurred.
+- Preview and actual formal SHORT_V1 inference now use only the exact last 31 completed, unique, contiguous
+  one-minute bars from their respective fresh one-use Public M1 response.
+- Legacy local M1 no longer participates in either inference. Cache persistence excludes active M1/H1 bars.
+- This correction does not alter direction thresholds, risk, quantity, order type, permit, or broker transport.
+- External preparation, Private API, credential access, notifications, LaunchAgent, and broker POST were not
+  performed during investigation or implementation. All old G012/G013/preview markers remain unchanged.

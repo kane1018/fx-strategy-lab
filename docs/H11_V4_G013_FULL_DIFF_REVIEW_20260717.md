@@ -206,5 +206,25 @@ Final independent review after both corrective rounds:
 - full Ruff, danger scan, and `git diff --check`: clear
 - reviewed-files digest: `sha256:b10aac41724c4fd32bbc4aaa32361a65dffe6e374d30e5da8defa981273ff862`
 - generation digest: `sha256:8d5a44932a79fbc8caa4aa066dcf08d3603efd45b5829574cbb06a132f22816b`
+
+## 2026-07-20 fresh-Public exact-window corrective generation
+
+- Root cause: the prior formal refresh could persist an active M1 candle into the legacy local cache; the
+  first non-authorizing preview correctly stopped on the later finalized remote/local mismatch.
+- Correction: preview and actual formal `SHORT_V1` inference independently use only the exact last 31
+  completed, unique, contiguous M1 bars from their own fresh one-use Public response, ending at
+  `floor(now)-1 minute`. Legacy local M1 is not an inference input. Persisted M1/H1 caches are completed-only.
+- Focused validation: `37 passed`; complete H-11 validation: `534 passed`; two existing pandas
+  `FutureWarning` notices only. Full Ruff, `git diff --check`, danger scan, and independent digest
+  recomputation are clear.
+- Independent final review: no blocking findings; Architecture CLEAR / Safety CLEAR / Operations CLEAR.
+  The reviewer's optional negative-test hardening was added, revalidated, and independently delta-reviewed
+  with all three verdicts still CLEAR.
+- Reviewed-files digest: `sha256:2fa43badd02ed5c8f60422c84e6ece27032fef867c77f0e3ef0f6fdbdfcd8288`.
+- Generation digest: `sha256:c0a49ee63db60049859bbb593b86f127ea4e39b820fe11afa7cd3a9e0c6682e0`.
+- Fixed contract remains G013 / `SHORT_V1` / `USD_JPY` / 30m / 1,000 units / `MARKET`.
+- `activation_permit_issued=false`, `broker_post_authorized=false`, broker POST count remains 0.
+- No credential, notification, Private GET, LaunchAgent, or broker operation was run for this correction.
+  All prior G012/G013/preview no-retry markers remain unchanged.
 - `actual_post_authorized=false`, `broker_post_authorized=false`,
   `activation_permit_issued=false`, broker POST count `0`

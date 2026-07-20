@@ -67,10 +67,8 @@ def _arrange(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, now: datetime) -> 
         "_execution_policy",
         lambda _generation: SimpleNamespace(entry_time_allowed=lambda **_kwargs: True),
     )
-    local = tmp_path / preview.G013_PREVIEW_LOCAL_M1_RELATIVE
     model = tmp_path / preview.G013_PREVIEW_MODEL_RELATIVE
-    local.parent.mkdir(parents=True)
-    _frame(now.replace(second=0, microsecond=0) - timedelta(minutes=2)).to_csv(local, index=False)
+    model.parent.mkdir(parents=True)
     model.write_text("{}\n", encoding="utf-8")
     monkeypatch.setattr(
         preview,
@@ -225,17 +223,17 @@ def test_active_public_bar_is_filtered_and_utc_date_is_used(
     assert _Client.calls[0][3]["date"] == "20260719"
 
 
-def test_local_input_change_after_slot_claim_fails_closed(
+def test_model_input_change_after_slot_claim_fails_closed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     now = datetime(2026, 7, 20, 5, 33, 20, tzinfo=UTC)
     slot = now.replace(second=0, microsecond=0) - timedelta(minutes=1)
     _arrange(monkeypatch, tmp_path, now)
-    local_path = tmp_path / preview.G013_PREVIEW_LOCAL_M1_RELATIVE
+    model_path = tmp_path / preview.G013_PREVIEW_MODEL_RELATIVE
 
     class _Mutating(_Client):
         def fetch_candles(self, *args: object, **kwargs: object) -> list[Candle]:
-            local_path.write_text("changed\n", encoding="utf-8")
+            model_path.write_text("changed\n", encoding="utf-8")
             return self.candles
 
     _Mutating.candles = [
@@ -248,7 +246,7 @@ def test_local_input_change_after_slot_claim_fails_closed(
         )
         for row in _frame(slot).itertuples(index=False)
     ]
-    with pytest.raises(preview.G013SignalPreviewError, match="LOCAL_INPUT_CHANGED"):
+    with pytest.raises(preview.G013SignalPreviewError, match="MODEL_INPUT_CHANGED"):
         preview.run_g013_signal_preview(repository=tmp_path, now_utc=now, client_factory=_Mutating)
 
 
@@ -265,11 +263,21 @@ def test_model_artifact_is_built_from_the_exact_captured_bytes(
         "_artifact_from_captured_bytes",
         lambda value: captured.append(value) or SimpleNamespace(config_hash="sha256:test-model"),
     )
-    preview._read_local_inputs(
+    preview._read_model_input(
         repository=tmp_path,
         expected_model_config_hash="sha256:test-model",
     )
     assert captured == [b"captured-model-bytes"]
+
+
+def test_remote_window_requires_exact_contiguous_31_bars() -> None:
+    slot = datetime(2026, 7, 20, 5, 34, tzinfo=UTC)
+    valid = _frame(slot, count=31)
+    result = preview._exact_remote_m1_window(remote=valid, slot=slot)
+    assert len(result) == 31
+    gap = _frame(slot, count=32).drop(index=15).reset_index(drop=True)
+    with pytest.raises(preview.G013SignalPreviewError, match="REMOTE_WINDOW_INVALID"):
+        preview._exact_remote_m1_window(remote=gap, slot=slot)
 
 
 @pytest.mark.parametrize("probability", [float("nan"), float("inf")])
