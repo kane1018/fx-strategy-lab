@@ -48,6 +48,13 @@ from app.private_api.auth import build_auth_headers
 from app.security.real_broker_post_hard_guard import assert_real_broker_post_allowed
 
 GMO_V4_PRIVATE_BASE_URL = "https://forex-api.coin.z.com"
+# Per-call HTTP budget for private requests. The frozen protection contract gives
+# 15s from the recorded entry attempt to the OCO POST; the worst pre-OCO chain is
+# 4 private calls (entry POST + 3 reconcile GETs) plus ~1.1s pacing, so 2.5s per
+# call bounds that chain to ~10s and the OCO is always POSTED inside the budget
+# even when every call runs to its timeout. (GMO normally answers in well under
+# a second; a response slower than 2.5s is treated as unknown, fail-closed.)
+GMO_V4_PRIVATE_HTTP_TIMEOUT_SECONDS = 2.5
 GMO_V4_KEYCHAIN_SERVICE = "fx-strategy-lab-h11-v4-actual"
 GMO_V4_API_KEY_ACCOUNT = "gmo-fx-api-key"
 GMO_V4_API_SECRET_ACCOUNT = "gmo-fx-api-secret"
@@ -476,7 +483,7 @@ class V4GmoHttpxPrivateTransport:
                 params=dict(request.params),
                 headers=dict(signed.headers),
                 content=(request.body_json if request.method == "POST" else None),
-                timeout=5.0,
+                timeout=GMO_V4_PRIVATE_HTTP_TIMEOUT_SECONDS,
             )
             payload = response.json()
             if not isinstance(payload, Mapping):

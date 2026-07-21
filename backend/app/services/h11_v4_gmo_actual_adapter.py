@@ -22,6 +22,8 @@ from typing import Any
 
 from app.h11_auto.contracts import SignalDecision
 from app.h11_auto.v4_activation_preparation import (
+    V4_PRIVATE_GET_PACING_SECONDS,
+    V4_PRIVATE_POST_TO_GET_PACING_SECONDS,
     v4_reconciliation_get_offsets_seconds,
 )
 from app.h11_auto.v4_gmo_contracts import (
@@ -233,6 +235,11 @@ class V4GmoActualAdapter:
         init=False,
         repr=False,
     )
+    _last_private_post_start_monotonic: float | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
     # Diagnostic only: the FIXED internal label of the most recent perform_once
     # failure (e.g. V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT). Never broker response
     # content, identifiers, or credentials — internal constant labels only.
@@ -296,6 +303,10 @@ class V4GmoActualAdapter:
             raise V4GmoActualAdapterError(
                 "V4_GMO_PUBLIC_MARKET_STATUS_GUARD_UNEXPECTED"
             )
+        # Shared pacing anchor: the coordinated path spaces the NEXT private call
+        # (POST or reconcile GET) from this timestamp, so bursts around a POST can
+        # never trip the broker's per-second or adaptive rate limits.
+        self._last_private_post_start_monotonic = float(now_monotonic)
         try:
             payload = self.transport.request(
                 request,
@@ -340,11 +351,14 @@ class V4GmoActualAdapter:
         monotonic_factory: Callable[[], float],
         wait: Callable[[float], None],
     ) -> V4GmoActualReconciliation:
-        """Perform three authoritative GETs with >=0.25s start separation.
+        """Perform three authoritative GETs at the frozen conservative pacing.
 
-        This actual-coordinator path applies a conservative 0.25s delay before
-        the first GET after adapter creation/restart.  It does not retry a
-        failed GET and it does not tighten the operator-frozen cadence.
+        Start separation is V4_PRIVATE_GET_PACING_SECONDS between GETs, one full
+        interval of delay before the first GET after adapter creation/restart,
+        and V4_PRIVATE_POST_TO_GET_PACING_SECONDS after any POST this adapter
+        sent — so a post-entry reconciliation can never crowd the broker's rate
+        limits in the same one-second window as the entry POST.  It does not
+        retry a failed GET and it does not tighten the operator-frozen cadence.
         """
 
         _validate_cycle_inputs(
@@ -360,13 +374,20 @@ class V4GmoActualAdapter:
         def request_at(offset: float, request: V4GmoPrivateRequest) -> Any:
             # A new adapter is treated as a conservative restart boundary: its
             # first GET is delayed by one full cadence interval.  The shared
-            # field then carries the account cadence across reconciliation
-            # calls made by this runtime.
-            target = start + 0.25 + offset
+            # fields then carry the account cadence across reconciliation and
+            # POST calls made by this runtime.
+            target = start + V4_PRIVATE_GET_PACING_SECONDS + offset
             if self._last_private_get_start_monotonic is not None:
                 target = max(
                     target,
-                    self._last_private_get_start_monotonic + 0.25,
+                    self._last_private_get_start_monotonic
+                    + V4_PRIVATE_GET_PACING_SECONDS,
+                )
+            if self._last_private_post_start_monotonic is not None:
+                target = max(
+                    target,
+                    self._last_private_post_start_monotonic
+                    + V4_PRIVATE_POST_TO_GET_PACING_SECONDS,
                 )
             current = float(monotonic_factory())
             if (
@@ -389,7 +410,9 @@ class V4GmoActualAdapter:
                 or actual_start < target
                 or (
                     self._last_private_get_start_monotonic is not None
-                    and actual_start < self._last_private_get_start_monotonic + 0.25
+                    and actual_start
+                    < self._last_private_get_start_monotonic
+                    + V4_PRIVATE_GET_PACING_SECONDS
                 )
             ):
                 raise V4GmoActualAdapterError(
@@ -444,7 +467,17 @@ class V4GmoActualAdapter:
             OSError,
             ValueError,
             InvalidOperation,
-        ):
+        ) as error:
+            # Diagnostic only (fixed internal labels): lets an operator distinguish
+            # a rate-limited/rejected GET from a timeout or connection failure when
+            # a reconciliation comes back unknown.
+            if (
+                isinstance(error, V4GmoActualAdapterError)
+                and str(error) == "V4_GMO_RESPONSE_REJECTED"
+            ):
+                self.last_failure_class = "V4_GMO_PRIVATE_GET_REJECTED_BY_BROKER"
+            else:
+                self.last_failure_class = _sanitized_failure_class(error)
             return _unknown_reconciliation()
 
     def _build_action_request(

@@ -27,6 +27,10 @@ from app.h11_auto.runtime_safety import (
     record_closed_result_once,
     record_risk_entry_attempt,
 )
+from app.h11_auto.v4_activation_preparation import (
+    V4_PRIVATE_GET_TO_POST_PACING_SECONDS,
+    V4_PRIVATE_POST_TO_POST_PACING_SECONDS,
+)
 from app.h11_auto.v4_actual_preparation_guard import V4CompletedPreparationEvidence
 from app.h11_auto.v4_gmo_actual_coordinator import (
     _ENTRY_PREFLIGHT_ISSUER_TOKEN,
@@ -62,6 +66,25 @@ from app.services.h11_v4_gmo_public_market_status import (
 class V4GmoCoordinatedPathError(RuntimeError):
     """Fixed safe integrated-path failure."""
 
+
+# Diagnostic-only mapping from the adapter's fixed failure class to the fixed
+# label raised when a reconciliation comes back unknown. Every key and value is
+# an internal constant literal; anything unrecognised keeps the base label, so
+# no broker content can ever reach the raised message.
+_RECONCILIATION_UNKNOWN_LABELS = {
+    "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT": (
+        "V4_COORDINATED_RECONCILIATION_UNKNOWN_TIMEOUT"
+    ),
+    "V4_GMO_PRIVATE_RESULT_UNKNOWN_CONNECTION": (
+        "V4_COORDINATED_RECONCILIATION_UNKNOWN_CONNECTION"
+    ),
+    "V4_GMO_PRIVATE_RESULT_UNKNOWN_NON_JSON": (
+        "V4_COORDINATED_RECONCILIATION_UNKNOWN_NON_JSON"
+    ),
+    "V4_GMO_PRIVATE_GET_REJECTED_BY_BROKER": (
+        "V4_COORDINATED_RECONCILIATION_REJECTED_BY_BROKER"
+    ),
+}
 
 _RECONCILIATION_EVIDENCE_TOKEN = object()
 
@@ -169,7 +192,12 @@ class V4GmoCoordinatedActualPath:
         )
         if result.snapshot.result_known is not True:
             self.store.engage_unknown_halt()
-            raise V4GmoCoordinatedPathError("V4_COORDINATED_RECONCILIATION_UNKNOWN")
+            raise V4GmoCoordinatedPathError(
+                _RECONCILIATION_UNKNOWN_LABELS.get(
+                    getattr(self.adapter, "last_failure_class", None) or "",
+                    "V4_COORDINATED_RECONCILIATION_UNKNOWN",
+                )
+            )
         evidence = V4AuthoritativeReconciliationEvidence(
             token=_RECONCILIATION_EVIDENCE_TOKEN,
             generation_digest=self.generation.digest,
@@ -350,6 +378,7 @@ class V4GmoCoordinatedActualPath:
             )
             self.risk_store.save(risk_state)
             self.after_persist_before_transport()
+            self._pace_before_private_post()
             self._require_transport_boundary_dead_man()
             outcome = self.adapter.perform_once(
                 plan=plan,
@@ -496,6 +525,7 @@ class V4GmoCoordinatedActualPath:
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
         try:
             self.after_persist_before_transport()
+            self._pace_before_private_post()
             outcome = self.adapter.perform_once(
                 plan=plan,
                 persisted_authorization=attempt.authorization,
@@ -575,6 +605,7 @@ class V4GmoCoordinatedActualPath:
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
         try:
             self.after_persist_before_transport()
+            self._pace_before_private_post()
             outcome = self.adapter.perform_once(
                 plan=plan,
                 persisted_authorization=attempt.authorization,
@@ -876,6 +907,29 @@ class V4GmoCoordinatedActualPath:
         if not isinstance(value, int | float) or not math.isfinite(value) or value < 0:
             raise V4GmoCoordinatedPathError("V4_COORDINATED_MONOTONIC_CLOCK_INVALID")
         return float(value)
+
+    def _pace_before_private_post(self) -> None:
+        """Wait until the frozen private-call spacing allows the next POST.
+
+        GMO caps POSTs at 1/s per account and applies an undocumented adaptive
+        throttle; both 2026-07-21 incidents coincided with a POST sharing a
+        one-second window with reconcile GETs. This waits (never skips, never
+        retries) until the POST is at least V4_PRIVATE_GET_TO_POST_PACING_SECONDS
+        after the last private GET and V4_PRIVATE_POST_TO_POST_PACING_SECONDS
+        after the last private POST sent by this runtime's adapter.
+        """
+
+        now = self._monotonic_now()
+        target = now
+        last_get = self.adapter._last_private_get_start_monotonic
+        if last_get is not None:
+            target = max(target, last_get + V4_PRIVATE_GET_TO_POST_PACING_SECONDS)
+        last_post = self.adapter._last_private_post_start_monotonic
+        if last_post is not None:
+            target = max(target, last_post + V4_PRIVATE_POST_TO_POST_PACING_SECONDS)
+        remaining = target - now
+        if remaining > 0:
+            self.reconciliation_wait(remaining)
 
     def __repr__(self) -> str:
         return "V4GmoCoordinatedActualPath(<persistent-before-transport>)"

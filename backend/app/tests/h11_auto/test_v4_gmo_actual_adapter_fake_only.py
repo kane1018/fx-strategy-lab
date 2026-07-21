@@ -500,7 +500,7 @@ def test_actual_reconciliation_path_enforces_fixed_get_cadence_without_retry() -
     )
     assert result.snapshot.result_known is True
     assert len(transport.requests) == 3
-    assert waits == pytest.approx([0.25, 0.25, 0.25])
+    assert waits == pytest.approx([0.55, 0.55, 0.55])
 
 
 def test_fixed_get_cadence_does_not_compress_after_slow_first_get() -> None:
@@ -538,7 +538,7 @@ def test_fixed_get_cadence_does_not_compress_after_slow_first_get() -> None:
         wait=wait,
     )
     assert result.snapshot.result_known is True
-    assert starts == pytest.approx([100.25, 100.65, 100.90])
+    assert starts == pytest.approx([100.55, 101.10, 101.65])
 
 
 def test_fixed_get_cadence_fails_closed_when_wait_does_not_advance_clock() -> None:
@@ -585,14 +585,142 @@ def test_fixed_get_cadence_is_shared_across_back_to_back_reconciliation() -> Non
 
     assert len(starts) == 6
     assert all(
-        later - earlier >= 0.249999
+        later - earlier >= 0.549999
         for earlier, later in zip(starts[:-1], starts[1:], strict=True)
     )
 
 
+def test_reconcile_first_get_waits_out_the_post_to_get_pacing() -> None:
+    # A reconciliation started right after a POST must keep the first GET at least
+    # V4_PRIVATE_POST_TO_GET_PACING_SECONDS after that POST, so the post-entry
+    # reconciliation can never share the broker's one-second window with the entry.
+    transport = FakePrivateTransport(responses=partial_responses())
+    adapter = V4GmoActualAdapter(transport=transport)
+    adapter._last_private_post_start_monotonic = 100.0
+    clock = [100.2]
+    starts: list[float] = []
+    original_request = transport.request
+
+    def request(request: V4GmoPrivateRequest) -> V4GmoPrivateEnvelope:
+        starts.append(clock[0])
+        return original_request(request)
+
+    transport.request = request  # type: ignore[method-assign]
+
+    def wait(seconds: float) -> None:
+        clock[0] += seconds
+
+    result = adapter.reconcile_at_fixed_cadence(
+        cycle_ref=CYCLE_REF,
+        side=SignalDecision.BUY,
+        requested_size=1_000,
+        monotonic_factory=lambda: clock[0],
+        wait=wait,
+    )
+    assert result.snapshot.result_known is True
+    # Without the POST buffer the first GET would start at 100.75 (100.2 + 0.55);
+    # the POST at 100.0 pushes it to 101.10.
+    assert starts[0] == pytest.approx(101.10)
+
+
+def test_reconcile_records_failure_class_for_rejected_and_timeout_gets() -> None:
+    # A rate-limited/rejected GET (JSON envelope with status != 0) and a timed-out
+    # GET must be distinguishable when the reconciliation comes back unknown.
+    rejected = V4GmoActualAdapter(
+        transport=FakePrivateTransport(responses=[{"status": 5}])
+    )
+    result = reconcile_fixed(
+        rejected, cycle_ref=CYCLE_REF, side=SignalDecision.BUY, requested_size=1_000
+    )
+    assert result.snapshot.result_known is False
+    assert rejected.last_failure_class == "V4_GMO_PRIVATE_GET_REJECTED_BY_BROKER"
+
+    timed_out = V4GmoActualAdapter(transport=TimeoutPrivateTransport())
+    result = reconcile_fixed(
+        timed_out, cycle_ref=CYCLE_REF, side=SignalDecision.BUY, requested_size=1_000
+    )
+    assert result.snapshot.result_known is False
+    assert timed_out.last_failure_class == "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+
+
+def test_coordinated_path_paces_posts_and_classifies_reconcile_unknown() -> None:
+    from types import SimpleNamespace
+
+    from app.services.h11_v4_gmo_coordinated_actual_path import (
+        _RECONCILIATION_UNKNOWN_LABELS,
+        V4GmoCoordinatedActualPath,
+    )
+
+    # The classification map is a closed literal->literal mapping.
+    assert _RECONCILIATION_UNKNOWN_LABELS[
+        "V4_GMO_PRIVATE_GET_REJECTED_BY_BROKER"
+    ] == "V4_COORDINATED_RECONCILIATION_REJECTED_BY_BROKER"
+    assert _RECONCILIATION_UNKNOWN_LABELS[
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+    ] == "V4_COORDINATED_RECONCILIATION_UNKNOWN_TIMEOUT"
+
+    # _pace_before_private_post waits (never skips) until the POST is clear of the
+    # last GET by the GET->POST buffer and of the last POST by the POST->POST buffer.
+    path = object.__new__(V4GmoCoordinatedActualPath)
+    clock = [100.0]
+    waits: list[float] = []
+
+    def wait(seconds: float) -> None:
+        waits.append(seconds)
+        clock[0] += seconds
+
+    path.monotonic_clock = lambda: clock[0]
+    path.reconciliation_wait = wait
+    path.adapter = SimpleNamespace(
+        _last_private_get_start_monotonic=99.5,
+        _last_private_post_start_monotonic=None,
+    )
+    path._pace_before_private_post()
+    assert waits == pytest.approx([0.6])  # 99.5 + 1.10 = 100.6
+
+    path.adapter = SimpleNamespace(
+        _last_private_get_start_monotonic=None,
+        _last_private_post_start_monotonic=100.0,
+    )
+    path._pace_before_private_post()
+    assert waits[-1] == pytest.approx(0.6)  # 100.0 + 1.20 = 101.2 from 100.6
+
+    # Already clear of both buffers: no wait at all.
+    before = len(waits)
+    path.adapter = SimpleNamespace(
+        _last_private_get_start_monotonic=clock[0] - 5.0,
+        _last_private_post_start_monotonic=clock[0] - 5.0,
+    )
+    path._pace_before_private_post()
+    assert len(waits) == before
+
+
+def test_private_call_budget_keeps_oco_post_inside_protection_deadline() -> None:
+    # Worst pre-OCO chain: entry POST + 3 reconcile GETs, each running to the full
+    # HTTP timeout, plus the post->get and get->post pacing buffers. The OCO must
+    # still be POSTED within the frozen 15s protection deadline with real margin.
+    from app.h11_auto.v4_activation_preparation import (
+        V4_PRIVATE_GET_PACING_SECONDS,
+        V4_PRIVATE_GET_TO_POST_PACING_SECONDS,
+        V4_PRIVATE_POST_TO_GET_PACING_SECONDS,
+    )
+    from app.services.h11_v4_gmo_actual_transport import (
+        GMO_V4_PRIVATE_HTTP_TIMEOUT_SECONDS,
+    )
+
+    timeout = GMO_V4_PRIVATE_HTTP_TIMEOUT_SECONDS
+    worst_case = (
+        4 * timeout
+        + V4_PRIVATE_POST_TO_GET_PACING_SECONDS
+        + 2 * V4_PRIVATE_GET_PACING_SECONDS
+        + V4_PRIVATE_GET_TO_POST_PACING_SECONDS
+    )
+    assert worst_case <= 15.0 - 1.5  # >=1.5s margin for store/plan/signing work
+
+
 def test_fixed_get_cadence_fails_closed_on_monotonic_clock_regression() -> None:
     transport = FakePrivateTransport(responses=partial_responses())
-    readings = iter((100.0, 100.0, 100.25, 100.10))
+    readings = iter((100.0, 100.0, 100.55, 100.10))
 
     result = V4GmoActualAdapter(transport=transport).reconcile_at_fixed_cadence(
         cycle_ref=CYCLE_REF,

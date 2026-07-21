@@ -177,17 +177,38 @@ def evaluate_v4_account_exclusivity(
     )
 
 
+# Private API pacing (GMO official: GET <=6/s, POST <=1/s per account, plus an
+# undocumented adaptive throttle under load whose response shape is unspecified).
+# Both 2026-07-21 incidents (entry POST unknown with no broker order record;
+# post-entry reconciliation unknown after a fill) coincided with reconcile GETs
+# and a POST packed into the same one-second window, so the callers now PACE
+# conservatively and the gate enforces slightly looser floors as a fail-closed
+# backstop (pacing must always satisfy the gate with margin — the gate never
+# sleeps or retries, it only refuses).
+V4_PRIVATE_GET_PACING_SECONDS = 0.55  # caller-side GET->GET spacing (~1.8/s)
+V4_PRIVATE_POST_TO_GET_PACING_SECONDS = 1.10  # first GET after any POST
+V4_PRIVATE_GET_TO_POST_PACING_SECONDS = 1.10  # POST after any GET
+V4_PRIVATE_POST_TO_POST_PACING_SECONDS = 1.20  # POST after any POST
+V4_PRIVATE_GATE_GET_MINIMUM_SECONDS = 0.50  # gate backstop, below pacing
+V4_PRIVATE_GATE_CROSS_MINIMUM_SECONDS = 1.00  # gate backstop GET<->POST
+
+
 @dataclass
 class V4PrivateApiCadenceGate:
     """Account-wide cadence gate; it never sleeps, queues, or retries."""
 
-    get_minimum_interval_seconds: float = 0.25
+    get_minimum_interval_seconds: float = V4_PRIVATE_GATE_GET_MINIMUM_SECONDS
     post_minimum_interval_seconds: float = 1.10
+    cross_minimum_interval_seconds: float = V4_PRIVATE_GATE_CROSS_MINIMUM_SECONDS
     _last_get_at: float | None = None
     _last_post_at: float | None = None
 
     def __post_init__(self) -> None:
-        values = (self.get_minimum_interval_seconds, self.post_minimum_interval_seconds)
+        values = (
+            self.get_minimum_interval_seconds,
+            self.post_minimum_interval_seconds,
+            self.cross_minimum_interval_seconds,
+        )
         if any(
             isinstance(value, bool)
             or not isinstance(value, int | float)
@@ -196,12 +217,16 @@ class V4PrivateApiCadenceGate:
             for value in values
         ):
             raise V4ActivationPreparationError("cadence intervals are invalid")
-        if self.get_minimum_interval_seconds < 0.25:
+        if self.get_minimum_interval_seconds < V4_PRIVATE_GATE_GET_MINIMUM_SECONDS:
             raise V4ActivationPreparationError(
-                "private GET cadence exceeds the four-per-second safety contract"
+                "private GET cadence exceeds the two-per-second safety contract"
             )
         if self.post_minimum_interval_seconds < 1.10:
             raise V4ActivationPreparationError("private POST cadence is not conservative")
+        if self.cross_minimum_interval_seconds < V4_PRIVATE_GATE_CROSS_MINIMUM_SECONDS:
+            raise V4ActivationPreparationError(
+                "private GET/POST cross cadence is not conservative"
+            )
 
     def admit(self, *, method: V4CadenceMethod, now_monotonic: float) -> bool:
         if (
@@ -216,6 +241,10 @@ class V4PrivateApiCadenceGate:
                 previous=self._last_get_at,
                 now=float(now_monotonic),
                 minimum=self.get_minimum_interval_seconds,
+            ) and self._admitted(
+                previous=self._last_post_at,
+                now=float(now_monotonic),
+                minimum=self.cross_minimum_interval_seconds,
             )
             if admitted:
                 self._last_get_at = float(now_monotonic)
@@ -225,6 +254,10 @@ class V4PrivateApiCadenceGate:
                 previous=self._last_post_at,
                 now=float(now_monotonic),
                 minimum=self.post_minimum_interval_seconds,
+            ) and self._admitted(
+                previous=self._last_get_at,
+                now=float(now_monotonic),
+                minimum=self.cross_minimum_interval_seconds,
             )
             if admitted:
                 self._last_post_at = float(now_monotonic)
@@ -246,7 +279,11 @@ class V4PrivateApiCadenceGate:
 def v4_reconciliation_get_offsets_seconds() -> tuple[float, float, float]:
     """Fixed schedule for executions, positions, and active-orders GETs."""
 
-    return (0.0, 0.25, 0.50)
+    return (
+        0.0,
+        V4_PRIVATE_GET_PACING_SECONDS,
+        2 * V4_PRIVATE_GET_PACING_SECONDS,
+    )
 
 
 @dataclass(frozen=True)
