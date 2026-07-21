@@ -15,6 +15,7 @@ from app.h11_auto.v4_gmo_canary_activation import (
     V4GmoCanaryIntent,
     confirm_v4_current_turn_exact,
     confirm_v4_major_incident_resume_exact,
+    consume_v4_gmo_actual_activation_permit,
     issue_v4_gmo_actual_activation_permit,
 )
 from app.h11_auto.v4_gmo_contracts import V4GmoAction, build_v4_action_plan
@@ -126,12 +127,57 @@ def test_current_turn_challenge_and_permit_are_fresh_one_use(tmp_path: Path) -> 
         generation_digest=GENERATION_DIGEST,
     )
     marker = json.loads(
-        (state_root / "activation-permit-issued.json").read_text(encoding="utf-8")
+        (state_root / f"activation-permit-issued.{CYCLE_REF}.json").read_text(
+            encoding="utf-8"
+        )
     )
     assert marker["status"] == "ISSUED_ONE_USE_NOT_POSTED"
     with pytest.raises(V4GmoCanaryActivationError, match="ALREADY_USED"):
         _permit(tmp_path)
     assert permit is not None
+
+
+def test_activation_runtime_binding_survives_daily_rollover_across_cycles(
+    tmp_path: Path,
+) -> None:
+    # Regression test: consume_v4_gmo_actual_activation_permit used to write its
+    # runtime-bound marker to a fixed filename, so a second cycle reusing the
+    # same long-lived generation under daily rollover would permanently fail
+    # closed with ALREADY_USED. Two distinct cycle_refs under the same
+    # generation must both bind successfully.
+    state_root = v4_gmo_runtime_state_root(
+        repository=tmp_path,
+        generation_digest=GENERATION_DIGEST,
+    )
+    for cycle_ref in ("d" * 64, "e" * 64):
+        intent = V4GmoCanaryIntent(
+            generation_digest=GENERATION_DIGEST,
+            cycle_ref=cycle_ref,
+            side="BUY",
+            exact_order_sheet_digest="sha256:" + "c" * 64,
+        )
+        resume = confirm_v4_major_incident_resume_exact(
+            phrase=RESUME_PHRASE,
+            generation_digest=GENERATION_DIGEST,
+        )
+        challenge = V4CurrentTurnChallenge.create(intent=intent)
+        current = confirm_v4_current_turn_exact(
+            typed_phrase=challenge.phrase_for_operator_internal(),
+            challenge=challenge,
+            intent=intent,
+        )
+        permit = issue_v4_gmo_actual_activation_permit(
+            intent=intent,
+            resume_proof=resume,
+            current_turn_proof=current,
+            repository=tmp_path,
+            now_monotonic=10.0,
+        )
+        scope = consume_v4_gmo_actual_activation_permit(permit, now_monotonic=10.1)
+        assert scope.cycle_ref == cycle_ref
+        assert (
+            state_root / f"activation-runtime-bound.{cycle_ref}.json"
+        ).is_file()
 
 
 def test_activated_runtime_scope_cannot_be_constructed_by_caller() -> None:

@@ -17,7 +17,10 @@ import pytest
 from app.h11_auto.contracts import FormalHorizon, FormalSignal, SignalDecision
 from app.h11_auto.v4_activation_preparation import V4ApprovedOperatorSelections
 from app.h11_auto.v4_gmo_actual_coordinator import V4GmoActualCoordinatorStore
-from app.h11_auto.v4_gmo_contracts import V4GmoExecutionPolicy
+from app.h11_auto.v4_gmo_contracts import (
+    V4GmoExecutionPolicy,
+    v4_gmo_trading_day_jst,
+)
 from app.h11_auto.v4_gmo_generation import build_v4_gmo_frozen_generation
 from app.h11_auto.v4_gmo_launchd import (
     V4_GMO_MONITOR_LABEL,
@@ -180,12 +183,13 @@ def test_monitor_marks_0345_dispatch_and_latches_0400_flat_miss(
     )
     with sqlite3.connect(store.path) as connection:
         connection.execute(
-            "UPDATE cycles SET market_attempted_at_utc=?,market_attempted_monotonic=?",
-            (FRIDAY_ENTRY.isoformat(), 100.0),
-        )
-        connection.execute(
-            "INSERT INTO metadata(key,value) VALUES('protection_confirmed_at_utc',?)",
-            ((FRIDAY_ENTRY + timedelta(seconds=10)).isoformat(),),
+            "UPDATE cycles SET market_attempted_at_utc=?,market_attempted_monotonic=?,"
+            "protection_confirmed_at_utc=?",
+            (
+                FRIDAY_ENTRY.isoformat(),
+                100.0,
+                (FRIDAY_ENTRY + timedelta(seconds=10)).isoformat(),
+            ),
         )
     supervisor = V4GmoMonitorSupervisor(repository=tmp_path, generation=generation)
     supervisor.acquire_single_process()
@@ -193,7 +197,8 @@ def test_monitor_marks_0345_dispatch_and_latches_0400_flat_miss(
         now_utc=datetime(2026, 7, 17, 18, 45, tzinfo=UTC)  # Sat 03:45 JST
     )
     assert dispatch.exit_dispatch_required is True
-    assert (root / "exit-sequence-dispatch-required.json").is_file()
+    cycle_day = v4_gmo_trading_day_jst(FRIDAY_ENTRY)
+    assert (root / f"exit-sequence-dispatch-required.{cycle_day}.json").is_file()
     missed = supervisor.run_tick(
         now_utc=datetime(2026, 7, 17, 19, 0, tzinfo=UTC)  # Sat 04:00 JST
     )
@@ -433,9 +438,12 @@ def _exit_dispatch_path(root: Path, *, generation_digest: str) -> MagicMock:
     return path
 
 
+_DISPATCH_CYCLE_DAY = v4_gmo_trading_day_jst(FRIDAY_ENTRY)
+
+
 def _write_dispatch_required(root: Path, *, generation_digest: str) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    (root / "exit-sequence-dispatch-required.json").write_text(
+    (root / f"exit-sequence-dispatch-required.{_DISPATCH_CYCLE_DAY}.json").write_text(
         (
             '{"generation_digest":"'
             + generation_digest
@@ -462,6 +470,7 @@ def test_exit_dispatcher_claims_once_and_runs_fixed_cancel_close_sequence(
         public_cancel_reader=cancel_reader,
         public_close_reader=close_reader,
         observed_at_utc=datetime(2026, 7, 17, 18, 45, tzinfo=UTC),
+        cycle_day_jst=_DISPATCH_CYCLE_DAY,
     )
 
     assert result.claimed is True
@@ -472,12 +481,15 @@ def test_exit_dispatcher_claims_once_and_runs_fixed_cancel_close_sequence(
     assert path.recover_pending_transport_and_carry_once.call_count == 2
     assert cancel_reader.read_once.call_count == 1
     assert close_reader.read_once.call_count == 1
-    assert (root / "exit-sequence-dispatch-completed.json").is_file()
+    assert (
+        root / f"exit-sequence-dispatch-completed.{_DISPATCH_CYCLE_DAY}.json"
+    ).is_file()
     with pytest.raises(V4GmoExitDispatcherError, match="ALREADY_CLAIMED"):
         dispatcher.dispatch_once(
             public_cancel_reader=cancel_reader,
             public_close_reader=close_reader,
             observed_at_utc=datetime(2026, 7, 17, 18, 46, tzinfo=UTC),
+            cycle_day_jst=_DISPATCH_CYCLE_DAY,
         )
     assert path.perform_risk_reducing_once.call_count == 2
 
@@ -501,6 +513,7 @@ def test_exit_dispatcher_completes_on_natural_oco_settlement_with_zero_posts(
         public_cancel_reader=MagicMock(),
         public_close_reader=MagicMock(),
         observed_at_utc=datetime(2026, 7, 17, 18, 45, tzinfo=UTC),
+        cycle_day_jst=_DISPATCH_CYCLE_DAY,
     )
 
     assert result.claimed is True
@@ -514,7 +527,9 @@ def test_exit_dispatcher_completes_on_natural_oco_settlement_with_zero_posts(
     import json as _json
 
     completed = _json.loads(
-        (root / "exit-sequence-dispatch-completed.json").read_text(encoding="utf-8")
+        (
+            root / f"exit-sequence-dispatch-completed.{_DISPATCH_CYCLE_DAY}.json"
+        ).read_text(encoding="utf-8")
     )
     assert completed["status"] == "EXIT_DISPATCH_COMPLETED_NATURAL_SETTLEMENT_FLAT"
 
@@ -531,6 +546,7 @@ def test_exit_dispatcher_generation_mismatch_fails_before_io(tmp_path: Path) -> 
             public_cancel_reader=MagicMock(),
             public_close_reader=MagicMock(),
             observed_at_utc=datetime(2026, 7, 17, 18, 45, tzinfo=UTC),
+            cycle_day_jst=_DISPATCH_CYCLE_DAY,
         )
     path.reconcile_once_fixed.assert_not_called()
     path.perform_risk_reducing_once.assert_not_called()
@@ -549,14 +565,18 @@ def test_exit_dispatcher_unknown_latches_halt_and_cannot_retry(tmp_path: Path) -
             public_cancel_reader=MagicMock(),
             public_close_reader=MagicMock(),
             observed_at_utc=datetime(2026, 7, 17, 18, 45, tzinfo=UTC),
+            cycle_day_jst=_DISPATCH_CYCLE_DAY,
         )
     path.store.engage_unknown_halt.assert_called_once_with()
-    assert (root / "exit-sequence-dispatch-failed.json").is_file()
+    assert (
+        root / f"exit-sequence-dispatch-failed.{_DISPATCH_CYCLE_DAY}.json"
+    ).is_file()
     with pytest.raises(V4GmoExitDispatcherError, match="ALREADY_CLAIMED"):
         dispatcher.dispatch_once(
             public_cancel_reader=MagicMock(),
             public_close_reader=MagicMock(),
             observed_at_utc=datetime(2026, 7, 17, 18, 46, tzinfo=UTC),
+            cycle_day_jst=_DISPATCH_CYCLE_DAY,
         )
     assert path.perform_risk_reducing_once.call_count == 1
 
@@ -566,7 +586,9 @@ def test_foreground_driver_consumes_monitor_marker_with_same_runtime_lock(
 ) -> None:
     root = tmp_path / "state"
     root.mkdir()
-    (root / "exit-sequence-dispatch-required.json").write_text("{}\n")
+    (root / f"exit-sequence-dispatch-required.{_DISPATCH_CYCLE_DAY}.json").write_text(
+        "{}\n"
+    )
     path = MagicMock()
     path.store.path = root / "coordinator.sqlite3"
     path.process_lock = SimpleNamespace(held=True)

@@ -466,6 +466,7 @@ def _path_preflight(
             token=preparation_guard._COMPLETED_EVIDENCE_TOKEN,
             generation_digest=path.generation.digest,
             state_root=preparation_state_root,
+            trading_day_jst="2026-07-16",
         ),
     )
 
@@ -1424,11 +1425,13 @@ def test_generation_preparation_evidence_cannot_preflight_second_coordinator(
         token=preparation_guard._COMPLETED_EVIDENCE_TOKEN,
         generation_digest=_generation().digest,
         state_root=state_root,
+        trading_day_jst="2026-07-16",
     )
     second_evidence = preparation_guard.V4CompletedPreparationEvidence(
         token=preparation_guard._COMPLETED_EVIDENCE_TOKEN,
         generation_digest=_generation().digest,
         state_root=state_root,
+        trading_day_jst="2026-07-16",
     )
 
     paths: list[V4GmoCoordinatedActualPath] = []
@@ -2327,7 +2330,9 @@ def test_actual_runtime_binding_consumes_permit_on_canonical_generation_paths(
             monotonic_factory=lambda: 50.1,
         )
         assert binding.process_lock.held is True
-        assert (runtime_root / "activation-runtime-bound.json").is_file()
+        assert (
+            runtime_root / f"activation-runtime-bound.{cycle_ref}.json"
+        ).is_file()
         binding.close()
         assert binding.process_lock.held is False
 
@@ -3246,9 +3251,12 @@ def test_foreground_driver_reads_real_coordinator_snapshot_and_dispatches(
         monotonic_clock=clock.monotonic_now,
         reconciliation_wait=clock.advance,
     )
-    (runtime_root / "exit-sequence-dispatch-required.json").write_text(
-        "{}\n", encoding="utf-8"
-    )
+    # Day-scoped filename (entry_time_utc defaults to NOW + 1s = 2026-07-16T03:00:01Z
+    # = 2026-07-16 JST): a stale fixed-name marker here would never be found by the
+    # driver's now day-scoped check, spinning run_until_flat's loop forever.
+    (
+        runtime_root / "exit-sequence-dispatch-required.2026-07-16.json"
+    ).write_text("{}\n", encoding="utf-8")
     dispatcher = MagicMock()
     dispatcher.path = path
     dispatcher.dispatch_once.return_value = V4GmoExitDispatchResult(

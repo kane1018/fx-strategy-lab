@@ -18,6 +18,7 @@ from app.h11_auto.persistence import H11AutoProcessLock
 from app.h11_auto.v4_gmo_actual_coordinator import V4GmoActualCoordinatorStore
 from app.h11_auto.v4_gmo_contracts import (
     v4_gmo_scheduled_time_exit_at,
+    v4_gmo_trading_day_jst,
     v4_gmo_weekend_flat_target_at,
 )
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
@@ -92,11 +93,16 @@ class V4GmoMonitorSupervisor:
         dispatch_required = False
         flat_target_missed = False
         if snapshot.entry_attempted_at_utc is not None and not snapshot.flat_reconciled:
+            # Keyed by the CYCLE's own entry day (not "now"'s day, which can differ
+            # if the exit lands after local midnight): at most one cycle is ever
+            # unresolved at a time, so this is naturally unique per cycle without
+            # needing cycle_ref threaded through every marker.
+            cycle_day = v4_gmo_trading_day_jst(snapshot.entry_attempted_at_utc)
             protection_deadline = snapshot.entry_attempted_at_utc.timestamp() + 15.0
             if now_utc.timestamp() > protection_deadline and not snapshot.protection_confirmed:
                 store.engage_unknown_halt()
                 self._write_once_marker(
-                    "protection-deadline-missed.json",
+                    f"protection-deadline-missed.{cycle_day}.json",
                     status="PERSISTENT_HALT_PROTECTION_DEADLINE_MISSED",
                     observed_at_utc=now_utc,
                 )
@@ -106,7 +112,7 @@ class V4GmoMonitorSupervisor:
             if exit_at is not None and now_utc >= exit_at:
                 dispatch_required = True
                 self._write_once_marker(
-                    "exit-sequence-dispatch-required.json",
+                    f"exit-sequence-dispatch-required.{cycle_day}.json",
                     status="GENERATION_BOUND_EXIT_DISPATCH_REQUIRED",
                     observed_at_utc=now_utc,
                 )
@@ -117,7 +123,7 @@ class V4GmoMonitorSupervisor:
                 flat_target_missed = True
                 store.engage_unknown_halt()
                 self._write_once_marker(
-                    "flat-target-missed.json",
+                    f"flat-target-missed.{cycle_day}.json",
                     status="PERSISTENT_HALT_WEEKEND_FLAT_TARGET_MISSED",
                     observed_at_utc=now_utc,
                 )

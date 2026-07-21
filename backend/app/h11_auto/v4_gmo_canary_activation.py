@@ -315,7 +315,11 @@ def issue_v4_gmo_actual_activation_permit(
     )
     if state_root.is_symlink():
         raise V4GmoCanaryActivationError("V4_CANARY_ACTIVATION_GATE_NOT_CLEAR")
-    marker_path = state_root / "activation-permit-issued.json"
+    # Keyed by cycle_ref (not a fixed generation-wide filename): cycle_ref is
+    # already unique per (generation, signal) because the signal fingerprint
+    # embeds its exact observation timestamp, so this is naturally one-use per
+    # trading day under daily rollover without needing a separate day parameter.
+    marker_path = state_root / f"activation-permit-issued.{intent.cycle_ref}.json"
     payload = {
         "generation_digest": intent.generation_digest,
         "intent_digest": intent.digest,
@@ -369,7 +373,12 @@ def consume_v4_gmo_actual_activation_permit(
         "symbol": permit._symbol,
     }:
         raise V4GmoCanaryActivationError("V4_CANARY_ACTIVATION_PERMIT_INVALID")
-    consumed_path = permit._marker_path.with_name("activation-runtime-bound.json")
+    # Keyed by cycle_ref for the same reason as the issued-permit marker above:
+    # a fixed filename here would permanently latch after the first cycle ever
+    # bound under this generation, defeating daily rollover from day 2 onward.
+    consumed_path = permit._marker_path.with_name(
+        f"activation-runtime-bound.{permit._cycle_ref}.json"
+    )
     _write_exclusive_marker(
         consumed_path,
         {

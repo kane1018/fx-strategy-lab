@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from app.h11_auto.v4_gmo_contracts import v4_gmo_trading_day_jst
 from app.services.h11_v4_gmo_coordinated_actual_path import (
     V4GmoCoordinatedActualPath,
 )
@@ -76,7 +77,6 @@ class V4GmoActualRuntimeDriver:
                 generation_digest=self.path.generation.digest
             )
         )
-        required = self.state_root / "exit-sequence-dispatch-required.json"
         try:
             initial = self.path.store.monitor_snapshot_safe()
             if (
@@ -86,6 +86,13 @@ class V4GmoActualRuntimeDriver:
                 or initial.pending_transport
             ):
                 raise V4GmoActualRuntimeDriverError("V4_RUNTIME_DRIVER_NOT_PROTECTED")
+            # Keyed by THIS cycle's own entry day (fixed once entry is attempted),
+            # not "now"'s day — an exit landing after local midnight must still
+            # match the same marker the supervisor writes for this cycle.
+            cycle_day = v4_gmo_trading_day_jst(initial.entry_attempted_at_utc)
+            required = (
+                self.state_root / f"exit-sequence-dispatch-required.{cycle_day}.json"
+            )
             # G013 contract: after protection is confirmed the foreground
             # driver performs the 5-second heartbeat and one-use exit-marker
             # watching ONLY. It issues zero Private GETs while protected --
@@ -113,6 +120,7 @@ class V4GmoActualRuntimeDriver:
                         public_cancel_reader=reader_factory(),
                         public_close_reader=reader_factory(),
                         observed_at_utc=now,
+                        cycle_day_jst=cycle_day,
                     )
                     return V4GmoActualRuntimeDriverResult(
                         flat_reconciled=result.flat_reconciled,

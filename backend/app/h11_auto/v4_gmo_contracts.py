@@ -34,9 +34,26 @@ V4_GMO_WEEKEND_EXIT_SEQUENCE_START_HOUR_JST = 3
 V4_GMO_WEEKEND_EXIT_SEQUENCE_START_MINUTE_JST = 45
 V4_GMO_MAXIMUM_HOLD_SECONDS = 82_800
 
+_JST = ZoneInfo("Asia/Tokyo")
+
 
 class V4GmoContractError(ValueError):
     """Raised when a value violates the frozen v4 GMO contract."""
+
+
+def v4_gmo_trading_day_jst(now_utc: datetime) -> str:
+    """Return the JST calendar day (``YYYY-MM-DD``) for one UTC instant.
+
+    Shared day key for every no-retry marker that must reset daily instead of
+    once-per-generation-forever (preparation 00-60, the coordinator's single
+    cycle guard, the one-use FINAL_QUOTE/activation-permit markers, and the
+    exit-dispatch sequence markers). All callers must derive the day from this
+    one function so a marker written by one module is found by another.
+    """
+
+    if now_utc.tzinfo is None:
+        raise V4GmoContractError("v4 trading day requires a timezone-aware instant")
+    return now_utc.astimezone(_JST).date().isoformat()
 
 
 class V4GmoAction(str, Enum):

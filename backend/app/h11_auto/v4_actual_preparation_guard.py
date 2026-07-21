@@ -10,9 +10,11 @@ import subprocess
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
 
+from app.h11_auto.v4_gmo_contracts import v4_gmo_trading_day_jst
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from h11_v4_reviewed_digest import (
     V4ReviewedDigestError,
@@ -178,6 +180,7 @@ class V4CompletedPreparationEvidence:
         "_token",
         "_generation_digest",
         "_state_root",
+        "_trading_day_jst",
         "_consumed",
     )
 
@@ -187,6 +190,7 @@ class V4CompletedPreparationEvidence:
         token: object,
         generation_digest: str,
         state_root: Path,
+        trading_day_jst: str,
     ) -> None:
         if (
             token is not _COMPLETED_EVIDENCE_TOKEN
@@ -197,6 +201,7 @@ class V4CompletedPreparationEvidence:
             or not state_root.name.endswith(
                 generation_digest.removeprefix("sha256:")
             )
+            or not _valid_trading_day_jst(trading_day_jst)
         ):
             raise V4ActualPreparationGuardError(
                 "PREPARATION_COMPLETED_EVIDENCE_INVALID"
@@ -204,6 +209,7 @@ class V4CompletedPreparationEvidence:
         self._token = token
         self._generation_digest = generation_digest
         self._state_root = state_root
+        self._trading_day_jst = trading_day_jst
         self._consumed = False
 
     def consume_for_generation(self, generation_digest: str) -> None:
@@ -215,10 +221,14 @@ class V4CompletedPreparationEvidence:
             raise V4ActualPreparationGuardError(
                 "PREPARATION_COMPLETED_EVIDENCE_INVALID"
             )
-        marker = self._state_root / "generation_consumed.json"
+        marker = (
+            self._state_root
+            / f"generation_consumed.{self._trading_day_jst}.json"
+        )
         payload = json.dumps(
             {
                 "generation_digest": self._generation_digest,
+                "trading_day_jst": self._trading_day_jst,
                 "status": "CONSUMED_FOR_CANARY_PREFLIGHT",
             },
             sort_keys=True,
@@ -347,6 +357,15 @@ def require_operation_permit(
             )
         permit._claimed = True
     return permit
+
+
+def _valid_trading_day_jst(value: object) -> bool:
+    if not isinstance(value, str) or len(value) != 10:
+        return False
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
 
 
 def _valid_completion_digest(value: object) -> bool:
@@ -620,7 +639,12 @@ def _operation_report_is_clear(
 class V4PreparationAttemptLedger:
     """Persistent no-reset sequence; attempt is written before external I/O."""
 
-    def __init__(self, *, external_gate: V4ExternalPreparationGate) -> None:
+    def __init__(
+        self,
+        *,
+        external_gate: V4ExternalPreparationGate,
+        now_utc: datetime | None = None,
+    ) -> None:
         require_external_preparation_gate(external_gate)
         unresolved = external_gate.state_root_for_internal_preparation_only()
         path_candidates = (
@@ -637,6 +661,11 @@ class V4PreparationAttemptLedger:
         )
         self._generation_digest = "sha256:" + self.state_root.name.rsplit("-", 1)[-1]
         self.state_root.mkdir(parents=True, exist_ok=True)
+        # Trading-day scope: the same reviewed generation can be prepared fresh on
+        # every JST day (no code change/new generation required) instead of the
+        # 00-60 sequence being usable exactly once for this generation's lifetime.
+        # Every marker this ledger writes or reads is keyed by this day.
+        self._trading_day_jst = v4_gmo_trading_day_jst(now_utc or datetime.now(UTC))
 
     def begin(
         self,
@@ -709,7 +738,10 @@ class V4PreparationAttemptLedger:
             raise V4ActualPreparationGuardError("PREPARATION_PASS_NOT_PERSISTED") from error
 
     def _marker(self, operation: V4PreparationOperation, suffix: str) -> Path:
-        return self.state_root / f"{operation.value}.{suffix}.json"
+        return (
+            self.state_root
+            / f"{operation.value}.{self._trading_day_jst}.{suffix}.json"
+        )
 
     def _write_marker(
         self,
@@ -778,8 +810,9 @@ def load_completed_preparation_evidence(
     *,
     external_gate: V4ExternalPreparationGate,
     generation_digest: str,
+    now_utc: datetime | None = None,
 ) -> V4CompletedPreparationEvidence:
-    """Mint no-POST readiness evidence only after every fixed step passed."""
+    """Mint no-POST readiness evidence only after today's fixed steps passed."""
 
     require_external_preparation_gate(external_gate)
     normalized = generation_digest.removeprefix("sha256:")
@@ -791,7 +824,7 @@ def load_completed_preparation_evidence(
         raise V4ActualPreparationGuardError(
             "PREPARATION_COMPLETED_EVIDENCE_INVALID"
         )
-    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate, now_utc=now_utc)
     if not ledger.state_root.name.endswith(f"-{normalized}"):
         raise V4ActualPreparationGuardError(
             "PREPARATION_COMPLETED_GENERATION_MISMATCH"
@@ -805,7 +838,9 @@ def load_completed_preparation_evidence(
             raise V4ActualPreparationGuardError(
                 "PREPARATION_SEQUENCE_NOT_COMPLETE"
             )
-    consumed_marker = ledger.state_root / "generation_consumed.json"
+    consumed_marker = (
+        ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
+    )
     if consumed_marker.exists() or consumed_marker.is_symlink():
         raise V4ActualPreparationGuardError(
             "PREPARATION_COMPLETED_EVIDENCE_INVALID"
@@ -814,6 +849,7 @@ def load_completed_preparation_evidence(
         token=_COMPLETED_EVIDENCE_TOKEN,
         generation_digest=generation_digest,
         state_root=ledger.state_root,
+        trading_day_jst=ledger._trading_day_jst,
     )
 
 

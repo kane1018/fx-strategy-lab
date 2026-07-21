@@ -28,6 +28,7 @@ from app.h11_auto.v4_gmo_contracts import (
     V4GmoExecutionPolicy,
     V4GmoProtectionStatus,
     v4_gmo_scheduled_time_exit_at,
+    v4_gmo_trading_day_jst,
 )
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.h11_auto.v4_gmo_persisted_authorization import (
@@ -214,6 +215,7 @@ class V4GmoActualCoordinatorStore:
                 CREATE TABLE IF NOT EXISTS cycles(
                     cycle_ref TEXT PRIMARY KEY,
                     signal_fingerprint TEXT NOT NULL UNIQUE,
+                    trading_day_jst TEXT NOT NULL,
                     side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
                     requested_size INTEGER NOT NULL,
                     frozen_atr_24 TEXT NOT NULL,
@@ -231,6 +233,7 @@ class V4GmoActualCoordinatorStore:
                     trade_won INTEGER CHECK(trade_won IN (0, 1)),
                     protection_plan_digest TEXT,
                     protection_plan_json TEXT,
+                    protection_confirmed_at_utc TEXT,
                     settlement_expected_size INTEGER,
                     market_attempted_at_utc TEXT,
                     market_attempted_monotonic REAL,
@@ -372,12 +375,18 @@ class V4GmoActualCoordinatorStore:
         frozen_atr_24: Decimal,
         now_utc: datetime,
     ) -> V4FrozenSignalRisk:
-        """Atomically reserve the single per-generation cycle, then return its risk.
+        """Atomically reserve at most one cycle per JST trading day, then price it.
 
-        Re-runs every precondition inside the same call and blocks fail-closed if a
-        cycle already exists (``SELECT 1 FROM cycles``) — so at most one cycle is ever
-        reserved for a generation, and once a cycle exists (i.e. an entry POST has been
-        committed to) it can never be superseded, even by a later actionable signal.
+        Re-runs every precondition inside the same call and blocks fail-closed if
+        (a) a cycle already exists for TODAY's JST trading day (the real
+        ``maximum_entries_per_day=1`` cap, now enforced per calendar day instead of
+        once for the generation's entire lifetime), or (b) ANY earlier cycle — any
+        day — is still unresolved (``realized_pnl_jpy IS NULL``: reserved, entered,
+        or protected but not yet closed flat). (b) is the actual "at most one
+        position ever open" invariant; (a) is the daily-entry cap layered on top of
+        it. Together they let the same reviewed generation serve many trading days
+        (fresh 00-60 preparation each day, no code change or new generation
+        required) while a cycle, once it exists, can still never be superseded.
         """
 
         risk = self._validate_and_price_entry(
@@ -389,24 +398,35 @@ class V4GmoActualCoordinatorStore:
         )
         cycle_ref = _cycle_ref(generation.digest, signal.fingerprint)
         timestamp = _timestamp(now_utc)
+        trading_day = v4_gmo_trading_day_jst(now_utc)
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
-                if connection.execute("SELECT 1 FROM cycles LIMIT 1").fetchone() is not None:
+                if (
+                    connection.execute(
+                        "SELECT 1 FROM cycles"
+                        " WHERE trading_day_jst=? OR realized_pnl_jpy IS NULL"
+                        " LIMIT 1",
+                        (trading_day,),
+                    ).fetchone()
+                    is not None
+                ):
                     raise V4GmoActualCoordinatorError(
-                        "v4 initial canary already has a cycle"
+                        "v4 canary already has a cycle today or an unresolved cycle"
                     )
                 connection.execute(
                     """
                     INSERT INTO cycles(
-                        cycle_ref,signal_fingerprint,side,requested_size,
-                        frozen_atr_24,frozen_atr_digest,probability_up,
-                        planned_loss_bound_jpy,signal_valid_until_utc,created_at_utc
-                    ) VALUES(?,?,?,?,?,?,?,?,?,?)
+                        cycle_ref,signal_fingerprint,trading_day_jst,side,
+                        requested_size,frozen_atr_24,frozen_atr_digest,
+                        probability_up,planned_loss_bound_jpy,
+                        signal_valid_until_utc,created_at_utc
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         cycle_ref,
                         signal.fingerprint,
+                        trading_day,
                         signal.decision.value,
                         policy.requested_size,
                         risk.atr_24,
@@ -1505,34 +1525,55 @@ class V4GmoActualCoordinatorStore:
             )
 
     def monitor_snapshot_safe(self) -> V4CoordinatorMonitorSnapshot:
-        """Read only non-identifying state needed by the resident supervisor."""
+        """Read only non-identifying state for the single most recent cycle.
+
+        Under daily rollover a generation can accumulate many CLOSED cycles over
+        time (one per trading day used). This watches only the chronologically
+        latest one — the only cycle that can possibly still be unresolved, since
+        ``reserve_entry_cycle`` refuses a new reservation while an earlier cycle
+        is unresolved — never an arbitrary or older historical one, or the
+        supervisor could latch a stale protection/exit deadline (or the driver
+        could spin forever on ``flat_reconciled``) against an already-flat cycle
+        from a previous day.
+        """
 
         with self._connect() as connection:
             generation = connection.execute(
                 "SELECT 1 FROM metadata WHERE key='generation_digest'"
             ).fetchone()
-            rows = connection.execute(
-                "SELECT market_attempted_at_utc,realized_pnl_jpy FROM cycles"
-            ).fetchall()
-            protection = connection.execute(
-                "SELECT 1 FROM metadata WHERE key='protection_confirmed_at_utc'"
+            row = connection.execute(
+                "SELECT cycle_ref,market_attempted_at_utc,realized_pnl_jpy,"
+                "protection_confirmed_at_utc FROM cycles"
+                " ORDER BY created_at_utc DESC LIMIT 1"
             ).fetchone()
+            unresolved_count = connection.execute(
+                "SELECT COUNT(*) AS n FROM cycles WHERE realized_pnl_jpy IS NULL"
+            ).fetchone()["n"]
             pending = connection.execute(
                 "SELECT 1 FROM metadata WHERE key='pending_transport_attempt'"
             ).fetchone()
             halt = connection.execute(
                 "SELECT value FROM metadata WHERE key='unknown_halt_latched'"
             ).fetchone()
-            attempts = {
-                str(row["action"])
-                for row in connection.execute("SELECT action FROM attempts").fetchall()
-            }
-        if len(rows) > 1:
+            attempts = (
+                {
+                    str(attempt_row["action"])
+                    for attempt_row in connection.execute(
+                        "SELECT action FROM attempts WHERE cycle_ref=?",
+                        (row["cycle_ref"],),
+                    ).fetchall()
+                }
+                if row is not None
+                else set()
+            )
+        if unresolved_count > 1:
             raise V4GmoActualCoordinatorError("v4 canary cycle count invalid")
         attempted_at: datetime | None = None
         flat_reconciled = False
-        if rows:
-            raw_attempted = rows[0]["market_attempted_at_utc"]
+        cycle_present = False
+        protection_confirmed = False
+        if row is not None:
+            raw_attempted = row["market_attempted_at_utc"]
             if raw_attempted is not None:
                 try:
                     attempted_at = datetime.fromisoformat(str(raw_attempted)).astimezone(UTC)
@@ -1540,13 +1581,15 @@ class V4GmoActualCoordinatorStore:
                     raise V4GmoActualCoordinatorError(
                         "v4 monitor timestamp invalid"
                     ) from error
-            flat_reconciled = rows[0]["realized_pnl_jpy"] is not None
+            flat_reconciled = row["realized_pnl_jpy"] is not None
+            cycle_present = not flat_reconciled
+            protection_confirmed = row["protection_confirmed_at_utc"] is not None
         return V4CoordinatorMonitorSnapshot(
             generation_bound=generation is not None,
-            cycle_present=bool(rows),
+            cycle_present=cycle_present,
             entry_attempted_at_utc=attempted_at,
             flat_reconciled=flat_reconciled,
-            protection_confirmed=protection is not None,
+            protection_confirmed=protection_confirmed,
             time_exit_cancel_attempted=(
                 V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT.value in attempts
             ),
@@ -1605,10 +1648,13 @@ class V4GmoActualCoordinatorStore:
                 raise V4GmoActualCoordinatorError(
                     "v4 exact protection confirmation failed"
                 )
+            # Per-cycle column (not global metadata): under daily rollover a later
+            # cycle's own protection confirmation must not collide with (or be
+            # masked by) an earlier, already-closed cycle's confirmation.
             connection.execute(
-                "INSERT INTO metadata(key,value) "
-                "VALUES('protection_confirmed_at_utc',?)",
-                (timestamp,),
+                "UPDATE cycles SET protection_confirmed_at_utc=?"
+                " WHERE signal_fingerprint=?",
+                (timestamp, signal_fingerprint),
             )
 
 

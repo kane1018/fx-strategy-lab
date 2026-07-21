@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from app.h11_auto.v4_gmo_contracts import V4GmoAction, build_v4_action_plan
@@ -26,6 +26,15 @@ from app.services.h11_v4_gmo_public_market_status import (
 
 class V4GmoExitDispatcherError(RuntimeError):
     """Fixed safe dispatcher failure."""
+
+
+def _valid_trading_day_jst(value: object) -> bool:
+    if not isinstance(value, str) or len(value) != 10:
+        return False
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -63,10 +72,13 @@ class V4GmoExitDispatcher:
         public_cancel_reader: V4GmoPublicMarketStatusReader,
         public_close_reader: V4GmoPublicMarketStatusReader,
         observed_at_utc: datetime,
+        cycle_day_jst: str,
     ) -> V4GmoExitDispatchResult:
         if observed_at_utc.tzinfo is None:
             raise V4GmoExitDispatcherError("V4_EXIT_DISPATCH_TIME_INVALID")
-        self._claim_once(observed_at_utc=observed_at_utc)
+        if not _valid_trading_day_jst(cycle_day_jst):
+            raise V4GmoExitDispatcherError("V4_EXIT_DISPATCH_TRADING_DAY_INVALID")
+        self._claim_once(observed_at_utc=observed_at_utc, cycle_day_jst=cycle_day_jst)
         store = self.path.store
         try:
             signal_fingerprint = store.load_single_signal_fingerprint_internal()
@@ -95,7 +107,7 @@ class V4GmoExitDispatcher:
                 if flat is not True:
                     raise V4GmoExitDispatcherError("V4_EXIT_FLAT_NOT_RECONCILED")
                 self._write_terminal_marker(
-                    "exit-sequence-dispatch-completed.json",
+                    f"exit-sequence-dispatch-completed.{cycle_day_jst}.json",
                     status="EXIT_DISPATCH_COMPLETED_NATURAL_SETTLEMENT_FLAT",
                     observed_at_utc=observed_at_utc,
                 )
@@ -171,7 +183,7 @@ class V4GmoExitDispatcher:
         except BaseException as error:
             store.engage_unknown_halt()
             self._write_terminal_marker(
-                "exit-sequence-dispatch-failed.json",
+                f"exit-sequence-dispatch-failed.{cycle_day_jst}.json",
                 status="PERSISTENT_HALT_EXIT_DISPATCH_FAILED_NO_RETRY",
                 observed_at_utc=observed_at_utc,
             )
@@ -179,7 +191,7 @@ class V4GmoExitDispatcher:
                 raise
             raise V4GmoExitDispatcherError("V4_EXIT_DISPATCH_FAILED") from error
         self._write_terminal_marker(
-            "exit-sequence-dispatch-completed.json",
+            f"exit-sequence-dispatch-completed.{cycle_day_jst}.json",
             status="EXIT_DISPATCH_COMPLETED_FLAT_RECONCILED",
             observed_at_utc=observed_at_utc,
         )
@@ -191,8 +203,10 @@ class V4GmoExitDispatcher:
             broker_post_attempt_count=2,
         )
 
-    def _claim_once(self, *, observed_at_utc: datetime) -> None:
-        required = self.state_root / "exit-sequence-dispatch-required.json"
+    def _claim_once(self, *, observed_at_utc: datetime, cycle_day_jst: str) -> None:
+        required = (
+            self.state_root / f"exit-sequence-dispatch-required.{cycle_day_jst}.json"
+        )
         if not required.is_file() or required.is_symlink():
             raise V4GmoExitDispatcherError("V4_EXIT_DISPATCH_NOT_REQUIRED")
         try:
@@ -206,7 +220,7 @@ class V4GmoExitDispatcher:
         ):
             raise V4GmoExitDispatcherError("V4_EXIT_DISPATCH_GENERATION_MISMATCH")
         self._write_terminal_marker(
-            "exit-sequence-dispatch-claimed.json",
+            f"exit-sequence-dispatch-claimed.{cycle_day_jst}.json",
             status="EXIT_DISPATCH_CLAIMED_ONE_USE",
             observed_at_utc=observed_at_utc,
             exclusive=True,

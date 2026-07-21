@@ -192,6 +192,7 @@ def prepare_g013_canary_session(
     """Prepare an exact order sheet; never issue a permit or call Private API."""
 
     repository = repository.resolve()
+    current = (now_utc or datetime.now(UTC)).astimezone(UTC)
     require_clean_main(repository=repository)
     implementation_digest = reviewed_files_digest(repository=repository)
     generation = load_v4_gmo_frozen_generation(
@@ -201,9 +202,12 @@ def prepare_g013_canary_session(
     if not generation.generation_label.endswith("G013"):
         raise V4GmoG013CanaryError("G013_GENERATION_REQUIRED")
     external_gate = load_external_preparation_gate(repository=repository)
+    # Same instant as `current` below: today's preparation (00-60) must have
+    # passed, not merely some earlier day's under this same reviewed generation.
     preparation_evidence = load_completed_preparation_evidence(
         external_gate=external_gate,
         generation_digest=generation.digest,
+        now_utc=current,
     )
     state_root = v4_gmo_runtime_state_root(
         repository=repository,
@@ -213,7 +217,6 @@ def prepare_g013_canary_session(
         state_root=state_root,
         generation_digest=generation.digest,
     )
-    current = (now_utc or datetime.now(UTC)).astimezone(UTC)
     policy = _execution_policy(generation)
     if not policy.entry_time_allowed(now_utc=current):
         raise V4GmoG013CanaryError("G013_ENTRY_TIME_BLOCKED_BEFORE_PUBLIC_GET")
@@ -469,13 +472,20 @@ def _run_bound_g013_canary(
 ) -> V4GmoG013CanaryResult:
     path = binding.coordinated_path
     signal = session.formal_input.signal
+    current = wall_clock()
     _ensure_signal_postable(
-        generation=session.generation, signal=signal, now_utc=wall_clock()
+        generation=session.generation, signal=signal, now_utc=current
     )
     _require_exact_session_binding(session)
+    # Per-minute slot (not once-per-generation-forever): under daily rollover, the
+    # same generation legitimately reads a fresh FINAL_QUOTE on every trading day
+    # (and, in practice, at most once per day since reserve_entry_cycle then caps
+    # the day). Minute granularity is strictly finer than day granularity, so this
+    # is always at least as fresh a check as before.
     quote = read_g013_final_quote_once(
         operation_ledger=session.public_operation_ledger,
         operation=V4GmoG013PublicOperation.FINAL_QUOTE,
+        cycle_key=g013_public_cycle_key(current),
     )
     _require_final_quote_near_reference(
         reference=session.reference_quote,
