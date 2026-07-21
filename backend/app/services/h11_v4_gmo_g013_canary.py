@@ -53,6 +53,9 @@ from app.services.h11_v4_gmo_actual_runtime_binding import (
     V4GmoActualRuntimeBinding,
     bind_v4_gmo_actual_runtime,
 )
+from app.services.h11_v4_gmo_actual_transport import (
+    V4_GMO_SURFACEABLE_FAILURE_CLASSES,
+)
 from app.services.h11_v4_gmo_formal_canary_source import (
     MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS,
     V4GmoFormalCanaryInput,
@@ -169,6 +172,10 @@ class V4GmoG013CanaryResult:
     persistent_halt: bool
     raw_response_retained: bool = False
     identifier_exposed: bool = False
+    # Diagnostic only: fixed internal label describing why the entry POST failed
+    # (timeout / connection / non-JSON / rejected-by-broker / pre-HTTP guard).
+    # Never broker response content or identifiers.
+    failure_class: str | None = None
 
     def to_safe_dict(self) -> dict[str, object]:
         return dict(self.__dict__)
@@ -302,7 +309,6 @@ def run_g013_actual_canary_after_exact_confirmation(
     session._use.consume_once()
     _require_exact_session_binding(session)
     session = _refresh_session_evidence_before_permit(session)
-    now_monotonic = time.monotonic()
     resume = confirm_v4_major_incident_resume_exact(
         phrase=major_incident_resume_phrase,
         generation_digest=session.generation.digest,
@@ -349,6 +355,11 @@ def run_g013_actual_canary_after_exact_confirmation(
         state_root=state_root,
         require_cycle_present=True,
     )
+    # Capture the permit clock only now, AFTER the two supervisor-heartbeat waits
+    # (each up to 20s). Capturing earlier could consume most of the permit's 30s
+    # lifetime before it is even issued, yielding a permit born (nearly) expired
+    # whose one-shot marker is already written — burning the generation with 0 POST.
+    now_monotonic = time.monotonic()
     permit = issue_v4_gmo_actual_activation_permit(
         intent=session.intent,
         resume_proof=resume,
@@ -398,6 +409,28 @@ def _refresh_session_evidence_before_permit(
     )
     _require_exact_session_binding(refreshed)
     return refreshed
+
+
+_SURFACEABLE_FAILURE_CLASSES = V4_GMO_SURFACEABLE_FAILURE_CLASSES | frozenset(
+    {
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN_ENVELOPE_INVALID",
+        "V4_GMO_PRIVATE_RESULT_REJECTED_BY_BROKER",
+    }
+)
+
+
+def _failure_class_from_path(path: object) -> str | None:
+    """Fixed internal diagnostic label recorded by the adapter, if any.
+
+    Defensive second filter: exact membership in a closed allow-list, so no
+    broker content — and nothing merely shaped like an internal label — can
+    surface even if an upstream filter were weakened.
+    """
+
+    label = getattr(getattr(path, "adapter", None), "last_failure_class", None)
+    if isinstance(label, str) and label in _SURFACEABLE_FAILURE_CLASSES:
+        return label
+    return None
 
 
 def _ensure_signal_postable(
@@ -482,6 +515,7 @@ def _run_bound_g013_canary(
             exact_protection_confirmed=False,
             flat_reconciled=False,
             persistent_halt=path.store.unknown_halt_latched(),
+            failure_class=_failure_class_from_path(path),
         )
     post_entry_evidence = path.reconcile_once_fixed(
         cycle_ref=session.intent.cycle_ref,
@@ -512,6 +546,7 @@ def _run_bound_g013_canary(
                 protection_post_attempt_count=0,
                 exact_protection_confirmed=False,
                 flat_reconciled=False,
+                failure_class=_failure_class_from_path(path),
                 persistent_halt=True,
             )
         post_cancel_evidence = path.reconcile_once_fixed(
@@ -569,6 +604,7 @@ def _run_bound_g013_canary(
             exact_protection_confirmed=False,
             flat_reconciled=False,
             persistent_halt=True,
+            failure_class=_failure_class_from_path(path),
         )
     post_protection_evidence = path.reconcile_once_fixed(
         cycle_ref=session.intent.cycle_ref,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import signal
+import time
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -800,6 +802,42 @@ def test_g013_unknown_write_outcome_never_reaches_a_later_write(
         assert "confirm_oco" not in path.calls
 
 
+def test_g013_entry_halt_surfaces_fixed_failure_class_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The halt result carries the adapter's FIXED diagnostic label so an operator can
+    # attribute a failed entry (timeout / connection / non-JSON / rejected) without any
+    # broker content; non-conforming labels are dropped.
+    monkeypatch.setattr(canary_module, "_require_exact_session_binding", lambda _s: None)
+    monkeypatch.setattr(
+        canary_module,
+        "_execution_policy",
+        lambda _g: SimpleNamespace(entry_time_allowed=lambda **_k: True),
+    )
+    monkeypatch.setattr(
+        canary_module,
+        "read_g013_final_quote_once",
+        lambda **_k: SimpleNamespace(bid=Decimal("160.000"), ask=Decimal("160.005")),
+    )
+
+    def _run(adapter_label: object) -> canary_module.V4GmoG013CanaryResult:
+        path = _FakePath([], market_outcome=V4GmoPrivateOutcome.UNKNOWN_SANITIZED)
+        path.adapter = SimpleNamespace(last_failure_class=adapter_label)
+        return canary_module._run_bound_g013_canary(
+            session=_fake_session(),
+            binding=SimpleNamespace(coordinated_path=path),
+            on_protected=None,
+            wall_clock=lambda: datetime(2099, 1, 1, 0, 1, tzinfo=UTC),
+        )
+
+    surfaced = _run("V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT")
+    assert surfaced.status == "ENTRY_NOT_ACCEPTED_HALT"
+    assert surfaced.failure_class == "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+    assert "failure_class" in surfaced.to_safe_dict()
+    dropped = _run("broker said: <html>")
+    assert dropped.failure_class is None
+
+
 def test_g013_prepermit_refresh_failure_prevents_confirmation_and_permit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -999,6 +1037,83 @@ def test_g013_run_reserves_no_cycle_when_signal_ages_out_before_reserve(
         )
     reserve.assert_not_called()
     issue_permit.assert_not_called()
+
+
+def test_canary_script_reads_hidden_input_without_discarding_typed_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # getpass must own the terminal BEFORE the operator types: it takes the tty with
+    # TCSAFLUSH, which discards whatever is already buffered. Waiting for input first
+    # (the previous select-on-stdin) threw away exactly the phrase the operator typed,
+    # so every confirmation silently mismatched.
+    import scripts.h11_auto_v4_g013_actual_canary as canary_script
+
+    prompts: list[str] = []
+
+    def _fake_getpass(prompt: str = "") -> str:
+        prompts.append(prompt)
+        return "operator-typed-value"
+
+    monkeypatch.setattr(canary_script.getpass, "getpass", _fake_getpass)
+    assert (
+        canary_script._hidden_input("major_incident_resume_exact_required")
+        == "operator-typed-value"
+    )
+    # The label rides in the getpass prompt (controlling tty), so it survives
+    # stdout redirection and appears exactly when echo-off input begins.
+    assert prompts == ["major_incident_resume_exact_required\n"]
+    # The one-shot timer is disarmed after a successful read, so SIGALRM can
+    # never fire later during the permit/POST sequence.
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+    prompts.clear()
+    assert (
+        canary_script._hidden_current_turn_input("H11 V4 G013 CANARY abc def")
+        == "operator-typed-value"
+    )
+    # The challenge rides in the getpass prompt, so it is shown the moment getpass takes
+    # the terminal — the operator never has to type blind just to reveal it.
+    assert prompts == [
+        "current_turn_challenge_exact_required [H11 V4 G013 CANARY abc def]\n> "
+    ]
+
+
+def test_canary_script_hidden_input_still_times_out_and_disarms_timer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import scripts.h11_auto_v4_g013_actual_canary as canary_script
+
+    monkeypatch.setattr(canary_script, "INPUT_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        canary_script.getpass, "getpass", lambda prompt="": time.sleep(5.0)
+    )
+    with pytest.raises(
+        canary_module.V4GmoG013CanaryError, match="OPERATOR_CONFIRMATION_TIMEOUT"
+    ):
+        canary_script._hidden_input("major_incident_resume_exact_required")
+    # The real-time timer is always disarmed, so it can never fire during a broker write.
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
+
+
+def test_canary_script_timeout_survives_inherited_sigalrm_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A launcher that blocks SIGALRM must not silently defeat the 300s bound: the
+    # reader unblocks SIGALRM before arming, so the timeout still fires.
+    import scripts.h11_auto_v4_g013_actual_canary as canary_script
+
+    monkeypatch.setattr(canary_script, "INPUT_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        canary_script.getpass, "getpass", lambda prompt="": time.sleep(5.0)
+    )
+    original_mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
+    try:
+        with pytest.raises(
+            canary_module.V4GmoG013CanaryError, match="OPERATOR_CONFIRMATION_TIMEOUT"
+        ):
+            canary_script._hidden_input("major_incident_resume_exact_required")
+    finally:
+        signal.pthread_sigmask(signal.SIG_SETMASK, original_mask)
+    assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
 
 
 def test_public_operation_ledger_cycle_key_retries_next_slot_only(

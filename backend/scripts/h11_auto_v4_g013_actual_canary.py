@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import getpass
 import json
-import select
-import sys
+import signal
 from pathlib import Path
 
 from app.services.h11_v4_gmo_g013_canary import (
@@ -18,19 +17,48 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 INPUT_TIMEOUT_SECONDS = 300.0
 
 
-def _hidden_input(prompt: str) -> str:
-    print(prompt, flush=True)
-    readable, _, _ = select.select([sys.stdin], [], [], INPUT_TIMEOUT_SECONDS)
-    if not readable:
+def _read_hidden_with_timeout(prompt: str) -> str:
+    """Read one hidden line, with getpass owning the terminal before any typing.
+
+    getpass takes the terminal with ``TCSAFLUSH``, which DISCARDS whatever is already
+    buffered.  Waiting for input first (the previous ``select`` on stdin) therefore threw
+    away exactly the phrase the operator had just typed or pasted, so every confirmation
+    silently mismatched.  Calling getpass up front means echo is already off and the
+    prompt is already shown when the operator types, so the input is read verbatim.
+
+    The same ``INPUT_TIMEOUT_SECONDS`` bound is kept, enforced with a real-time timer that
+    is armed only while waiting for operator input and always disarmed afterwards, so it
+    can never fire during a broker write.
+    """
+
+    def _expire(signum: int, frame: object) -> None:
+        del signum, frame
         raise V4GmoG013CanaryError("G013_OPERATOR_CONFIRMATION_TIMEOUT")
-    return getpass.getpass("")
+
+    # Install the handler BEFORE unblocking: an inherited mask that blocks SIGALRM
+    # would otherwise leave the itimer pending forever (silently defeating the
+    # timeout), and unblocking first could deliver an already-pending SIGALRM under
+    # the default disposition — killing the process instead of raising the labelled
+    # timeout. Handler first, then unblock, then arm.
+    previous = signal.signal(signal.SIGALRM, _expire)
+    signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGALRM})
+    signal.setitimer(signal.ITIMER_REAL, INPUT_TIMEOUT_SECONDS)
+    try:
+        return getpass.getpass(prompt)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def _hidden_input(prompt: str) -> str:
+    # The label rides in the getpass prompt (written to the controlling tty), so the
+    # operator still sees it when stdout is redirected, and it appears exactly when
+    # echo-off input begins.
+    return _read_hidden_with_timeout(f"{prompt}\n")
 
 
 def _hidden_current_turn_input(challenge: str) -> str:
-    readable, _, _ = select.select([sys.stdin], [], [], INPUT_TIMEOUT_SECONDS)
-    if not readable:
-        raise V4GmoG013CanaryError("G013_OPERATOR_CONFIRMATION_TIMEOUT")
-    return getpass.getpass(
+    return _read_hidden_with_timeout(
         f"current_turn_challenge_exact_required [{challenge}]\n> "
     )
 

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import inspect
+import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any
 
+import httpx
 import pytest
 
 from app.h11_auto.contracts import SignalDecision
@@ -303,6 +305,101 @@ def test_market_entry_and_cancel_use_deterministic_client_order_id() -> None:
     assert cancel.body == {"clientOrderIds": [entry_client_id()]}
     assert len(entry_client_id()) == 36
 
+
+
+def test_transport_unknown_failure_is_classified_into_fixed_labels() -> None:
+    # Diagnostic classes carry ONLY the failure mechanism, never broker content:
+    # a real incident (entry POST -> unknown halt, no broker-side order record)
+    # must be attributable to timeout / connection / non-JSON / invalid envelope.
+    classify = transport_module._classify_private_result_unknown
+    assert classify(httpx.ConnectTimeout("t")) == (
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+    )
+    assert classify(httpx.ConnectError("c")) == (
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN_CONNECTION"
+    )
+    assert classify(json.JSONDecodeError("m", "<html>", 0)) == (
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN_NON_JSON"
+    )
+    assert classify(
+        V4GmoActualTransportError("V4_GMO_RESPONSE_STATUS_INVALID")
+    ) == "V4_GMO_PRIVATE_RESULT_UNKNOWN_ENVELOPE_INVALID"
+    # Anything unrecognised collapses to the base label; no content leaks through.
+    assert classify(ValueError("broker said <html>")) == (
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN"
+    )
+
+
+def test_adapter_failure_class_only_passes_fixed_internal_labels() -> None:
+    sanitize = adapter_module._sanitized_failure_class
+    assert sanitize(
+        V4GmoActualTransportError("V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT")
+    ) == "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+    assert sanitize(
+        V4GmoActualTransportError("V4_GMO_CURRENT_TURN_ENTRY_SCOPE_EXPIRED_OR_MISMATCHED")
+    ) == "V4_GMO_CURRENT_TURN_ENTRY_SCOPE_EXPIRED_OR_MISMATCHED"
+    # Arbitrary text (possible broker content) never passes through.
+    assert sanitize(V4GmoActualTransportError("broker said: <html>")) == (
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN"
+    )
+    # Membership is EXACT, not a charset/shape test: a label merely SHAPED like an
+    # internal one (e.g. a future f-string carrying a broker code) is refused.
+    assert sanitize(V4GmoActualTransportError("V4_GMO_ERR5106_REJECTED")) == (
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN"
+    )
+    assert sanitize(TimeoutError()) == "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+    assert sanitize(OSError()) == "V4_GMO_PRIVATE_RESULT_UNKNOWN_CONNECTION"
+
+
+def test_every_transport_error_label_is_a_non_interpolated_literal() -> None:
+    # The allow-list is only trustworthy while transport labels stay literal: an
+    # f-string label could otherwise be built to match an enumerated entry.
+    source = inspect.getsource(transport_module)
+    assert 'V4GmoActualTransportError(f"' not in source
+    assert "V4GmoActualTransportError(f'" not in source
+    # Every enumerated surfaceable class must actually be a fixed string constant.
+    for label in transport_module.V4_GMO_SURFACEABLE_FAILURE_CLASSES:
+        assert label.startswith("V4_GMO_")
+        assert f'"{label}"' in source
+
+
+def test_perform_once_records_failure_class_behaviourally(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Behavioural (not source-scan): drive real outcomes through perform_once and
+    # assert the recorded diagnostic, so a dead assignment would fail the test.
+    # The authorization CONSUMER is stubbed rather than forging an issuance, so the
+    # coordinator-only issuer invariant stays intact.
+    monkeypatch.setattr(
+        adapter_module,
+        "consume_persisted_action_authorization",
+        lambda *args, **kwargs: object(),
+    )
+
+    def _run(transport: Any) -> tuple[Any, str | None]:
+        adapter = V4GmoActualAdapter(transport=transport)
+        outcome = adapter.perform_once(
+            plan=action_plan(V4GmoAction.MARKET_ENTRY),
+            persisted_authorization=object(),  # type: ignore[arg-type]
+            now_monotonic=1.0,
+        )
+        return outcome, adapter.last_failure_class
+
+    timeout_outcome, timeout_label = _run(TimeoutPrivateTransport())
+    assert timeout_outcome is adapter_module.V4GmoPrivateOutcome.UNKNOWN_SANITIZED
+    assert timeout_label == "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+
+    rejected_outcome, rejected_label = _run(
+        FakePrivateTransport(responses=[{"status": 5}])
+    )
+    assert rejected_outcome is adapter_module.V4GmoPrivateOutcome.REJECTED_SANITIZED
+    assert rejected_label == "V4_GMO_PRIVATE_RESULT_REJECTED_BY_BROKER"
+
+    accepted_outcome, accepted_label = _run(
+        FakePrivateTransport(responses=[{"status": 0}])
+    )
+    assert accepted_outcome is adapter_module.V4GmoPrivateOutcome.ACCEPTED_SANITIZED
+    assert accepted_label is None
 
 
 def test_adapter_refuses_write_without_coordinator_issued_authorization() -> None:

@@ -52,6 +52,78 @@ GMO_V4_KEYCHAIN_SERVICE = "fx-strategy-lab-h11-v4-actual"
 GMO_V4_API_KEY_ACCOUNT = "gmo-fx-api-key"
 GMO_V4_API_SECRET_ACCOUNT = "gmo-fx-api-secret"
 
+# Fixed diagnostic classes for a private call whose result is unknown. These carry
+# ONLY the failure mechanism (never broker response content, identifiers, or
+# credentials) so a real incident like 2026-07-21 (entry POST -> unknown halt, no
+# broker-side order record) can be attributed to timeout / connection / non-JSON /
+# invalid-envelope instead of remaining a single opaque UNKNOWN.
+V4_GMO_UNKNOWN_TIMEOUT = "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+V4_GMO_UNKNOWN_CONNECTION = "V4_GMO_PRIVATE_RESULT_UNKNOWN_CONNECTION"
+V4_GMO_UNKNOWN_NON_JSON = "V4_GMO_PRIVATE_RESULT_UNKNOWN_NON_JSON"
+V4_GMO_UNKNOWN_ENVELOPE_INVALID = "V4_GMO_PRIVATE_RESULT_UNKNOWN_ENVELOPE_INVALID"
+V4_GMO_PRIVATE_RESULT_UNKNOWN_CLASSES = frozenset(
+    {
+        V4_GMO_UNKNOWN_TIMEOUT,
+        V4_GMO_UNKNOWN_CONNECTION,
+        V4_GMO_UNKNOWN_NON_JSON,
+        V4_GMO_UNKNOWN_ENVELOPE_INVALID,
+    }
+)
+
+# Closed allow-list of transport labels that may be surfaced as an operator-facing
+# failure class. Exact membership only — a shape/charset test would still admit a
+# future ``f"V4_GMO_...{broker_value}"``, so anything not enumerated here collapses
+# to the base UNKNOWN label. Every entry is a fixed literal raised by this module.
+V4_GMO_SURFACEABLE_FAILURE_CLASSES = V4_GMO_PRIVATE_RESULT_UNKNOWN_CLASSES | frozenset(
+    {
+        "V4_GMO_PRIVATE_RESULT_UNKNOWN",
+        "V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED",
+        "V4_GMO_PERSISTED_TRANSPORT_AUTHORIZATION_REQUIRED",
+        "V4_GMO_PERSISTED_TRANSPORT_AUTHORIZATION_UNEXPECTED",
+        "V4_GMO_CURRENT_TURN_ENTRY_SCOPE_EXPIRED_OR_MISMATCHED",
+        "V4_GMO_PRIVATE_CADENCE_BLOCKED",
+        "V4_GMO_SAME_ACTION_SECOND_ATTEMPT_FORBIDDEN",
+        "V4_GMO_POST_SEQUENCE_INVALID",
+        "V4_GMO_POST_SCOPE_INVALID",
+        "V4_GMO_POST_BODY_REQUIRED",
+        "V4_GMO_POST_PARAMETERS_FORBIDDEN",
+        "V4_GMO_PRIVATE_ENDPOINT_NOT_ALLOWED",
+        "V4_GMO_REQUEST_INVALID",
+        "V4_GMO_REQUEST_BODY_INVALID",
+        "V4_GMO_MARKET_BODY_INVALID",
+        "V4_GMO_ORDER_SCOPE_INVALID",
+        "V4_GMO_ORDER_SIZE_INVALID",
+        "V4_GMO_RESPONSE_STATUS_INVALID",
+        "V4_GMO_SIGNER_INVALID",
+        "V4_GMO_TIMESTAMP_INVALID",
+        "V4_GMO_UNKNOWN_POST_CALLBACK_REQUIRED",
+        "V4_GMO_KEYCHAIN_READ_FAILED",
+        "V4_GMO_KEYCHAIN_ITEM_UNAVAILABLE",
+        "V4_GMO_KEYCHAIN_ITEM_EMPTY",
+        "V4_GMO_KEYCHAIN_ARGUMENT_INVALID",
+        "V4_GMO_KEYCHAIN_PLATFORM_UNSUPPORTED",
+        "V4_GMO_KEYCHAIN_READER_CONTRACT_INVALID",
+    }
+)
+
+
+def _classify_private_result_unknown(error: Exception) -> str:
+    """Map one private-call failure to one FIXED label; never echo error content."""
+
+    if isinstance(error, httpx.TimeoutException):
+        return V4_GMO_UNKNOWN_TIMEOUT
+    if isinstance(error, httpx.TransportError):
+        return V4_GMO_UNKNOWN_CONNECTION
+    if isinstance(error, json.JSONDecodeError):
+        return V4_GMO_UNKNOWN_NON_JSON
+    if isinstance(error, V4GmoActualTransportError):
+        label = str(error)
+        if label in V4_GMO_PRIVATE_RESULT_UNKNOWN_CLASSES:
+            return label
+        if label == "V4_GMO_RESPONSE_STATUS_INVALID":
+            return V4_GMO_UNKNOWN_ENVELOPE_INVALID
+    return "V4_GMO_PRIVATE_RESULT_UNKNOWN"
+
 _ALLOWED_ENDPOINTS = frozenset(
     {
         ("GET", "/private/v1/latestExecutions", "/v1/latestExecutions"),
@@ -408,7 +480,7 @@ class V4GmoHttpxPrivateTransport:
             )
             payload = response.json()
             if not isinstance(payload, Mapping):
-                raise V4GmoActualTransportError("V4_GMO_PRIVATE_RESULT_UNKNOWN")
+                raise V4GmoActualTransportError(V4_GMO_UNKNOWN_NON_JSON)
             envelope = V4GmoPrivateEnvelope.from_injected_payload(payload)
         except Exception as error:  # noqa: BLE001
             if request.method == "POST":
@@ -416,7 +488,9 @@ class V4GmoHttpxPrivateTransport:
                     self._unknown_post_callback()
                 except Exception:  # noqa: BLE001
                     pass
-            raise V4GmoActualTransportError("V4_GMO_PRIVATE_RESULT_UNKNOWN") from error
+            raise V4GmoActualTransportError(
+                _classify_private_result_unknown(error)
+            ) from error
         return envelope
 
     def _require_bound_post_once(

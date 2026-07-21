@@ -37,6 +37,7 @@ from app.h11_auto.v4_gmo_persisted_authorization import (
 )
 from app.h11_auto.v4_gmo_protection import V4GmoExactProtectionPlan
 from app.services.h11_v4_gmo_actual_transport import (
+    V4_GMO_SURFACEABLE_FAILURE_CLASSES,
     V4GmoActualTransportError,
     V4GmoPrivateEnvelope,
     V4GmoPrivateRequest,
@@ -232,6 +233,10 @@ class V4GmoActualAdapter:
         init=False,
         repr=False,
     )
+    # Diagnostic only: the FIXED internal label of the most recent perform_once
+    # failure (e.g. V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT). Never broker response
+    # content, identifiers, or credentials — internal constant labels only.
+    last_failure_class: str | None = field(default=None, init=False, repr=False)
 
     def __repr__(self) -> str:
         return "V4GmoActualAdapter(<transport-redacted>)"
@@ -248,6 +253,9 @@ class V4GmoActualAdapter:
             V4GmoPublicMarketStatusTransportGuard | None
         ) = None,
     ) -> V4GmoPrivateOutcome:
+        # Reset first so the diagnostic is strictly per-call: a failure in the
+        # pre-transport guards below can never leave a previous call's label behind.
+        self.last_failure_class = None
         key = (plan.cycle_ref, plan.action)
         if key in self._attempted:
             raise V4GmoActualAdapterError("V4_GMO_SAME_ACTION_SECOND_ATTEMPT_FORBIDDEN")
@@ -293,17 +301,18 @@ class V4GmoActualAdapter:
                 request,
                 persisted_transport_authorization=transport_authorization,
             )
-        except (V4GmoActualTransportError, TimeoutError, OSError):
+        except (V4GmoActualTransportError, TimeoutError, OSError) as error:
+            self.last_failure_class = _sanitized_failure_class(error)
             return V4GmoPrivateOutcome.UNKNOWN_SANITIZED
         try:
             status = _envelope_status(payload)
         except V4GmoActualAdapterError:
+            self.last_failure_class = "V4_GMO_PRIVATE_RESULT_UNKNOWN_ENVELOPE_INVALID"
             return V4GmoPrivateOutcome.UNKNOWN_SANITIZED
-        return (
-            V4GmoPrivateOutcome.ACCEPTED_SANITIZED
-            if status == 0
-            else V4GmoPrivateOutcome.REJECTED_SANITIZED
-        )
+        if status != 0:
+            self.last_failure_class = "V4_GMO_PRIVATE_RESULT_REJECTED_BY_BROKER"
+            return V4GmoPrivateOutcome.REJECTED_SANITIZED
+        return V4GmoPrivateOutcome.ACCEPTED_SANITIZED
 
     def reconcile(
         self,
@@ -866,6 +875,25 @@ def _post_request(
         params={},
         body=body,
     )
+
+
+def _sanitized_failure_class(error: Exception) -> str:
+    """Return one FIXED internal diagnostic label for a failed private call.
+
+    Membership in the closed ``V4_GMO_SURFACEABLE_FAILURE_CLASSES`` allow-list is
+    exact, so no exception text can pass through — not even one shaped like an
+    internal label. Anything unrecognised collapses to the base UNKNOWN label.
+    """
+
+    if isinstance(error, V4GmoActualTransportError):
+        label = str(error)
+        if label in V4_GMO_SURFACEABLE_FAILURE_CLASSES:
+            return label
+    if isinstance(error, TimeoutError):
+        return "V4_GMO_PRIVATE_RESULT_UNKNOWN_TIMEOUT"
+    if isinstance(error, OSError):
+        return "V4_GMO_PRIVATE_RESULT_UNKNOWN_CONNECTION"
+    return "V4_GMO_PRIVATE_RESULT_UNKNOWN"
 
 
 def _envelope_status(payload: V4GmoPrivateEnvelope) -> int:
