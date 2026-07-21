@@ -2675,6 +2675,186 @@ def test_flat_result_updates_persistent_risk_exactly_once(
     lock.release()
 
 
+def test_natural_flat_peek_matches_record_on_a_real_reconciliation(
+    tmp_path: Path,
+) -> None:
+    # Guards the exit dispatcher's natural-settlement shortcut end-to-end: the
+    # non-consuming peek must agree with the consuming record on the SAME
+    # authoritative evidence from a real 3-GET reconciliation (not a mock), so a
+    # future divergence between their criteria is caught here rather than only
+    # surfacing as an unexplained halt in production.
+    signal = _signal()
+    runtime_root = _runtime_root(tmp_path)
+    store = V4GmoActualCoordinatorStore(runtime_root / "coordinator.sqlite3")
+    store.prepare_entry_intent(
+        generation=_generation(),
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    _record_market(store, signal)
+    store._persist_exact_protection_plan_from_coordinated_path(
+        issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
+        signal_fingerprint=signal.fingerprint,
+        reconciled_average_fill_price=Decimal("150.000"),
+        reconciled_filled_size=1_000,
+        now_utc=NOW + timedelta(seconds=2),
+        now_monotonic=102.0,
+    )
+    cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
+    entry_id = v4_gmo_client_order_id(cycle_ref=cycle_ref, action=V4GmoAction.MARKET_ENTRY)
+    protection_id = v4_gmo_client_order_id(
+        cycle_ref=cycle_ref, action=V4GmoAction.EXACT_SIZE_OCO_PROTECTION
+    )
+    # A natural OCO settlement looks identical, on the wire, to any other closed
+    # trade: the broker-side SL/TP fill is just another CLOSE execution row.
+    responses = [
+        {
+            "status": 0,
+            "data": {
+                "list": [
+                    {
+                        "clientOrderId": entry_id,
+                        "positionId": 1001,
+                        "symbol": "USD_JPY",
+                        "side": "BUY",
+                        "settleType": "OPEN",
+                        "size": "1000",
+                        "amount": "0",
+                        "lossGain": "0",
+                        "fee": "0",
+                        "settledSwap": "0",
+                    },
+                    {
+                        "clientOrderId": protection_id,
+                        "positionId": 1001,
+                        "symbol": "USD_JPY",
+                        "side": "SELL",
+                        "settleType": "CLOSE",
+                        "size": "1000",
+                        "amount": "1610.00",
+                        "lossGain": "1610.00",
+                        "fee": "-30",
+                        "settledSwap": "-4",
+                    },
+                ]
+            },
+        },
+        {"status": 0, "data": {"list": []}},
+        {"status": 0, "data": {"list": []}},
+    ]
+    transport = _FakeTransport(responses=list(responses))
+    lock = H11AutoProcessLock(runtime_root / "process.lock")
+    assert lock.acquire() is True
+    risk_store, risk_policy, dead_man = _runtime_safety(runtime_root)
+    clock = _Clock(wall=NOW + timedelta(seconds=3), monotonic=103.0)
+    path = V4GmoCoordinatedActualPath(
+        repository=tmp_path,
+        store=store,
+        adapter=V4GmoActualAdapter(transport=transport),
+        process_lock=lock,
+        generation=_generation(),
+        risk_store=risk_store,
+        risk_policy=risk_policy,
+        dead_man_store=dead_man,
+        wall_clock=clock.wall_now,
+        monotonic_clock=clock.monotonic_now,
+        reconciliation_wait=clock.advance,
+    )
+    evidence = path.reconcile_once_fixed(
+        cycle_ref=cycle_ref,
+        side=SignalDecision.BUY,
+        requested_size=1_000,
+    )
+    # (i) peek True on the still-unconsumed evidence...
+    assert (
+        path.reconciliation_shows_natural_flat(
+            signal_fingerprint=signal.fingerprint,
+            reconciliation_evidence=evidence,
+        )
+        is True
+    )
+    # (ii) ...and the peek left it fully consumable: record succeeds on the SAME
+    # evidence right after.
+    assert (
+        path.record_flat_closed_result_once(
+            signal_fingerprint=signal.fingerprint,
+            reconciliation_evidence=evidence,
+        )
+        is True
+    )
+    state = risk_store.load()
+    assert state.daily_loss_jpy_internal == 0
+    assert state.consecutive_losses == 0
+
+    # (iii) peek raises on already-consumed evidence, mirroring the consumer.
+    with pytest.raises(V4GmoCoordinatedPathError, match="EVIDENCE_INVALID"):
+        path.reconciliation_shows_natural_flat(
+            signal_fingerprint=signal.fingerprint,
+            reconciliation_evidence=evidence,
+        )
+
+    # (iv) an OPEN position (not flat) must peek False — a fresh reconciliation
+    # of the same cycle showing the entry fill still open and the OCO live.
+    transport.responses.extend(
+        [
+            {
+                "status": 0,
+                "data": {
+                    "list": [
+                        {
+                            "clientOrderId": entry_id,
+                            "positionId": 1001,
+                            "symbol": "USD_JPY",
+                            "side": "BUY",
+                            "settleType": "OPEN",
+                            "size": "1000",
+                            "amount": "0",
+                            "lossGain": "0",
+                            "fee": "0",
+                            "settledSwap": "0",
+                        }
+                    ]
+                },
+            },
+            {
+                "status": 0,
+                "data": {
+                    "list": [
+                        {
+                            "positionId": 1001,
+                            "symbol": "USD_JPY",
+                            "side": "BUY",
+                            "size": "1000",
+                            "orderedSize": "0",
+                            "price": "150.000",
+                            "lossGain": "0",
+                        }
+                    ]
+                },
+            },
+            {"status": 0, "data": {"list": []}},
+        ]
+    )
+    halt_before = store.unknown_halt_latched()
+    open_evidence = path.reconcile_once_fixed(
+        cycle_ref=cycle_ref,
+        side=SignalDecision.BUY,
+        requested_size=1_000,
+    )
+    assert (
+        path.reconciliation_shows_natural_flat(
+            signal_fingerprint=signal.fingerprint,
+            reconciliation_evidence=open_evidence,
+        )
+        is False
+    )
+    # The peek is read-only: it never flips the halt state either way.
+    assert store.unknown_halt_latched() is halt_before
+    lock.release()
+
+
 def test_amount_only_flat_result_is_unknown_and_latches_halt(
     tmp_path: Path,
 ) -> None:

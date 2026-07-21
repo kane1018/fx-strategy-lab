@@ -80,6 +80,32 @@ class V4GmoExitDispatcher:
                 side=side,
                 requested_size=requested_size,
             )
+            # Natural OCO settlement shortcut: when the broker already settled the
+            # position (SL/TP filled), the OCO no longer exists — cancelling it
+            # would only fail. Record the flat result from this same evidence and
+            # complete with ZERO additional POSTs.
+            if self.path.reconciliation_shows_natural_flat(
+                signal_fingerprint=signal_fingerprint,
+                reconciliation_evidence=cancel_evidence,
+            ):
+                flat = self.path.record_flat_closed_result_once(
+                    signal_fingerprint=signal_fingerprint,
+                    reconciliation_evidence=cancel_evidence,
+                )
+                if flat is not True:
+                    raise V4GmoExitDispatcherError("V4_EXIT_FLAT_NOT_RECONCILED")
+                self._write_terminal_marker(
+                    "exit-sequence-dispatch-completed.json",
+                    status="EXIT_DISPATCH_COMPLETED_NATURAL_SETTLEMENT_FLAT",
+                    observed_at_utc=observed_at_utc,
+                )
+                return V4GmoExitDispatchResult(
+                    claimed=True,
+                    protection_cancel_accepted=False,
+                    position_close_accepted=False,
+                    flat_reconciled=True,
+                    broker_post_attempt_count=0,
+                )
             cancel_plan = build_v4_action_plan(
                 cycle_ref=cycle_ref,
                 action=V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT,

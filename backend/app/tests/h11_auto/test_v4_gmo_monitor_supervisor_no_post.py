@@ -101,6 +101,66 @@ def test_monitor_entrypoint_checks_pinned_digests_before_supervisor() -> None:
     assert 'parser.add_argument("--expected-generation-digest"' in source
 
 
+def test_observer_store_never_latches_restart_halt_on_inflight_pending(
+    tmp_path: Path,
+) -> None:
+    # The pending->halt restart latch protects the OWNING trading process. An
+    # observer (the monitor) constructing a store mid-flight must not convert a
+    # normal in-flight pending marker into a permanent halt.
+    database = tmp_path / "coordinator.sqlite3"
+    store = V4GmoActualCoordinatorStore(database)
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "INSERT INTO metadata(key,value) VALUES('pending_transport_attempt',?)",
+            ('{"action":"MARKET_ENTRY","cycle_ref":"' + "c" * 64 + '"}',),
+        )
+    observer = V4GmoActualCoordinatorStore.open_monitor_observer(database)
+    assert observer.unknown_halt_latched() is False
+    # The owning process's restart path keeps the latch: a DEFAULT construction
+    # over the same pending marker still halts.
+    restarted = V4GmoActualCoordinatorStore(database)
+    assert restarted.unknown_halt_latched() is True
+    del store, restarted
+
+
+def test_monitor_tick_during_inflight_pending_does_not_latch_halt(
+    tmp_path: Path,
+) -> None:
+    # 2026-07-21 false-latch incident: a 15s tick landed inside the ~5s pending
+    # window of a fully successful trade and permanently halted the generation.
+    generation = _generation()
+    root = v4_gmo_runtime_state_root(
+        repository=tmp_path,
+        generation_digest=generation.digest,
+    )
+    store = V4GmoActualCoordinatorStore(root / "coordinator.sqlite3")
+    signal = _signal()
+    store.prepare_entry_intent(
+        generation=generation,
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=FRIDAY_ENTRY - timedelta(seconds=1),
+    )
+    with sqlite3.connect(store.path) as connection:
+        connection.execute(
+            "UPDATE cycles SET market_attempted_at_utc=?,market_attempted_monotonic=?",
+            (FRIDAY_ENTRY.isoformat(), 100.0),
+        )
+        connection.execute(
+            "INSERT INTO metadata(key,value) VALUES('pending_transport_attempt',?)",
+            ('{"action":"MARKET_ENTRY","cycle_ref":"' + "c" * 64 + '"}',),
+        )
+    supervisor = V4GmoMonitorSupervisor(repository=tmp_path, generation=generation)
+    supervisor.acquire_single_process()
+    # Tick lands 5 seconds after the entry POST, while the pending marker is a
+    # normal in-flight state (protection deadline not yet passed).
+    tick = supervisor.run_tick(now_utc=FRIDAY_ENTRY + timedelta(seconds=5))
+    supervisor.close()
+    assert tick.persistent_halt is False
+    assert store.unknown_halt_latched() is False
+
+
 def test_monitor_marks_0345_dispatch_and_latches_0400_flat_miss(
     tmp_path: Path,
 ) -> None:
@@ -367,6 +427,9 @@ def _exit_dispatch_path(root: Path, *, generation_digest: str) -> MagicMock:
         V4GmoPrivateOutcome.ACCEPTED_SANITIZED,
     ]
     path.record_flat_closed_result_once.return_value = True
+    # The position is still open in this scenario; the natural-settlement
+    # shortcut must not trigger.
+    path.reconciliation_shows_natural_flat.return_value = False
     return path
 
 
@@ -417,6 +480,43 @@ def test_exit_dispatcher_claims_once_and_runs_fixed_cancel_close_sequence(
             observed_at_utc=datetime(2026, 7, 17, 18, 46, tzinfo=UTC),
         )
     assert path.perform_risk_reducing_once.call_count == 2
+
+
+def test_exit_dispatcher_completes_on_natural_oco_settlement_with_zero_posts(
+    tmp_path: Path,
+) -> None:
+    # SL/TP settled at the broker before the scheduled exit: the first reconcile
+    # already shows a clean flat, so the dispatcher records the result and
+    # completes WITHOUT posting a cancel or close (a consumed OCO cannot be
+    # cancelled; before this shortcut the dispatch fail-closed with a halt and
+    # the realized result was never recorded).
+    generation_digest = _generation().digest
+    root = tmp_path / "state"
+    _write_dispatch_required(root, generation_digest=generation_digest)
+    path = _exit_dispatch_path(root, generation_digest=generation_digest)
+    path.reconciliation_shows_natural_flat.return_value = True
+    dispatcher = V4GmoExitDispatcher(coordinated_path=path, state_root=root)
+
+    result = dispatcher.dispatch_once(
+        public_cancel_reader=MagicMock(),
+        public_close_reader=MagicMock(),
+        observed_at_utc=datetime(2026, 7, 17, 18, 45, tzinfo=UTC),
+    )
+
+    assert result.claimed is True
+    assert result.flat_reconciled is True
+    assert result.broker_post_attempt_count == 0
+    assert result.protection_cancel_accepted is False
+    assert result.position_close_accepted is False
+    path.perform_risk_reducing_once.assert_not_called()
+    path.record_flat_closed_result_once.assert_called_once()
+    assert path.reconcile_once_fixed.call_count == 1
+    import json as _json
+
+    completed = _json.loads(
+        (root / "exit-sequence-dispatch-completed.json").read_text(encoding="utf-8")
+    )
+    assert completed["status"] == "EXIT_DISPATCH_COMPLETED_NATURAL_SETTLEMENT_FLAT"
 
 
 def test_exit_dispatcher_generation_mismatch_fails_before_io(tmp_path: Path) -> None:

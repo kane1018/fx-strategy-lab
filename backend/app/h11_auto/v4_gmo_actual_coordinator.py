@@ -173,19 +173,37 @@ class _V4VerifiedEntryPreflightAuthorization:
 class V4GmoActualCoordinatorStore:
     """Dedicated exact-once ledger; separate from fake runtime state."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(
+        self, path: Path, *, _latch_pending_restart_halt: bool = True
+    ) -> None:
         if path.is_symlink() or (path.exists() and not path.is_file()):
             raise V4GmoActualCoordinatorError("v4 coordinator path is invalid")
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
-        self._initialize()
+        self._initialize(latch_pending_restart_halt=_latch_pending_restart_halt)
+
+    @classmethod
+    def open_monitor_observer(cls, path: Path) -> V4GmoActualCoordinatorStore:
+        """Open the ledger as a monitor-only OBSERVER: never latch the restart halt.
+
+        The pending->halt latch in ``_initialize`` protects the OWNING trading
+        process: if it restarts while a transport attempt is still pending, the
+        result is unknown and the generation must halt.  An observer (the
+        resident monitor supervisor) constructing a store MID-FLIGHT must not
+        convert a normal in-flight pending marker into a permanent halt — on
+        2026-07-21 a 15s supervisor tick landed inside the ~5s entry/OCO pending
+        window of a fully successful trade and falsely latched the generation.
+        Observers still read state and may explicitly ``engage_unknown_halt``.
+        """
+
+        return cls(path, _latch_pending_restart_halt=False)
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=5.0)
         connection.row_factory = sqlite3.Row
         return connection
 
-    def _initialize(self) -> None:
+    def _initialize(self, *, latch_pending_restart_halt: bool = True) -> None:
         with self._connect() as connection:
             connection.executescript(
                 """
@@ -249,7 +267,7 @@ class V4GmoActualCoordinatorStore:
             pending = connection.execute(
                 "SELECT value FROM metadata WHERE key='pending_transport_attempt'"
             ).fetchone()
-            if pending is not None:
+            if pending is not None and latch_pending_restart_halt:
                 connection.execute(
                     "INSERT INTO metadata(key,value) VALUES('unknown_halt_latched','true') "
                     "ON CONFLICT(key) DO UPDATE SET value='true'"

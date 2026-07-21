@@ -83,7 +83,10 @@ class V4GmoMonitorSupervisor:
             )
             self._write_heartbeat(tick)
             return tick
-        store = V4GmoActualCoordinatorStore(database)
+        # OBSERVER open: a 15s tick landing inside a normal in-flight pending
+        # window must not convert it into a permanent halt — the restart latch
+        # belongs to the owning trading process (2026-07-21 false-latch incident).
+        store = V4GmoActualCoordinatorStore.open_monitor_observer(database)
         store.bind_generation(self.generation)
         snapshot = store.monitor_snapshot_safe()
         dispatch_required = False
@@ -163,7 +166,9 @@ class V4GmoMonitorSupervisor:
         database = self.state_root / "coordinator.sqlite3"
         if database.is_file() and not database.is_symlink():
             try:
-                V4GmoActualCoordinatorStore(database).engage_unknown_halt()
+                V4GmoActualCoordinatorStore.open_monitor_observer(
+                    database
+                ).engage_unknown_halt()
             except Exception:  # noqa: BLE001
                 pass
         self._write_once_marker(

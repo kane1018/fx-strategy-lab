@@ -792,6 +792,63 @@ class V4GmoCoordinatedActualPath:
         self._reconciliations[id(evidence)] = reconciliation
         return evidence
 
+    def reconciliation_shows_natural_flat(
+        self,
+        *,
+        signal_fingerprint: str,
+        reconciliation_evidence: V4AuthoritativeReconciliationEvidence,
+    ) -> bool:
+        """Read-only peek: does this un-consumed evidence already show a clean flat?
+
+        Used by the exit dispatcher before its cancel/close sequence: when the OCO
+        settled naturally at the broker, the position, pending orders, and
+        protection are all gone and the closed size matches — cancelling a
+        consumed OCO would only fail. This peek NEVER consumes the evidence and
+        NEVER engages halt; it mirrors exactly the flat criteria that
+        ``record_flat_closed_result_once`` will re-verify when it consumes the
+        same evidence.
+        """
+
+        if not self.process_lock.held:
+            raise V4GmoCoordinatedPathError("V4_COORDINATED_PROCESS_LOCK_REQUIRED")
+        cycle_ref = self.store.cycle_ref_for_signal_internal(signal_fingerprint)
+        if (
+            type(reconciliation_evidence) is not V4AuthoritativeReconciliationEvidence
+            or getattr(reconciliation_evidence, "_token", None)
+            is not _RECONCILIATION_EVIDENCE_TOKEN
+            or reconciliation_evidence._consumed
+            or reconciliation_evidence._generation_digest != self.generation.digest
+            or reconciliation_evidence._cycle_ref != cycle_ref
+        ):
+            raise V4GmoCoordinatedPathError(
+                "V4_COORDINATED_RECONCILIATION_EVIDENCE_INVALID"
+            )
+        reconciliation = self._reconciliations.get(id(reconciliation_evidence))
+        if (
+            reconciliation is None
+            or reconciliation._binding_digest_internal()
+            != reconciliation_evidence._binding_digest
+        ):
+            raise V4GmoCoordinatedPathError(
+                "V4_COORDINATED_RECONCILIATION_EVIDENCE_INVALID"
+            )
+        snapshot = reconciliation.snapshot
+        expected_size = self.store.expected_closed_size_for_signal_internal(
+            signal_fingerprint
+        )
+        return (
+            snapshot.fresh is True
+            and snapshot.result_known is True
+            and snapshot.position_count == 0
+            and snapshot.position_side is None
+            and snapshot.filled_size == 0
+            and snapshot.pending_entry_size == 0
+            and snapshot.protection_size == 0
+            and reconciliation.position_bundle is None
+            and reconciliation.closed_size == expected_size
+            and reconciliation.realized_pnl_jpy_internal is not None
+        )
+
     def _consume_reconciliation_evidence(
         self,
         evidence: V4AuthoritativeReconciliationEvidence,
