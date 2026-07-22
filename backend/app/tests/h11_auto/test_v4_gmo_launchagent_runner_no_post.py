@@ -9,6 +9,42 @@ from types import SimpleNamespace
 from scripts import h11_auto_v4_install_monitor_launchagent as runner_script
 
 
+def test_launchctl_runner_uses_phase_specific_timeouts(monkeypatch) -> None:
+    observed: list[tuple[list[str], float]] = []
+
+    def fake_run(command, **kwargs):
+        observed.append((command, kwargs["timeout"]))
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner_script.subprocess, "run", fake_run)
+
+    for action in ("print", "bootout", "bootstrap"):
+        result = runner_script._run(["launchctl", action, "safe-target"])
+        assert result.returncode == 0
+
+    assert observed == [
+        (["launchctl", "print", "safe-target"], 15.0),
+        (["launchctl", "bootout", "safe-target"], 30.0),
+        (["launchctl", "bootstrap", "safe-target"], 30.0),
+    ]
+
+
+def test_launchctl_runner_rejects_unknown_action_without_subprocess(monkeypatch) -> None:
+    monkeypatch.setattr(
+        runner_script.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("unknown launchctl action must not execute")
+        ),
+    )
+
+    result = runner_script._run(["launchctl", "kickstart", "safe-target"])
+
+    assert result.returncode == 126
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
 def test_gui_domain_refusal_is_retry_safe_before_ledger_begin(
     monkeypatch,
     tmp_path: Path,

@@ -29,13 +29,30 @@ from app.h11_auto.v4_gmo_launchd import (
 )
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 
+_LAUNCHCTL_TIMEOUT_SECONDS = {
+    "print": 15.0,
+    "bootout": 30.0,
+    "bootstrap": 30.0,
+}
+
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
+    if (
+        len(command) < 2
+        or command[0] != "launchctl"
+        or command[1] not in _LAUNCHCTL_TIMEOUT_SECONDS
+    ):
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=126,
+            stdout="",
+            stderr="",
+        )
     return subprocess.run(
         command,
         capture_output=True,
         text=True,
-        timeout=15.0,
+        timeout=_LAUNCHCTL_TIMEOUT_SECONDS[command[1]],
         check=False,
     )
 
