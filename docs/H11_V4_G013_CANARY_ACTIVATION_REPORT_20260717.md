@@ -273,3 +273,9 @@ unattended_live_supported=false
 - Scope: `v4_gmo_launchd.py` default, this report, and the AGENTS.md operation-60 note (20→50 s). The
   no-retry ledger flow, operation-60 clear condition, permit chain, and broker transport are not touched.
   Broker POST count remains zero; failed markers on prior generations remain immutable.
+## 1.7 2026-07-22 operation 30 AC-power no-retry stop
+
+- The generation bound to reviewed-files digest `sha256:1b3fecae855f5b92cd4f9565bd6b0d9256e5197b62fe1a1a191f51669d36e968` completed operations 00, 05, 10, 15, and 20, then stopped at operation 30 with `BLOCKED_CURRENT_HOST_AC_POWER_NOT_CLEAR`.
+- The failed operation reported broker GET count 0, broker POST count 0, no actual runtime process killed, and no disposable process started. Its no-retry marker remains authoritative and must not be deleted, changed, reset, or retried.
+- The operator connected the Mac to AC power only after that generation had stopped. The environmental correction does not authorize reuse of any earlier preparation evidence.
+- The next corrective generation must be bound to a new reviewed-files digest and restart external preparation at operation 00. Frozen order intent, risk policy, one-attempt limits, and `actual_post_authorized=false` remain unchanged.
