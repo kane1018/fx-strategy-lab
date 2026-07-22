@@ -17,6 +17,7 @@ from app.h11_auto import v4_actual_preparation_guard as guard_module
 from app.h11_auto.v4_actual_host_kill_rehearsal import (
     V4ActualHostKillRehearsalError,
     run_actual_host_kill_rehearsal,
+    run_readonly_network_time_preparation,
 )
 from app.h11_auto.v4_actual_preparation_guard import (
     EMAIL_DELIVERY_CONFIRMATION,
@@ -206,6 +207,14 @@ def _test_only_complete(
             "exact_match": True,
             "broker_post_authorized": False,
             "activation_permit_issued": False,
+        },
+        V4PreparationOperation.NETWORK_TIME: {
+            "status": "PASSED_NETWORK_TIME_READ_ONLY_NO_BROKER_POST",
+            "network_time_enabled": True,
+            "administrator_prompt_used": True,
+            "settings_changed": False,
+            "broker_get_count": 0,
+            "broker_post_count": 0,
         },
         V4PreparationOperation.HOST_KILL: {
             "status": "PASSED_TEST_ONLY",
@@ -1506,6 +1515,12 @@ def test_exact_operator_confirmations_do_not_authorize_broker_post(
         V4PreparationOperation.EMAIL_CONFIRMATION,
         operation_permit=email_permit,
     )
+    network_time_permit = ledger.begin(V4PreparationOperation.NETWORK_TIME)
+    _test_only_complete(
+        ledger,
+        network_time_permit,
+        V4PreparationOperation.NETWORK_TIME,
+    )
     host_permit = ledger.begin(V4PreparationOperation.HOST_KILL)
     _test_only_complete(
         ledger, host_permit, V4PreparationOperation.HOST_KILL
@@ -1629,6 +1644,65 @@ def test_network_time_state_uses_fixed_admin_readonly_fallback() -> None:
             "with administrator privileges",
         ]
     ]
+
+
+def test_network_time_preparation_is_separate_generation_bound_operation(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    ledger, permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.NETWORK_TIME,
+    )
+    calls: list[list[str]] = []
+
+    def admin_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "Network Time: On\n", "")
+
+    report = run_readonly_network_time_preparation(
+        external_gate=external_gate,
+        operation_permit=permit,
+        admin_command_runner=admin_runner,
+    )
+
+    assert report.status == "PASSED_NETWORK_TIME_READ_ONLY_NO_BROKER_POST"
+    assert report.network_time_enabled is True
+    assert report.settings_changed is False
+    assert report.broker_post_count == 0
+    assert calls == [list(host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND)]
+    ledger.complete(V4PreparationOperation.NETWORK_TIME, operation_permit=permit)
+
+
+def test_network_time_preparation_off_cannot_complete(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    ledger, permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.NETWORK_TIME,
+    )
+    report = run_readonly_network_time_preparation(
+        external_gate=external_gate,
+        operation_permit=permit,
+        admin_command_runner=lambda command: subprocess.CompletedProcess(
+            command, 0, "Network Time: Off\n", ""
+        ),
+    )
+
+    assert report.status == "BLOCKED_NETWORK_TIME_READ_ONLY_NOT_CLEAR"
+    with pytest.raises(V4ActualPreparationGuardError, match="PERMIT_INVALID"):
+        ledger.complete(V4PreparationOperation.NETWORK_TIME, operation_permit=permit)
+
+
+def test_host_script_uses_only_prechecked_network_time_result() -> None:
+    result = host_rehearsal_script._prechecked_network_time_result(
+        list(host_rehearsal_module._ADMIN_NETWORK_TIME_COMMAND)
+    )
+    assert result.returncode == 0
+    assert result.stdout == "Network Time: On\n"
+    with pytest.raises(V4ActualHostKillRehearsalError, match="FORBIDDEN"):
+        host_rehearsal_script._prechecked_network_time_result(
+            ["/usr/sbin/systemsetup", "-setusingnetworktime", "on"]
+        )
 
 
 def test_network_time_state_falls_back_when_unprivileged_probe_exits_zero_with_error() -> None:

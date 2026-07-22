@@ -71,6 +71,7 @@ REVIEWED_FILES = (
     "backend/scripts/h11_auto_v4_pushover_rehearsal.py",
     "backend/scripts/h11_auto_v4_smtp_rehearsal.py",
     "backend/scripts/h11_auto_v4_actual_host_kill_rehearsal.py",
+    "backend/scripts/h11_auto_v4_network_time_preflight.py",
     "backend/scripts/h11_auto_v4_coordinator_kill_probe.py",
     "backend/scripts/h11_auto_v4_email_delivery_confirm.py",
     "backend/scripts/h11_auto_v4_exclusivity_confirm.py",

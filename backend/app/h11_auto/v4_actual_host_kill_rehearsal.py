@@ -27,6 +27,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4PreparationOperation,
     V4PreparationOperationPermit,
     _attest_host_kill_success_internal,
+    _attest_network_time_success_internal,
     require_external_preparation_gate,
     require_operation_permit,
 )
@@ -34,6 +35,22 @@ from app.h11_auto.v4_actual_preparation_guard import (
 
 class V4ActualHostKillRehearsalError(RuntimeError):
     """Fixed safe host/KILL rehearsal failure."""
+
+
+@dataclass(frozen=True)
+class V4ReadOnlyNetworkTimeReport:
+    status: str
+    network_time_enabled: bool | None
+    administrator_prompt_used: bool
+    settings_changed: bool = False
+    broker_get_count: int = 0
+    broker_post_count: int = 0
+
+    def to_safe_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    def __bool__(self) -> bool:
+        return False
 
 
 _ADMIN_NETWORK_TIME_COMMAND = (
@@ -80,6 +97,42 @@ class V4ActualHostKillReport:
 
     def __bool__(self) -> bool:
         return False
+
+
+def run_readonly_network_time_preparation(
+    *,
+    external_gate: V4ExternalPreparationGate,
+    operation_permit: V4PreparationOperationPermit,
+    admin_command_runner: (
+        Callable[[list[str]], subprocess.CompletedProcess[str]] | None
+    ) = None,
+) -> V4ReadOnlyNetworkTimeReport:
+    """Run the fixed administrator read once, separately from host/KILL."""
+
+    require_external_preparation_gate(external_gate)
+    require_operation_permit(
+        operation_permit,
+        expected_operation=V4PreparationOperation.NETWORK_TIME,
+        claim=True,
+    )
+    runner = admin_command_runner or _run_readonly_admin_host_command
+    result = runner(list(_ADMIN_NETWORK_TIME_COMMAND))
+    enabled = _network_time_value(result)
+    report = V4ReadOnlyNetworkTimeReport(
+        status=(
+            "PASSED_NETWORK_TIME_READ_ONLY_NO_BROKER_POST"
+            if enabled is True
+            else "BLOCKED_NETWORK_TIME_READ_ONLY_NOT_CLEAR"
+        ),
+        network_time_enabled=enabled,
+        administrator_prompt_used=True,
+    )
+    if enabled is True:
+        _attest_network_time_success_internal(
+            operation_permit,
+            report.to_safe_dict(),
+        )
+    return report
 
 
 def run_actual_host_kill_rehearsal(

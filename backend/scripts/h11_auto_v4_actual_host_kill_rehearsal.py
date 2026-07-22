@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from collections.abc import Sequence
 from datetime import datetime
@@ -11,6 +12,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from app.h11_auto.v4_actual_host_kill_rehearsal import (
+    _ADMIN_NETWORK_TIME_COMMAND,
     V4ActualHostKillRehearsalError,
     run_actual_host_kill_rehearsal,
 )
@@ -24,6 +26,19 @@ from app.h11_auto.v4_actual_preparation_guard import (
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 JST = ZoneInfo("Asia/Tokyo")
+
+
+def _prechecked_network_time_result(
+    command: list[str],
+) -> subprocess.CompletedProcess[str]:
+    if tuple(command) != _ADMIN_NETWORK_TIME_COMMAND:
+        raise V4ActualHostKillRehearsalError("ADMIN_HOST_COMMAND_FORBIDDEN")
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=0,
+        stdout="Network Time: On\n",
+        stderr="",
+    )
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> None:
@@ -50,6 +65,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             external_gate=gate,
             operation_permit=operation_permit,
             cycle_day_jst=datetime.now(JST).date().isoformat(),
+            admin_command_runner=_prechecked_network_time_result,
         )
         if not report.status.startswith("PASSED_"):
             print(json.dumps(report.to_safe_dict(), sort_keys=True, indent=2))

@@ -271,6 +271,7 @@ class V4PreparationOperation(str, Enum):
     PUSHOVER = "10_pushover"
     SMTP = "15_smtp"
     EMAIL_CONFIRMATION = "20_email_confirmation"
+    NETWORK_TIME = "25_network_time"
     HOST_KILL = "30_host_kill"
     EXCLUSIVITY_CONFIRMATION = "40_exclusivity_confirmation"
     PUBLIC_GET = "45_public_get"
@@ -284,7 +285,8 @@ _PREVIOUS_OPERATION = {
     V4PreparationOperation.PUSHOVER: V4PreparationOperation.KEYCHAIN_ACCESS,
     V4PreparationOperation.SMTP: V4PreparationOperation.PUSHOVER,
     V4PreparationOperation.EMAIL_CONFIRMATION: V4PreparationOperation.SMTP,
-    V4PreparationOperation.HOST_KILL: V4PreparationOperation.EMAIL_CONFIRMATION,
+    V4PreparationOperation.NETWORK_TIME: V4PreparationOperation.EMAIL_CONFIRMATION,
+    V4PreparationOperation.HOST_KILL: V4PreparationOperation.NETWORK_TIME,
     V4PreparationOperation.EXCLUSIVITY_CONFIRMATION: V4PreparationOperation.HOST_KILL,
     V4PreparationOperation.PUBLIC_GET: V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
     V4PreparationOperation.PRIVATE_GET: V4PreparationOperation.PUBLIC_GET,
@@ -474,6 +476,14 @@ def _attest_email_confirmation_success_internal(
     )
 
 
+def _attest_network_time_success_internal(
+    permit: V4PreparationOperationPermit, safe_report: dict[str, object]
+) -> None:
+    _attest_operation_success(
+        permit, operation=V4PreparationOperation.NETWORK_TIME, safe_report=safe_report
+    )
+
+
 def _attest_host_kill_success_internal(
     permit: V4PreparationOperationPermit, safe_report: dict[str, object]
 ) -> None:
@@ -577,6 +587,15 @@ def _operation_report_is_clear(
             report.get("exact_match") is True
             and report.get("broker_post_authorized") is False
             and report.get("activation_permit_issued") is False
+        )
+    if operation is V4PreparationOperation.NETWORK_TIME:
+        return (
+            report.get("status") == "PASSED_NETWORK_TIME_READ_ONLY_NO_BROKER_POST"
+            and report.get("network_time_enabled") is True
+            and report.get("administrator_prompt_used") is True
+            and report.get("settings_changed") is False
+            and report.get("broker_get_count") == 0
+            and report.get("broker_post_count") == 0
         )
     if operation is V4PreparationOperation.HOST_KILL:
         return (
