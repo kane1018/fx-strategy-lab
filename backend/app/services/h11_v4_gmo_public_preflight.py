@@ -39,7 +39,7 @@ MAXIMUM_QUOTE_AGE_SECONDS = 5.0
 # (MAXIMUM_QUOTE_AGE_SECONDS) is unchanged, so a genuinely old quote is still
 # rejected and no stale price ever reaches a gate.
 MAXIMUM_QUOTE_CLOCK_SKEW_SECONDS = 5.0
-G013_MAXIMUM_ENTRY_SPREAD_PIPS = Decimal("0.5")
+G013_MAXIMUM_ENTRY_SPREAD_PIPS = Decimal("2.0")
 
 
 class V4GmoPublicPreflightError(RuntimeError):

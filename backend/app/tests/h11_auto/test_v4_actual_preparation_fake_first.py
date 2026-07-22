@@ -379,7 +379,7 @@ def test_public_preflight_does_not_pass_spread_above_g013_limit(
                 "data": [
                     {
                         "symbol": "USD_JPY",
-                        "ask": "160.006",
+                        "ask": "160.021",
                         "bid": "160.000",
                         "timestamp": "2026-07-17T00:00:00Z",
                         "status": "OPEN",

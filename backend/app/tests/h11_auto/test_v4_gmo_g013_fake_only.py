@@ -359,7 +359,7 @@ def _public_ledger(tmp_path: Path) -> V4GmoG013PublicOperationLedger:
 def test_g013_final_quote_is_two_gets_and_accepts_exact_spread_limit(
     tmp_path: Path,
 ) -> None:
-    client = _quote_client(spread_pips="0.5")
+    client = _quote_client(spread_pips="2.0")
     quote = read_g013_final_quote_once(
         operation_ledger=_public_ledger(tmp_path),
         operation=V4GmoG013PublicOperation.REFERENCE_QUOTE,
@@ -375,7 +375,7 @@ def test_g013_final_quote_is_two_gets_and_accepts_exact_spread_limit(
 
 
 def test_g013_final_quote_blocks_spread_above_limit(tmp_path: Path) -> None:
-    client = _quote_client(spread_pips="0.6")
+    client = _quote_client(spread_pips="2.1")
     with pytest.raises(V4GmoPublicPreflightError, match="GATE_BLOCKED"):
         read_g013_final_quote_once(
             operation_ledger=_public_ledger(tmp_path),
