@@ -7,9 +7,12 @@ from pathlib import Path
 
 REVIEWED_FILES = (
     "backend/app/services/h11_v4_gmo_signal_preview.py",
+    "backend/app/services/h11_v4_gmo_formal_aware_preview.py",
     "backend/scripts/h11_auto_v4_g013_signal_preview.py",
     "backend/scripts/h11_auto_v4_g013_finite_observer.py",
+    "backend/scripts/h11_auto_v4_g013_formal_aware_observer.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g013_signal_preview_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_gmo_g013_formal_aware_preview_no_post.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g013_finite_observer_no_post.py",
     "AGENTS.md",
     "backend/requirements.txt",
@@ -90,6 +93,7 @@ REVIEWED_FILES = (
     "docs/H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md",
     "docs/H11_V4_G012_CANARY_PREPARATION_REPORT_20260717.md",
     "docs/H11_V4_G013_CANARY_ACTIVATION_REPORT_20260717.md",
+    "docs/H11_V4_G013_FORMAL_AWARE_OBSERVER_DESIGN_20260722.md",
     "docs/H11_AUTO_OPERATOR_DECISION_SHEET_NO_POST_20260715.md",
     "docs/H11_V4_MAJOR_INCIDENT_RESUME_DECLARATION_DRAFT_NO_POST_20260715.md",
     "docs/H11_AUTO_FROZEN_GENERATION_MANIFEST_TEMPLATE_NO_POST_20260715.md",
