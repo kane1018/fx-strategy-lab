@@ -279,3 +279,9 @@ unattended_live_supported=false
 - The failed operation reported broker GET count 0, broker POST count 0, no actual runtime process killed, and no disposable process started. Its no-retry marker remains authoritative and must not be deleted, changed, reset, or retried.
 - The operator connected the Mac to AC power only after that generation had stopped. The environmental correction does not authorize reuse of any earlier preparation evidence.
 - The next corrective generation must be bound to a new reviewed-files digest and restart external preparation at operation 00. Frozen order intent, risk policy, one-attempt limits, and `actual_post_authorized=false` remain unchanged.
+## 1.8 2026-07-22 operation 15 Keychain availability no-retry stop
+
+- The generation bound to reviewed-files digest `sha256:7f276911cb8914cd9b1a298721bf778e04ac677ec9997323aae00fc69f889233` completed operations 00 and 05 and received the one-use Pushover acknowledgement at operation 10. At operation 15, the operator-session CLI output reported fixed safe status `NOTIFICATION_KEYCHAIN_ITEM_UNAVAILABLE`; durable state records only `ATTEMPT_STARTED_NO_RETRY` with no passed marker, so the terminal classification is session-observed rather than durable marker evidence.
+- No broker operation was part of the SMTP path and broker POST count remained zero. SMTP acceptance was not established, so no delivery confirmation from this generation may be reused.
+- The failed operation 15 no-retry marker remains authoritative and must not be deleted, changed, reset, or retried. Earlier presence, Keychain, and Pushover evidence is also non-reusable.
+- After the stop, a value-free host check reported the login Keychain accessible and the Mac drawing from AC power. The next corrective generation must still restart external preparation at operation 00; no frozen order intent, risk rule, or authorization flag changes.
