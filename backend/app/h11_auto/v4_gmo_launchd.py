@@ -21,6 +21,10 @@ class V4GmoLaunchdError(RuntimeError):
     """Fixed safe LaunchAgent failure."""
 
 
+class V4GmoLaunchdDomainNotReady(V4GmoLaunchdError):
+    """Retry-safe refusal before the operation 60 marker is claimed."""
+
+
 @dataclass(frozen=True)
 class V4GmoLaunchdResult:
     installed: bool
@@ -87,6 +91,35 @@ CommandRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 WallClock = Callable[[], datetime]
 MonotonicClock = Callable[[], float]
 Wait = Callable[[float], None]
+
+
+def require_stable_v4_gmo_aqua_domain(
+    *,
+    user_id: int,
+    runner: CommandRunner,
+) -> None:
+    """Fail closed before op60 if the GUI login domain is still transitioning."""
+
+    if user_id < 1:
+        raise V4GmoLaunchdDomainNotReady("V4_LAUNCHD_GUI_DOMAIN_NOT_READY")
+    try:
+        state = runner(["launchctl", "print", f"gui/{user_id}"])
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise V4GmoLaunchdDomainNotReady(
+            "V4_LAUNCHD_GUI_DOMAIN_NOT_READY"
+        ) from error
+    required_markers = (
+        "type = login",
+        "session = Aqua",
+        "auxiliary bootstrapper = com.apple.xpc.otherbsd (complete)",
+        "properties = gui | gui login",
+    )
+    if (
+        state.returncode != 0
+        or not state.stdout
+        or any(marker not in state.stdout for marker in required_markers)
+    ):
+        raise V4GmoLaunchdDomainNotReady("V4_LAUNCHD_GUI_DOMAIN_NOT_READY")
 
 
 def install_and_restart_v4_gmo_monitor_launchagent(

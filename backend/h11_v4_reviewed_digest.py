@@ -81,6 +81,7 @@ REVIEWED_FILES = (
     "backend/app/tests/h11_auto/test_v4_gmo_relaxed_no_post.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g012_activation_fake_only.py",
     "backend/app/tests/h11_auto/test_v4_gmo_monitor_supervisor_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_gmo_launchagent_runner_no_post.py",
     "backend/app/tests/h11_auto/test_v4_notification_binding_fake_only.py",
     "backend/app/tests/test_h11_stage1_paper_wiring_no_post.py",
     "backend/app/tests/test_h11_v3_runtime_safety_no_post.py",

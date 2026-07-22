@@ -21,9 +21,11 @@ from app.h11_auto.v4_actual_preparation_guard import (
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from app.h11_auto.v4_gmo_launchd import (
     V4_GMO_MONITOR_LABEL,
+    V4GmoLaunchdDomainNotReady,
     V4GmoLaunchdError,
     install_and_restart_v4_gmo_monitor_launchagent,
     render_v4_gmo_monitor_launchagent,
+    require_stable_v4_gmo_aqua_domain,
 )
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 
@@ -60,6 +62,17 @@ def main() -> int:
         repository=repository,
         generation_digest=generation.digest,
     )
+    try:
+        require_stable_v4_gmo_aqua_domain(
+            user_id=os.getuid(),
+            runner=_run,
+        )
+    except V4GmoLaunchdDomainNotReady:
+        print(
+            "status=GUI_DOMAIN_NOT_READY_RETRY_SAFE "
+            "broker_write=false actual_post_count=0"
+        )
+        return 3
     try:
         external_gate = load_external_preparation_gate(repository=repository)
         ledger = V4PreparationAttemptLedger(external_gate=external_gate)

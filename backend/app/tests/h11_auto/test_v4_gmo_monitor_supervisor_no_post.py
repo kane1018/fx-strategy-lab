@@ -24,9 +24,11 @@ from app.h11_auto.v4_gmo_contracts import (
 from app.h11_auto.v4_gmo_generation import build_v4_gmo_frozen_generation
 from app.h11_auto.v4_gmo_launchd import (
     V4_GMO_MONITOR_LABEL,
+    V4GmoLaunchdDomainNotReady,
     V4GmoLaunchdError,
     install_and_restart_v4_gmo_monitor_launchagent,
     render_v4_gmo_monitor_launchagent,
+    require_stable_v4_gmo_aqua_domain,
 )
 from app.h11_auto.v4_gmo_monitor_supervisor import V4GmoMonitorSupervisor
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
@@ -323,6 +325,72 @@ def test_launchagent_boots_out_existing_exact_service_once_before_bootstrap(
         "bootstrap",
         "print",
     ]
+
+
+def test_launchagent_aqua_domain_preflight_accepts_observed_stable_shape() -> None:
+    calls: list[list[str]] = []
+    healthy = """
+type = login
+session = Aqua
+auxiliary bootstrapper = com.apple.xpc.otherbsd (complete)
+properties = gui | gui login
+"""
+
+    def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, healthy, "")
+
+    require_stable_v4_gmo_aqua_domain(user_id=501, runner=runner)
+    assert calls == [["launchctl", "print", "gui/501"]]
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout"),
+    [
+        (1, "hidden"),
+        (0, ""),
+        (
+            0,
+            "session = Aqua\n"
+            "auxiliary bootstrapper = com.apple.xpc.otherbsd (complete)\n"
+            "properties = gui | gui login",
+        ),
+        (
+            0,
+            "type = login\n"
+            "auxiliary bootstrapper = com.apple.xpc.otherbsd (complete)\n"
+            "properties = gui | gui login",
+        ),
+        (0, "type = login\nsession = Aqua\nproperties = gui | gui login"),
+        (
+            0,
+            "type = login\nsession = Aqua\n"
+            "auxiliary bootstrapper = com.apple.xpc.otherbsd (complete)",
+        ),
+    ],
+)
+def test_launchagent_aqua_domain_preflight_refuses_fixed_safe(
+    returncode: int,
+    stdout: str,
+) -> None:
+    with pytest.raises(V4GmoLaunchdDomainNotReady, match="GUI_DOMAIN_NOT_READY"):
+        require_stable_v4_gmo_aqua_domain(
+            user_id=501,
+            runner=lambda command: subprocess.CompletedProcess(
+                command,
+                returncode,
+                stdout,
+                "hidden",
+            ),
+        )
+
+
+def test_launchagent_aqua_domain_preflight_wraps_timeout() -> None:
+    def runner(_command: list[str]) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(["launchctl", "print"], 15.0)
+
+    with pytest.raises(V4GmoLaunchdDomainNotReady, match="GUI_DOMAIN_NOT_READY"):
+        require_stable_v4_gmo_aqua_domain(user_id=501, runner=runner)
 
 
 def _write_safe_monitor_heartbeat(path: Path, *, generation_digest: str) -> None:

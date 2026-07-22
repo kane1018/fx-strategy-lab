@@ -102,6 +102,20 @@ GUI-capable escalated contextから1回だけ実行する。external preparation
 operation 00から再開する。Architecture/SafetyはCLEARで、code変更不要、procedure-only reviewed changeは
 この修正条件で許容との判定だった。
 
+### 1.6 2026-07-22 GUI login-domain transition corrective generation
+
+daily one-shot/spread corrective generationのoperation 60は、bootstrap success後もserviceが`xpcproxy`、
+`execs=0`のままPython supervisorへ遷移せず、50秒以内にheartbeatを生成しなかった。sanitized unified logは
+同時刻に多数のApple/third-party agentを含む`gui/501` domain全体がon-demand-only transition中だったことを
+示した。G013 broker read/writeはfalse、broker POST countは0で、`60_monitor_launchagent.started`を保持し、
+同generationでは再実行しない。
+
+correctiveはoperation marker作成前に`launchctl print gui/<uid>`をread-onlyで1回確認し、このhostで実測した
+`type=login`、`session=Aqua`、auxiliary bootstrapper complete、`gui login` propertiesをすべて要求する。
+不安定・timeout・欠落は固定`GUI_DOMAIN_NOT_READY_RETRY_SAFE`で拒否し、ledger、plist、launchdを変更しない。
+domain transitionが確認後に始まるTOCTOUは残るため、bootstrap後50秒heartbeat gateは最終検出器として維持する。
+bootout/bootstrap各最大1 attempt、kickstart禁止、KeepAlive=false、credential/broker非接続は変更しない。
+
 ## 2. Official ticker contract correction
 
 - `GET /public/v1/ticker`はsymbol queryを送らず、全銘柄listを返す。
