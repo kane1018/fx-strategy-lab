@@ -273,6 +273,25 @@ unattended_live_supported=false
 - This changes only the Pushover preparation classification. It does not alter the frozen trade intent, actual
   canary, permit, broker transport, Keychain contract, SMTP path, or any historical marker.
 
+## 2026-07-22 host GUI-context unknown-stop corrective generation
+
+- The prior generation completed operations 00 through 20, then created only
+  `30_host_kill.started`; no passed marker or sanitized terminal report was produced. The generation-specific
+  host rehearsal directory remained empty, so the coordinator/KILL persistence stage was not reached. Broker
+  GET/POST counts remained zero and no later preparation operation was started.
+- The elevated Codex execution bridge returned no stdout and did not prove that the macOS administrator dialog
+  completed in the logged-in Aqua session. The retained evidence cannot safely distinguish administrator-dialog
+  cancellation, GUI-context loss, or termination before the disposable-process stage, so the operation remains
+  an unknown no-retry stop. Its marker and empty state directory are retained unchanged.
+- This is a procedure-only corrective generation; host/KILL code and its pass criteria are unchanged. Before the
+  new generation starts operation 30, the operator must separately authorize and complete the fixed read-only
+  network-time administrator check in a confirmed GUI-capable context. Operation 30 may then be started once,
+  with no arguments, only from that same confirmed context. Missing dialog, missing sanitized result, timeout, or
+  context uncertainty is terminal for that generation.
+- All preparation operations restart at 00. No prior Keychain, Pushover, SMTP, email confirmation, host state,
+  Public/Private GET, LaunchAgent, signal, quote, or operator confirmation is reusable. Frozen order intent,
+  risk limits, permit rules, and broker transport are unchanged.
+
 ## 2026-07-20 active-M1 cache corrective generation
 
 - The first preview generation stopped at `G013_PREVIEW_LOCAL_REMOTE_CONFLICT`; its slot marker is retained.
