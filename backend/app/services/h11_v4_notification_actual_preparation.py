@@ -317,6 +317,12 @@ def run_actual_pushover_rehearsal_once(
                 ) from None
             if deadline - monotonic_factory() <= 0:
                 break
+            # A receipt returned by the accepted emergency send can briefly be
+            # unavailable at the receipt endpoint. Keep this fixed 404 case
+            # inside the already-authorized acknowledgement window; it neither
+            # sends another message nor exposes provider details.
+            if receipt_response.status_code == 404:
+                continue
             receipt_payload = _json_mapping(
                 receipt_response, "PUSHOVER_RECEIPT_RESPONSE_INVALID"
             )

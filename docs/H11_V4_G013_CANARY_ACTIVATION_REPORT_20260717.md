@@ -260,6 +260,19 @@ unattended_live_supported=false
   or broker POST authority. After an alert, the operator starts a new actual-canary process, which obtains its
   own fresh M1/H1 signal and all normal current-turn gates.
 
+## 2026-07-22 Pushover receipt propagation corrective generation
+
+- The prior generation completed Keychain presence and sealed access, then its one Pushover send stopped at the
+  first receipt lookup with the fixed safe label `PUSHOVER_RECEIPT_REJECTED_NO_RETRY`. Its started marker is
+  retained; neither the message nor the receipt lookup is retried in that generation.
+- The accepted send had already produced a receipt, so a receipt endpoint `404` is treated as bounded
+  propagation-pending state within the existing 15-minute acknowledgement window. It does not cause an
+  additional application send, credential read, broker action, or result persistence. Any non-404 receipt
+  failure, malformed success response, network failure, expiry, or acknowledgement timeout remains terminal
+  and no-retry.
+- This changes only the Pushover preparation classification. It does not alter the frozen trade intent, actual
+  canary, permit, broker transport, Keychain contract, SMTP path, or any historical marker.
+
 ## 2026-07-20 active-M1 cache corrective generation
 
 - The first preview generation stopped at `G013_PREVIEW_LOCAL_REMOTE_CONFLICT`; its slot marker is retained.

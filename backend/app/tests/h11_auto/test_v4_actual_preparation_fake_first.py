@@ -930,6 +930,100 @@ def test_pushover_ack_poll_does_not_cross_total_deadline(
     assert fake_time.value == 15.0
 
 
+def test_pushover_receipt_not_found_is_pending_within_ack_window(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    values = {
+        "pushover-api-token": "synthetic-token",
+        "pushover-user-key": "synthetic-user",
+    }
+    fake_time = FakeTime()
+    receipt_get_count = 0
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        return _SealedNotificationSecret(values[account])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal receipt_get_count
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={"status": 1, "receipt": "synthetic-receipt"},
+            )
+        receipt_get_count += 1
+        if receipt_get_count == 1:
+            return httpx.Response(404, json={"status": 0})
+        return httpx.Response(
+            200,
+            json={"status": 1, "acknowledged": 1, "expired": 0},
+        )
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUSHOVER,
+    )
+    report = run_actual_pushover_rehearsal_once(
+        external_gate=external_gate,
+        operation_permit=operation_permit,
+        credentials=H11V4NotificationCredentialBundle(reader=reader),
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        acknowledgement_timeout_seconds=15,
+        receipt_poll_interval_seconds=5,
+        monotonic_factory=fake_time.monotonic,
+        sleep=fake_time.sleep,
+    )
+    assert receipt_get_count == 2
+    assert report.pushover_application_send_count == 1
+    assert report.pushover_acknowledged is True
+    assert report.broker_post_count == 0
+
+
+def test_pushover_receipt_non_404_failure_stops_without_second_get(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    values = {
+        "pushover-api-token": "synthetic-token",
+        "pushover-user-key": "synthetic-user",
+    }
+    receipt_get_count = 0
+    fake_time = FakeTime()
+
+    def reader(service: str, account: str) -> _SealedNotificationSecret:
+        del service
+        return _SealedNotificationSecret(values[account])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal receipt_get_count
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                json={"status": 1, "receipt": "synthetic-receipt"},
+            )
+        receipt_get_count += 1
+        return httpx.Response(400, json={"status": 0})
+
+    _, operation_permit = _permit_for(
+        external_gate=external_gate,
+        target=V4PreparationOperation.PUSHOVER,
+    )
+    with pytest.raises(
+        H11V4ActualNotificationError,
+        match="PUSHOVER_RECEIPT_REJECTED_NO_RETRY",
+    ):
+        run_actual_pushover_rehearsal_once(
+            external_gate=external_gate,
+            operation_permit=operation_permit,
+            credentials=H11V4NotificationCredentialBundle(reader=reader),
+            http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+            acknowledgement_timeout_seconds=15,
+            receipt_poll_interval_seconds=5,
+            monotonic_factory=fake_time.monotonic,
+            sleep=fake_time.sleep,
+        )
+    assert receipt_get_count == 1
+
+
 def test_pushover_ack_returned_after_deadline_is_not_accepted(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
