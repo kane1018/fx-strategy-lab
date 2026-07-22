@@ -8,7 +8,9 @@ from pathlib import Path
 REVIEWED_FILES = (
     "backend/app/services/h11_v4_gmo_signal_preview.py",
     "backend/scripts/h11_auto_v4_g013_signal_preview.py",
+    "backend/scripts/h11_auto_v4_g013_finite_observer.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g013_signal_preview_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_gmo_g013_finite_observer_no_post.py",
     "AGENTS.md",
     "backend/requirements.txt",
     "backend/h11_v4_reviewed_digest.py",

@@ -245,6 +245,21 @@ unattended_live_supported=false
   eligible rows and 15.07% over the latest 1,440 eligible rows. This is workflow evidence only, not
   performance or profitability evidence.
 
+## 2026-07-22 finite Public observer and local alert
+
+- An operator-authorized Codex automation may invoke the new foreground observer for at most 20 distinct,
+  completed M1 slots at a fixed 60-second cadence. It invokes the existing reviewed Public-only preview once
+  per wake and stops on any non-success or actionable candidate; a claimed slot remains immutable and is not
+  retried.
+- The observer directly imports only the Public preview. It has no Private API, Keychain, permit, broker
+  transport, Pushover, SMTP, resident process, LaunchAgent, cron, background loop, or actual-canary import.
+- A candidate may cause exactly one local attempt to play the fixed macOS `Glass.aiff` sound. The emitted
+  result remains sanitized and never includes direction, probability, price, candle, credential, raw response,
+  identifier, order sheet, or authorization.
+- The alert is workflow-only. It does not create a formal signal, order intent, preparation evidence, permit,
+  or broker POST authority. After an alert, the operator starts a new actual-canary process, which obtains its
+  own fresh M1/H1 signal and all normal current-turn gates.
+
 ## 2026-07-20 active-M1 cache corrective generation
 
 - The first preview generation stopped at `G013_PREVIEW_LOCAL_REMOTE_CONFLICT`; its slot marker is retained.
