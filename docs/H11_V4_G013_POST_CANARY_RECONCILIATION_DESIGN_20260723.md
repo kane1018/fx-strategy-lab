@@ -13,6 +13,7 @@ the existing exit dispatcher and it cannot initiate a new entry.
 - The target reviewed generation is marked `entry_disabled=true` in the dedicated contract. `prepare_g013_canary_session` rejects that target before it can obtain formal inputs or create an order sheet.
 - The contract binds the target reviewed digest and target generation digest to one immutable origin generation digest. The origin cycle reference is loaded only in memory from the origin coordinator state and is never emitted.
 - The concrete broker client exposes only three fixed GET methods: `latestExecutions`, `openPositions`, and `activeOrders`. It has no generic request surface and no action, permit, dispatcher, cancel, close, or order dependency.
+- `openPositions` and `activeOrders` use the same proven `count=100` query contract as the successful preparation preflight. Valid broker row representations (`data=null`, a row array, or `data.list`) are normalized in memory before reconciliation.
 - The three reads occur once in fixed order with 0.25 second spacing. There is no retry. Broker data is reduced immediately to booleans and aggregate counts; credentials, raw payloads, headers, signatures, and identifiers are neither returned nor persisted.
 
 ## Result rules
@@ -30,3 +31,13 @@ the existing exit dispatcher and it cannot initiate a new entry.
    entry-disabled one-shot lane has no resident runtime to monitor.
 3. Invoke the dedicated reconciliation CLI once only after the operator grants the subject-specific read-only action.
 4. If flat is confirmed, retain both generations and report only the sanitized terminal status. If not, retain persistent HALT and do not invoke the exit dispatcher under this authority.
+
+## 2026-07-23 corrective finding
+
+The first dedicated generation completed `latestExecutions` and stopped at the
+second read. Its client used an unproven `symbol` query for `openPositions` and
+`activeOrders`, while the immediately preceding successful preparation used
+`count=100`. It also rejected valid empty-account representations other than a
+mapping containing `list`. The failed generation remains consumed and is not
+retried; this correction requires a new reviewed-files digest and fresh
+preparation.

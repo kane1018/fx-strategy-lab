@@ -40,13 +40,13 @@ _ENDPOINTS = (
         "open_positions",
         "/private/v1/openPositions",
         "/v1/openPositions",
-        {"symbol": "USD_JPY"},
+        {"count": "100"},
     ),
     (
         "active_orders",
         "/private/v1/activeOrders",
         "/v1/activeOrders",
-        {"symbol": "USD_JPY"},
+        {"count": "100"},
     ),
 )
 _PACING_SECONDS = 0.25
@@ -143,17 +143,16 @@ class V4GmoHttpxPostCanaryReadOnlyClient:
                 headers=dict(signed.headers),
                 timeout=GMO_V4_PRIVATE_HTTP_TIMEOUT_SECONDS,
             )
+            if response.status_code != 200:
+                raise V4GmoPostCanaryReconciliationError(
+                    "G013_POST_CANARY_READ_REJECTED"
+                )
             payload = response.json()
             if not isinstance(payload, Mapping) or payload.get("status") != 0:
                 raise V4GmoPostCanaryReconciliationError(
                     "G013_POST_CANARY_READ_REJECTED"
                 )
-            data = payload.get("data")
-            if not isinstance(data, Mapping):
-                raise V4GmoPostCanaryReconciliationError(
-                    "G013_POST_CANARY_READ_SCHEMA_INVALID"
-                )
-            return data
+            return _normalize_rows_data(payload.get("data"))
         except V4GmoPostCanaryReconciliationError:
             raise
         except (V4GmoActualTransportError, httpx.HTTPError, OSError, ValueError):
@@ -314,6 +313,28 @@ def _rows(data: Mapping[str, Any]) -> Sequence[Mapping[str, Any]]:
     if not isinstance(rows, list) or any(not isinstance(row, Mapping) for row in rows):
         raise V4GmoPostCanaryReconciliationError("G013_POST_CANARY_READ_SCHEMA_INVALID")
     return rows
+
+
+def _normalize_rows_data(data: Any) -> Mapping[str, Any]:
+    if data is None:
+        return {"list": []}
+    if isinstance(data, Sequence) and not isinstance(data, str | bytes | bytearray):
+        rows = list(data)
+    elif isinstance(data, Mapping):
+        rows = data.get("list")
+        if not isinstance(rows, list):
+            raise V4GmoPostCanaryReconciliationError(
+                "G013_POST_CANARY_READ_SCHEMA_INVALID"
+            )
+    else:
+        raise V4GmoPostCanaryReconciliationError(
+            "G013_POST_CANARY_READ_SCHEMA_INVALID"
+        )
+    if any(not isinstance(row, Mapping) for row in rows):
+        raise V4GmoPostCanaryReconciliationError(
+            "G013_POST_CANARY_READ_SCHEMA_INVALID"
+        )
+    return {"list": rows}
 
 
 def _subject_entry_seen(data: Mapping[str, Any], *, cycle_ref: str) -> bool:

@@ -114,6 +114,33 @@ def test_unknown_after_one_read_reports_only_the_completed_read_count(tmp_path: 
     assert result.broker_read_count == 1
 
 
+def test_account_snapshot_queries_match_the_proven_preflight_contract() -> None:
+    assert subject._ENDPOINTS[1][3] == {"count": "100"}
+    assert subject._ENDPOINTS[2][3] == {"count": "100"}
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    (
+        (None, {"list": []}),
+        ([], {"list": []}),
+        ([{"symbol": "USD_JPY"}], {"list": [{"symbol": "USD_JPY"}]}),
+        ({"list": []}, {"list": []}),
+    ),
+)
+def test_broker_row_shapes_are_normalized_without_retaining_the_envelope(
+    data: object, expected: dict[str, object]
+) -> None:
+    assert subject._normalize_rows_data(data) == expected
+
+
+def test_invalid_broker_row_shape_is_rejected() -> None:
+    with pytest.raises(
+        subject.V4GmoPostCanaryReconciliationError, match="READ_SCHEMA_INVALID"
+    ):
+        subject._normalize_rows_data({"list": ["raw"]})
+
+
 def test_reconciliation_module_has_no_existing_write_path_dependency() -> None:
     source = inspect.getsource(subject)
     for forbidden in (
