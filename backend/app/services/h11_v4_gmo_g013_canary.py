@@ -61,6 +61,9 @@ from app.services.h11_v4_gmo_formal_canary_source import (
     V4GmoFormalCanaryInput,
     refresh_g013_formal_canary_input,
 )
+from app.services.h11_v4_gmo_post_canary_reconciliation import (
+    require_g013_entry_enabled,
+)
 from app.services.h11_v4_gmo_public_preflight import (
     G013_MAXIMUM_ENTRY_SPREAD_PIPS,
     V4GmoG013FinalQuote,
@@ -198,6 +201,11 @@ def prepare_g013_canary_session(
     generation = load_v4_gmo_frozen_generation(
         repository=repository,
         implementation_digest=implementation_digest,
+    )
+    require_g013_entry_enabled(
+        repository=repository,
+        reviewed_files_digest=implementation_digest,
+        generation_digest=generation.digest,
     )
     if not generation.generation_label.endswith("G013"):
         raise V4GmoG013CanaryError("G013_GENERATION_REQUIRED")
