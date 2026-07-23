@@ -872,6 +872,58 @@ def load_completed_preparation_evidence(
     )
 
 
+def load_completed_post_canary_preparation_evidence(
+    *,
+    external_gate: V4ExternalPreparationGate,
+    generation_digest: str,
+    now_utc: datetime | None = None,
+) -> V4CompletedPreparationEvidence:
+    """Require fresh operations 00-50 for the entry-disabled reconciliation lane."""
+
+    require_external_preparation_gate(external_gate)
+    normalized = generation_digest.removeprefix("sha256:")
+    if (
+        not generation_digest.startswith("sha256:")
+        or len(normalized) != 64
+        or any(character not in "0123456789abcdef" for character in normalized)
+    ):
+        raise V4ActualPreparationGuardError(
+            "POST_CANARY_PREPARATION_COMPLETED_EVIDENCE_INVALID"
+        )
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate, now_utc=now_utc)
+    if not ledger.state_root.name.endswith(f"-{normalized}"):
+        raise V4ActualPreparationGuardError(
+            "POST_CANARY_PREPARATION_GENERATION_MISMATCH"
+        )
+    required_operations = tuple(
+        operation
+        for operation in V4PreparationOperation
+        if operation is not V4PreparationOperation.MONITOR_LAUNCHAGENT
+    )
+    for operation in required_operations:
+        if not ledger._marker_matches_review(
+            ledger._marker(operation, "passed"),
+            operation=operation,
+            expected_status="PASSED",
+        ):
+            raise V4ActualPreparationGuardError(
+                "POST_CANARY_PREPARATION_SEQUENCE_NOT_COMPLETE"
+            )
+    consumed_marker = (
+        ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
+    )
+    if consumed_marker.exists() or consumed_marker.is_symlink():
+        raise V4ActualPreparationGuardError(
+            "POST_CANARY_PREPARATION_COMPLETED_EVIDENCE_INVALID"
+        )
+    return V4CompletedPreparationEvidence(
+        token=_COMPLETED_EVIDENCE_TOKEN,
+        generation_digest=generation_digest,
+        state_root=ledger.state_root,
+        trading_day_jst=ledger._trading_day_jst,
+    )
+
+
 def preparation_state_root(
     *,
     repository: Path,

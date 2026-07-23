@@ -32,6 +32,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     check_v4_keychain_presence_only,
     confirm_account_exclusivity_exact,
     confirm_email_delivery_exact,
+    load_completed_post_canary_preparation_evidence,
     load_completed_preparation_evidence,
     load_external_preparation_gate,
     require_operation_permit,
@@ -440,6 +441,29 @@ def test_completed_preparation_evidence_requires_all_steps_and_is_one_use(
     with pytest.raises(V4ActualPreparationGuardError, match="EVIDENCE_INVALID"):
         second_preloaded.consume_for_generation(generation_digest)
     with pytest.raises(V4ActualPreparationGuardError, match="EVIDENCE_INVALID"):
+        load_completed_preparation_evidence(
+            external_gate=external_gate,
+            generation_digest=generation_digest,
+        )
+
+
+def test_post_canary_preparation_ends_at_private_get_without_monitor(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    generation_digest = "sha256:" + "b" * 64
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    for operation in V4PreparationOperation:
+        if operation is V4PreparationOperation.MONITOR_LAUNCHAGENT:
+            break
+        permit = ledger.begin(operation)
+        _test_only_complete(ledger, permit, operation)
+
+    evidence = load_completed_post_canary_preparation_evidence(
+        external_gate=external_gate,
+        generation_digest=generation_digest,
+    )
+    assert bool(evidence) is False
+    with pytest.raises(V4ActualPreparationGuardError, match="NOT_COMPLETE"):
         load_completed_preparation_evidence(
             external_gate=external_gate,
             generation_digest=generation_digest,

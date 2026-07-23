@@ -7,7 +7,7 @@ import sqlite3
 from pathlib import Path
 
 from app.h11_auto.v4_actual_preparation_guard import (
-    load_completed_preparation_evidence,
+    load_completed_post_canary_preparation_evidence,
     load_external_preparation_gate,
 )
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
@@ -31,7 +31,7 @@ def main() -> int:
             repository=repository, implementation_digest=digest
         )
         gate = load_external_preparation_gate(repository=repository)
-        load_completed_preparation_evidence(
+        load_completed_post_canary_preparation_evidence(
             external_gate=gate, generation_digest=generation.digest
         )
         origin_digest = load_post_canary_origin_generation_digest(

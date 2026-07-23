@@ -25,6 +25,8 @@ the existing exit dispatcher and it cannot initiate a new entry.
 ## Operational sequence
 
 1. Review, test, freeze, and publish this corrective target generation.
-2. Run its external preparation from operation 00 with fresh evidence.
+2. Run its dedicated external preparation from operation 00 through operation
+   50 with fresh evidence. Operation 60 is intentionally excluded because this
+   entry-disabled one-shot lane has no resident runtime to monitor.
 3. Invoke the dedicated reconciliation CLI once only after the operator grants the subject-specific read-only action.
 4. If flat is confirmed, retain both generations and report only the sanitized terminal status. If not, retain persistent HALT and do not invoke the exit dispatcher under this authority.
