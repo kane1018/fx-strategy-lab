@@ -13,5 +13,5 @@
   "ruff_passed": true,
   "safety_review_clear": true,
   "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
-  "status": "REVIEWED_POST_CANARY_RECONCILIATION_ONLY_NO_BROKER_POST"
+  "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST"
 }
