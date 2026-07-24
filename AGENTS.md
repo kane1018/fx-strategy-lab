@@ -727,3 +727,44 @@ scheduler・resident processへは一切接続しない。
   exit dispatcher／hard guard）の変更。
 - この設計案を、実際のproof発行やactivationとして扱うこと。設計doc完成はlive-ready、
   performance proof、実装承認を意味しない。
+
+## H-11 v4 unattended proof constructor 実装限定例外（唯一のG012/G013コード追記・未結線）
+
+上記design-only例外で承認された設計（§10、Option A、consume-first順序、§9.2項目3の解決済み state
+root）をoperatorが実装承認した場合に限り、`v4_gmo_canary_activation.py`へ**追加専用**で新関数を
+実装してよい。これは本トラック全体で唯一のG012/G013コード変更である。既存関数
+（`V4GmoCanaryIntent`／`V4CurrentTurnChallenge`／`confirm_v4_major_incident_resume_exact`／
+`confirm_v4_current_turn_exact`／`issue_v4_gmo_actual_activation_permit`／
+`consume_v4_gmo_actual_activation_permit`）は一切変更しない。
+
+### この例外で限定的に許可すること
+
+- `v4_gmo_canary_activation.py`へ、`app.h11_auto.runtime_safety`（同一package。既存の
+  `v4_host_rehearsal.py`が`app.services`をimportしている前例に倣い、`app.services`のunattended
+  live moduleも直接importしてよい）を使い、authorization／risk／dead-man／heartbeat
+  continuityを**呼び出しの瞬間に新鮮読み込みし直す**新関数を1つ追加する。
+  `notification_ready`・`entry_gate_blocked_reasons`は呼び出し側供給のまま（§10.2の意図的な
+  scope境界）。
+- 新関数は既存の`decide_unattended_permit_issuance`（変更しない）を呼び、`allowed`なら
+  **真っ先に**`consume_operator_daily_authorization_once`を呼んでから（これが今回の評価での
+  最初の書き込み）、resume proofとcurrent-turn proofの両方を同一評価から同時にmintして返す。
+  consume呼び出し前にはいかなるproofもmintしない。
+- fake-only test（fake store／tmp pathだけを使う）に加え、consume-then-mintの順序を**真の並行
+  プロセス／スレッド**でレースさせ、同一JST日に2組目のproof pairが絶対にmintされないことを
+  検証する、実際に並行させるconcurrency testを追加する（設計doc §10.3/§10.4が要求する、
+  従来のsequential呼び出しだけのtestでは代替できない項目）。
+- 新関数のdocstringに、「既存の`confirm_v4_major_incident_resume_exact`／
+  `confirm_v4_current_turn_exact`をunattended経路から直接呼び出してこの新関数をバイパスしては
+  ならない」旨を明記する。orchestration moduleがまだ存在しないため、import-graph isolation
+  によるbypass防止の強制は、orchestration実装時の別Stepで扱う（本Stepでは文書化と、新関数
+  自体の閉じたtestまでとする）。
+- 設計doc §10.4の該当項目の更新、AGENTS.md本体の必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- 既存のG012/G013関数（上記6関数）の変更。新関数は追加専用。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信。
+- 新関数を実coordinator／実transport／実runtime state root／scheduler／resident processへ
+  結線すること。結線は別途明示承認が必要な独立Stepとする。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。

@@ -644,3 +644,76 @@ track), and must additionally:
 - Not wire the new constructor into any real coordinator, transport, or
   runtime state root -- that remains a separate, later, explicitly authorized
   step per §9.2 and §8.
+
+### 10.5 Implementation status (2026-07-24, fake-only, unwired)
+
+`confirm_v4_unattended_authorization_once` is implemented in
+`v4_gmo_canary_activation.py`, under its own AGENTS.md exception ("H-11 v4
+unattended proof constructor 実装限定例外（唯一のG012/G013コード追記・未結線）").
+It is the single new function added to that file; the diff against the four
+pre-existing G012/G013 functions there
+(`confirm_v4_major_incident_resume_exact`, `confirm_v4_current_turn_exact`,
+`issue_v4_gmo_actual_activation_permit`, `consume_v4_gmo_actual_activation_permit`)
+is empty -- the only removed line across the whole file is the old
+single-line import statement, expanded to add `v4_gmo_trading_day_jst`.
+`grep` across the repo confirms zero production callers; it is reachable
+only from its own test file today.
+
+§10.3/§10.4's first outstanding item is now resolved: a genuine
+`threading.Barrier`-based concurrency test
+(`test_concurrent_threads_racing_the_same_day_mint_exactly_one_proof_pair`,
+`test_v4_gmo_canary_activation_unattended_fake_only.py`) races 8 threads
+against the same shared authorization/risk/dead-man/heartbeat state and
+asserts exactly one success, `worker_count - 1` failures, and exactly one
+consumption marker on disk -- confirmed non-vacuous and stable across 15
+repeated runs by an independent reviewer, who additionally probed it with 32
+threads and an injected artificial delay inside the six-condition check to
+widen the race window well beyond anything GIL scheduling alone could
+produce, with the same result every time. The atomicity genuinely comes from
+`consume_operator_daily_authorization_once`'s O_EXCL write, not from
+timing luck.
+
+§10.4's second item (structurally blocking the bypass path via import-graph
+isolation) remains genuinely open, exactly as scoped: no orchestration module
+exists yet for such a test to constrain, so today's only mitigation is the
+function's own docstring warning plus a test asserting the docstring names
+both bypassable functions and the word "bypass". This is accepted as correct
+scoping for this step, not a gap in it -- the function is unreachable from
+production code regardless, so there is no live exploit path yet. The future
+wiring step must still add the import-graph isolation test before any
+orchestration module is introduced.
+
+**Independent review outcome and the fix it forced.** An adversarial Safety
+review VETOED the first version of this function with one High finding,
+since fixed and regression-pinned: `risk_store.load()` was called unwrapped,
+unlike the two other external calls in the same function (`decide_unattended_permit_issuance`
+and `consume_operator_daily_authorization_once`), which were already wrapped
+to re-raise as this module's own `V4GmoCanaryActivationError`. A risk-state
+file with a `policy_digest` that no longer matches the current
+`PhaseBRiskPolicy` (realistic: a policy-constants change deployed without
+migrating on-disk state, or corruption/tampering) let
+`runtime_safety.H11AutoRuntimeSafetyError` propagate uncaught past this
+module's boundary -- a contract-fidelity defect (a future caller catching
+only this module's advertised error type would miss it), not a fund-safety
+one, since the function still failed closed and minted no proof either way.
+Fixed by wrapping `risk_store.load()` (re-raising
+`V4_CANARY_UNATTENDED_RISK_STATE_INVALID`) and, defensively,
+`check_operator_daily_authorization` (re-raising
+`V4_CANARY_UNATTENDED_AUTHORIZATION_CHECK_INVALID`), matching the pattern
+already used for the other two calls. Both fixes sit in the same execution
+position as before the fix -- they translate exception types only, they do
+not move any code across the consume-first ordering -- confirmed by the same
+reviewer re-running the concurrency probes against the fixed code with no
+change in outcome.
+
+Additional test coverage added after the same review round: a non-`KILLED`
+risk stop state (`STOPPED_DAILY_BUDGET`, reached via two accumulated
+per-trade-bound losses) blocking exactly like `KILLED` does, confirming the
+risk-gate veto is state-agnostic rather than special-cased; an
+invalid-charset `entry_gate_blocked_reasons` string correctly wrapped as
+`V4_CANARY_UNATTENDED_DECISION_INVALID` rather than leaking
+`V4UnattendedLivePermitDecisionError`; and a wholly-missing (never-written)
+heartbeat-chain file blocking, distinct from the already-covered
+insufficient-continuity case. 25 tests total; full `h11_auto` suite passes
+unchanged (761, up from 757 before this slice) alongside Ruff and a danger
+scan for credential/transport/broker tokens.
