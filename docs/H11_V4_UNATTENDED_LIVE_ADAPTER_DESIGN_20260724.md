@@ -1580,3 +1580,55 @@ would have required re-touching `confirm_v4_unattended_authorization_once`)
 and keeps the higher-cost path (a real send) off the hot per-cycle loop.
 No code is authorized by this decision alone -- it only resolves which
 shape a future, separately authorized implementation step should target.
+
+### 14.6 Implementation status (2026-07-24, fake-only, unwired)
+
+Implemented per §14.4/§14.5, under AGENTS.md's "unattended live entry
+notification 実装限定例外". `H11V4NotificationEvent` gained one additive
+member, `UNATTENDED_LIVE_ENTRY_ATTEMPTED` (not in `CRITICAL_EVENTS` --
+confirmed it never triggers emergency-priority/acknowledgement); the
+three pre-existing notification test suites pass unchanged (23 tests),
+and `git diff` confirms the only change to the existing file is that one
+enum line -- `CRITICAL_EVENTS` and `H11V4DisabledDualRouteNotifier` are
+byte-identical.
+
+New module `h11_v4_unattended_live_entry_notification.py`: the pure
+`unattended_live_notification_channel_ready` (cheap, no-I/O, per-cycle
+signal) and `H11V4EnabledDualRouteNotifier` (the real-transport sibling,
+required no-default `fake_only is False` transports, identical
+`notify_once` decision logic to the disabled original -- only the
+`reason_safe_label` differs). Neither construct constructs a transport,
+reads a credential, or performs I/O; both remain fully unwired.
+
+Independent review round (Safety; Architecture+Operations): Safety
+returned PASS outright. Architecture+Operations returned an OPERATIONS
+VETO on two High findings, both fixed before closing this slice:
+
+- This §14.6 status note itself was missing at review time (the
+  exception's own text requires it, mirroring §10.5/§11.4c/§11.6a/
+  §12.5a/§13.3) -- added now.
+- The reachability test only checked `ast.Name`/`ast.Attribute`, missing
+  the `ast.alias` check every sibling reachability test in this track
+  already added after an earlier review found the same gap -- fixed.
+
+Also fixed from the same round (Medium findings): added a parametrized
+cross-check test asserting `H11V4EnabledDualRouteNotifier` and
+`H11V4DisabledDualRouteNotifier` compute identical
+`primary_ready`/`secondary_ready`/`halt_required` across 8 accepted/
+acknowledged/critical-event combinations -- the mechanism that would
+catch a future silent divergence between the two deliberately-duplicated
+decision bodies; added tests for non-bool truthy `fake_only` values
+(`1`, `"yes"`, `"True"`) confirming the strict `is False`/`is not False`
+comparison rejects them rather than coercing; and the channel-ready
+docstring now states its known limitation explicitly (a structural
+check, not a live reachability/credential-validity probe -- a
+real-shaped transport with expired credentials still reports `True`
+here).
+
+35 tests in the new file; full `h11_auto` suite: 867 passing (up from
+832). Ruff and the danger scan clean. Still fully unwired: nothing calls
+either new construct, `notification_ready` in the bounded runner's
+`main` is still a static bool (wiring this in -- deriving it from
+`unattended_live_notification_channel_ready`, and adding the
+notify-at-issuance hook using `H11V4EnabledDualRouteNotifier` -- remains
+a separate, later, explicitly authorized step).
