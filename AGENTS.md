@@ -768,3 +768,41 @@ root）をoperatorが実装承認した場合に限り、`v4_gmo_canary_activati
   結線すること。結線は別途明示承認が必要な独立Stepとする。
 - `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
 - 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended orchestration wiring／scheduler 設計限定例外（design-only・コード実装なし）
+
+proof constructor実装時の例外（上記）が明示的に「結線は別途明示承認が必要な独立Step」として
+先送りした2項目 —(1) `confirm_v4_unattended_authorization_once`を実coordinator/実transport
+経路へ結線するorchestration wiring、および(2) resident/scheduler supervisor —について、
+operatorが明示的にこの設計を依頼した場合に限り、**文書（design doc addendum）とAGENTS.md
+本体の更新だけ**を行ってよい。このStepはPythonコードを一切書かない。既存のG012/G013
+コード・全既存unattended-track moduleは一切変更しない。
+
+### この例外で限定的に許可すること
+
+- `v4_gmo_actual_coordinator.py`／`h11_v4_gmo_coordinated_actual_path.py`／
+  `h11_v4_gmo_actual_adapter.py`／`h11_v4_gmo_actual_transport.py`／
+  `h11_v4_gmo_actual_runtime_binding.py`を読み取り調査し、新規orchestration moduleが
+  再利用できる既存の「required・no-default」注入点（`V4GmoCoordinatedActualPath.adapter`、
+  `V4GmoActualAdapter.transport`）を特定・文書化する。
+- `bind_v4_gmo_actual_runtime`の`credential_pair`/`client`が`None`の場合に実Keychain
+  credentialへ解決される既存挙動を明記し、新規orchestration moduleが**この関数を
+  呼ばないこと**を設計上の制約として記録する。
+- orchestration moduleの**設計**（署名・呼び出し順序・import-graph isolationで塞ぐべき
+  fragment一覧・「adapter/transportは呼び出し側供給必須でdefaultを持たない」という
+  構造的境界）を文書化する。
+- resident/scheduler supervisorについて、既存2パターン
+  （G012 LaunchAgent方式=heartbeat_broker_write固定False、Phase 1 bounded runner方式=
+  非常駐・cycle数固定）を比較し、live-order-issuing schedulerがどちらの形状を取るべきかの
+  設計上のオプションを文書化する（operatorの決定を仰ぐ設問として提示してよい）。
+- この設計案自体はwiringやscheduler installの実装ではない。
+
+### この例外でも禁止し続けること
+
+- 実装コード（Python）を一切書かない。
+- G012/G013コード、既存unattended-track module（proof constructor含む）の変更。
+- scheduler、cron、LaunchAgent、launchd、resident process、background loopの
+  実際のinstall・追加。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信。
+- この設計案を、実際のwiringやscheduler稼働として扱うこと。設計doc完成はlive-ready、
+  performance proof、実装承認を意味しない。

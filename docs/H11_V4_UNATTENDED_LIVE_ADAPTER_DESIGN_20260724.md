@@ -717,3 +717,223 @@ heartbeat-chain file blocking, distinct from the already-covered
 insufficient-continuity case. 25 tests total; full `h11_auto` suite passes
 unchanged (761, up from 757 before this slice) alongside Ruff and a danger
 scan for credential/transport/broker tokens.
+
+## 11. Orchestration wiring — design (2026-07-24, design-only, no code)
+
+§10.4's remaining bullet ("do not wire the new constructor into any real
+coordinator, transport, or runtime state root") and §8's next-steps item 3
+both name this as a separate, later, explicitly authorized step. This
+section is that design, not that authorization.
+
+### 11.1 What already exists and is reusable unchanged
+
+The existing coordinator boundary is already exactly what this design needs,
+and needs no new code to preserve:
+
+- `v4_gmo_actual_coordinator.py`'s own docstring states its boundary: *"The
+  coordinator stops before transport ... No credential, network client,
+  activation permit, or broker method is imported here."* It only persists
+  SQLite state (attempts, plans, pending-transport markers); it never calls
+  a transport itself.
+- One layer up, `V4GmoCoordinatedActualPath`
+  (`h11_v4_gmo_coordinated_actual_path.py`) already has a **required,
+  no-default** field `adapter: V4GmoActualAdapter`, and `V4GmoActualAdapter`
+  (`h11_v4_gmo_actual_adapter.py`) already has a required, no-default field
+  `transport: V4GmoPrivateTransport`. Neither type can be constructed without
+  a caller supplying a concrete transport -- this is precisely the
+  "required, no-default injection" convention this track has used everywhere
+  else (Phase 1's `client` param, Phase 3 slice 1's `credential_pair`/
+  `client`), already present in the existing coordinated-path code without
+  any change needed.
+- The existing, unmodified `issue_v4_gmo_actual_activation_permit`/
+  `consume_v4_gmo_actual_activation_permit` (the two G012/G013 functions the
+  proof constructor's output feeds) remain the only way to obtain/consume a
+  `V4GmoActualActivationPermit`.
+
+### 11.2 A real counterexample this design must not copy
+
+`bind_v4_gmo_actual_runtime` (`h11_v4_gmo_actual_runtime_binding.py`) is the
+function G013's interactive script actually calls to assemble a live-capable
+runtime, and it **breaks** the "no defaults anywhere" assumption this track
+otherwise relies on: `credential_pair: V4GmoSealedCredentialPair | None =
+None` and `client: httpx.Client | None = None` both default to `None`, and a
+`None` credential_pair is silently replaced with a real
+`V4GmoKeychainCredentialPair()`. This function is reachable today only from
+the human-interactive G013 script
+(`backend/scripts/h11_auto_v4_g013_actual_canary.py`), which prompts the
+operator via `getpass` with a 300-second fail-closed timeout -- not from any
+fake-only/unattended-track module.
+
+**This is a hard constraint on the new orchestration module's design, not
+just a note**: it must never call `bind_v4_gmo_actual_runtime`, and its own
+`adapter`/`transport`-equivalent parameter must have no default of any kind
+-- neither a fake one nor one that silently resolves to something real. A
+real activation continues to require a human to construct the real adapter
+and pass it in explicitly, exactly as G013's script already does today; the
+orchestration module's job is only to get from "six conditions verified" to
+"permit obtained, ready to hand to *some* adapter," never further.
+
+### 11.3 Correction: the existing end-to-end driver cannot simply be called with proofs
+
+An earlier draft of this section assumed "wiring" would be a thin handoff:
+mint proofs, call the existing single-call entry-cycle driver with them. That
+assumption does not survive contact with the actual code and is corrected
+here rather than carried forward silently.
+
+`run_g013_actual_canary_after_exact_confirmation`
+(`h11_v4_gmo_g013_canary.py:311-393`) already drives the *entire* sequence
+end-to-end in one call -- `bind_v4_gmo_actual_runtime` →
+`reconcile_once_fixed` → `record_canary_entry_preflight` →
+`perform_market_once` → (conditional cancel/recover branch) →
+`prepare_exact_protection_plan` → `perform_exact_protection_once` →
+`confirm_exact_protection_once` → `run_until_flat()` monitoring handoff. This
+is a real, complete, already-reviewed driver; nothing about the state
+machine itself needs to be redesigned.
+
+But its signature is `major_incident_resume_phrase: str,
+current_turn_phrase: str` (lines 314-315), not proof objects -- it calls
+`confirm_v4_major_incident_resume_exact`/`confirm_v4_current_turn_exact`
+*itself*, internally, with those raw phrases (lines 323-331). There is no
+version of this function that accepts an already-minted
+`V4MajorIncidentResumeProof`/`V4CurrentTurnConfirmationProof` pair, which is
+exactly what `confirm_v4_unattended_authorization_once` produces. The
+unattended path cannot substitute a "phrase" for these proofs -- they are
+different types entirely, and the two `confirm_v4_*_exact` functions
+validate an actual human-typed phrase against a real secret constant, which
+has no unattended equivalent.
+
+### 11.4 The resulting fork -- an operator decision, not a default
+
+Making unattended proofs actually drive this existing end-to-end sequence
+requires one of two structurally different paths. Neither is a "just
+proceed" continuation of this design; each has a real cost this document
+should not minimize:
+
+**Path 1 -- a second G013 code addition.** Add one more function next to
+`run_g013_actual_canary_after_exact_confirmation` (or refactor its shared
+body into a private helper both call) that accepts a pre-minted
+`resume_proof`/`confirmation_proof` pair instead of phrases, then continues
+identically into `_run_bound_g013_canary`. This keeps a single
+implementation of the state machine (no duplicated logic to drift out of
+sync) but directly contradicts this track's own repeated framing of the
+proof constructor as *"本トラック全体で唯一のG012/G013コード変更"* (the
+one and only G012/G013 code change in this entire track,
+`AGENTS.md`'s proof-constructor exception, `v4_gmo_canary_activation.py`
+diff). Reopening that boundary for a second addition is not something this
+design chooses on its own; it would need its own fresh, explicit operator
+authorization, separate from anything already granted.
+
+**Path 2 -- an independent reimplementation.** A new, unattended-track-only
+module calls `issue_v4_gmo_actual_activation_permit` directly with the
+unattended proofs (never touching the two `confirm_v4_*_exact` phrase
+functions), then `bind_v4_gmo_actual_runtime`, then re-drives its own copy
+of the reconcile → preflight → market → cancel/recover → protect → confirm →
+monitor sequence by calling the same lower-level `V4GmoCoordinatedActualPath`
+methods `_run_bound_g013_canary` already calls. This never modifies any
+existing G012/G013 file, but it duplicates roughly 300 lines of
+extremely safety-critical sequencing logic into a second, independently
+written and independently reviewed implementation -- introducing exactly
+the kind of two-implementations-can-silently-diverge risk this project has
+otherwise avoided everywhere else by reusing components verbatim rather
+than re-deriving them.
+
+Both paths are more work, and carry a different kind of risk, than the
+"thin handoff" this section originally assumed. This document does not pick
+between them -- the choice belongs to the operator, mirroring how the
+1-day authorization window (§3.4) and the scheduler shape (§12) were
+decided rather than assumed.
+
+### 11.5 Scope boundary for the eventual implementation step
+
+Everything below must remain true of the *implementation*, not just this
+design, mirroring exactly the boundary the proof-constructor exception
+already enforces on itself. Note that §11.3/§11.4's correction changes what
+"no import of `bind_v4_gmo_actual_runtime`" can mean -- Path 2 necessarily
+calls it (that is the whole point of not touching G013 code), so the
+constraint below is restated precisely rather than as a blanket ban:
+
+- No default for the adapter/transport/credential parameter anywhere in the
+  new module or anything it constructs -- ever, fake or real. If Path 2 is
+  chosen and the new module itself calls `bind_v4_gmo_actual_runtime`, it
+  must pass `credential_pair`/`client` explicitly (never rely on that
+  function's own `None`-defaulting-to-real-Keychain behavior, §11.2).
+  `V4GmoKeychainCredentialPair`/`V4GmoHttpxPrivateTransport` construction
+  itself remains something only a human-supplied value can trigger, not
+  something the new module defaults to.
+- Whichever path is chosen, `confirm_v4_major_incident_resume_exact`/
+  `confirm_v4_current_turn_exact` (the phrase-based functions) must remain
+  unreachable from the unattended path -- Path 1's new sibling function and
+  Path 2's direct `issue_v4_gmo_actual_activation_permit` call both satisfy
+  this; calling the phrase functions from anywhere in this module would not.
+- No scheduler/cron/LaunchAgent/launchd/resident-process wiring -- that is
+  §12's separate, still-unauthorized question.
+- Its own import-graph isolation test, following every prior slice's
+  pattern, checked against this module's own forbidden-fragment list
+  (adjusted per path: Path 1 forbids nothing new since it's still one
+  driver; Path 2's isolation test must instead prove it never imports the
+  two phrase-confirmation functions, rather than banning
+  `bind_v4_gmo_actual_runtime` outright).
+- A new, separately named AGENTS.md exception before any of this is written
+  -- and, if Path 1 is chosen, that exception must explicitly acknowledge
+  and supersede the "唯一のG012/G013コード変更" framing rather than silently
+  contradicting it -- following this same design → operator decision →
+  implementation-exception → fake-only-tests → independent review → doc
+  update → approved commit/push rhythm used for every prior slice.
+
+## 12. Resident/scheduler supervisor — design options (2026-07-24, design-only, no code)
+
+No document in this track commits to a shape for a *live-order-issuing*
+scheduler; §6 and every exception's prohibited-list ban installing one
+outright pending separate authorization. This section lays out the two
+structural precedents already in this repo, since a genuinely new shape
+would need its own justification.
+
+### 12.1 Option A -- resident LaunchAgent, monitor-only (G012 precedent)
+
+`v4_gmo_launchd.py` (`render_v4_gmo_monitor_launchagent`,
+`install_and_restart_v4_gmo_monitor_launchagent`), installed via the
+human-run `h11_auto_v4_install_monitor_launchagent.py`, is a real, already-
+reviewed resident daemon. Its result type fixes `heartbeat_broker_write:
+bool` to always `False` in practice -- it is a monitor/heartbeat-only
+daemon, never an order-placing one. Its cold-start/heartbeat-timing
+behavior received its own independent review and fix (documented in
+`docs/H11_V4_G013_CANARY_ACTIVATION_REPORT_20260717.md`).
+
+If reused as a precedent for the unattended path, the daemon itself would
+still never call `run_unattended_live_entry_attempt` (§11) directly --
+it would only maintain the dead-man heartbeat / notification-check loop,
+with actual entry evaluation staying a separate, human- or bounded-runner-
+triggered action. This keeps a resident process's blast radius to
+"can go stale and trip the dead-man gate," never "can place an order."
+
+### 12.2 Option B -- bounded runner, no residency (Phase 1 precedent)
+
+Phase 1's shadow runner (`h11_auto_v4_unattended_shadow_run.py`) is the
+opposite shape: `--max-cycles`/`--interval-seconds`, never resident, no
+auto-restart, invoked fresh each time (by a human, or by an external,
+out-of-scope-here trigger). Applied to the live path, each invocation would
+call `run_unattended_live_entry_attempt` at most once (the daily
+authorization cap already enforces this even if invoked more than once) and
+exit -- no daemon exists to go stale, be compromised, or drift from its
+reviewed state.
+
+### 12.3 Open question for the operator
+
+Both keep the actual order-placing decision inside the already-reviewed,
+fail-closed evaluation chain; they differ only in what triggers that
+evaluation. Option A adds real residency (a long-lived process, its own
+crash/restart surface, and the precedent that this project has already
+independently reviewed once for G012) but keeps a live heartbeat warmer than
+manual invocation allows. Option B adds no new operational surface at all
+but means unattended really means "runs only when something outside this
+design invokes it," which raises the question of what that external
+trigger would be. This document does not choose between them; the operator
+decision belongs in §3.4-style notes once made, mirroring how the 1-day
+authorization window and cold-start acceptance were recorded there.
+
+### 12.4 Operator decision (2026-07-24)
+
+Option B (bounded runner, no residency) is the direction to continue
+exploring. No new resident process is authorized by this decision -- it
+only sets which shape a future, separately authorized scheduler
+implementation step should target if and when that step is requested.
