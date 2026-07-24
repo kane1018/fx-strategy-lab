@@ -558,3 +558,32 @@ operator persistent HALT配線、runnerへの実結線は含まない。
 - `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
 - 既存G013 canary／post-canary marker、`h11_v4_gmo_readonly_preflight.py`等の既存G013専用
   preparation-gated moduleの変更、またはそれらのgate／permitへの結合。
+
+## H-11 v4 unattended shadow 通知判断layer 限定例外（slice 2・fake-only）
+
+上記slice 1の境界は維持する。ただしoperatorが明示的に、shadow cycleの結果を通知すべきか判断する
+layerの実装を依頼した場合に限り、既存の汎用・fake-only強制済み`H11V4DisabledDualRouteNotifier`
+（`app/services/h11_v4_notification_binding_no_post.py`）を再利用し、shadow controller報告から
+通知要否を判定する純粋関数を実装してよい。実Pushover/SMTP送信、runnerへの結線は含まない。
+
+### この例外で限定的に許可すること
+
+- `H11V4NotificationEvent`へ`SHADOW_ACTIONABLE_OBSERVED`（非critical）と`SHADOW_HALT_ENGAGED`
+  （critical、sticky HALTはclear/resetパスがないため）の2値を追加専用で追記する（既存値・既存
+  `CRITICAL_EVENTS`メンバーは変更しない）。
+- shadow controller の`V4ShadowControllerReport.status`と直前statusから、通知要否と
+  重複排除（同一statusが連続する限り再通知しない）を行う純粋関数を実装する。I/Oを持たない。
+- 送信自体は既存の`H11V4DisabledDualRouteNotifier.notify_once`をそのまま呼ぶだけとし、
+  新しいtransport実装、新しいPushover/SMTP接続コードは一切追加しない。
+- fake transport（`H11V4FakePushoverTransport`／`H11V4FakeEmailTransport`）だけを使うtestを
+  追加する。default（Refusing）transportでは送信不能であることも確認する。
+
+### この例外でも禁止し続けること
+
+- 実Pushover/SMTP transportの実装・接続、`H11V4DisabledDualRouteNotifier`のfake_only強制の
+  弱体化・迂回。
+- shadow runner CLIへの結線（別途明示依頼が必要な独立Step）。
+- daily／monthly／consecutive-loss stop、host／dead-man状態、operator persistent HALTの実装・
+  claim。
+- broker write endpoint、Private API、Keychain、credentialのimport・呼出し・接続。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。

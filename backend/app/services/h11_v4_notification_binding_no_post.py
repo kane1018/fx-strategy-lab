@@ -33,6 +33,8 @@ class H11V4NotificationEvent(str, Enum):
     KILL_ENGAGED = "KILL_ENGAGED"
     JOURNAL_INVALID = "JOURNAL_INVALID"
     MANUAL_POSITION_CONFLICT = "MANUAL_POSITION_CONFLICT"
+    SHADOW_ACTIONABLE_OBSERVED = "SHADOW_ACTIONABLE_OBSERVED"
+    SHADOW_HALT_ENGAGED = "SHADOW_HALT_ENGAGED"
 
 
 CRITICAL_EVENTS = frozenset(
@@ -47,6 +49,8 @@ CRITICAL_EVENTS = frozenset(
         H11V4NotificationEvent.KILL_ENGAGED,
         H11V4NotificationEvent.JOURNAL_INVALID,
         H11V4NotificationEvent.MANUAL_POSITION_CONFLICT,
+        # Sticky/permanent (no clear-or-reset path); the operator must know.
+        H11V4NotificationEvent.SHADOW_HALT_ENGAGED,
     }
 )
 
