@@ -1188,3 +1188,121 @@ Option B (bounded runner, no residency) is the direction to continue
 exploring. No new resident process is authorized by this decision -- it
 only sets which shape a future, separately authorized scheduler
 implementation step should target if and when that step is requested.
+
+### 12.5 Bounded runner CLI — design (2026-07-24, after the orchestration module landed)
+
+With `run_unattended_live_entry_cycle_once` (§11.6) implemented and
+reviewed, this CLI is a thin `--max-cycles`/`--interval-seconds` loop
+around it, mirroring Phase 1's shadow runner
+(`backend/scripts/h11_auto_v4_unattended_shadow_run.py`) structurally --
+same flag shape, same bounded/non-resident behavior, same
+`main(argv) -> int` testable entry point.
+
+**The one genuinely new problem this CLI faces, that Phase 1 never did**:
+Phase 1's adapter only ever touched the Public API, so its runner could
+freely construct a plain `httpx.Client()` itself -- no credential exists to
+protect. This CLI's `run_unattended_live_entry_cycle_once` requires
+`credential_pair`/`client` with no default (§11.5, §11.6), and nothing in
+this track has ever once constructed `V4GmoKeychainCredentialPair`/
+`V4GmoHttpxPrivateTransport` from unattended-track code, by design. This
+CLI must not become the first.
+
+**Resolution**: `main` takes `credential_pair`/`client` as required
+keyword-only parameters with no default, exactly like every other
+component -- but `main` is also the thing `argparse` normally populates
+from `sys.argv`, and a real credential pair/client are not expressible as
+CLI flags. So this file:
+
+- Implements `main(argv: list[str], *, credential_pair, client) -> int`
+  as the fully testable core (parses `--max-cycles`/`--interval-seconds`
+  from `argv`; the credential/client are Python objects the *caller of
+  `main`* supplies, never derived from `argv` itself).
+- Ships **no `if __name__ == "__main__":` block that can run a real
+  cycle**. Executing this file directly explains why and stops there --
+  it does not attempt to construct anything real, and does not silently
+  do nothing either (that would be worse: it would look like it ran).
+  Real invocation requires a separate, operator-authored launcher (a few
+  lines the operator writes themselves, importing `main` and constructing
+  `V4GmoKeychainCredentialPair()`/an `httpx.Client()`) -- exactly the "last
+  millimeter" boundary already described to the operator for this whole
+  track.
+
+  **Correction**: an earlier draft of this paragraph claimed the operator
+  would do this "the same way the existing G013 interactive script already
+  does" -- that is not accurate and is corrected here rather than carried
+  forward. `h11_auto_v4_g013_actual_canary.py` never explicitly constructs
+  either object; it calls `run_g013_actual_canary_after_exact_confirmation`,
+  which passes `credential_pair=None, client=None` through to
+  `bind_v4_gmo_actual_runtime`, whose own `None`-defaulting logic (§11.2)
+  constructs `V4GmoKeychainCredentialPair()` implicitly. No script anywhere
+  in this repo explicitly constructs `V4GmoKeychainCredentialPair()` today.
+  The operator's future launcher is therefore genuinely new code, not a
+  precedent-following one -- a few lines, but not "the same way" as
+  anything already shipped.
+
+**Per-cycle error handling**, mirroring Phase 1's `_run_one_cycle`
+uniform-safe-degrade pattern rather than inventing a new one: every known,
+fixed-safe-label exception type this call chain can raise
+(`V4GmoCanaryActivationError`, `V4UnattendedLiveOrchestrationError`,
+`V4GmoG013CanaryError`) is caught per cycle, printed as a safe status line,
+and the loop continues to the next cycle -- these are expected "not yet"
+outcomes (gate not clear, authorization not present, session not
+refreshable), not runner failures. Genuinely unexpected exceptions are
+**not** caught and abort the runner loudly, matching Phase 1's `except
+_UNEXPECTED_IO_ERRORS` boundary (degrade known IO errors only, never
+swallow the unknown). A cycle that returns successfully (the driver
+actually ran to some result, whatever its status) means the day's one
+authorization is spent -- the loop prints that result and stops early
+rather than burning through the remaining cycle budget uselessly.
+
+**Still not solved by this CLI, by design** (carried forward, unchanged
+in priority from §11.6a): `notification_ready`/`entry_gate_blocked_reasons`
+must be derived from real evaluations, not hardcoded -- this CLI's own
+`main` signature makes both required parameters too (no default), pushing
+the "derive them for real" obligation to whatever calls `main`, exactly
+mirroring how `credential_pair`/`client` are handled. `session` and all
+four stores (`risk_store`/`risk_policy`/`dead_man_store`/
+`heartbeat_chain_store`) are likewise required parameters of `main` --
+this CLI never calls `prepare_g013_canary_session` or constructs any store
+itself; only the `--max-cycles`/`--interval-seconds` argv parsing belongs
+to this file. `state_root` remains non-operator-facing (no CLI flag for
+it). No scheduler/cron/launchd wiring of this CLI exists or is added here.
+
+### 12.5a Implementation status (2026-07-24, fake-only, unwired)
+
+Implemented per §12.5, under AGENTS.md's "unattended live bounded runner
+CLI 実装限定例外". 18 tests; full `h11_auto` suite 802 passing (up from
+784). Ruff and the danger scan clean. One existing test was necessarily
+updated (named explicitly in the exception this time, learning from
+§11.6a's VETO on the same class of gap): the orchestration module's
+"zero production callers" pin became an allowlist naming exactly this
+CLI script.
+
+Independent review round (Safety; Architecture+Operations) returned two
+VETOs, both fixed before closing this slice:
+
+- **Safety VETO**: the per-cycle catch list folded
+  `G013_IMPLEMENTATION_CHANGED_BEFORE_PERMIT`/
+  `G013_GENERATION_CHANGED_BEFORE_PERMIT` — signals that the reviewed
+  implementation digest or frozen generation changed underneath an
+  already-running session, i.e. tamper/drift, not routine gate-timing —
+  indistinguishably into ordinary "not yet, retry next cycle" handling.
+  Fixed: these two labels now always propagate and abort the run loudly
+  instead of being retried, pinned by a dedicated regression test.
+- **Architecture VETO**: this section previously claimed the operator's
+  deferred launcher would construct real credentials "the same way the
+  existing G013 interactive script already does" — false; that script
+  never explicitly constructs `V4GmoKeychainCredentialPair()`/
+  `httpx.Client()` (it relies on `bind_v4_gmo_actual_runtime`'s own
+  `None`-default). Corrected above rather than left standing.
+
+Additional Medium/Low findings addressed: `--max-cycles`/
+`--interval-seconds` exact boundary values (240/3600) and one-above-max
+rejection now have dedicated tests, alongside argparse's own
+type-coercion failure path (distinct from this file's explicit
+`parser.error` range checks); the per-cycle print no longer carries a
+silent `json.dumps(..., default=str)` fallback (removed — every safe-dict
+shape this can produce today is JSON-native, so a future non-primitive
+field now fails loudly instead of being silently stringified); and
+`_run_one_cycle`'s bare 2-tuple return became a small frozen
+`_CycleOutcome` dataclass for clarity at the call site.

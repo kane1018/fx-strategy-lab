@@ -334,10 +334,15 @@ def test_own_source_never_references_bypass_or_credential_construction_names() -
     assert hits == []
 
 
-def test_no_production_callers_outside_this_test_file() -> None:
+def test_has_exactly_one_authorized_production_caller() -> None:
     # Same scope note as the sibling G013 test: catches direct names and
-    # aliased imports; cannot catch string-based/dynamic lookups.
+    # aliased imports; cannot catch string-based/dynamic lookups. Originally
+    # asserted zero production callers; the bounded runner CLI (its own
+    # AGENTS.md exception, its own review) is now the single authorized
+    # caller, so the pinned property is: exactly that one file and nothing
+    # else.
     target = "run_unattended_live_entry_cycle_once"
+    authorized = "backend/scripts/h11_auto_v4_unattended_live_bounded_run.py"
     module_path = Path(subject.__file__)
     repo_root = module_path.parents[2]
     hits: list[str] = []
@@ -357,8 +362,10 @@ def test_no_production_callers_outside_this_test_file() -> None:
                     and (node.name == target or node.asname == target)
                 )
             ):
-                hits.append(str(path))
-    assert hits == []
+                hits.append(path.as_posix())
+    unauthorized = [hit for hit in hits if not hit.endswith(authorized)]
+    assert unauthorized == []
+    assert any(hit.endswith(authorized) for hit in hits)
 
 
 def test_module_contains_no_dangerous_tokens() -> None:
