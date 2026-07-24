@@ -280,15 +280,18 @@ def test_unattended_path_still_consumes_session_once_and_refreshes_evidence(
     assert order == ["consume", "require_binding", "refresh"]
 
 
-def test_new_function_has_no_production_callers_outside_this_test_file() -> None:
+def test_new_function_has_exactly_one_authorized_production_caller() -> None:
     # Scope note: this catches direct-name references (Name/Attribute) and
     # aliased imports (`import ... as X`, via ast.alias.name/asname); it does
     # NOT catch string-based/dynamic lookups (getattr with a computed string,
-    # importlib by string). No such pattern exists anywhere in this diff, but
-    # a future wiring change could still evade this specific check that way.
+    # importlib by string). Originally this asserted zero production callers;
+    # the unattended orchestration module (its own AGENTS.md exception, its
+    # own review) is now the single authorized caller, so the pinned property
+    # is: exactly that one module and nothing else.
     import ast
 
     target = "run_g013_actual_canary_after_unattended_authorization"
+    authorized = "app/services/h11_v4_unattended_live_orchestration.py"
     module_path = Path(canary_module.__file__)
     repo_root = module_path.parents[2]
     hits: list[str] = []
@@ -308,8 +311,10 @@ def test_new_function_has_no_production_callers_outside_this_test_file() -> None
                     and (node.name == target or node.asname == target)
                 )
             ):
-                hits.append(str(path))
-    assert hits == []
+                hits.append(path.as_posix())
+    unauthorized = [hit for hit in hits if not hit.endswith(authorized)]
+    assert unauthorized == []
+    assert any(hit.endswith(authorized) for hit in hits)
 
 
 def test_module_docstring_and_new_functions_contain_no_dangerous_tokens() -> None:

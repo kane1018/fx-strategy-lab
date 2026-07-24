@@ -1031,6 +1031,106 @@ constraint below is restated precisely rather than as a blanket ban:
   implementation-exception → fake-only-tests → independent review → doc
   update → approved commit/push rhythm used for every prior slice.
 
+### 11.6 Orchestration module — design (2026-07-24, after the §11.4b driver split landed)
+
+With the proof constructor (§10.5) and the proof-accepting driver (§11.4c)
+both implemented and reviewed, the orchestration module reduces to a thin,
+sequential bridge with no decision logic of its own:
+
+```
+app/services/h11_v4_unattended_live_orchestration.py
+
+def run_unattended_live_entry_cycle_once(
+    *,
+    session: V4GmoG013PreparedSession,
+    state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    risk_store, risk_policy, dead_man_store, heartbeat_chain_store,
+    notification_ready: bool,
+    entry_gate_blocked_reasons: tuple[str, ...],
+    credential_pair: V4GmoSealedCredentialPair,   # required, no default
+    client: httpx.Client,                          # required, no default
+    now_utc: datetime,
+) -> V4GmoG013CanaryResult:
+```
+
+Sequence, in full: (1) fail-closed runtime guard on `credential_pair`/
+`client` being non-`None` (the same double-guard the driver itself now
+carries -- redundant on purpose, so neither layer depends on the other for
+this property); (2) call `confirm_v4_unattended_authorization_once` with
+`session.intent` and the caller-supplied stores -- this consumes the
+operator's daily authorization as its first write and mints the proof pair,
+or raises with no proof minted; (3) hand the proofs, session, and
+caller-supplied `credential_pair`/`client` to
+`run_g013_actual_canary_after_unattended_authorization`, whose own internal
+sequence (session consume/refresh → permit → bind → entry cycle → monitor)
+is unchanged and already reviewed. No step is added, reordered, or
+re-implemented here.
+
+Design properties, each pinned by its own test in the implementation step:
+
+- **The §10.3 bypass-prevention obligation is finally dischargeable and is
+  discharged here.** The orchestration module's own source must never
+  reference `confirm_v4_major_incident_resume_exact`/
+  `confirm_v4_current_turn_exact` (the phrase functions),
+  `bind_v4_gmo_actual_runtime`, `issue_v4_gmo_actual_activation_permit`,
+  `V4GmoKeychainCredentialPair`, or `V4GmoHttpxPrivateTransport` -- checked
+  by an AST test on this module's own source. A module-name-fragment
+  import-graph ban is not usable here (the driver module it legitimately
+  imports reaches all of those transitively); the own-source AST check is
+  the precise form of the obligation §11.5 already anticipated for exactly
+  this reason.
+- **Known, accepted cost carried forward from §10.3**: the daily
+  authorization is consumed at step (2), before the driver runs. A driver
+  failure after that point (aged-out signal, already-consumed session, a
+  broker rejection) burns the day's authorization with no entry made --
+  consistent with the track-wide fail-closed preference for wasting a day
+  over any double-issuance risk.
+- **Still unwired after this step**: no CLI, no scheduler, nothing calls
+  this function in production. The bounded-runner CLI (§12.4's decided
+  shape) is the next and separate slice.
+
+### 11.6a Implementation status (2026-07-24, fake-only, unwired)
+
+Implemented exactly per the sequence above, under AGENTS.md's "unattended
+live orchestration module 実装限定例外". One detail the design did not
+name: the guard's error type is `V4UnattendedLiveOrchestrationError` with
+the fixed label `UNATTENDED_ORCHESTRATION_CREDENTIAL_OR_CLIENT_REQUIRED`.
+12 tests; full `h11_auto` suite 784 passing (up from 772). Ruff and the
+danger scan clean. The happy-path test runs the REAL proof constructor
+against real tmp-path stores with only the driver faked, asserting real
+proof objects and the identical caller-supplied session/credential/client
+objects (identity, not equality) reach the driver, and that the
+consumption marker genuinely lands on disk.
+
+One existing test was necessarily updated (explicitly named in the
+exception): the G013 driver's "zero production callers" pin became an
+allowlist pinning "exactly this orchestration module, nothing else" —
+including a deliberate tripwire that fails if the module is ever
+deleted/renamed without reverting the allowlist.
+
+Independent review round (Safety; Architecture+Operations): the Safety
+reviewer initially VETOed on exactly that scope-precision point — the
+exception text as first written did not name the forced allowlist-test
+update — fixed by amending the exception to name it explicitly, plus:
+`_run_g013_actual_canary_from_refreshed_session` (the driver's private
+helper, which skips the session consume/refresh and credential guard) and
+`consume_v4_gmo_actual_activation_permit` added to the own-source
+forbidden-AST list; a burn-the-day regression test added (driver failure
+after consumption propagates unwrapped, the marker stays, a same-day retry
+is refused without the driver being called again) plus a structural
+zero-`ExceptHandler` pin so a future try/except-and-retry edit fails a
+test, not just review; and the module docstring now restates §9.2 item 4
+(`notification_ready`/`entry_gate_blocked_reasons` are caller-supplied
+unverifiable claims the CLI slice must derive from real evaluations,
+never hardcode).
+
+Carried forward to the CLI slice, unchanged in priority: §9.2 item 4
+(derive the two claims from real same-cycle evaluations), §9.2 item 2
+(`state_root` must not become an operator-controllable flag), and the
+likely need to forward the driver's `on_protected` callback for §3.2
+item 6's notification-at-issuance requirement (a known future diff to
+this module, not a surprise).
+
 ## 12. Resident/scheduler supervisor — design options (2026-07-24, design-only, no code)
 
 No document in this track commits to a shape for a *live-order-issuing*

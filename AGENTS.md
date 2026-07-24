@@ -855,3 +855,46 @@ adapter、transport、exit dispatcher、hard guard、`v4_gmo_actual_runtime_bind
 - scheduler、cron、LaunchAgent、launchd、resident processの追加。
 - 実credential、実Private API、実broker write、実Pushover/SMTP送信。
 - 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended live orchestration module 実装限定例外（fake-only・scheduler未接続）
+
+design doc §11.6の設計をoperatorが実装承認した場合に限り、新規module
+`app/services/h11_v4_unattended_live_orchestration.py`を実装してよい。これは
+proof constructor（`confirm_v4_unattended_authorization_once`）とproof受け取り版
+driver（`run_g013_actual_canary_after_unattended_authorization`）を順に呼ぶだけの
+薄い橋渡しであり、判断ロジック・stateの追加・既存関数の変更は一切含まない。
+
+### この例外で限定的に許可すること
+
+- 新規moduleに関数`run_unattended_live_entry_cycle_once`を1つ実装する。順序は
+  §11.6の通り：(1) `credential_pair`/`client`の実行時non-Noneガード（driverの
+  同名ガードと二重・意図的な冗長）、(2) `confirm_v4_unattended_authorization_once`
+  を`session.intent`と呼び出し側供給storeで呼ぶ（日次認可のconsume-first・proof
+  pair発行）、(3) proofとsessionと呼び出し側供給の`credential_pair`/`client`を
+  `run_g013_actual_canary_after_unattended_authorization`へ渡す。それ以外の処理を
+  加えない。
+- `credential_pair`/`client`は必須引数・default一切なし（fakeでも実でも）。
+- 自module source上に`confirm_v4_major_incident_resume_exact`／
+  `confirm_v4_current_turn_exact`／`bind_v4_gmo_actual_runtime`／
+  `issue_v4_gmo_actual_activation_permit`／`V4GmoKeychainCredentialPair`／
+  `V4GmoHttpxPrivateTransport`への参照が一切ないことをASTで検証するtestを追加する
+  （§10.3のbypass防止義務を、この段階で初めて構造的に履行する）。
+- fake-only test（fake credential/client／tmp path store／driverのmonkeypatch）を
+  追加する。proof constructorが失敗した場合driverが一切呼ばれないことをpinする。
+- 既存test `test_v4_gmo_g013_unattended_authorization_fake_only.py`の
+  「driver呼び出し元ゼロ」assertion 1件のみを、「唯一の承認済み呼び出し元＝本
+  orchestration module、それ以外ゼロ」のallowlist形式へ更新する（本moduleの追加に
+  より旧assertionは必然的に失敗するため。他のtest・既存コードの変更は一切不可）。
+- design doc・AGENTS.mdの必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- 既存の全ファイル（G012/G013コード・全unattended-track module）の変更
+  （上記で明示的に許可した「driver呼び出し元test 1件のallowlist化」のみを唯一の
+  例外とする）。
+- 新moduleを呼び出すCLI・scheduler・cron・LaunchAgent・launchd・resident process
+  の実装・追加（bounded runner CLIは§12.4の方針決定済みだが、別途明示承認が必要な
+  次の独立Stepとする）。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信。
+- `credential_pair`/`client`へのdefault付与、実Keychain読み込みコードの記述。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
