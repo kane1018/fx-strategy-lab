@@ -806,3 +806,52 @@ operatorが明示的にこの設計を依頼した場合に限り、**文書（d
 - 実credential、実Private API、実broker write、実Pushover/SMTP送信。
 - この設計案を、実際のwiringやscheduler稼働として扱うこと。設計doc完成はlive-ready、
   performance proof、実装承認を意味しない。
+
+## H-11 v4 proof-accepting G013 entry-cycle driver 実装限定例外（G012/G013コードへの2件目の変更・未結線）
+
+design doc §11.4a/§11.4bでoperatorが明示的に選択したPath 1を実装する例外。**これは
+本トラックの従来の宣言「本トラック全体で唯一のG012/G013コード変更」を明示的に見直し、
+撤回する。** 唯一性の主張そのものを撤回するのであって、黙って矛盾させるのではない。
+対象は`h11_v4_gmo_g013_canary.py`の`run_g013_actual_canary_after_exact_confirmation`
+一箇所のみ。他の全G012/G013ファイル（`v4_gmo_canary_activation.py`、coordinator、
+adapter、transport、exit dispatcher、hard guard、`v4_gmo_actual_runtime_binding.py`
+の`bind_v4_gmo_actual_runtime`自体）は一切変更しない。
+
+### この例外で限定的に許可すること
+
+- `run_g013_actual_canary_after_exact_confirmation`を、design doc §11.4bの通りに
+  分割する：session消費／binding確認／refreshと2つのphrase確認呼び出し（既存のまま、
+  一切ロジック変更なし）はそのまま残し、それ以降の全ロジック
+  （signal postable再確認・monitor heartbeat再確認・cycle予約・permit発行・
+  `bind_v4_gmo_actual_runtime`呼び出し・`_run_bound_g013_canary`呼び出し）を
+  新規private helper `_run_g013_actual_canary_from_refreshed_session`へ切り出す。
+  唯一の実質的な差分は、`bind_v4_gmo_actual_runtime`へ`credential_pair`/`client`を
+  **明示的に**渡すようになること（既存のphrase経路は`None`を明示的に渡し、今日と
+  完全に同じ real-Keychain-default挙動を再現する）。
+- 新規public関数`run_g013_actual_canary_after_unattended_authorization`を追加し、
+  phraseの代わりに`resume_proof: V4MajorIncidentResumeProof`／
+  `confirmation_proof: V4CurrentTurnConfirmationProof`（`confirm_v4_unattended_
+  authorization_once`が生成する型と同一）を受け取り、同じsession消費／binding確認
+  ／refreshを行った上で同じ`_run_g013_actual_canary_from_refreshed_session`を呼ぶ。
+  `credential_pair`・`client`は**必須引数・default一切なし**とする。
+- `issue_v4_gmo_actual_activation_permit`／`_run_bound_g013_canary`／
+  `bind_v4_gmo_actual_runtime`自体の署名・挙動は一切変更しない。
+- 既存のphrase経路（`run_g013_actual_canary_after_exact_confirmation`）の外部から
+  見た挙動が完全に不変であることを、既存G013 test suite全体を無変更のまま実行して
+  pinする。
+- fake-only test（fake credential_pair／fake client）を新規関数に追加し、実Keychain
+  ・実transportには一切触れないことを確認する。
+
+### この例外でも禁止し続けること
+
+- 上記1関数の分割以外、`h11_v4_gmo_g013_canary.py`内の他ロジックの変更。
+- `v4_gmo_canary_activation.py`を含む他の全G012/G013ファイルの変更。
+- `bind_v4_gmo_actual_runtime`自体の署名・default挙動の変更（既存のphrase経路への
+  影響を避けるため、呼び出し側で明示的にNoneを渡すことで対応する）。
+- 新規関数`run_g013_actual_canary_after_unattended_authorization`に
+  `credential_pair`/`client`のdefaultを持たせること（fakeでも実でも）。
+- 新規関数を実際に呼び出すorchestration moduleの実装・結線（design doc §11が
+  すでに指摘した、別途明示承認が必要な独立Step）。
+- scheduler、cron、LaunchAgent、launchd、resident processの追加。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。

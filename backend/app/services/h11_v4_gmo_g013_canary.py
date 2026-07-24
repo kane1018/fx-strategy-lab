@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import httpx
+
 from app.h11_auto.contracts import FormalHorizon, FormalSignal
 from app.h11_auto.v4_actual_preparation_guard import (
     V4CompletedPreparationEvidence,
@@ -32,7 +34,9 @@ from app.h11_auto.v4_gmo_actual_coordinator import (
 )
 from app.h11_auto.v4_gmo_canary_activation import (
     V4CurrentTurnChallenge,
+    V4CurrentTurnConfirmationProof,
     V4GmoCanaryIntent,
+    V4MajorIncidentResumeProof,
     confirm_v4_current_turn_exact,
     confirm_v4_major_incident_resume_exact,
     issue_v4_gmo_actual_activation_permit,
@@ -55,6 +59,7 @@ from app.services.h11_v4_gmo_actual_runtime_binding import (
 )
 from app.services.h11_v4_gmo_actual_transport import (
     V4_GMO_SURFACEABLE_FAILURE_CLASSES,
+    V4GmoSealedCredentialPair,
 )
 from app.services.h11_v4_gmo_formal_canary_source import (
     MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS,
@@ -329,6 +334,73 @@ def run_g013_actual_canary_after_exact_confirmation(
         challenge=session.challenge,
         intent=session.intent,
     )
+    return _run_g013_actual_canary_from_refreshed_session(
+        session=session,
+        resume=resume,
+        confirmation=confirmation,
+        on_protected=on_protected,
+        credential_pair=None,
+        client=None,
+    )
+
+
+def run_g013_actual_canary_after_unattended_authorization(
+    *,
+    session: V4GmoG013PreparedSession,
+    resume_proof: V4MajorIncidentResumeProof,
+    confirmation_proof: V4CurrentTurnConfirmationProof,
+    credential_pair: V4GmoSealedCredentialPair,
+    client: httpx.Client,
+    on_protected: Callable[[V4GmoG013CanaryResult], None] | None = None,
+) -> V4GmoG013CanaryResult:
+    """Unattended equivalent of the function above: proofs instead of phrases.
+
+    ``resume_proof``/``confirmation_proof`` are expected to come from
+    ``confirm_v4_unattended_authorization_once``
+    (``app.h11_auto.v4_gmo_canary_activation``), not from typing a phrase.
+    Unlike the phrase-based function, ``credential_pair``/``client`` here are
+    required with no default of any kind -- neither fake nor real -- so a
+    caller can never silently reach ``bind_v4_gmo_actual_runtime``'s own
+    real-Keychain-on-``None`` behavior by omission. A real activation still
+    requires a human to construct the real credential pair and client and
+    pass them in explicitly; this function only gets from "proofs already
+    minted" to "permit obtained, handed to whatever credential/client the
+    caller supplied."
+
+    The type hints alone do not stop a caller from writing
+    ``credential_pair=None``/``client=None`` explicitly (Python does not
+    enforce them at runtime), so this is also checked here directly, fail
+    closed, rather than trusting the hints as the only guard.
+    """
+
+    if credential_pair is None or client is None:
+        raise V4GmoG013CanaryError("G013_UNATTENDED_CREDENTIAL_OR_CLIENT_REQUIRED")
+    session._use.consume_once()
+    _require_exact_session_binding(session)
+    session = _refresh_session_evidence_before_permit(session)
+    return _run_g013_actual_canary_from_refreshed_session(
+        session=session,
+        resume=resume_proof,
+        confirmation=confirmation_proof,
+        on_protected=on_protected,
+        credential_pair=credential_pair,
+        client=client,
+    )
+
+
+def _run_g013_actual_canary_from_refreshed_session(
+    *,
+    session: V4GmoG013PreparedSession,
+    resume: V4MajorIncidentResumeProof,
+    confirmation: V4CurrentTurnConfirmationProof,
+    on_protected: Callable[[V4GmoG013CanaryResult], None] | None,
+    credential_pair: V4GmoSealedCredentialPair | None,
+    client: httpx.Client | None,
+) -> V4GmoG013CanaryResult:
+    """Shared body for both confirmation paths above, given an already-refreshed
+    session and an already-obtained resume/confirmation proof pair -- proceeds
+    identically regardless of how those proofs were produced."""
+
     # Both exact confirmations succeeded: the operator has authorised THIS exact entry.
     # Only now commit — re-check the signal is still postable, then atomically reserve
     # the single per-generation cycle. Any failure up to here (mistyped/timed-out
@@ -382,6 +454,8 @@ def run_g013_actual_canary_after_exact_confirmation(
         repository=session.repository,
         generation=session.generation,
         activation_permit=permit,
+        credential_pair=credential_pair,
+        client=client,
     )
     try:
         return _run_bound_g013_canary(

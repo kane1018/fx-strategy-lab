@@ -843,6 +843,157 @@ between them -- the choice belongs to the operator, mirroring how the
 1-day authorization window (§3.4) and the scheduler shape (§12) were
 decided rather than assumed.
 
+### 11.4a Operator decision (2026-07-24): Path 1
+
+Path 1 is the direction to implement. This explicitly and knowingly
+supersedes this track's prior framing of the proof constructor as
+*"本トラック全体で唯一のG012/G013コード変更"* -- that framing is
+retired by this decision, not silently contradicted. §11.4b below is the
+concrete refactor plan this authorizes; it is scoped as narrowly as Path 1
+allows.
+
+### 11.4b Concrete refactor plan for Path 1
+
+Read in full: `run_g013_actual_canary_after_exact_confirmation`
+(`h11_v4_gmo_g013_canary.py:311-393`). Its structure splits cleanly:
+
+- Lines 320-322: consume the session's one-use marker, verify exact session
+  binding, refresh session evidence (clean-main + implementation/generation
+  digest re-check). Identical regardless of how confirmation happens.
+- Lines 323-331: the two phrase-based confirmations
+  (`confirm_v4_major_incident_resume_exact`/`confirm_v4_current_turn_exact`),
+  producing `resume`/`confirmation`. **This is the only part that differs
+  between the phrase path and the proof path.**
+- Lines 332-393: signal-postable re-check, monitor-heartbeat re-checks,
+  cycle reservation, permit issuance (`issue_v4_gmo_actual_activation_permit`,
+  unchanged, taking `resume`/`confirmation` positionally -- already
+  proof-shaped, not phrase-shaped), `bind_v4_gmo_actual_runtime` (called
+  **without** `credential_pair`/`client`, resolving to real Keychain by
+  default -- the known counterexample from §11.2), then
+  `_run_bound_g013_canary` (already fully generic on the resulting
+  `binding`; confirmed by reading it in full that it never branches on how
+  confirmation happened).
+
+The refactor: extract lines 332-393 into a new private helper,
+`_run_g013_actual_canary_from_refreshed_session(*, session, resume,
+confirmation, on_protected, credential_pair, client)`, with one behavioral
+change from today's inline code -- `bind_v4_gmo_actual_runtime` is called
+with `credential_pair=credential_pair, client=client` passed through
+explicitly, instead of omitted.
+
+Two public functions call it:
+
+```
+def run_g013_actual_canary_after_exact_confirmation(
+    *, session, major_incident_resume_phrase, current_turn_phrase, on_protected=None,
+) -> V4GmoG013CanaryResult:
+    session._use.consume_once()
+    _require_exact_session_binding(session)
+    session = _refresh_session_evidence_before_permit(session)
+    resume = confirm_v4_major_incident_resume_exact(...)       # unchanged
+    confirmation = confirm_v4_current_turn_exact(...)          # unchanged
+    return _run_g013_actual_canary_from_refreshed_session(
+        session=session, resume=resume, confirmation=confirmation,
+        on_protected=on_protected, credential_pair=None, client=None,
+    )
+
+def run_g013_actual_canary_after_unattended_authorization(
+    *, session, resume_proof, confirmation_proof, credential_pair, client, on_protected=None,
+) -> V4GmoG013CanaryResult:
+    session._use.consume_once()
+    _require_exact_session_binding(session)
+    session = _refresh_session_evidence_before_permit(session)
+    return _run_g013_actual_canary_from_refreshed_session(
+        session=session, resume=resume_proof, confirmation=confirmation_proof,
+        on_protected=on_protected, credential_pair=credential_pair, client=client,
+    )
+```
+
+Why this shape and not others:
+
+- **The phrase-based function's behavior must be byte-identical, pinned by
+  the full existing G013 test suite passing unchanged.** Passing
+  `credential_pair=None, client=None` explicitly from it reproduces today's
+  implicit omission exactly -- `bind_v4_gmo_actual_runtime`'s own
+  `None`-defaulting logic (§11.2) is untouched and still applies only to
+  this one, already-reviewed, human-interactive path.
+- **The new function's `credential_pair`/`client` are required, no
+  default -- ever.** This is the one property that must hold without
+  exception: an unattended caller (now, and any future orchestration) must
+  always supply them explicitly, exactly like every other injected
+  dependency in this track (Phase 1's `client`, Phase 3 slice 1's
+  `credential_pair`/`client`). There is no fake-default and no
+  real-default; a caller that omits either gets a `TypeError` at the call
+  site, not a silent real-Keychain resolution.
+- **Session consume/binding/refresh is duplicated (3 lines) rather than
+  folded into the shared helper.** The phrase path's confirm-calls need the
+  *already-refreshed* session (they read `session.generation.digest`/
+  `session.challenge`/`session.intent` post-refresh); duplicating three
+  direct, non-branching calls is lower-risk than restructuring the
+  refresh-then-confirm ordering to fit a callback shape.
+- **`issue_v4_gmo_actual_activation_permit` and `_run_bound_g013_canary`
+  are untouched, called identically from both paths.** Proof binding
+  (`generation_digest`/`intent_digest` matching `session`) is enforced there
+  exactly as today, regardless of which function produced the proofs.
+
+This is now concrete enough to implement under its own new AGENTS.md
+exception (§11.4a's decision recorded above); the exception must state the
+above explicitly rather than treat this as an unscoped green light to
+rewrite the module.
+
+### 11.4c Implementation status (2026-07-24, second-ever G012/G013 change, unwired)
+
+Implemented exactly per §11.4b, under AGENTS.md's "proof-accepting G013
+entry-cycle driver 実装限定例外". `git diff --numstat` on
+`h11_v4_gmo_g013_canary.py` shows 67 insertions, 0 deletions -- the
+pre-existing function body was relocated into the new shared helper without
+a single line altered, except the two new `credential_pair=`/`client=`
+arguments added to the existing `bind_v4_gmo_actual_runtime` call. The full
+pre-existing G013 test suite (40 tests across three files) passes unchanged,
+which is the primary evidence that the human-interactive phrase path's
+behavior did not change. 11 new tests pin: the new function's required,
+no-default `credential_pair`/`client`; that both public functions dispatch
+to the identical shared helper (proving one implementation, not two); that
+the phrase path still passes `None`/`None` through to `bind_v4_gmo_actual_runtime`
+explicitly (reproducing today's real-Keychain-default exactly); that the
+new function passes its caller-supplied `credential_pair`/`client` through
+unchanged; and that it has zero production callers today.
+
+Two independent reviews (Safety; Architecture+Operations) returned PASS,
+each after re-deriving the diff-minimality claim from `git diff` directly
+rather than trusting this document, and after independently re-running the
+full pre-existing G013 suite. Two findings from that round were fixed
+before treating this slice as closed, both addressed in the shipped code
+rather than deferred:
+
+- **The "no silent real-Keychain fallback" guarantee was enforced only by
+  an unchecked type hint.** Python does not stop a caller from writing
+  `credential_pair=None`/`client=None` explicitly despite the hints not
+  permitting `None` -- this is now also checked at runtime in
+  `run_g013_actual_canary_after_unattended_authorization` itself, raising
+  `G013_UNATTENDED_CREDENTIAL_OR_CLIENT_REQUIRED` fail-closed before doing
+  anything else, matching this codebase's existing convention of
+  runtime-checking beyond static type hints rather than trusting them alone.
+- **The "no production callers" test had an AST blind spot for aliased
+  imports** (`import ... as X`) and dynamic/string-based lookups. The
+  alias case is now also checked (`ast.alias.name`/`asname`); the test's
+  scope note now states plainly that string-based/dynamic lookups remain
+  outside what it can catch, rather than implying broader coverage than it
+  has.
+
+72 tests total in the new-plus-fixed file's lineage (11 in the dedicated new
+test file); full `h11_auto` suite: 772 passing (up from 761 before this
+slice). Ruff clean; danger scan (credential/transport/scheduler tokens)
+clean; `git status`/`git diff --stat` confirm only the one service file,
+the new test file, `AGENTS.md`, and this design doc changed -- no other
+G012/G013 file touched, matching the new exception's own claim exactly.
+
+Remaining, still explicitly unauthorized: wiring
+`run_g013_actual_canary_after_unattended_authorization` to anything that
+actually calls it (an orchestration module still does not exist), the
+scheduler (§12), and real Keychain/credential construction -- all separate,
+later steps per §6/§8/§11.5 below.
+
 ### 11.5 Scope boundary for the eventual implementation step
 
 Everything below must remain true of the *implementation*, not just this
