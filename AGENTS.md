@@ -628,18 +628,24 @@ scheduler・resident processへは一切接続しない。
 
 ### この例外で限定的に許可すること
 
-- (a) realized P&L risk ledger: unattended live専用の永続SQLite台帳。確定済み約定結果
-  （realized P&L）をcycle_refごとにappend-onlyで1回だけ記録し、凍結риск値
-  （5,000円/trade・10,000円/日・50,000円/月・5連敗・JST日/月境界）に対する
-  daily/monthly/consecutive-loss stopの3 booleanを算出する。金額はledger内部のみとし、
-  安全出力はboolean/件数だけに限定する。削除・reset・上書きAPIを持たない。
-- (b) supervisor health/dead-man check: heartbeat記録と「直前N秒間の連続健全性」判定。
+- (a) realized P&L risk ledger: 当初は専用SQLite台帳の新設を想定したが、調査の結果、既存の
+  reviewed済み`app/h11_auto/runtime_safety.py`（`PhaseBRiskPolicy/State/Store`・
+  `evaluate_risk_before_entry`・`record_closed_result_once`・JST日/月rollover・
+  cycle_refごとのdedup・凍結risk値5,000円/trade・10,000円/日・50,000円/月・5連敗）が
+  この要件を既に満たすため、**変更なしで再利用**する（重複実装によるdrift回避。2026-07-24
+  operator承認済みの設計doc §9に記録）。新規台帳は実装しない。既知の制約: `PhaseBRiskStore`は
+  state file欠損時に新規ACTIVE stateを生成するため、wiring時に「file欠損=起動拒否」の
+  bootstrap規律を別途必須とする（設計doc §9.2-1）。
+- (b) supervisor health/dead-man check: 既存`DeadManPolicy/Store`（recency）を再利用し、
+  新規moduleは「直前N秒間の連続健全性」（continuity chain）判定だけを追加する。
   read-onlyのhost状態観測を含んでよいが、process kill・sleep・reboot・設定変更は行わない。
 - (c) operator authorization artifact型: operator-write-onlyの事前授権artifact
   （1 JST営業日window・最大1 entry・O_EXCL one-use消費marker）。自動化側から
   window延長・cap引き上げ・再発行を行うAPIを構造的に持たない。
-- (d) unattended live専用のoperator persistent HALT: latch-only・clear/reset APIなし。
-  shadow ledgerのHALTとは別のstate root。
+- (d) unattended live専用のoperator persistent HALT: 既存`engage_risk_kill`＋
+  `AutoRiskStopState.KILLED`（un-kill APIなし・auto-clearなし）を**変更なしで再利用**する
+  （(a)と同じ理由・同じ2026-07-24記録）。state rootはshadow ledgerと別であることをwiring時に
+  必須とし、(a)のbootstrap規律（file欠損=起動拒否）がHALTの永続性保証の前提となる。
 - (e) permit発行orchestration: (a)〜(d)と既存fail-closed gate群の全条件成立時だけ、
   既存の**無変更**`issue_v4_gmo_actual_activation_permit`へ渡すproof objectを組み立てる
   純粋な判断layer。ただし本例外の実装・testではpermitの実発行はfake state rootに対する

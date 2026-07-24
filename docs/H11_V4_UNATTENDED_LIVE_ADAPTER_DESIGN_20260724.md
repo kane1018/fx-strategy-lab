@@ -289,3 +289,118 @@ conflated, here or anywhere else in this project.
 3. Real Keychain/Private-API/broker-write wiring, and any resident/scheduler
    process, remain separate, explicitly authorized steps after all of the
    above are implemented and reviewed.
+
+## 9. Implementation status (2026-07-24, fake-only, unwired)
+
+The §8-step-2 components were implemented the same day, with one significant
+correction to the plan: a codebase survey found that **items (a) and (d)
+already exist, reviewed and tested**, in
+`backend/app/h11_auto/runtime_safety.py` — `PhaseBRiskPolicy/State/Store` with
+`evaluate_risk_before_entry` / `record_closed_result_once` is precisely the
+persistent realized-P&L ledger §3.2 item 3 calls for (JST day/month rollover,
+per-cycle_ref dedup, daily/monthly/consecutive-loss stops against the frozen
+limits, and a per-trade-bound discipline violation engaging latch-only
+`KILLED`), and `engage_risk_kill` + `AutoRiskStopState.KILLED` (which never
+auto-clears and has no un-kill API) is item 5's operator persistent HALT.
+Duplicating either would have repeated the drift anti-pattern flagged in the
+Phase 3 slice 1 review, so both are **reused unchanged** and the decision
+layer consumes them through their existing types.
+
+What was genuinely new, implemented fake-only and wired into nothing:
+
+- `backend/app/services/h11_v4_unattended_live_heartbeat_chain.py` — item 4's
+  *continuity* requirement. The existing `DeadManStore` proves heartbeat
+  recency only; the chain store additionally tracks when unbroken continuity
+  started, restarts the chain on any gap beyond the policy maximum, and
+  reports `HEARTBEAT_CHAIN_CONTINUITY_INSUFFICIENT` until the minimum
+  continuous duration has genuinely elapsed. Both are consumed side by side.
+- `backend/app/services/h11_v4_unattended_live_authorization.py` — item 1's
+  operator-write-only daily artifact. Read-and-consume only: the module's
+  entire public surface is `check_operator_daily_authorization` and
+  `consume_operator_daily_authorization_once` (a test pins this), so the
+  automation structurally cannot mint, extend, re-date, or re-issue an
+  authorization. Consumption is a one-use O_EXCL marker beside the artifact.
+- `backend/app/services/h11_v4_unattended_live_permit_decision.py` — the pure
+  decision layer composing all six conditions. It performs no I/O, and its
+  output type pins `permit_issued=False` / `broker_post_authorized=False` /
+  `live_ready=False` unconstructibly-otherwise. It cannot call
+  `issue_v4_gmo_actual_activation_permit` even in principle: the proof
+  constructors that function requires do not exist for the unattended path
+  yet, deliberately — creating them (inside the G013 permit module, under its
+  private-token discipline) is its own future, separately authorized and
+  separately reviewed step.
+
+Tests: `backend/app/tests/h11_auto/test_v4_unattended_live_components_fake_only.py`
+(41 tests) covers the chain lifecycle (fresh/sustained/gap-reset/stale/missing/
+future/corrupt/backwards/policy-mismatch, inclusive gap and continuity
+boundaries), every authorization artifact defect, one-use consumption, the
+six-condition decision matrix including composition with the real reused
+`runtime_safety` machinery (operator KILL and a per-trade-bound discipline
+violation both block end-to-end), forged/inconsistent-input rejection,
+duck-typed input rejection, and import-graph isolation from every actual/
+canary/coordinator/transport/hard-guard/private-api module.
+
+### 9.1 Independent review outcome (2026-07-24) and the fix it forced
+
+An adversarial Safety review VETOED the first version of this batch with one
+Critical finding, since fixed and regression-pinned: the decision layer's
+risk-gate branch appended only the gate's own `blocked_reasons` when
+`allowed=False`. `PhaseBRiskGateResult` carries no internal consistency
+invariant, so `allowed=False` with an *empty* reasons tuple is constructible —
+and that combination contributed nothing to the decision's reason set,
+producing `allowed=True` despite a blocked risk gate. That branch is exactly
+where the realized-P&L stops (§3.2 item 3) and the operator KILL (§3.2 item 5)
+flow, i.e. the operator's veto could have been silently ignored by any future
+wiring, refactor, or deserialization that produced an inconsistent gate
+object. The fix appends an unconditional `PERSISTENT_RISK_GATE_NOT_CLEAR`
+sentinel whenever the gate is not allowed, and independently blocks on any
+`stop_state` other than `ACTIVE` regardless of `allowed`
+(`PERSISTENT_RISK_STOP_STATE_NOT_ACTIVE`); the analogous
+`dead_man.halt_required` inconsistency now also blocks independently of
+`alive`. All three are pinned by dedicated forged-input regression tests.
+
+### 9.2 Named obligations for the future wiring step (from the same reviews)
+
+These are documented obligations, not implemented behavior. The wiring step
+must not begin without addressing each one:
+
+1. **Risk-state bootstrap discipline (High).** `PhaseBRiskStore.load()`
+   fabricates a fresh `ACTIVE` state when its file is missing — fine for
+   Phase B paper, backwards for an unattended live veto: a lost/deleted state
+   file would silently clear a latched `KILLED`. The wiring must treat a
+   missing risk-state file as *refuse to run* (operator-initialized state
+   required), and pin that with a test. Until then, "KILLED never auto-clears"
+   is true of the API surface but not of the persistence layer.
+2. **Canonical artifact path (Medium).** One-use consumption is keyed by the
+   artifact's *directory* + day. Copying a same-day artifact to a second
+   directory would permit a second consumption. The wiring must pin exactly
+   one canonical artifact path per generation and never accept a
+   caller-supplied one.
+3. **Local, unsynced artifact directory (Medium).** The consumption marker
+   lives beside the artifact. On a cloud-synced directory (note: macOS syncs
+   `~/Desktop` — where this repository lives — to iCloud by default),
+   sync conflict/restore could delete or resurrect the marker, and O_EXCL
+   atomicity is not dependable on synced filesystems. The canonical artifact
+   directory must be local and unsynced, or the marker must move to a
+   dedicated local state root.
+4. **`entry_gate_blocked_reasons=()` and `notification_ready=True` are
+   unverifiable claims to this layer (High).** The decision cannot
+   distinguish "gates ran and passed" from "gates never ran", nor "notifier
+   verified" from a hardcoded `True`. The wiring must derive both from the
+   real evaluations in the same cycle, and §3.2 item 6 additionally requires
+   verifying the actual *send* at issuance time — readiness-before-decision
+   alone quietly under-implements it.
+5. **Single-writer assumption for the risk store (Medium).** The JSON
+   load-mutate-save pattern has no cross-process lock; overlapping processes
+   could both read `ACTIVE`. The wiring must enforce the existing
+   single-process lock convention around every risk-state read/mutate/save.
+6. **Daily auto-clear is acceptable only because of the 1-day window
+   (Low, load-bearing).** `_roll_calendar` auto-clears `STOPPED_DAILY_BUDGET`
+   on day rollover. That is safe here *only because* §3.4's decision requires
+   a fresh operator artifact every JST day. Relaxing the window later (e.g.
+   back toward the 7-day example) would silently invalidate this and must
+   revisit the rollover semantics.
+7. **`decision.allowed` must never collapse into proof construction (Medium).**
+   §6's no-allow-bridge rule applies: the future proof constructors must each
+   independently re-verify their own condition from primary state, not accept
+   this layer's boolean as a substitute.
