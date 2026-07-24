@@ -617,3 +617,45 @@ scheduler・resident processへは一切接続しない。
 - 実credential、実Private API、実broker write、scheduler、resident processへの接続。
 - unattended permit発行判断の設計案を、実際のpermit発行や活性化として扱うこと。設計docの完成は
   live-ready、performance proof、実装承認を意味しない。
+
+## H-11 v4 unattended live activation components 実装限定例外（fake-only・未結線）
+
+上記design-only例外の設計docをoperatorがレビューし、§3.2の6条件構造と§3.4の決定値
+（authorized window=1 JST営業日・authorization 1件あたり最大1 entry・cold-startはそのまま許容）を
+明示承認した場合に限り、その設計に対応する以下のcomponent群を、fake-only／未結線で実装してよい。
+この例外はPhase 4 component実装専用であり、実credential・実Private API・実broker write・
+実通知送信・scheduler・resident process・既存G012/G013コードの変更を一切含まない。
+
+### この例外で限定的に許可すること
+
+- (a) realized P&L risk ledger: unattended live専用の永続SQLite台帳。確定済み約定結果
+  （realized P&L）をcycle_refごとにappend-onlyで1回だけ記録し、凍結риск値
+  （5,000円/trade・10,000円/日・50,000円/月・5連敗・JST日/月境界）に対する
+  daily/monthly/consecutive-loss stopの3 booleanを算出する。金額はledger内部のみとし、
+  安全出力はboolean/件数だけに限定する。削除・reset・上書きAPIを持たない。
+- (b) supervisor health/dead-man check: heartbeat記録と「直前N秒間の連続健全性」判定。
+  read-onlyのhost状態観測を含んでよいが、process kill・sleep・reboot・設定変更は行わない。
+- (c) operator authorization artifact型: operator-write-onlyの事前授権artifact
+  （1 JST営業日window・最大1 entry・O_EXCL one-use消費marker）。自動化側から
+  window延長・cap引き上げ・再発行を行うAPIを構造的に持たない。
+- (d) unattended live専用のoperator persistent HALT: latch-only・clear/reset APIなし。
+  shadow ledgerのHALTとは別のstate root。
+- (e) permit発行orchestration: (a)〜(d)と既存fail-closed gate群の全条件成立時だけ、
+  既存の**無変更**`issue_v4_gmo_actual_activation_permit`へ渡すproof objectを組み立てる
+  純粋な判断layer。ただし本例外の実装・testではpermitの実発行はfake state rootに対する
+  test内でのみ行い、実runtime state root・実coordinator・実transportへは接続しない。
+- 各componentのfake-only test、設計doc更新、AGENTS.md本体の必要最小限更新。
+- shadow系moduleと同様のimport-graph isolation test（actual transport・credential・
+  notification実送信・G013 canary orchestrationへの到達を拒否）。
+
+### この例外でも禁止し続けること
+
+- 実credential、実Keychain read、実Private API、実broker write、実Pushover/SMTP送信。
+- scheduler、cron、LaunchAgent、resident process、background loopの追加・install。
+- 既存G012/G013 permit／coordinator／transport／exit dispatcher／hard guardコードの変更。
+- (c)のauthorization artifactを自動化側から作成・延長・再発行するAPIの実装。artifactの
+  作成はoperator自身の明示的なCLI/手動操作として別Stepで設計する。
+- (e)から実coordinator・実transport・実runtime state rootへの結線。結線は全component
+  review完了後の別Step・別明示承認とする。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+- 本例外下の実装・test完了をlive-ready、performance proof、activation承認として扱うこと。

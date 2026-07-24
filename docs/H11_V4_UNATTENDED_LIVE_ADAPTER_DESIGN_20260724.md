@@ -153,6 +153,29 @@ available, and that the residual risk they leave is one the operator accepts
 explicitly (as a documented, dated, revocable decision — see §6) rather than
 implicitly.
 
+### 3.4 Operator decisions (2026-07-24)
+
+The operator reviewed §3.2 and decided:
+
+- **Six-item structure: approved** for implementation as fake-only,
+  independently reviewed slices.
+- **Item 1 window: one JST trading day per authorization.** Combined with the
+  frozen 1-entry-per-day cap, each authorization artifact therefore permits at
+  most **one** entry, and every trading day of unattended operation requires a
+  fresh, separate operator authorization action. This is deliberately more
+  conservative than the 7-day example sketched in §3.2 — it keeps a human
+  decision within one day of every order the system could ever place, which is
+  the closest an unattended design can get to G013's per-trade human
+  confirmation.
+- **Item 3 cold-start: accepted as-is** (an empty realized-P&L ledger counts as
+  stops-clear). This is coherent *because of* the 1-day window decision: the
+  maximum exposure an empty ledger can permit is a single entry bounded by the
+  frozen 5,000-yen per-trade loss cap before the operator is back in the loop
+  for the next authorization.
+
+These decisions are revocable by the operator at any time and are themselves
+not a permit, generation freeze, or activation.
+
 ## 4. Fixed contract (unchanged)
 
 `SHORT_V1`, `30m`, `USD_JPY`, `1,000` units, `MARKET` entry, existing
