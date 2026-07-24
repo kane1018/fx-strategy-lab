@@ -1453,3 +1453,130 @@ proof — the real guarantee is the single import site.
 
 Final: 48 tests across the two new/updated files; full `h11_auto` suite
 832 passing. Ruff and the danger scan clean.
+
+## 14. Real notification-send integration — design (2026-07-24, design-only, no code)
+
+Discharges the remaining half of §9.2 item 4 / §3.2 item 6: an actual
+Pushover/email send, verified, that fail-closes on failure. This section
+is that design, not an authorization to implement it.
+
+### 14.1 The finding that reframes this problem
+
+`run_actual_pushover_rehearsal_once`/`run_actual_smtp_rehearsal_once`
+(`h11_v4_notification_actual_preparation.py:233,387`) are NOT reusable for
+unattended per-cycle or per-entry checks, and not merely because of their
+one-use `V4PreparationOperation` permit. `build_h11_v4_pushover_request`
+(`h11_v4_notification_binding_no_post.py:81-93`) sets
+`emergency_priority=True, receipt_required=True, retry_seconds=60,
+expire_seconds=3_600` for every event in `CRITICAL_EVENTS` — and
+`ACTIVATION_PREPARATION_TEST` (the only event the rehearsal sends) is one
+of them. The rehearsal function then polls Pushover's receipt endpoint for
+up to 15 minutes waiting for `acknowledged == 1` — a human physically
+tapping acknowledge on their phone. This is fundamentally incompatible
+with an unattended process, not a one-use-permit inconvenience to route
+around.
+
+The good news: `CRITICAL_EVENTS` is a strict subset of
+`H11V4NotificationEvent` (`:40-55`). Non-critical events (e.g.
+`ENTRY_CONFIRMED`, `SHADOW_ACTIONABLE_OBSERVED`) get
+`emergency_priority=False, receipt_required=False` — `H11V4PushoverTransport
+.send_once()` for these returns immediately once Pushover's API accepts
+the POST, no ack wait. This shape is genuinely usable by an unattended
+process; the emergency/ack machinery was solving a different problem
+(a human-verified activation ceremony), not "can this run unattended".
+
+### 14.2 The credential/real-send boundary applies here too
+
+Writing a new class that performs a real HTTP POST to Pushover or a real
+SMTP send, using real credentials, is the same category of thing this
+track has never done for the GMO broker path — every "real" component
+touched so far (`bind_v4_gmo_actual_runtime`, `V4GmoHttpxPrivateTransport`,
+`V4GmoKeychainCredentialPair`) was pre-existing, never authored in this
+track, always treated as something only injected as a required parameter,
+never constructed. For consistency, a real notification send is treated
+the same way here: **implementing a new
+`H11V4PushoverTransport`/`H11V4EmailTransport` that actually calls
+Pushover/SMTP with real credentials is out of scope for anything this
+assistant implements** — that class is the operator's to write (or to
+adapt from the existing rehearsal module's HTTP-calling code, which
+already exists and is already reviewed), exactly like the launcher script
+already described for GMO credentials.
+
+What stays in scope: the pure decision/orchestration layer around
+whatever real transport the operator supplies -- mirroring exactly how
+`H11V4DisabledDualRouteNotifier` (`:198-`) already works, but for a real
+transport instead of a fake one. That existing class's own
+`__post_init__` hard-blocks this by design (`self.primary.fake_only is
+not True` raises `ACTUAL_NOTIFICATION_TRANSPORT_FORBIDDEN`,
+`:208-211`) -- it must never be modified to accept real transports. A
+new, additive sibling class is needed instead, taking real (`fake_only
+= False`) transports as required, no-default constructor parameters, and
+otherwise reusing the identical try-primary-then-secondary,
+`CRITICAL_EVENTS`-aware halt logic. Nothing about that decision logic
+touches credentials or performs I/O itself -- it only calls
+`.send_once()` on whatever transport object the caller constructed.
+
+### 14.3 Open fork: what does "notification_ready" mean per cycle, vs. "notify at issuance"?
+
+§3.2 item 6's own words are "notify before or immediately upon permit
+issuance" -- a single event tied to the moment entry is about to happen,
+not a repeated per-cycle check. But the six-condition proof constructor
+(`confirm_v4_unattended_authorization_once`, already implemented and
+reviewed) takes `notification_ready: bool` as one of its six conditions,
+evaluated fresh every cycle the bounded runner calls it. Two designs are
+possible, and this document does not choose between them:
+
+- **Option A -- `notification_ready` stays a per-cycle gate, cheaply
+  computed.** Define it as "the notification channel is configured and
+  reachable" (e.g. a lightweight auth-only check, or simply "the operator
+  supplied a real transport pair to the launcher at all"), never a full
+  send, so it can be evaluated every cycle without sending real messages
+  while conditions are still pending. The actual real send happens
+  separately, once, exactly when the other five conditions have already
+  cleared.
+- **Option B -- restructure so the real send happens INSIDE the
+  six-condition evaluation itself**, at the moment all other conditions
+  are already known to pass, folding "did the send succeed" into
+  `notification_ready` for that one decisive cycle only. This is closer
+  to §3.2 item 6's literal wording but requires re-touching
+  `confirm_v4_unattended_authorization_once` -- a THIRD G012/G013-adjacent
+  change (it lives in `v4_gmo_canary_activation.py`), reopening the same
+  class of decision this track already made once for the proof
+  constructor's sibling function.
+
+Whichever is chosen, the "notify at/immediately upon issuance" send
+itself needs a new hook. The existing driver's `on_protected` callback
+(`h11_v4_gmo_g013_canary.py:354`) fires too late -- after fill and OCO
+confirmation, not at permit issuance -- so it cannot satisfy this
+requirement by itself; a new hook point in the orchestration module
+(fired between the proof constructor succeeding and the driver being
+called) is the more likely shape, but this too is not decided here.
+
+### 14.4 What a future implementation step would need, regardless of the fork chosen
+
+- A new, additive `H11V4NotificationEvent` member for unattended-live
+  entry notification (e.g. `UNATTENDED_LIVE_ENTRY_ATTEMPTED`), NOT in
+  `CRITICAL_EVENTS` -- purely additive to the existing enum, mirroring
+  Phase 3 slice 2's `SHADOW_ACTIONABLE_OBSERVED`/`SHADOW_HALT_ENGAGED`
+  precedent.
+- A new, additive dual-route notifier class alongside
+  `H11V4DisabledDualRouteNotifier`, requiring real (non-`fake_only`)
+  transports with no default -- never constructing them.
+- A new, separately named AGENTS.md exception before any code is written,
+  following this track's standard rhythm.
+- Fake-only tests using the existing `H11V4FakePushoverTransport`/
+  `H11V4FakeEmailTransport` (already reviewed, already in this module) to
+  exercise the new decision class without ever touching a real transport.
+- A resolution to §14.3's fork, made by the operator, before implementation
+  proceeds.
+
+### 14.5 Operator decision (2026-07-24): Option A
+
+Option A (§14.3) is the direction: `notification_ready` stays a
+per-cycle, cheaply-computed channel-health signal; the actual real send
+happens separately, once, exactly when the other five conditions have
+already cleared. This avoids a third G012/G013-adjacent change (Option B
+would have required re-touching `confirm_v4_unattended_authorization_once`)
+and keeps the higher-cost path (a real send) off the hot per-cycle loop.
+No code is authorized by this decision alone -- it only resolves which
+shape a future, separately authorized implementation step should target.

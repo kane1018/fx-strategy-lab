@@ -998,3 +998,36 @@ notification_ready側（実Pushover/SMTP送信の検証）は通知Keychain cred
 - `notification_ready`のprovider化・実送信検証（別Step）。
 - scheduler、cron、LaunchAgent、launchd、resident processの追加。
 - 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 real notification-send統合 設計限定例外（design-only・コード実装なし）
+
+design doc §9.2項目4の残り半分（notification_readyの実送信検証）について、
+operatorが明示的にこの設計を依頼した場合に限り、**文書（design doc addendum）と
+AGENTS.md本体の更新だけ**を行ってよい。このStepはPythonコードを一切書かない。
+既存の通知関連ファイル（`h11_v4_notification_binding_no_post.py`、
+`h11_v4_notification_actual_preparation.py`、`h11_v4_unattended_shadow_notification.py`
+等）は一切変更しない。
+
+### この例外で限定的に許可すること
+
+- 既存の実送信rehearsal機構（`run_actual_pushover_rehearsal_once`等）と、
+  fake-only notifier（`H11V4DisabledDualRouteNotifier`等）の構造を読み取り調査し、
+  無人経路で再利用可能な部分・不可能な部分を文書化する。
+- 実transport（`H11V4PushoverTransport`/`H11V4EmailTransport`を実装し実credentialで
+  実送信を行うクラス）の実装は、GMOのcredential/transportと同じ理由でこのAIの
+  実装対象外であることを設計上の制約として明記する。
+- `notification_ready`の意味論（毎cycle評価する軽量health-check案 vs
+  six-condition評価内で実送信を行う案）の2案を、両者のtrade-offとともに文書化する
+  （operatorの決定を仰ぐ設問として提示してよい）。
+- 将来の実装Stepが必要とする要素（新規additive enum member、新規additive
+  notifier class、新規AGENTS.md例外、fake-only test方針）を列挙する。
+- この設計案自体は実送信の実装ではない。
+
+### この例外でも禁止し続けること
+
+- 実装コード（Python）を一切書かない。
+- 既存の通知関連ファイル・G012/G013コード・他のunattended-track moduleの変更。
+- `H11V4DisabledDualRouteNotifier`を含む既存notifier classの変更
+  （新規additive classとしてのみ将来実装可能、既存classへの改変は不可）。
+- この設計案を、実際の通知送信や検証として扱うこと。設計doc完成はlive-ready、
+  performance proof、実装承認を意味しない。
