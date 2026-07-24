@@ -924,6 +924,7 @@ class V4GmoCoordinatedActualPath:
             broker_capability_evidence_hash=(
                 self.generation.broker_capability_evidence_hash
             ),
+            max_entries_per_day=self.generation.maximum_entries_per_day,
         )
 
     def _require_entry_runtime_safety(

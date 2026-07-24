@@ -7,6 +7,22 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0AH. H-11 v4 G014 sequential entries-per-day改定 1→20（2026-07-25・no-POST・operator指示）
+
+- operatorは「本番を完成させたい」との明示指示で、`maximum_entries_per_day`を1から20へ改定。
+  同時ポジションは引き続き最大1（sequential re-entryのみ、同時複数保有ではない）。
+- 予算（5,000/10,000/50,000円・5連敗）、exit/friday/weekend profile、broker POST禁止、その他の
+  安全条件は不変。世代labelを`H11_AUTO_30M_20260725_G014`へ改め、protection/policy/risk/
+  implementation digestを新値で再凍結。AGENTS.mdへG014例外セクションを追加済み。
+- `reserve_entry_cycle`の予約guardを「未決済ポジションが1つもない」ことだけを見るよう単純化し、
+  暦日ベースの重複制約は撤廃（1日上限は`PhaseBRiskPolicy.entries_today`が独立担保）。上限到達等の
+  予約後・実発注前の棄却でreservationが永久に詰まらないよう`release_unattempted_reservation`
+  （真のincidentでは解放しない）を追加。
+- 独立レビュー2本（Safety／Architecture+Operations）を実施し、両VETOの指摘（上記の詰まりリスク・
+  G013ラベル決め打ちによるG014での機能不全）を修正。再検証でG013ラベル決め打ちがもう1箇所
+  （`h11_v4_gmo_signal_preview.py`、no-POST previewのみ・money/order経路なし）残っているのを検出し、
+  同様に修正。h11_auto 881件・full backend 8,475件パス、両レビューPASS。
+
 ## 0AG. H-11 v4 G013 数量改定 10,000→1,000通貨（2026-07-17・no-POST・operator指示）
 
 - operatorは初回actual canaryの数量を10,000通貨から**1,000通貨**へ改定した（証拠金所要と

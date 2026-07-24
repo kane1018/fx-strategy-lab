@@ -35,9 +35,17 @@ def _policy(**overrides: int) -> PhaseBRiskPolicy:
     return PhaseBRiskPolicy(**values)  # type: ignore[arg-type]
 
 
-def test_policy_requires_consistent_positive_limits_and_one_entry() -> None:
+def test_policy_requires_consistent_positive_limits_and_bounded_entries() -> None:
+    from app.h11_auto.runtime_safety import MAXIMUM_ENTRIES_PER_DAY_CEILING
+
+    # A sequential-entry count within [1, ceiling] is now valid (operator
+    # decision 2026-07-25); only <1 or above the ceiling is rejected.
+    _policy(maximum_entries_per_day=2)
+    _policy(maximum_entries_per_day=MAXIMUM_ENTRIES_PER_DAY_CEILING)
     with pytest.raises(H11AutoRuntimeSafetyError):
-        _policy(maximum_entries_per_day=2)
+        _policy(maximum_entries_per_day=0)
+    with pytest.raises(H11AutoRuntimeSafetyError):
+        _policy(maximum_entries_per_day=MAXIMUM_ENTRIES_PER_DAY_CEILING + 1)
     with pytest.raises(H11AutoRuntimeSafetyError):
         _policy(daily_loss_limit_jpy=4_000)
 
@@ -74,6 +82,42 @@ def test_per_trade_bound_violation_kills_and_never_auto_resumes() -> None:
     )
     assert gate.allowed is False
     assert state.stop_state == AutoRiskStopState.KILLED.value
+
+
+def test_daily_loss_limit_binds_independently_of_the_raised_entries_per_day_cap() -> None:
+    # Operator decision 2026-07-25 raised maximum_entries_per_day from 1 to 20.
+    # This proves the daily loss limit still fails closed well before the
+    # entries-per-day cap could ever bind on its own -- two losing trades at
+    # the real per-trade bound exhaust the real daily limit at entry 2 of a
+    # possible 20, so neither cap masks the other. Values mirror the real
+    # frozen generation's production limits (5,000/10,000 yen).
+    policy = _policy(
+        per_trade_loss_bound_jpy=5_000,
+        daily_loss_limit_jpy=10_000,
+        monthly_loss_limit_jpy=50_000,
+        maximum_consecutive_losses=5,
+        maximum_entries_per_day=20,
+    )
+    state = PhaseBRiskState(policy_digest=policy.digest)
+    stop = AutoRiskStopState.ACTIVE
+    for _ in range(2):
+        record_risk_entry_attempt(
+            state=state, policy=policy, cycle_day_jst="2026-07-15"
+        )
+        stop = record_closed_result(
+            state=state,
+            policy=policy,
+            cycle_day_jst="2026-07-15",
+            pnl_jpy_internal=-5_000,
+        )
+    assert stop is AutoRiskStopState.STOPPED_DAILY_BUDGET
+    assert state.entries_today == 2
+    gate = evaluate_risk_before_entry(
+        state=state, policy=policy, cycle_day_jst="2026-07-15"
+    )
+    assert gate.allowed is False
+    assert "DAILY_LOSS_LIMIT_REACHED" in gate.blocked_reasons
+    assert "MAX_ENTRIES_PER_DAY_REACHED" not in gate.blocked_reasons
 
 
 def test_daily_monthly_and_consecutive_stops_are_fail_closed() -> None:

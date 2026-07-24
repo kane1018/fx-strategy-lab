@@ -17,9 +17,15 @@ from app.services.h11_v4_gmo_actual_transport import V4GmoSealedCredentialPair
 def _fake_session() -> SimpleNamespace:
     return SimpleNamespace(
         _use=SimpleNamespace(consume_once=lambda: None),
-        store=SimpleNamespace(reserve_entry_cycle=lambda **_kwargs: None),
+        store=SimpleNamespace(
+            reserve_entry_cycle=lambda **_kwargs: None,
+            release_unattempted_reservation=lambda **_kwargs: True,
+        ),
         generation=SimpleNamespace(digest="sha256:" + "a" * 64),
-        formal_input=SimpleNamespace(signal=object(), frozen_atr_24=Decimal("0.1")),
+        formal_input=SimpleNamespace(
+            signal=SimpleNamespace(fingerprint="sha256:" + "f" * 64),
+            frozen_atr_24=Decimal("0.1"),
+        ),
         intent=object(),
         challenge=object(),
         repository=Path("/nonexistent"),

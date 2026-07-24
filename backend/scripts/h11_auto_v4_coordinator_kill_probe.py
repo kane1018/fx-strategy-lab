@@ -40,6 +40,7 @@ def main() -> int:
         signal_config_hash=selected.signal_config_hash,
         selected_horizon=selected.selected_horizon,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
+        max_entries_per_day=selected.maximum_entries_per_day,
     )
     generation = build_v4_gmo_frozen_generation(
         generation_label="H11_AUTO_30M_KILL_REHEARSAL_G001",

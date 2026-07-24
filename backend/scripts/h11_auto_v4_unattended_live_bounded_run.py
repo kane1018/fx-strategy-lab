@@ -61,10 +61,13 @@ _EXPECTED_NOT_YET_ERRORS = (
 # (e.g. a provider label with a bad charset slipping past the runner's
 # element check below) -- always a programming error, never a market
 # condition, so retrying it would only burn the cycle budget on repeat
-# failures. Fourth: a failed real notification send that already burned the
-# day's one authorization (§15.2) -- a significant, actionable event the
-# operator must see distinctly, and retrying is pointless regardless since
-# the day is already spent. All must abort the run loudly.
+# failures. Fourth: a failed real notification send that already burned this
+# run's one prepared session's authorization (§15.2) -- a significant,
+# actionable event the operator must see distinctly, and retrying is
+# pointless regardless since this run's one session is already spent (a
+# separate invocation with a freshly prepared session, later the same day, is
+# a different matter -- see the entries-per-day cap enforced independently by
+# the risk policy). All must abort the run loudly.
 _INTEGRITY_ABORT_LABELS = frozenset(
     {
         "G013_IMPLEMENTATION_CHANGED_BEFORE_PERMIT",
@@ -169,7 +172,11 @@ def main(
     parser = argparse.ArgumentParser(
         description=(
             "Run a bounded, finite unattended H-11 v4 live entry cycle "
-            "(at most one entry per authorized day)."
+            "(at most one entry per invocation, using the single session "
+            "supplied to this run -- the entries-per-day cap, now up to "
+            "MAXIMUM_ENTRIES_PER_DAY_CEILING, is enforced independently by "
+            "the risk policy and may permit further invocations with a "
+            "freshly prepared session later the same day)."
         ),
     )
     parser.add_argument("--max-cycles", type=int, required=True)
@@ -212,8 +219,12 @@ def main(
         print(json.dumps({"cycle": index, **outcome.safe_dict}, sort_keys=True))
         sys.stdout.flush()
         if outcome.entry_attempted:
-            # The day's one authorization is spent; further cycles this run
-            # would only hit the gate again. Stop early.
+            # This run's one prepared session is spent -- it was built for a
+            # single signal, so it cannot produce a second, different entry.
+            # Further cycles this run would only hit the gate again. Stop
+            # early. A later invocation with a freshly prepared session may
+            # still place another entry the same day, up to the
+            # entries-per-day cap enforced independently by the risk policy.
             return 0
         if index + 1 < args.max_cycles and args.interval_seconds > 0:
             time.sleep(args.interval_seconds)

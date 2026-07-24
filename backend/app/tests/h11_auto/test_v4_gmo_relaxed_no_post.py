@@ -155,6 +155,29 @@ def test_v4_policy_freezes_relaxed_but_bounded_gmo_invariants() -> None:
         policy(broker_capability_evidence_hash="sha256:changed")
 
 
+def test_v4_policy_max_entries_per_day_is_bounded_1_to_ceiling() -> None:
+    from app.h11_auto import runtime_safety, v4_activation_preparation, v4_gmo_contracts
+
+    # The three copies of this ceiling (one canonical in runtime_safety.py,
+    # two intentionally duplicated -- not imported -- in v4_gmo_contracts.py
+    # and v4_activation_preparation.py to preserve import-graph isolation)
+    # must never silently drift apart. A future edit that raises one without
+    # the others would otherwise go unnoticed until it caused a confusing
+    # mismatch somewhere else.
+    assert (
+        runtime_safety.MAXIMUM_ENTRIES_PER_DAY_CEILING
+        == v4_gmo_contracts._MAXIMUM_ENTRIES_PER_DAY_CEILING
+        == v4_activation_preparation._MAXIMUM_ENTRIES_PER_DAY_CEILING
+    )
+    ceiling = v4_gmo_contracts._MAXIMUM_ENTRIES_PER_DAY_CEILING
+    policy(max_entries_per_day=2)
+    policy(max_entries_per_day=ceiling)
+    with pytest.raises(V4GmoContractError):
+        policy(max_entries_per_day=0)
+    with pytest.raises(V4GmoContractError):
+        policy(max_entries_per_day=ceiling + 1)
+
+
 def test_v4_gmo_capability_evidence_is_canonical_and_hash_bound() -> None:
     assert H11_V4_GMO_CAPABILITY_EVIDENCE.schema == (
         "H11_V4_GMO_CAPABILITY_EVIDENCE_V1"

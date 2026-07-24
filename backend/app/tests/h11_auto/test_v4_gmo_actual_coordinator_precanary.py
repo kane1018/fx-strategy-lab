@@ -153,6 +153,7 @@ def _policy() -> V4GmoExecutionPolicy:
         signal_config_hash=selected.signal_config_hash,
         selected_horizon=selected.selected_horizon,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
+        max_entries_per_day=selected.maximum_entries_per_day,
     )
 
 
@@ -850,10 +851,14 @@ def test_evaluate_entry_intent_prices_without_reserving_a_cycle(tmp_path: Path) 
         assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 1
 
 
-def test_reserve_entry_cycle_blocks_any_second_cycle(tmp_path: Path) -> None:
-    # The single-cycle guard is unchanged: once ANY cycle is reserved (i.e. an entry POST
-    # has been committed to), no second cycle can be reserved for the generation, even for
-    # a different, later actionable signal.
+def test_reserve_entry_cycle_blocks_a_second_cycle_while_one_is_unresolved(
+    tmp_path: Path,
+) -> None:
+    # The "at most one open position ever" invariant is unchanged: while ANY
+    # reserved cycle is still unresolved (realized_pnl_jpy IS NULL), no second
+    # cycle can be reserved, even for a different later signal. (Operator
+    # decision 2026-07-25 relaxed only the once-per-CALENDAR-DAY cap; this
+    # unresolved-cycle guard stays.)
     store = V4GmoActualCoordinatorStore(tmp_path / "coordinator.sqlite3")
     store.reserve_entry_cycle(
         generation=_generation(),
@@ -864,7 +869,7 @@ def test_reserve_entry_cycle_blocks_any_second_cycle(tmp_path: Path) -> None:
     )
     later = _signal(observed_at_utc=NOW + timedelta(seconds=30))
     assert later.fingerprint != _signal().fingerprint
-    with pytest.raises(V4GmoActualCoordinatorError, match="already has a cycle"):
+    with pytest.raises(V4GmoActualCoordinatorError, match="unresolved cycle"):
         store.reserve_entry_cycle(
             generation=_generation(),
             signal=later,
@@ -872,6 +877,125 @@ def test_reserve_entry_cycle_blocks_any_second_cycle(tmp_path: Path) -> None:
             frozen_atr_24=Decimal("0.20"),
             now_utc=NOW + timedelta(seconds=30),
         )
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 1
+
+
+def test_reserve_entry_cycle_allows_same_day_reentry_once_prior_cycle_resolves(
+    tmp_path: Path,
+) -> None:
+    # The point of the 2026-07-25 change: once the first cycle resolves
+    # (realized_pnl_jpy set = position closed flat), a second same-day cycle
+    # for a different later signal is permitted. max_positions stays 1 -- this
+    # is sequential re-entry, never concurrent.
+    store = V4GmoActualCoordinatorStore(tmp_path / "coordinator.sqlite3")
+    store.reserve_entry_cycle(
+        generation=_generation(),
+        signal=_signal(),
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    # Simulate the first cycle closing flat by marking it resolved directly.
+    with sqlite3.connect(store.path) as connection:
+        connection.execute("UPDATE cycles SET realized_pnl_jpy=0")
+        connection.commit()
+    later = _signal(observed_at_utc=NOW + timedelta(seconds=30))
+    assert later.fingerprint != _signal().fingerprint
+    store.reserve_entry_cycle(
+        generation=_generation(),
+        signal=later,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW + timedelta(seconds=30),
+    )
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 2
+
+
+def test_release_unattempted_reservation_frees_the_slot_for_a_new_reservation(
+    tmp_path: Path,
+) -> None:
+    # This is the fix for the bricking risk the 2026-07-25 change introduced:
+    # once reserve_entry_cycle no longer looks at the calendar day, a routine
+    # rejection AFTER reservation but BEFORE any real market attempt (entry
+    # window closed, or today's entries-per-day/loss-limit cap already
+    # reached -- the exact scenario this change exists to allow) must not
+    # leave the reservation stuck forever, since nothing will ever close a
+    # position that was never opened.
+    store = V4GmoActualCoordinatorStore(tmp_path / "coordinator.sqlite3")
+    signal = _signal()
+    store.reserve_entry_cycle(
+        generation=_generation(),
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
+    assert store.release_unattempted_reservation(cycle_ref=cycle_ref) is True
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 0
+    later = _signal(observed_at_utc=NOW + timedelta(seconds=30))
+    store.reserve_entry_cycle(
+        generation=_generation(),
+        signal=later,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW + timedelta(seconds=30),
+    )
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 1
+
+
+def test_release_unattempted_reservation_is_a_noop_once_market_attempted(
+    tmp_path: Path,
+) -> None:
+    # A cycle that already has a real market attempt recorded must never be
+    # released -- that would let a second reservation slip in alongside a
+    # position that may actually be open.
+    store = V4GmoActualCoordinatorStore(tmp_path / "coordinator.sqlite3")
+    signal = _signal()
+    store.reserve_entry_cycle(
+        generation=_generation(),
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
+    _record_market(store, signal, resolve_filled=True)
+    assert store.release_unattempted_reservation(cycle_ref=cycle_ref) is False
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 1
+        assert (
+            connection.execute(
+                "SELECT market_attempted_at_utc FROM cycles WHERE cycle_ref=?",
+                (cycle_ref,),
+            ).fetchone()[0]
+            is not None
+        )
+
+
+def test_release_unattempted_reservation_is_a_noop_when_unknown_halt_engaged(
+    tmp_path: Path,
+) -> None:
+    # A genuine incident (e.g. the dead-man switch failing, which always
+    # engages unknown-halt before or instead of raising) must leave the
+    # reservation in place for operator investigation, never silently
+    # auto-recover.
+    store = V4GmoActualCoordinatorStore(tmp_path / "coordinator.sqlite3")
+    signal = _signal()
+    store.reserve_entry_cycle(
+        generation=_generation(),
+        signal=signal,
+        policy=_policy(),
+        frozen_atr_24=Decimal("0.20"),
+        now_utc=NOW,
+    )
+    cycle_ref = store.cycle_ref_for_signal_internal(signal.fingerprint)
+    store.engage_unknown_halt()
+    assert store.release_unattempted_reservation(cycle_ref=cycle_ref) is False
     with sqlite3.connect(store.path) as connection:
         assert connection.execute("SELECT COUNT(*) FROM cycles").fetchone()[0] == 1
 

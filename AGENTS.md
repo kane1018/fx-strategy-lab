@@ -418,6 +418,26 @@ current-turn確認後の初回actual canaryを実行してよい。この例外�
 この例外は利益、edge、live-ready、unattended liveの証明ではない。初回canaryの各actual writeはoperatorが
 確認したexact sheetとcurrent-turn challengeに限定される。
 
+## H-11 v4 G014 sequential entries-per-day改定（2026-07-25・no-POST・operator指示）
+
+operatorは「本番を完成させたい」との明示指示で、`maximum_entries_per_day`を**1から20**へ改定した
+（同時ポジションは引き続き最大1、これはsequential re-entry限定であり同時複数保有ではない）。
+G013の全conduct規律（この文書のG013セクション全体）はG014へそのまま引き継ぐ。世代labelを
+`H11_AUTO_30M_20260725_G014`へ改め、`maximum_entries_per_day`が変わったためprotection/policy/risk/
+implementation digestを新値で再凍結した。
+
+- 予算（5,000/10,000/50,000円・5連敗）、exit/friday/weekend profile、broker POST禁止、その他の安全条件は不変。
+- 予約guard（`reserve_entry_cycle`）は「未決済ポジションが1つもない」ことだけを見るよう単純化し、
+  暦日ベースの重複制約を撤廃した。1日あたりの上限は`PhaseBRiskPolicy.entries_today`が独立して担保する。
+- 上限到達などpermitより前の予約後棄却（entry window終了、risk gate拒否）でreservationが永久に
+  詰まらないよう、`release_unattempted_reservation`（market attempt未実施かつunknown-halt未発生の
+  場合のみ解放）を追加した。dead-man等の真のincidentはこれまで通り解放せず、operator確認を要求する。
+- generation labelの決め打ちcheckは`h11_v4_gmo_g013_canary.py`と`h11_v4_gmo_signal_preview.py`の
+  **2箇所**に存在する（後者はレビューの再検証で発覚、修正済み）。次のgeneration改定では両方を
+  同時に更新し、implementation_digestの再計算前に`grep -rn "H11_AUTO_30M_.*_G0"`等で他の
+  決め打ち箇所が残っていないか確認すること。
+- h11_auto 881件・full backend 8,475件パス。
+
 ## 最初に読む文書
 
 - `docs/CODEX_HANDOFF.md`

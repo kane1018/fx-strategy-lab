@@ -33,7 +33,7 @@ def test_approved_operator_selections_are_frozen_and_not_activation() -> None:
     assert selected.daily_loss_limit_jpy == 10_000
     assert selected.monthly_loss_limit_jpy == 50_000
     assert selected.maximum_consecutive_losses == 5
-    assert selected.maximum_entries_per_day == 1
+    assert selected.maximum_entries_per_day == 20
     assert selected.heartbeat_interval_seconds == 15
     assert selected.maximum_heartbeat_age_seconds == 60
     assert selected.account_ownership is V4AccountOwnershipMode.EXCLUSIVE_DURING_AUTO
@@ -46,6 +46,17 @@ def test_approved_operator_selections_are_frozen_and_not_activation() -> None:
 
     with pytest.raises(V4ActivationPreparationError, match="cannot be changed"):
         replace(selected, selected_horizon=FormalHorizon.MINUTES_10)
+
+
+def test_approved_selections_bound_max_entries_per_day_1_to_ceiling() -> None:
+    ceiling = preparation_module._MAXIMUM_ENTRIES_PER_DAY_CEILING
+    selected = V4ApprovedOperatorSelections()
+    replace(selected, maximum_entries_per_day=1)
+    replace(selected, maximum_entries_per_day=ceiling)
+    with pytest.raises(V4ActivationPreparationError, match="cannot be changed"):
+        replace(selected, maximum_entries_per_day=0)
+    with pytest.raises(V4ActivationPreparationError, match="cannot be changed"):
+        replace(selected, maximum_entries_per_day=ceiling + 1)
 
 
 def test_account_exclusivity_requires_no_manual_or_unowned_activity() -> None:

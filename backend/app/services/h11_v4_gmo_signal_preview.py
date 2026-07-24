@@ -133,8 +133,12 @@ def _load_prerequisite(*, repository: Path) -> _PreviewPrerequisite:
         raise G013SignalPreviewError("G013_PREVIEW_GENERATION_INVALID") from error
     if evidence.get("generation_manifest_digest") != generation.digest:
         raise G013SignalPreviewError("G013_PREVIEW_GENERATION_INVALID")
+    # Bumped in lockstep with docs/templates/h11_v4_gmo_frozen_generation.json's
+    # generation_label on every re-freeze (G013 -> G014 on 2026-07-25, raising
+    # maximum_entries_per_day from 1 to 20) -- same reasoning and same required
+    # explicit bump as h11_v4_gmo_g013_canary.py's equivalent check.
     if (
-        generation.generation_label != "H11_AUTO_30M_20260717_G013"
+        generation.generation_label != "H11_AUTO_30M_20260725_G014"
         or generation.strategy_version != "SHORT_V1"
         or generation.selected_horizon != "30m"
         or generation.symbol != "USD_JPY"
@@ -156,6 +160,7 @@ def _execution_policy(generation: V4GmoFrozenGeneration) -> V4GmoExecutionPolicy
         selected_horizon=FormalHorizon.MINUTES_30,
         protection_contract_hash=generation.protection_contract_hash,
         broker_capability_evidence_hash=generation.broker_capability_evidence_hash,
+        max_entries_per_day=generation.maximum_entries_per_day,
     )
 
 

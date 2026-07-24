@@ -52,6 +52,7 @@ def _policy() -> V4GmoExecutionPolicy:
         signal_config_hash=selected.signal_config_hash,
         selected_horizon=selected.selected_horizon,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
+        max_entries_per_day=selected.maximum_entries_per_day,
     )
 
 
