@@ -475,3 +475,46 @@ broker read/write、credential、外部通知を許可しない。
 - shadow intent、preview、過去canary confirmation、旧generation evidenceをlive authorizationへ流用すること。
 - `live_ready`、`unattended_live_supported`、`actual_post_authorized`のtrue化。live化は独立review、
   新reviewed generation、fresh external preparation、固定小額contractを必須とする別Stepで扱う。
+
+## H-11 v4 unattended Public-only finite shadow adapter/runner 限定例外
+
+上記no-POST shadow controller例外の境界は維持する。ただしoperatorが明示的に、完全自動売買へ向けた
+Public-only有限shadow adapterとbounded runnerの実装を依頼した場合に限り、既存の凍結signal／risk
+contractとno-POST controllerへ、GMO **Public** read-only市場データだけを供給するnetwork adapterと
+有限cycle runnerを実装してよい。この例外は設計・fake test・有限Public shadow専用であり、live
+activation、resident運転、Private API、credential、broker read/write、外部通知を許可しない。
+
+### この例外で限定的に許可すること
+
+- GMO Public read-only endpoint（`/public/v1/status`、`/public/v1/ticker`、`/public/v1/klines`の
+  M1／H1）だけを、既存の`GmoPublicMarketDataClient`経由で、完了済みM1 slotごとに有限回GETする。
+  same completed slotは`backend/shadow_exports/`配下のO_EXCL markerで一度だけclaimし、retryしない。
+- 凍結SHORT_V1／30分方向推論と、official H1だけからのATR(24)（`build_g013_formal_canary_input`と
+  同一結果をcross-check testで固定）を再利用し、caller非依存のformal signalとsanitized market
+  snapshotをメモリ内で作る。account flat／active orders／boot reconciliation／fresh broker snapshotは
+  Private GETなしに観測できないため、preflightでfail-closed（未観測=block）とする。よって
+  Public-only cycleは`SHADOW_WOULD_ENTER`へ到達せず、常にsafe blockに留まる。
+- no-POST controllerを1 cycle呼び、generation非依存のSQLite shadow ledgerへ非認可決定を記録する。
+- 有限のbounded runner（最大cycle数または固定interval。resident化・常駐loop・自動再起動なし）で
+  上記を駆動し、sanitized aggregateだけを出力する。direction、probability、price、raw candle、
+  実IDを表示・保存しない。
+- 上記adapter／runner／fake test／設計docを必要最小限で追加する。shadow結果は
+  `broker_post_authorized=false`、`actual_post_count=0`、`live_ready=false`、
+  `unattended_live_supported=false`を固定する。
+
+### この例外でも禁止し続けること
+
+- Private API、Keychain、credential、broker transport、hard guard、permit、actual coordinator／
+  transport／adapter、`order`／`cancelOrders`／`closeOrder`／OCO write経路のimport、呼出し、接続。
+- Public結果からaccount flat等を推測すること。account／position／order／risk stopの観測は
+  credential＋Private GETを使う別phaseで扱う。
+- scheduler、cron、LaunchAgent、launchd、resident process、background loop、自動再起動、
+  Pushover／SMTP送信。
+- shadow判定booleanをhard guardの`allow`へ接続するgeneric allow bridge、env／`.env`／`LIVE=true`に
+  よるlive解除。
+- shadow observation、intent、preview、過去canary confirmation、旧generation evidenceを
+  live authorization、live-ready、performance proofへ流用すること。
+- `live_ready`、`unattended_live_supported`、`actual_post_authorized`、`broker_post_authorized`の
+  true化。live化は独立review、新reviewed generation、fresh external preparation、固定小額contractを
+  必須とする別Stepで扱う。
+- 既存G013 canary／post-canary markerの変更・reset・削除・上書き、またはそれらの証拠流用。
