@@ -518,3 +518,43 @@ activation、resident運転、Private API、credential、broker read/write、外
   true化。live化は独立review、新reviewed generation、fresh external preparation、固定小額contractを
   必須とする別Stepで扱う。
 - 既存G013 canary／post-canary markerの変更・reset・削除・上書き、またはそれらの証拠流用。
+
+## H-11 v4 unattended shadow Private-GET account/order preflight 限定例外（slice 1・fake-only）
+
+上記Public-only shadow例外の境界は維持する。ただしoperatorが明示的に、Private GETを使う
+full operational read-only shadowへの着手を依頼した場合に限り、shadow preflightのうち
+`broker_snapshot_fresh`／`boot_reconciled`／`position_count`／`active_order_count`を
+`latestExecutions`／`openPositions`／`activeOrders`のsanitized Private GETから導出する型・
+snapshot・合成関数を実装してよい。この例外はslice 1（account/order観測のみ）専用であり、
+notification送信、daily／monthly／consecutive-loss stop追跡、host／dead-man状態、
+operator persistent HALT配線、runnerへの実結線は含まない。
+
+### この例外で限定的に許可すること
+
+- `latestExecutions`／`openPositions`／`activeOrders`用の、shadow専用・generation非依存の
+  read-only GET Protocolと、sanitized件数（`latest_executions_count`／`open_positions_count`／
+  `active_orders_count`／`account_flat`／`active_orders_zero`）だけを返すsnapshot型を実装する。
+- Phase 1のfail-closed preflightのうち`broker_snapshot_fresh`／`boot_reconciled`／
+  `position_count`／`active_order_count`だけを上記snapshotへ差し替える合成関数を実装する。
+  `notification_path_ready`、daily／monthly／consecutive-loss stop、`operator_halt_clear`は
+  この合成対象に含めず、Phase 1の値のまま変更しない。
+- HMAC署名ヘッダ生成には既存の純粋関数`app.private_api.auth.build_auth_headers`（呼び出し側が
+  渡した値だけを使い、credential store・env・fileを読まない）だけを再利用してよい。
+- fake credential pair、fake HTTP transportだけを使うtestを追加する。実Keychain reader関数は
+  このモジュールへ実装しない（＝defaultからの実credential到達経路を作らない）。
+- 設計docとtestを必要最小限で追加する。
+
+### この例外でも禁止し続けること
+
+- 実Keychain read、実credential値の読込・表示・保存。このモジュールへ実Keychain reader
+  （`security find-generic-password`等）を実装・importしないこと。
+- 実Private API endpointへの実HTTP呼出し、実broker read。testは常にfake transportだけを使う。
+- 本snapshot／合成関数をshadow runner CLIへ実結線すること。実結線は別途明示依頼と別reviewを
+  必須とする独立Stepとして扱う。
+- Pushover／SMTP送信、notification transportのimport・呼出し。
+- daily／monthly／consecutive-loss stop、host／dead-man状態、operator persistent HALTの実装・
+  claim。これらは別phaseで扱う。
+- broker write endpoint（`order`／`cancelOrders`／`closeOrder`／OCO）のimport・呼出し・接続。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+- 既存G013 canary／post-canary marker、`h11_v4_gmo_readonly_preflight.py`等の既存G013専用
+  preparation-gated moduleの変更、またはそれらのgate／permitへの結合。
