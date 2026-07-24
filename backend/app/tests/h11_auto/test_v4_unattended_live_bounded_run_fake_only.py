@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -50,7 +51,7 @@ def _kwargs(**overrides: object) -> dict[str, object]:
         "dead_man_store": object(),
         "heartbeat_chain_store": object(),
         "notification_ready": True,
-        "entry_gate_blocked_reasons": (),
+        "entry_gate_reason_provider": lambda _now: (),
         "credential_pair": cast(V4GmoSealedCredentialPair, object()),
         "client": cast(httpx.Client, object()),
     }
@@ -67,7 +68,7 @@ def test_main_signature_requires_every_dependency_with_no_default() -> None:
         "dead_man_store",
         "heartbeat_chain_store",
         "notification_ready",
-        "entry_gate_blocked_reasons",
+        "entry_gate_reason_provider",
         "credential_pair",
         "client",
     ):
@@ -175,6 +176,169 @@ def test_integrity_drift_labels_propagate_and_abort_the_loop_instead_of_retrying
         with pytest.raises(canary_module.V4GmoG013CanaryError, match=label):
             subject.main(["--max-cycles", "5", "--interval-seconds", "0"], **_kwargs())
         assert call_count == 1, label
+
+
+def test_provider_is_called_exactly_once_per_cycle_with_that_cycles_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider_calls: list[object] = []
+    cycle_clocks: list[object] = []
+
+    def _provider(now: object) -> tuple[str, ...]:
+        provider_calls.append(now)
+        return ("ENTRY_GATE_MARKET_NOT_OPEN",)
+
+    def _record_cycle(**kwargs: object) -> None:
+        cycle_clocks.append(kwargs["now_utc"])
+        raise activation_module.V4GmoCanaryActivationError(
+            "V4_CANARY_UNATTENDED_GATE_NOT_CLEAR"
+        )
+
+    monkeypatch.setattr(
+        orchestration_module, "run_unattended_live_entry_cycle_once", _record_cycle
+    )
+    subject.main(
+        ["--max-cycles", "3", "--interval-seconds", "0"],
+        **_kwargs(entry_gate_reason_provider=_provider),
+    )
+    assert len(provider_calls) == 3
+    # The provider and the orchestration call receive the SAME clock value
+    # within each cycle -- the same-cycle property §9.2 item 4 requires.
+    assert provider_calls == cycle_clocks
+
+
+def test_provider_result_reaches_the_orchestration_call_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reasons = ("ENTRY_GATE_SPREAD_LIMIT_EXCEEDED", "ENTRY_GATE_QUOTE_NOT_FRESH")
+    seen: list[object] = []
+
+    def _capture(**kwargs: object) -> None:
+        seen.append(kwargs["entry_gate_blocked_reasons"])
+        raise activation_module.V4GmoCanaryActivationError(
+            "V4_CANARY_UNATTENDED_GATE_NOT_CLEAR"
+        )
+
+    monkeypatch.setattr(
+        orchestration_module, "run_unattended_live_entry_cycle_once", _capture
+    )
+    subject.main(
+        ["--max-cycles", "1", "--interval-seconds", "0"],
+        **_kwargs(entry_gate_reason_provider=lambda _now: reasons),
+    )
+    assert seen == [reasons]
+
+
+def test_provider_returning_non_tuple_aborts_the_run_loudly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    orchestration = MagicMock()
+    monkeypatch.setattr(
+        orchestration_module, "run_unattended_live_entry_cycle_once", orchestration
+    )
+    with pytest.raises(
+        subject.V4UnattendedLiveRunnerError,
+        match="UNATTENDED_RUNNER_ENTRY_GATE_PROVIDER_INVALID",
+    ):
+        subject.main(
+            ["--max-cycles", "5", "--interval-seconds", "0"],
+            **_kwargs(entry_gate_reason_provider=lambda _now: ["a", "list"]),
+        )
+    orchestration.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "bad_result",
+    (
+        ("ENTRY_GATE_QUOTE_NOT_FRESH", None),
+        (1, 2),
+        (b"ENTRY_GATE_QUOTE_INVALID",),
+    ),
+)
+def test_provider_tuple_with_non_string_elements_also_aborts_before_orchestration(
+    monkeypatch: pytest.MonkeyPatch, bad_result: tuple[object, ...]
+) -> None:
+    # The container check alone would let a tuple of non-strings slip through
+    # to the decision layer's own validation, whose DECISION_INVALID raise is
+    # in the caught not-yet list -- silently burning the cycle budget on a
+    # programming error. Element types must be checked here, before anything
+    # downstream runs.
+    orchestration = MagicMock()
+    monkeypatch.setattr(
+        orchestration_module, "run_unattended_live_entry_cycle_once", orchestration
+    )
+    with pytest.raises(
+        subject.V4UnattendedLiveRunnerError,
+        match="UNATTENDED_RUNNER_ENTRY_GATE_PROVIDER_INVALID",
+    ):
+        subject.main(
+            ["--max-cycles", "5", "--interval-seconds", "0"],
+            **_kwargs(entry_gate_reason_provider=lambda _now: bad_result),
+        )
+    orchestration.assert_not_called()
+
+
+def test_decision_invalid_label_aborts_instead_of_being_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A charset-invalid (but str-typed) label passes the runner's element
+    # check and is rejected by the decision layer as
+    # V4_CANARY_UNATTENDED_DECISION_INVALID -- always a programming error,
+    # never a market condition, so it must abort the run, not burn cycles.
+    call_count = 0
+
+    def _raise_decision_invalid(**_kwargs: object) -> None:
+        nonlocal call_count
+        call_count += 1
+        raise activation_module.V4GmoCanaryActivationError(
+            "V4_CANARY_UNATTENDED_DECISION_INVALID"
+        )
+
+    monkeypatch.setattr(
+        orchestration_module,
+        "run_unattended_live_entry_cycle_once",
+        _raise_decision_invalid,
+    )
+    with pytest.raises(
+        activation_module.V4GmoCanaryActivationError,
+        match="V4_CANARY_UNATTENDED_DECISION_INVALID",
+    ):
+        subject.main(
+            ["--max-cycles", "5", "--interval-seconds", "0"],
+            **_kwargs(entry_gate_reason_provider=lambda _now: ("bad-charset!",)),
+        )
+    assert call_count == 1
+
+
+def test_provider_raising_aborts_the_run_rather_than_being_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    call_count = 0
+
+    def _raising_provider(_now: object) -> tuple[str, ...]:
+        nonlocal call_count
+        call_count += 1
+        raise RuntimeError("provider fetch blew up")
+
+    orchestration = MagicMock()
+    monkeypatch.setattr(
+        orchestration_module, "run_unattended_live_entry_cycle_once", orchestration
+    )
+    with pytest.raises(RuntimeError, match="provider fetch blew up"):
+        subject.main(
+            ["--max-cycles", "5", "--interval-seconds", "0"],
+            **_kwargs(entry_gate_reason_provider=_raising_provider),
+        )
+    assert call_count == 1
+    orchestration.assert_not_called()
+
+
+def test_runner_error_type_is_not_in_the_caught_not_yet_list() -> None:
+    assert subject.V4UnattendedLiveRunnerError not in subject._EXPECTED_NOT_YET_ERRORS
+    assert not any(
+        issubclass(subject.V4UnattendedLiveRunnerError, caught)
+        for caught in subject._EXPECTED_NOT_YET_ERRORS
+    )
 
 
 def test_expected_not_yet_errors_are_caught_and_loop_continues(

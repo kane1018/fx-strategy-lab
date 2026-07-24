@@ -22,6 +22,7 @@ import argparse
 import json
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -48,18 +49,32 @@ _EXPECTED_NOT_YET_ERRORS = (
     canary_module.V4GmoG013CanaryError,
 )
 
-# Not routine "gate not clear yet" waits: the reviewed implementation digest
-# or the frozen generation changed underneath an already-running session --
-# an integrity/tamper-drift signal. Folding these into ordinary retries would
-# let a live tamper signal blend into routine market-timing noise for the
-# rest of the cycle budget. These must always propagate and abort the loop
-# loudly instead, even though their type is otherwise in the retry-safe list.
+# Not routine "gate not clear yet" waits, even though their exception type is
+# otherwise in the retry-safe list. First two: the reviewed implementation
+# digest or frozen generation changed underneath an already-running session --
+# an integrity/tamper-drift signal that must never blend into market-timing
+# noise. Third: the decision layer rejected its own inputs as malformed
+# (e.g. a provider label with a bad charset slipping past the runner's
+# element check below) -- always a programming error, never a market
+# condition, so retrying it would only burn the cycle budget on repeat
+# failures. All must abort the run loudly.
 _INTEGRITY_ABORT_LABELS = frozenset(
     {
         "G013_IMPLEMENTATION_CHANGED_BEFORE_PERMIT",
         "G013_GENERATION_CHANGED_BEFORE_PERMIT",
+        "V4_CANARY_UNATTENDED_DECISION_INVALID",
     }
 )
+
+
+class V4UnattendedLiveRunnerError(RuntimeError):
+    """Programming-error boundary of the runner itself (never caught here).
+
+    Deliberately NOT in ``_EXPECTED_NOT_YET_ERRORS``: a buggy entry-gate
+    provider must abort the run loudly, not silently burn the cycle budget
+    as repeat "not yet" lines (design doc §13.2, same reasoning as the
+    integrity-abort labels above).
+    """
 
 
 def _safe_not_yet(error: BaseException) -> dict[str, object]:
@@ -114,10 +129,25 @@ def main(
     dead_man_store: DeadManStore,
     heartbeat_chain_store: V4HeartbeatChainStore,
     notification_ready: bool,
-    entry_gate_blocked_reasons: tuple[str, ...],
+    entry_gate_reason_provider: Callable[[datetime], tuple[str, ...]],
     credential_pair: V4GmoSealedCredentialPair,
     client: httpx.Client,
 ) -> int:
+    """Bounded runner loop; each cycle derives its gate reasons freshly.
+
+    ``entry_gate_reason_provider`` is called exactly once per cycle with
+    that cycle's ``now_utc`` and must return a ``tuple`` of safe reason
+    labels (empty = clear) -- satisfying §9.2 item 4's "derive from the
+    real evaluations in the same cycle" for the credential-free half.
+    A provider returning a non-tuple, or raising, aborts the whole run
+    (``V4UnattendedLiveRunnerError`` / the provider's own exception) --
+    providers must map their own fetch failures to a blocking reason such
+    as ``ENTRY_GATE_QUOTE_UNAVAILABLE``, never raise for market/network
+    conditions. ``notification_ready`` deliberately remains a static bool:
+    upgrading it honestly requires the credential-gated real-send slice
+    (design doc §13), not a provider wrapper around the same claim.
+    """
+
     parser = argparse.ArgumentParser(
         description=(
             "Run a bounded, finite unattended H-11 v4 live entry cycle "
@@ -136,6 +166,14 @@ def main(
         )
 
     for index in range(args.max_cycles):
+        now_utc = datetime.now(UTC)
+        entry_gate_blocked_reasons = entry_gate_reason_provider(now_utc)
+        if type(entry_gate_blocked_reasons) is not tuple or not all(
+            type(reason) is str for reason in entry_gate_blocked_reasons
+        ):
+            raise V4UnattendedLiveRunnerError(
+                "UNATTENDED_RUNNER_ENTRY_GATE_PROVIDER_INVALID"
+            )
         outcome = _run_one_cycle(
             session=session,
             risk_store=risk_store,
@@ -146,7 +184,7 @@ def main(
             entry_gate_blocked_reasons=entry_gate_blocked_reasons,
             credential_pair=credential_pair,
             client=client,
-            now_utc=datetime.now(UTC),
+            now_utc=now_utc,
         )
         # No `default=` fallback: every safe_dict shape this can actually
         # produce today is JSON-native (str/int/bool/None); a future field

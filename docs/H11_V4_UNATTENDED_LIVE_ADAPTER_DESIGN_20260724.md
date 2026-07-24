@@ -1306,3 +1306,150 @@ shape this can produce today is JSON-native, so a future non-primitive
 field now fails loudly instead of being silently stringified); and
 `_run_one_cycle`'s bare 2-tuple return became a small frozen
 `_CycleOutcome` dataclass for clarity at the call site.
+
+## 13. Entry-gate real derivation — design (2026-07-24)
+
+§9.2 item 4 (High) has two halves. This section discharges the
+credential-free half: `entry_gate_blocked_reasons` can and now should be
+derived from real, same-cycle Public-only market facts instead of being a
+caller-supplied static claim. The other half — `notification_ready`, whose
+§3.2 item 6 obligation requires an actual Pushover/SMTP send verified at
+issuance time — needs the notification Keychain credentials
+(`h11_v4_notification_actual_preparation.py`'s
+`read_notification_keychain_secret`, the same human-interactive Keychain
+mechanism as the GMO credential) and therefore remains a separate,
+credential-gated future step outside this slice.
+
+### 13.1 The derivation module
+
+New module `app/services/h11_v4_unattended_live_entry_gate.py`, one pure
+function:
+
+```
+def derive_unattended_entry_gate_blocked_reasons(
+    *,
+    bid: Decimal,
+    ask: Decimal,
+    quote_observed_at_utc: datetime,
+    market_open: bool,
+    now_utc: datetime,
+) -> tuple[str, ...]:
+```
+
+It re-derives spread and freshness from the primary quote facts
+(bid/ask/timestamp) against the SAME frozen constants the
+human-interactive G013 flow already uses —
+`MAXIMUM_QUOTE_AGE_SECONDS`/`MAXIMUM_QUOTE_CLOCK_SKEW_SECONDS`/
+`G013_MAXIMUM_ENTRY_SPREAD_PIPS` imported from
+`h11_v4_gmo_public_preflight` — rather than trusting any caller-computed
+boolean (the same trust-no-precomputed-flags principle behind §9.1's VETO
+fix and §10.2's Option A decision). `market_open` alone is accepted as a
+strictly-typed bool, since exchange status cannot be re-derived from a
+quote. Returned labels (`ENTRY_GATE_MARKET_NOT_OPEN`,
+`ENTRY_GATE_QUOTE_NOT_FRESH`, `ENTRY_GATE_QUOTE_INVALID`,
+`ENTRY_GATE_SPREAD_LIMIT_EXCEEDED`) all satisfy the decision layer's
+safe-reason charset. Type-invalid inputs raise the module's own fixed
+error rather than returning; an empty tuple means every derivable gate
+passed. The module performs no network access itself — the quote fetch
+stays with the caller (e.g. the operator launcher reusing
+`read_g013_final_quote_once` with a per-minute cycle key).
+
+### 13.2 The CLI change: static tuple → per-cycle provider
+
+§9.2 item 4's exact words: the values must come "from the real
+evaluations in the same cycle". A static
+`entry_gate_blocked_reasons` passed once to the bounded runner's `main()`
+is stale from cycle 2 onward — structurally under-implementing the
+obligation. `main`'s parameter therefore changes from
+`entry_gate_blocked_reasons: tuple[str, ...]` to
+`entry_gate_reason_provider: Callable[[datetime], tuple[str, ...]]`
+(required, no default), called exactly once per cycle with that cycle's
+`now_utc`, its result passed to the orchestration function for that cycle
+only.
+
+Fail-closed contract, both directions: a provider returning anything but
+a `tuple` raises the runner's own new
+`V4UnattendedLiveRunnerError("UNATTENDED_RUNNER_ENTRY_GATE_PROVIDER_INVALID")`,
+which is deliberately NOT in the caught not-yet list — a buggy provider
+aborts the run loudly instead of silently burning the cycle budget as
+repeat "not yet" lines (the same reasoning as §12.5a's integrity-abort
+fix). A provider that itself raises likewise aborts the run — providers
+are expected to map their own fetch failures to a blocking reason tuple
+(e.g. a single `ENTRY_GATE_QUOTE_UNAVAILABLE` label, exported as a
+constant by the derivation module) rather than raising.
+
+`notification_ready` deliberately stays a static bool parameter in this
+slice — making it a provider without a real send behind it would only
+dress up the same unverifiable claim; the honest upgrade is the future
+credential-gated notify slice.
+
+### 13.3 Implementation status (2026-07-24, fake-only, unwired)
+
+Implemented per §13.1/§13.2 under AGENTS.md's "unattended entry-gate real
+derivation 実装限定例外". The derivation module re-derives spread and
+freshness from bid/ask/timestamp against the imported frozen constants
+(a test pins that the numeric threshold values are never restated in the
+module source, only imported); numerically invalid quotes (non-finite,
+non-positive, inverted) block via `ENTRY_GATE_QUOTE_INVALID` rather than
+crashing the runner loop, while type-invalid inputs raise. Every label
+the module can emit is verified against the permit-decision layer's own
+`_validate_safe_reason` charset, so a genuinely blocked cycle is evaluated
+as blocked rather than rejected as `DECISION_INVALID`.
+
+The bounded runner's `main` now takes `entry_gate_reason_provider`
+(required, no default), called exactly once per cycle with that cycle's
+`now_utc`; a test pins that the provider and the orchestration call see
+the SAME clock value within each cycle (the §9.2 item 4 same-cycle
+property, held structurally rather than by convention). A provider
+returning a non-tuple aborts via the runner's new
+`V4UnattendedLiveRunnerError` (pinned as NOT in, and not a subclass of
+anything in, the caught not-yet list); a raising provider aborts the run
+with the orchestration never called.
+
+Boundary tests pin the exact frozen limits: a quote at exactly
+`MAXIMUM_QUOTE_AGE_SECONDS` old passes and 1ms beyond blocks; skew at
+exactly `MAXIMUM_QUOTE_CLOCK_SKEW_SECONDS` ahead passes and beyond
+blocks; spread at exactly `G013_MAXIMUM_ENTRY_SPREAD_PIPS` passes and
+beyond blocks.
+
+With this slice, §9.2 item 4's credential-free half is discharged. What
+remains of item 4 is exactly the `notification_ready` half: the real
+Pushover/SMTP send verified at issuance time (§3.2 item 6), requiring the
+notification Keychain credentials — operator-side, credential-gated, and
+explicitly out of scope for this track's assistant-implemented slices.
+
+### 13.4 Independent review outcome (2026-07-24) and the fixes it forced
+
+Both reviews (Safety; Architecture+Operations) returned PASS, with both
+independently converging on the same Medium finding, fixed before commit:
+the runner's provider check validated only the container type, so a
+provider returning a tuple of non-strings — or a str-typed but
+charset-invalid label — would pass the runner, be rejected by the
+decision layer as `V4_CANARY_UNATTENDED_DECISION_INVALID`, and be
+retried as a routine "not yet" for the full cycle budget: exactly the
+silent-burn failure mode §13.2's own rationale says a buggy provider
+must not produce (mitigated only in that no authorization is ever
+consumed on that path). Fixed twice over: the runner now also validates
+every element is a `str` before anything downstream runs, and
+`V4_CANARY_UNATTENDED_DECISION_INVALID` joined the abort-label set (it
+is always a programming error, never a market condition) — both pinned
+by dedicated tests.
+
+Also from the same round: the module docstring now carries explicit
+provider-author notes (§13.1a semantics) — `market_open` must be the
+conjunction of /status OPEN and the ticker row's own open status,
+matching the G013 path's combined semantic; and a provider built on
+`read_g013_final_quote_once` must catch `V4GmoPublicPreflightError` and
+collapse every failure to `ENTRY_GATE_QUOTE_UNAVAILABLE`, because that
+function raises on any blocked gate rather than returning the quote —
+this module's four distinct labels only become reachable once a
+non-raising raw-quote reader exists (future work). The freshness-window
+docstring wording was corrected from "+/-" to the actual asymmetric
+`[-SKEW, +AGE]` form. Reviewer-noted Low items accepted as-is: the
+pip-size literal `Decimal("0.01")` is a unit, not a threshold (exporting
+it would require touching the frozen module, which the exception
+forbids); the no-restated-literals test is a substring tripwire, not a
+proof — the real guarantee is the single import site.
+
+Final: 48 tests across the two new/updated files; full `h11_auto` suite
+832 passing. Ruff and the danger scan clean.
