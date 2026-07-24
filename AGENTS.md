@@ -665,3 +665,36 @@ scheduler・resident processへは一切接続しない。
   review完了後の別Step・別明示承認とする。
 - `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
 - 本例外下の実装・test完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended live daily authorization artifact作成CLI 限定例外（operator手動実行専用）
+
+上記component例外は、authorization artifactの作成を「operator自身の明示的なCLI／手動操作として
+別Stepで設計する」と明記して先送りした。operatorが明示的にこのCLIの実装を依頼した場合に限り、
+その別Stepとして以下を実装してよい。artifactのconsume（消費）は既存の
+`h11_v4_unattended_live_authorization.py`のままとし、本例外はcreateだけを対象とする。
+
+### この例外で限定的に許可すること
+
+- generation-bound canonical path helper（`v4_gmo_runtime_paths.py`と同型のdigest検証、
+  `backend/market_data/h11_v4_unattended_live/generation-{digest}/`配下）を新設する。
+  既存のgitignore済み`backend/market_data/`配下に限定する。
+- operatorが手動実行するCLIスクリプト（`backend/scripts/`配下）を新設する。実行時のJST日付は
+  常に「実行時点の今日」固定とし、operatorによる日付指定・過去日・未来日オーバーライドを
+  受け付けない。`--generation-digest`は明示必須引数とし、暗黙のdefaultやfallback推定を持たない。
+  既存artifactが当日分で存在する場合は`--force`なしで上書きしない。
+- 生成したartifactに対して、既存の`check_operator_daily_authorization`をそのまま呼び、結果を
+  sanitizedに表示する（値の解釈・判断ロジックの新規実装はしない）。
+- 各componentのfake-only／ローカルfilesystemだけを使うtest、設計doc更新、AGENTS.md本体の
+  必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- このCLIをscheduler、cron、LaunchAgent、resident process、他のCodex/Claude自動実行から
+  呼び出すこと。呼出しは常にoperatorの手動実行に限る。
+- `h11_v4_unattended_live_authorization.py`の公開関数（check／consume）を変更・拡張すること。
+  本例外はcreate専用の別スクリプトとし、既存モジュールの「read-and-consume only」設計を
+  変更しない。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信、G012/G013コードの変更。
+- artifactの自動再発行・自動延長・cap自動引き上げの実装。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。

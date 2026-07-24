@@ -404,3 +404,51 @@ must not begin without addressing each one:
    §6's no-allow-bridge rule applies: the future proof constructors must each
    independently re-verify their own condition from primary state, not accept
    this layer's boolean as a substitute.
+
+### 9.3 Operator daily authorization artifact-creation CLI (2026-07-24)
+
+The prior batch's exception text explicitly deferred artifact *creation* to
+"the operator's own explicit CLI/manual operation, designed as a separate
+Step" (§9.2 item 1 area, and the component exception's own prohibited-list).
+That separate step is implemented here, under its own new AGENTS.md exception
+scoped to creation only:
+
+- `backend/app/services/h11_v4_unattended_live_paths.py` — a canonical,
+  generation-bound path helper (mirrors `v4_gmo_runtime_paths.py`'s
+  digest-validated state-root pattern), under the already-gitignored
+  `backend/market_data/` root. Both this CLI (writer) and the future wiring
+  step (reader) are expected to converge on this one function rather than
+  accept an arbitrary caller-supplied path — this directly addresses §9.2
+  item 2's "canonical path" obligation for the artifact's location (though
+  the wiring step must still enforce it defensively, since a canonical helper
+  existing does not by itself prevent a future caller from ignoring it).
+- `backend/scripts/h11_auto_v4_unattended_live_create_daily_authorization.py`
+  — the operator-run CLI. The JST trading day is always the real current
+  day (no override flag exists); `--generation-digest` has no default; an
+  existing file at the canonical path is never overwritten without
+  `--force`; a symlinked destination is refused. The script only writes the
+  artifact -- it calls the existing, unmodified `check_operator_daily_authorization`
+  to report the result and never imports or calls the consume function.
+
+This does not resolve §9.2 item 3 (local/unsynced directory) -- the operator
+must still ensure the repository (or at least `backend/market_data/`) is not
+inside a cloud-synced path when this is actually used for real authorization;
+the CLI has no way to detect or enforce that itself.
+
+A same-day independent review found one Medium finding: the CLI's atomic-write
+`.tmp` intermediate was created with `O_CREAT|O_WRONLY|O_TRUNC` rather than
+`O_EXCL`, unlike `consume_operator_daily_authorization_once`'s own marker
+write -- a local, co-resident attacker with write access to the exact
+canonical directory could in principle plant a symlink at the `.tmp` path
+between a check and the open call. Fixed to use `O_CREAT|O_EXCL`, matching
+the consume function's pattern exactly; a pre-existing `.tmp` file (leftover
+crash or a planted symlink) now fails closed with
+`AUTHORIZATION_ARTIFACT_TEMP_FILE_ALREADY_EXISTS` rather than being silently
+removed and reopened, with a regression test pinning that a symlinked `.tmp`
+target is never written to.
+
+Tests: `backend/app/tests/h11_auto/test_v4_unattended_live_authorization_create_cli_no_post.py`
+(16 tests) cover path generation-binding and digest validation, artifact
+creation and its resulting content, the no-overwrite-without-force,
+symlinked-destination, and symlinked-temp-file behavior, and that the CLI
+writes exactly one file, exactly at the canonical path, and nowhere else.
