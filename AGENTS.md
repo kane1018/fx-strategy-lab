@@ -587,3 +587,33 @@ layerの実装を依頼した場合に限り、既存の汎用・fake-only強制
   claim。
 - broker write endpoint、Private API、Keychain、credentialのimport・呼出し・接続。
 - `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+
+## H-11 v4 unattended live adapter 設計限定例外（design-only・コード実装なし）
+
+上記slice群の境界は維持する。ただしoperatorが明示的に、unattended live adapter（将来の実発注経路）の
+全体設計を依頼した場合に限り、**文書（design doc）とAGENTS.md本体の更新だけ**を行ってよい。
+このStepはPythonコードを一切書かない。既存のG012/G013 permit／action-proof／coordinator／
+exit dispatcher／hard guardコードを一切変更しない。実credential・実Private API・実broker write・
+scheduler・resident processへは一切接続しない。
+
+### この例外で限定的に許可すること
+
+- 既存のgeneration-bound one-use permit型（`v4_gmo_canary_activation.py`）、persisted action-proof
+  chain（`v4_gmo_persisted_authorization.py`）、real coordinator／coordinated-path
+  （`v4_gmo_actual_coordinator.py`／`h11_v4_gmo_coordinated_actual_path.py`）、pure OCO計算
+  （`build_exact_fill_oco_plan_no_post`）、exit dispatcher（`h11_v4_gmo_exit_dispatcher.py`）、
+  hard guard（`assert_real_broker_post_allowed`）を**読み取り調査**し、unattended文脈での再利用可否を
+  設計docへ記述する。
+- G013の人間確認2種（major-incident resume phrase、current-turn challenge）を置き換える、
+  unattended向けpermit発行判断の**設計案**（構造要件・複数の独立した安全条件・operatorレビュー
+  ポイント）を文書化する。この設計案自体はpermitを発行する実装ではない。
+- Phase 5昇格基準（機械判定可能なchecklist）を文書化する。
+- 新しいAGENTS.md本体限定例外（次の実装slice用）の草案を、実装前提を明記した上でこのdocへ含めてよい。
+
+### この例外でも禁止し続けること
+
+- 実装コード（Python）を一切書かない。型定義・関数実装・permit発行実装はすべて次の別Step。
+- 既存のG012/G013 permit／coordinator／transport／hard guardコードの変更。
+- 実credential、実Private API、実broker write、scheduler、resident processへの接続。
+- unattended permit発行判断の設計案を、実際のpermit発行や活性化として扱うこと。設計docの完成は
+  live-ready、performance proof、実装承認を意味しない。
