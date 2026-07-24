@@ -452,3 +452,179 @@ Tests: `backend/app/tests/h11_auto/test_v4_unattended_live_authorization_create_
 creation and its resulting content, the no-overwrite-without-force,
 symlinked-destination, and symlinked-temp-file behavior, and that the CLI
 writes exactly one file, exactly at the canonical path, and nowhere else.
+
+## 10. Unattended proof constructor — design (2026-07-24, design-only, no code)
+
+This is the item this document has repeatedly deferred: "creating them (inside
+the G013 permit module, under its private-token discipline) is its own
+future, separately authorized and separately reviewed step" (§2). It is the
+**only G012/G013 code change anywhere in this track** — every other component
+so far is new, additive code in `app/services/`. This section is design only;
+no implementation exists yet.
+
+### 10.1 Why this must live inside `v4_gmo_canary_activation.py`
+
+`issue_v4_gmo_actual_activation_permit` validates its two proof arguments by
+checking `getattr(proof, "_token", None) is _RESUME_TOKEN` /
+`_CONFIRMATION_TOKEN` — module-private sentinel objects
+(`v4_gmo_canary_activation.py:27-28`). No code outside this file can construct
+a valid `V4MajorIncidentResumeProof` or `V4CurrentTurnConfirmationProof`
+without either modifying this file or reaching into its private names from
+outside (the latter would be exactly the kind of back door this design
+exists to prevent, and the existing import-graph isolation tests across this
+track would flag it). The two proof-minting lines must physically live here.
+
+Everything else about this file stays unchanged: `V4GmoCanaryIntent`,
+`V4CurrentTurnChallenge`, `issue_v4_gmo_actual_activation_permit`,
+`consume_v4_gmo_actual_activation_permit`, and the existing
+`confirm_v4_major_incident_resume_exact` / `confirm_v4_current_turn_exact`
+(the G013 human-confirmation path) are not touched. This is purely additive,
+the same pattern already used for the Phase 3 slice 2 notification enum.
+
+### 10.2 The verification-trust question, and the operator's decision
+
+Two designs were considered for how much the new constructor trusts its
+caller versus re-verifies itself:
+
+- **Option B (rejected):** accept a pre-computed `V4UnattendedPermitDecision`
+  plus a freshness/staleness bound (e.g. "computed within the last N
+  seconds"). Smaller code footprint, but structurally weaker: it is still
+  "accepting the boolean as a substitute" (§6's no-allow-bridge rule), just
+  with an expiry attached, and correctly bounding staleness across process/
+  clock boundaries is its own hard sub-problem that buys a weaker guarantee
+  than it costs to build.
+- **Option A (operator-approved 2026-07-24):** the new constructor takes
+  references to the primary state stores themselves (the daily authorization
+  artifact path, the risk store + policy, the dead-man store, the heartbeat
+  chain store) and reads every one of them fresh, at the exact moment of
+  proof-minting, then calls the already-reviewed pure
+  `decide_unattended_permit_issuance` itself. It never accepts a
+  pre-computed decision object. This satisfies §6/§9.2-item-7 literally: the
+  trusted module re-derives the answer from primary state, not from anyone's
+  claim about it.
+
+Two inputs remain caller-supplied even under Option A:
+`notification_ready: bool` and `entry_gate_blocked_reasons: tuple[str, ...]`.
+This is a deliberate scope boundary, not an oversight: verifying notification
+readiness for real requires an actual Pushover/SMTP send attempt (not built
+yet -- named as §9.2 item 4's own gap), and verifying entry gates requires
+the entire existing Public-market signal/quote pipeline, which this
+historically network-free, minimal module has never touched even in the
+human-confirmed G013 path (the human/caller has always been trusted to bring
+a fresh, already-verified `V4GmoCanaryIntent`). The wiring step remains
+responsible for both being genuinely fresh at call time, as already recorded
+in §9.2 item 4.
+
+### 10.3 The repeated-evaluation risk, and why it does not become unbounded reissuance
+
+An operator review of this design surfaced a real risk: if the six-condition
+check is re-run repeatedly (a retry loop, a re-evaluation, a bug) *before*
+the daily authorization is actually consumed, each evaluation could
+independently see `consumption_available=True` and mint a fresh, valid
+resume/current-turn proof pair -- `issue_v4_gmo_actual_activation_permit`'s
+own one-use marker is keyed by `cycle_ref` (derived from the signal), not by
+the daily authorization artifact, so it would not by itself catch a second
+mint against a *different* signal within the same day. This is a real
+double-issue risk, not a recursion/hang risk -- `decide_unattended_permit_issuance`
+is a pure, single-pass, always-terminating function; the danger is unbounded
+*successful* re-attempts, not an infinite loop in the literal sense.
+
+The fix is ordering, not new mechanism: **the new constructor consumes the
+daily authorization as the first write action after the six-condition check
+clears, before minting either proof.** Concretely, one function (not two
+independent ones) performs the full sequence and returns both proofs
+together:
+
+1. Fresh-read authorization, risk, dead-man, and heartbeat state from their
+   stores (§10.2). Combine with caller-supplied `notification_ready` and
+   `entry_gate_blocked_reasons`. Call `decide_unattended_permit_issuance`.
+2. If `not decision.allowed`, raise -- no write occurs.
+3. If allowed, call `consume_operator_daily_authorization_once` immediately.
+   Before its O_EXCL marker write, this function always performs its **own**
+   fresh internal `check_operator_daily_authorization` call (verified in the
+   existing code, `h11_v4_unattended_live_authorization.py:135-141`) rather
+   than trusting any object the caller passed in. The **O_EXCL write itself**
+   is the actual atomic mechanism that resolves a race between two callers;
+   the internal check is what makes that write authoritative rather than
+   trusting step 1's inputs.
+4. Only after consumption succeeds, mint both
+   `V4MajorIncidentResumeProof` and `V4CurrentTurnConfirmationProof` from the
+   same evaluation and return them as a pair.
+
+A second call for the same JST day -- whether from a genuine retry or a bug
+in the same process -- reaches step 3 and finds `consumption_available=False`
+via the fresh internal check, and refuses before any proof is minted; this
+part is a plain repeated-filesystem-read property with no caching involved,
+not something that needs its own proof.
+
+**Two things this ordering does not yet fully close, both requiring
+correction before this is treated as ready for implementation:**
+
+- **Concurrency under O_EXCL is only as reliable as the filesystem.** This
+  document has not yet run an adversarial concurrency test of the
+  *authorization module's own* O_EXCL write specifically (an ad-hoc multi-
+  thread verification was performed by a reviewer against the six-condition
+  *decision layer* during the earlier component-batch review, not against
+  this consume path, and citing it here as if it already covers this path was
+  an error in an earlier draft of this section, now corrected). More
+  importantly, §9.2 item 3 already states that O_EXCL atomicity is **not**
+  dependable on synced filesystems, and that this repository's own location
+  (`~/Desktop`) is iCloud-synced by default on macOS -- exactly the
+  precondition under which this section's race-safety claim would not hold.
+  §10.3's ordering fix is necessary but is not sufficient on its own until
+  §9.2 item 3 is resolved (canonical artifact directory confirmed local and
+  unsynced) and a real adversarial concurrency test for *this specific*
+  consume-then-mint sequence is written and passes, exercising true
+  concurrent processes (not just repeated sequential calls).
+- **Nothing yet prevents bypassing the new function entirely.** The existing
+  `confirm_v4_major_incident_resume_exact` only requires matching a hardcoded,
+  non-secret phrase constant, and `confirm_v4_current_turn_exact` only
+  requires a challenge/intent pair a caller could construct itself. Nothing
+  in this design stops a future implementer from calling those two existing
+  functions directly, plus the unmodified `issue_v4_gmo_actual_activation_permit`,
+  entirely skipping the new function's consume-first ordering -- which would
+  silently reintroduce the exact double-issue risk this section exists to
+  close. The future implementation step must make this bypass structurally
+  unreachable from the unattended orchestration path (e.g. the unattended
+  orchestration module must never import `confirm_v4_major_incident_resume_exact`/
+  `confirm_v4_current_turn_exact` directly, enforced by its own import-graph
+  isolation test, mirroring every other slice in this track) and must state
+  this explicitly as a reviewed obligation, not leave it implicit.
+
+The cost of the ordering itself, independent of the two gaps above: if step 4
+or anything after it fails, the day's authorization is already spent with no
+proof successfully used -- consistent with this project's established
+fail-closed, no-retry philosophy (prefer wasting a day's authorization over
+any risk of a second issuance).
+
+### 10.4 What remains for the future implementation step
+
+This section is design only. Implementing it requires its own new AGENTS.md
+exception (mirroring the pattern of every prior implementation step in this
+track), and must additionally:
+
+- **Resolve §9.2 item 3 first** (canonical authorization-artifact directory
+  confirmed local and unsynced) and add a real adversarial concurrency test
+  of the consume-then-mint sequence specifically -- true concurrent
+  processes racing the new function, not sequential repeated calls -- before
+  §10.3's race-safety claim is treated as proven rather than designed.
+- **Structurally block the bypass path named in §10.3**: the unattended
+  orchestration module must never import `confirm_v4_major_incident_resume_exact`
+  or `confirm_v4_current_turn_exact` directly, and this must be enforced by
+  its own import-graph isolation test (mirroring every other slice), not left
+  as a documentation-only convention.
+- Add fake-only tests proving the ordering in §10.3 -- especially that a
+  second call within the same JST day, and concurrent calls, never mint a
+  second proof pair, using fake stores/paths exactly as every other slice in
+  this track has done.
+- Pin the canonical authorization-artifact path via
+  `v4_unattended_live_daily_authorization_path` (§9.3) inside the new
+  constructor itself, rather than accepting an arbitrary caller-supplied
+  path -- satisfying §9.2 item 2 at the point where it matters most (the
+  actual consume call), not only at the CLI's write side.
+- Prove import-graph isolation still holds for real transport/credential/
+  broker-write surfaces (this addition only reaches local state stores, never
+  network/Keychain/broker code).
+- Not wire the new constructor into any real coordinator, transport, or
+  runtime state root -- that remains a separate, later, explicitly authorized
+  step per §9.2 and §8.

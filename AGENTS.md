@@ -698,3 +698,32 @@ scheduler・resident processへは一切接続しない。
 - artifactの自動再発行・自動延長・cap自動引き上げの実装。
 - `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
 - 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended proof constructor 設計限定例外（design-only・コード実装なし）
+
+これは、Phase 4設計docが「G013 permit moduleのprivate-token規律内に追加する、別途明示承認・別review
+必須の唯一のG013コード変更」として明示的に先送りした項目である。operatorが明示的にこの設計を
+依頼した場合に限り、**文書（design doc addendum）とAGENTS.md本体の更新だけ**を行ってよい。
+このStepはPythonコードを一切書かない。`v4_gmo_canary_activation.py`を含む既存G012/G013コードは
+一切変更しない。
+
+### この例外で限定的に許可すること
+
+- `v4_gmo_canary_activation.py`の`_RESUME_TOKEN`／`_CONFIRMATION_TOKEN`によるprivate-token規律を
+  読み取り調査し、unattended文脈でのproof発行に必要な新規関数の**設計**（シグネチャ・検証順序・
+  「decision.allowedをproof構築に流用しない」ための一次state再検証方針）を文書化する。
+- 既存の`issue_v4_gmo_actual_activation_permit`／`consume_v4_gmo_actual_activation_permit`／
+  `confirm_v4_major_incident_resume_exact`／`confirm_v4_current_turn_exact`を変更しないことを
+  設計の前提として明記する。
+- 「6条件評価を繰り返し呼んでも、同一JST日にresume/current-turn proofのペアを2回以上mintできない」
+  ことを保証する具体的な順序（authorization artifactの消費を、6条件クリア後の最初の書き込みとして
+  行う）を設計に含める。
+- この設計案自体はproofを発行する実装ではない。
+
+### この例外でも禁止し続けること
+
+- 実装コード（Python）を一切書かない。
+- `v4_gmo_canary_activation.py`を含む既存G012/G013コード（permit／coordinator／transport／
+  exit dispatcher／hard guard）の変更。
+- この設計案を、実際のproof発行やactivationとして扱うこと。設計doc完成はlive-ready、
+  performance proof、実装承認を意味しない。
