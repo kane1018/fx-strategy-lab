@@ -25,17 +25,15 @@ _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 
 def test_state_root_and_artifact_path_are_generation_bound(tmp_path: Path) -> None:
     root = paths_module.v4_unattended_live_state_root(
-        repository=tmp_path, generation_digest=_GENERATION
+        state_root=tmp_path, generation_digest=_GENERATION
     )
     assert root == (
         tmp_path.resolve()
-        / "backend"
-        / "market_data"
         / "h11_v4_unattended_live"
         / f"generation-{'c' * 64}"
     )
     artifact = paths_module.v4_unattended_live_daily_authorization_path(
-        repository=tmp_path, generation_digest=_GENERATION
+        state_root=tmp_path, generation_digest=_GENERATION
     )
     assert artifact == root / "daily-authorization.json"
 
@@ -56,7 +54,7 @@ def test_malformed_generation_digest_is_refused(tmp_path: Path, bad_digest: str)
         match="V4_UNATTENDED_LIVE_GENERATION_DIGEST_INVALID",
     ):
         paths_module.v4_unattended_live_state_root(
-            repository=tmp_path, generation_digest=bad_digest
+            state_root=tmp_path, generation_digest=bad_digest
         )
 
 
@@ -66,17 +64,17 @@ def test_non_string_generation_digest_is_refused(tmp_path: Path) -> None:
         match="V4_UNATTENDED_LIVE_GENERATION_DIGEST_INVALID",
     ):
         paths_module.v4_unattended_live_state_root(
-            repository=tmp_path, generation_digest=12345  # type: ignore[arg-type]
+            state_root=tmp_path, generation_digest=12345  # type: ignore[arg-type]
         )
 
 
 def test_different_generations_resolve_to_different_paths(tmp_path: Path) -> None:
     other = "sha256:" + "d" * 64
     first = paths_module.v4_unattended_live_daily_authorization_path(
-        repository=tmp_path, generation_digest=_GENERATION
+        state_root=tmp_path, generation_digest=_GENERATION
     )
     second = paths_module.v4_unattended_live_daily_authorization_path(
-        repository=tmp_path, generation_digest=other
+        state_root=tmp_path, generation_digest=other
     )
     assert first != second
 
@@ -101,7 +99,7 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
 
 def test_cli_creates_a_valid_authorized_artifact(tmp_path: Path) -> None:
     result = _run_cli(
-        "--generation-digest", _GENERATION, "--repository", str(tmp_path)
+        "--generation-digest", _GENERATION, "--state-root", str(tmp_path)
     )
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(result.stdout)
@@ -111,7 +109,7 @@ def test_cli_creates_a_valid_authorized_artifact(tmp_path: Path) -> None:
     assert payload["consumption_available"] is True
 
     artifact_path = paths_module.v4_unattended_live_daily_authorization_path(
-        repository=tmp_path, generation_digest=_GENERATION
+        state_root=tmp_path, generation_digest=_GENERATION
     )
     assert artifact_path.is_file()
     on_disk = json.loads(artifact_path.read_text(encoding="utf-8"))
@@ -132,9 +130,9 @@ def test_cli_creates_a_valid_authorized_artifact(tmp_path: Path) -> None:
 
 
 def test_cli_never_overwrites_without_force(tmp_path: Path) -> None:
-    first = _run_cli("--generation-digest", _GENERATION, "--repository", str(tmp_path))
+    first = _run_cli("--generation-digest", _GENERATION, "--state-root", str(tmp_path))
     assert first.returncode == 0
-    second = _run_cli("--generation-digest", _GENERATION, "--repository", str(tmp_path))
+    second = _run_cli("--generation-digest", _GENERATION, "--state-root", str(tmp_path))
     assert second.returncode == 2
     payload = json.loads(second.stdout)
     assert payload["created"] is False
@@ -142,9 +140,9 @@ def test_cli_never_overwrites_without_force(tmp_path: Path) -> None:
 
 
 def test_cli_force_overwrites_an_existing_artifact(tmp_path: Path) -> None:
-    _run_cli("--generation-digest", _GENERATION, "--repository", str(tmp_path))
+    _run_cli("--generation-digest", _GENERATION, "--state-root", str(tmp_path))
     result = _run_cli(
-        "--generation-digest", _GENERATION, "--repository", str(tmp_path), "--force"
+        "--generation-digest", _GENERATION, "--state-root", str(tmp_path), "--force"
     )
     assert result.returncode == 0
     payload = json.loads(result.stdout)
@@ -153,13 +151,13 @@ def test_cli_force_overwrites_an_existing_artifact(tmp_path: Path) -> None:
 
 def test_cli_refuses_a_symlinked_destination(tmp_path: Path) -> None:
     artifact_path = paths_module.v4_unattended_live_daily_authorization_path(
-        repository=tmp_path, generation_digest=_GENERATION
+        state_root=tmp_path, generation_digest=_GENERATION
     )
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     real_target = tmp_path / "elsewhere.json"
     real_target.write_text("{}", encoding="utf-8")
     artifact_path.symlink_to(real_target)
-    result = _run_cli("--generation-digest", _GENERATION, "--repository", str(tmp_path))
+    result = _run_cli("--generation-digest", _GENERATION, "--state-root", str(tmp_path))
     assert result.returncode == 2
     payload = json.loads(result.stdout)
     assert payload["status"] == "AUTHORIZATION_ARTIFACT_PATH_SYMLINK_REFUSED"
@@ -171,14 +169,14 @@ def test_cli_refuses_a_symlinked_temp_file(tmp_path: Path) -> None:
     # O_EXCL rather than following a planted symlink, matching the pattern
     # consume_operator_daily_authorization_once already uses for its marker.
     artifact_path = paths_module.v4_unattended_live_daily_authorization_path(
-        repository=tmp_path, generation_digest=_GENERATION
+        state_root=tmp_path, generation_digest=_GENERATION
     )
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     real_target = tmp_path / "elsewhere.json"
     real_target.write_text("{}", encoding="utf-8")
     temp_path = artifact_path.with_suffix(f"{artifact_path.suffix}.tmp")
     temp_path.symlink_to(real_target)
-    result = _run_cli("--generation-digest", _GENERATION, "--repository", str(tmp_path))
+    result = _run_cli("--generation-digest", _GENERATION, "--state-root", str(tmp_path))
     assert result.returncode == 2
     payload = json.loads(result.stdout)
     assert payload["status"] == "AUTHORIZATION_ARTIFACT_TEMP_FILE_ALREADY_EXISTS"
@@ -189,7 +187,7 @@ def test_cli_refuses_a_symlinked_temp_file(tmp_path: Path) -> None:
 
 def test_cli_rejects_a_malformed_generation_digest(tmp_path: Path) -> None:
     result = _run_cli(
-        "--generation-digest", "not-a-digest", "--repository", str(tmp_path)
+        "--generation-digest", "not-a-digest", "--state-root", str(tmp_path)
     )
     assert result.returncode == 2
     payload = json.loads(result.stdout)
@@ -206,8 +204,19 @@ def test_cli_requires_generation_digest_argument() -> None:
 def test_cli_never_writes_outside_the_canonical_generation_directory(
     tmp_path: Path,
 ) -> None:
-    _run_cli("--generation-digest", _GENERATION, "--repository", str(tmp_path))
-    created = list((tmp_path / "backend" / "market_data" / "h11_v4_unattended_live").rglob("*"))
+    _run_cli("--generation-digest", _GENERATION, "--state-root", str(tmp_path))
+    created = list((tmp_path / "h11_v4_unattended_live").rglob("*"))
     created_files = [path for path in created if path.is_file()]
     assert len(created_files) == 1
     assert created_files[0].name == "daily-authorization.json"
+
+
+def test_default_state_root_is_outside_icloud_desktop_documents_sync() -> None:
+    # The regression this whole relocation exists to fix: the default must
+    # never resolve under ~/Desktop or ~/Documents (the only two folders
+    # iCloud Desktop & Documents sync actually touches).
+    default_root = paths_module.DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT.resolve()
+    home = Path.home().resolve()
+    assert default_root.is_relative_to(home / "Library")
+    assert not default_root.is_relative_to(home / "Desktop")
+    assert not default_root.is_relative_to(home / "Documents")

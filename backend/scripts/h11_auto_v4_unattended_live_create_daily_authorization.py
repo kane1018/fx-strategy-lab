@@ -30,12 +30,12 @@ from app.services.h11_v4_unattended_live_authorization import (
     check_operator_daily_authorization,
 )
 from app.services.h11_v4_unattended_live_paths import (
+    DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
     V4UnattendedLivePathError,
     v4_unattended_live_daily_authorization_path,
 )
 
 _JST = ZoneInfo("Asia/Tokyo")
-_DEFAULT_REPOSITORY = Path(__file__).resolve().parents[2]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,7 +50,17 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="Exact sha256:<64 hex> digest of the generation being authorized.",
     )
-    parser.add_argument("--repository", type=Path, default=_DEFAULT_REPOSITORY)
+    parser.add_argument(
+        "--state-root",
+        type=Path,
+        default=DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+        help=(
+            "Root directory for unattended-live state. Defaults to a local, "
+            "non-iCloud-synced location under ~/Library/Application Support "
+            "(never the repository checkout, which may itself be inside a "
+            "synced folder such as ~/Desktop)."
+        ),
+    )
     parser.add_argument(
         "--force",
         action="store_true",
@@ -60,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         path = v4_unattended_live_daily_authorization_path(
-            repository=args.repository, generation_digest=args.generation_digest
+            state_root=args.state_root, generation_digest=args.generation_digest
         )
     except V4UnattendedLivePathError as error:
         print(json.dumps({"status": str(error), "created": False}, sort_keys=True))

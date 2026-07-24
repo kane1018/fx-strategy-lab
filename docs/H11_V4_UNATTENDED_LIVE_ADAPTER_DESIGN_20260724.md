@@ -430,10 +430,24 @@ scoped to creation only:
   artifact -- it calls the existing, unmodified `check_operator_daily_authorization`
   to report the result and never imports or calls the consume function.
 
-This does not resolve §9.2 item 3 (local/unsynced directory) -- the operator
-must still ensure the repository (or at least `backend/market_data/`) is not
-inside a cloud-synced path when this is actually used for real authorization;
-the CLI has no way to detect or enforce that itself.
+**Update (2026-07-24, later the same day): §9.2 item 3 is now resolved.** A
+read-only check on the actual development machine confirmed iCloud Desktop &
+Documents sync is genuinely active (`com.apple.bird`/`com.apple.cloudd`
+running, `FXICloudDriveDesktop` preference set, and this repository lives
+under the synced `~/Desktop`) -- the risk §9.2 item 3 warned about was not
+hypothetical. The canonical state root (`h11_v4_unattended_live_paths.py`)
+was changed from a repository-relative path (`backend/market_data/...`,
+inheriting whatever sync state the checkout happens to be in) to
+`~/Library/Application Support/fx-strategy-lab-h11-v4-unattended-live/`,
+overridable but no longer defaulting anywhere under `~/Desktop` or
+`~/Documents` -- the only two locations iCloud Desktop & Documents sync
+touches. `Path.home()`-relative, not tied to where the repository checkout
+sits. Verified end-to-end against the real (non-test) default location, not
+just overridden test paths. This resolves the precondition for *this specific
+new component*; it does not retroactively relocate the pre-existing G012/G013
+runtime state root (`v4_gmo_runtime_paths.py`, still repository-relative),
+which remains a separate, out-of-scope, pre-existing condition affecting the
+whole project, not something this track's components can fix unilaterally.
 
 A same-day independent review found one Medium finding: the CLI's atomic-write
 `.tmp` intermediate was created with `O_CREAT|O_WRONLY|O_TRUNC` rather than
@@ -566,16 +580,17 @@ correction before this is treated as ready for implementation:**
   thread verification was performed by a reviewer against the six-condition
   *decision layer* during the earlier component-batch review, not against
   this consume path, and citing it here as if it already covers this path was
-  an error in an earlier draft of this section, now corrected). More
-  importantly, §9.2 item 3 already states that O_EXCL atomicity is **not**
-  dependable on synced filesystems, and that this repository's own location
-  (`~/Desktop`) is iCloud-synced by default on macOS -- exactly the
-  precondition under which this section's race-safety claim would not hold.
-  §10.3's ordering fix is necessary but is not sufficient on its own until
-  §9.2 item 3 is resolved (canonical artifact directory confirmed local and
-  unsynced) and a real adversarial concurrency test for *this specific*
-  consume-then-mint sequence is written and passes, exercising true
-  concurrent processes (not just repeated sequential calls).
+  an error in an earlier draft of this section, now corrected). §9.2 item 3's
+  underlying precondition (canonical artifact directory confirmed local and
+  unsynced) **is now resolved** -- see §9.3's 2026-07-24 update: the
+  authorization artifact's default state root was relocated to
+  `~/Library/Application Support/...`, verified genuinely outside the
+  actively-confirmed iCloud-synced `~/Desktop`/`~/Documents` trees. What
+  remains outstanding is narrower: a real adversarial concurrency test for
+  *this specific* consume-then-mint sequence, exercising true concurrent
+  processes (not just repeated sequential calls), which still does not exist
+  and must be written before this section's race-safety claim is treated as
+  proven rather than designed.
 - **Nothing yet prevents bypassing the new function entirely.** The existing
   `confirm_v4_major_incident_resume_exact` only requires matching a hardcoded,
   non-secret phrase constant, and `confirm_v4_current_turn_exact` only
@@ -603,11 +618,12 @@ This section is design only. Implementing it requires its own new AGENTS.md
 exception (mirroring the pattern of every prior implementation step in this
 track), and must additionally:
 
-- **Resolve §9.2 item 3 first** (canonical authorization-artifact directory
-  confirmed local and unsynced) and add a real adversarial concurrency test
-  of the consume-then-mint sequence specifically -- true concurrent
-  processes racing the new function, not sequential repeated calls -- before
-  §10.3's race-safety claim is treated as proven rather than designed.
+- §9.2 item 3 (canonical authorization-artifact directory confirmed local and
+  unsynced) is now resolved -- see §9.3's 2026-07-24 update. What remains: add
+  a real adversarial concurrency test of the consume-then-mint sequence
+  specifically -- true concurrent processes racing the new function, not
+  sequential repeated calls -- before §10.3's race-safety claim is treated as
+  proven rather than designed.
 - **Structurally block the bypass path named in §10.3**: the unattended
   orchestration module must never import `confirm_v4_major_incident_resume_exact`
   or `confirm_v4_current_turn_exact` directly, and this must be enforced by
