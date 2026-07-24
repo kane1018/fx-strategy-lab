@@ -1632,3 +1632,153 @@ either new construct, `notification_ready` in the bounded runner's
 `unattended_live_notification_channel_ready`, and adding the
 notify-at-issuance hook using `H11V4EnabledDualRouteNotifier` -- remains
 a separate, later, explicitly authorized step).
+
+## 15. Wiring the notification decision layer — design (2026-07-24)
+
+Connects §14's two unwired constructs into the orchestration module and
+bounded runner CLI. This is the second modification to
+`h11_v4_unattended_live_orchestration.py` (its own reviewed, previously
+"no logic beyond the credential guard" module) and the fourth to the
+bounded runner CLI -- both explicitly named here rather than left as an
+unstated side effect of this slice.
+
+### 15.1 Orchestration module changes
+
+`run_unattended_live_entry_cycle_once` currently takes
+`notification_ready: bool` as a caller-supplied value. It changes to take
+`notification_primary: H11V4PushoverTransport` and
+`notification_secondary: H11V4EmailTransport` (required, no default,
+exactly like `credential_pair`/`client`) instead. New sequence, inserted
+between the existing credential guard and the existing proof-constructor
+call:
+
+1. (Unchanged) guard `credential_pair`/`client` non-`None`.
+2. Compute `notification_ready =
+   unattended_live_notification_channel_ready(primary=notification_primary,
+   secondary=notification_secondary)` -- the cheap, no-I/O signal (§14.5
+   Option A), now genuinely derived rather than caller-asserted.
+3. (Unchanged) call `confirm_v4_unattended_authorization_once` with the
+   computed `notification_ready` -- if any of the six conditions fail, no
+   authorization is consumed, nothing further happens.
+4. **New**: once proofs are minted (authorization already consumed),
+   call `H11V4EnabledDualRouteNotifier(primary=notification_primary,
+   secondary=notification_secondary).notify_once
+   (H11V4NotificationEvent.UNATTENDED_LIVE_ENTRY_ATTEMPTED)` -- the one
+   real send, exactly once, immediately before permit issuance (§3.2 item
+   6's "before or immediately upon" -- the driver, not the orchestration
+   module, is where the permit is actually minted, and the driver remains
+   untouched a third time by design). If `result.halt_required` is
+   `True`, raise (the day's authorization is already spent; the driver is
+   never called) -- a failed notification is itself a fail-closed
+   condition, per §3.2 item 6, not merely logged.
+5. (Unchanged) call `run_g013_actual_canary_after_unattended_authorization`.
+
+The accepted cost is the same one already named for every other failure
+mode after consumption (§10.3, §11.6, §13.2): if the notification send
+fails, the day's one authorization is burned with no entry attempted --
+preferred over any risk of proceeding on an unverified notification
+claim.
+
+### 15.2 Bounded runner CLI changes
+
+`main`'s `notification_ready: bool` parameter is removed; two new
+required, no-default parameters replace it:
+`notification_primary: H11V4PushoverTransport`,
+`notification_secondary: H11V4EmailTransport` -- passed through to the
+orchestration call unchanged every cycle (these are caller-constructed
+objects, not per-cycle-derived values like `entry_gate_blocked_reasons`,
+so no provider/callable wrapper is needed here).
+
+The new orchestration failure raised in §15.1 step 4
+(`UNATTENDED_ORCHESTRATION_NOTIFICATION_SEND_FAILED`) is added to the
+runner's abort-label set alongside the existing integrity-drift labels:
+a failed real send that already burned the day's one authorization is a
+significant, actionable event the operator must see distinctly, not a
+routine "not yet" to retry (retrying is also pointless -- the day is
+already spent regardless of catching it). The runner's per-cycle catch
+list and elsewhere are otherwise unchanged.
+
+### 15.3 What stays out of scope
+
+No real transport implementation is added by this step (`notification_primary`/
+`notification_secondary` remain required parameters only a
+future operator launcher can supply with real, credentialed objects).
+No scheduler/CLI-invocation change beyond the parameter swap. No change
+to `H11V4DisabledDualRouteNotifier`, `H11V4EnabledDualRouteNotifier`'s
+own decision logic (§14), or the G013 driver.
+
+### 15.4 Implementation status (2026-07-24, fake-only, unwired)
+
+Implemented per §15.1/§15.2, under AGENTS.md's "notification decision層の
+結線 実装限定例外". `run_unattended_live_entry_cycle_once`'s
+`notification_ready: bool` parameter became required
+`notification_primary`/`notification_secondary` transports; it now
+derives `notification_ready` itself via
+`unattended_live_notification_channel_ready` and performs the one real
+send via `H11V4EnabledDualRouteNotifier.notify_once` immediately before
+calling the driver, raising `UNATTENDED_ORCHESTRATION_NOTIFICATION_SEND_FAILED`
+(never caught as routine "not yet") if `halt_required` comes back true --
+the day's authorization is already consumed at that point, matching the
+same accepted burn-the-day cost as every other post-consumption failure
+mode in this track. The bounded runner CLI's `main`/`_run_one_cycle` swap
+the same parameter and add the new label to `_INTEGRITY_ABORT_LABELS`.
+
+Adding the orchestration module as a genuine caller of
+`H11V4EnabledDualRouteNotifier`/`unattended_live_notification_channel_ready`
+necessarily broke the entry-notification module's "zero production
+callers" test; it became an allowlist naming exactly the orchestration
+module, named explicitly in the exception up front (no VETO on this
+point this time).
+
+16 tests in the orchestration file (up from 12, including one added
+during the review round below), 30 in the CLI file (up from 27 -- an
+earlier draft of this note said "18," the count from when that file was
+first created, not accounting for the entry-gate derivation slice's
+additions in between; corrected here), 35 unchanged in the
+entry-notification file (plus the allowlist fix); full `h11_auto` suite:
+874 passing (up from 867). Ruff and the danger scan clean. `git diff`
+confirms the two modified, previously-reviewed modules changed only as
+described above -- no other logic touched.
+
+### 15.5 Independent review outcome (2026-07-24)
+
+Safety returned PASS outright. Operations returned PASS with a Medium
+coverage-completeness note (no test exercised `entry_gate_blocked_reasons`
+non-empty simultaneously with a not-ready notification channel; added --
+both raise the identical `V4_CANARY_UNATTENDED_GATE_NOT_CLEAR` label
+regardless, so this was a coverage gap, not a functional one) and the
+stale test-count fix above.
+
+Architecture returned a VETO, corrected in the docstring above rather
+than deferred: the notification fires once this module's six coarse
+conditions clear and the daily authorization is consumed -- not once a
+permit is actually minted or an order reaches the broker. The driver
+still has its own fail-closed gates left after that point (session
+consume/exact-binding/clean-main re-checks, signal-postable, two
+dead-man-heartbeat waits) before `issue_v4_gmo_actual_activation_permit`
+ever runs, and only two of those labels
+(`G013_IMPLEMENTATION_CHANGED_BEFORE_PERMIT`/
+`G013_GENERATION_CHANGED_BEFORE_PERMIT`) are treated as distinct aborts
+by the CLI -- the rest surface as routine "not yet" lines, meaning an
+operator could see "entry attempted" immediately followed by ordinary
+retry noise for a cycle where no permit was ever minted. This is not a
+double-issuance, credential, or fail-open risk (every order-placement
+gate remains untouched and still fails closed) -- it is a
+notification-accuracy gap against §3.2 item 6's intent to let the
+operator watch/react to an imminent live action.
+
+Fix applied within this slice's scope (the driver remains untouched, as
+required): the orchestration module's docstring now states this residual
+gap explicitly rather than asserting parity with "immediately upon
+permit issuance." Not resolved by this slice, carried forward: narrowing
+the gap itself -- by moving the notify seam closer to actual permit
+issuance, by distinguishing more of the driver's pre-permit labels in the
+CLI's abort handling, or by renaming/reframing the event -- would each
+require touching the driver or the notification enum again, both beyond
+this exception's authorized scope, and needs its own future decision.
+
+Remaining, still unwired: the operator's real credential/transport
+launcher (constructing real `V4GmoSealedCredentialPair`/`httpx.Client`
+and real `H11V4PushoverTransport`/`H11V4EmailTransport` implementations)
+and any scheduler around the CLI -- both explicitly out of scope for
+anything this assistant implements.

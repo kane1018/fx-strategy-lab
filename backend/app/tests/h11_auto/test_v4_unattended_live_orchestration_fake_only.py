@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,6 +23,15 @@ from app.h11_auto.runtime_safety import (
 from app.services import h11_v4_unattended_live_orchestration as subject
 from app.services.h11_v4_gmo_actual_transport import V4GmoSealedCredentialPair
 from app.services.h11_v4_gmo_g013_canary import V4GmoG013PreparedSession
+from app.services.h11_v4_notification_binding_no_post import (
+    H11V4EmailTransport,
+    H11V4FakeEmailTransport,
+    H11V4FakePushoverTransport,
+    H11V4NotificationEvent,
+    H11V4PushoverDelivery,
+    H11V4PushoverRequest,
+    H11V4PushoverTransport,
+)
 from app.services.h11_v4_unattended_live_authorization import (
     V4_UNATTENDED_LIVE_AUTHORIZATION_SCHEMA,
 )
@@ -29,6 +39,57 @@ from app.services.h11_v4_unattended_live_heartbeat_chain import (
     V4HeartbeatChainPolicy,
     V4HeartbeatChainStore,
 )
+
+_UNATTENDED_EVENT = H11V4NotificationEvent.UNATTENDED_LIVE_ENTRY_ATTEMPTED
+
+
+# Test-only doubles satisfying the real transport protocol shape
+# (fake_only=False), matching the sibling entry-notification test file --
+# needed because H11V4EnabledDualRouteNotifier rejects fake_only=True
+# transports outright, so exercising the "real send happens" paths here
+# requires real-shaped (not fake) doubles.
+@dataclass
+class _RealShapedPushoverTransport:
+    accepted: bool = True
+    receipt_present: bool = True
+    acknowledged: bool = True
+    fake_only: bool = field(default=False, init=False)
+    calls: list[H11V4NotificationEvent] = field(default_factory=list, init=False)
+
+    def send_once(self, request: H11V4PushoverRequest) -> H11V4PushoverDelivery:
+        self.calls.append(request.event)
+        receipt = self.receipt_present if request.receipt_required else False
+        acknowledged = self.acknowledged if request.receipt_required else self.accepted
+        return H11V4PushoverDelivery(
+            accepted=self.accepted, receipt_present=receipt, acknowledged=acknowledged
+        )
+
+
+@dataclass
+class _RealShapedEmailTransport:
+    accepted: bool = True
+    fake_only: bool = field(default=False, init=False)
+    calls: list[H11V4NotificationEvent] = field(default_factory=list, init=False)
+
+    def send_once(self, event: H11V4NotificationEvent) -> bool:
+        self.calls.append(event)
+        return self.accepted
+
+
+def _real_pushover(**overrides: object) -> H11V4PushoverTransport:
+    return cast(H11V4PushoverTransport, _RealShapedPushoverTransport(**overrides))
+
+
+def _real_email(**overrides: object) -> H11V4EmailTransport:
+    return cast(H11V4EmailTransport, _RealShapedEmailTransport(**overrides))
+
+
+def _fake_pushover() -> H11V4PushoverTransport:
+    return cast(H11V4PushoverTransport, H11V4FakePushoverTransport())
+
+
+def _fake_email() -> H11V4EmailTransport:
+    return cast(H11V4EmailTransport, H11V4FakeEmailTransport())
 
 _NOW = datetime(2026, 7, 24, 1, 0, tzinfo=UTC)
 _GENERATION = "sha256:" + "b" * 64
@@ -121,6 +182,8 @@ def _run(
     entry_gate_blocked_reasons: tuple[str, ...] = (),
     stores: tuple[PhaseBRiskStore, DeadManStore, V4HeartbeatChainStore] | None = None,
     session: object | None = None,
+    notification_primary: object | None = "DEFAULT",
+    notification_secondary: object | None = "DEFAULT",
 ) -> object:
     risk_store, dead_man, chain = stores if stores is not None else _healthy_stores(tmp_path)
     _authorization_artifact(tmp_path)
@@ -131,7 +194,14 @@ def _run(
         risk_policy=_risk_policy(),
         dead_man_store=dead_man,
         heartbeat_chain_store=chain,
-        notification_ready=True,
+        notification_primary=cast(
+            H11V4PushoverTransport,
+            _real_pushover() if notification_primary == "DEFAULT" else notification_primary,
+        ),
+        notification_secondary=cast(
+            H11V4EmailTransport,
+            _real_email() if notification_secondary == "DEFAULT" else notification_secondary,
+        ),
         entry_gate_blocked_reasons=entry_gate_blocked_reasons,
         credential_pair=cast(
             V4GmoSealedCredentialPair,
@@ -142,9 +212,14 @@ def _run(
     )
 
 
-def test_signature_requires_credential_pair_and_client_with_no_default() -> None:
+def test_signature_requires_all_dependencies_with_no_default() -> None:
     signature = inspect.signature(subject.run_unattended_live_entry_cycle_once)
-    for name in ("credential_pair", "client"):
+    for name in (
+        "credential_pair",
+        "client",
+        "notification_primary",
+        "notification_secondary",
+    ):
         assert signature.parameters[name].default is inspect.Parameter.empty, name
 
 
@@ -178,8 +253,10 @@ def test_happy_path_runs_real_proof_constructor_then_hands_proofs_to_driver(
 ) -> None:
     # The REAL proof constructor runs against real tmp-path stores (only the
     # driver is faked): the six conditions genuinely evaluate, the daily
-    # authorization is genuinely consumed, and real proof objects reach the
-    # driver together with the caller-supplied credential/client, unchanged.
+    # authorization is genuinely consumed, the real notification send
+    # genuinely happens (real-shaped transports), and real proof objects
+    # reach the driver together with the caller-supplied credential/client,
+    # unchanged.
     driver_calls: list[dict[str, object]] = []
 
     def _fake_driver(**kwargs: object) -> str:
@@ -192,7 +269,16 @@ def test_happy_path_runs_real_proof_constructor_then_hands_proofs_to_driver(
     session = _fake_session()
     credential_pair = _fake_credential_pair()
     client = object()
-    result = _run(tmp_path, session=session, credential_pair=credential_pair, client=client)
+    primary = _RealShapedPushoverTransport()
+    secondary = _RealShapedEmailTransport()
+    result = _run(
+        tmp_path,
+        session=session,
+        credential_pair=credential_pair,
+        client=client,
+        notification_primary=cast(H11V4PushoverTransport, primary),
+        notification_secondary=cast(H11V4EmailTransport, secondary),
+    )
     assert result == "CANARY_RESULT"
     assert len(driver_calls) == 1
     call = driver_calls[0]
@@ -207,6 +293,10 @@ def test_happy_path_runs_real_proof_constructor_then_hands_proofs_to_driver(
     assert call["session"] is session
     assert call["credential_pair"] is credential_pair
     assert call["client"] is client
+    # The one real notification send genuinely happened, exactly once, for
+    # exactly the unattended-live event.
+    assert primary.calls == [_UNATTENDED_EVENT]
+    assert secondary.calls == [_UNATTENDED_EVENT]
     marker = (
         tmp_path
         / "h11_v4_unattended_live"
@@ -236,6 +326,133 @@ def test_blocked_condition_raises_and_driver_is_never_called(
         / "unattended-authorization-consumed-2026-07-24.json"
     )
     assert not marker.exists()
+
+
+def test_fake_notification_transports_block_via_the_channel_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # fake_only=True transports make unattended_live_notification_channel_ready
+    # return False, so notification_ready=False fails the six-condition check
+    # BEFORE authorization is consumed -- the flow never reaches
+    # H11V4EnabledDualRouteNotifier construction (which would reject fakes
+    # outright), and the driver is never called.
+    driver = MagicMock()
+    monkeypatch.setattr(
+        subject, "run_g013_actual_canary_after_unattended_authorization", driver
+    )
+    with pytest.raises(
+        activation_module.V4GmoCanaryActivationError,
+        match="V4_CANARY_UNATTENDED_GATE_NOT_CLEAR",
+    ):
+        _run(
+            tmp_path,
+            notification_primary=_fake_pushover(),
+            notification_secondary=_fake_email(),
+        )
+    driver.assert_not_called()
+    marker = (
+        tmp_path
+        / "h11_v4_unattended_live"
+        / f"generation-{'b' * 64}"
+        / "unattended-authorization-consumed-2026-07-24.json"
+    )
+    assert not marker.exists()
+
+
+def test_blocked_entry_gate_and_not_ready_notification_together_still_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Coverage-completeness check (independent review, §15.5): confirms the
+    # combination of a non-empty entry_gate_blocked_reasons AND a not-ready
+    # notification channel still blocks via the same generic label, not some
+    # other/inconsistent behavior, before authorization is ever consumed.
+    driver = MagicMock()
+    monkeypatch.setattr(
+        subject, "run_g013_actual_canary_after_unattended_authorization", driver
+    )
+    with pytest.raises(
+        activation_module.V4GmoCanaryActivationError,
+        match="V4_CANARY_UNATTENDED_GATE_NOT_CLEAR",
+    ):
+        _run(
+            tmp_path,
+            entry_gate_blocked_reasons=("SPREAD_LIMIT_EXCEEDED",),
+            notification_primary=_fake_pushover(),
+            notification_secondary=_fake_email(),
+        )
+    driver.assert_not_called()
+    marker = (
+        tmp_path
+        / "h11_v4_unattended_live"
+        / f"generation-{'b' * 64}"
+        / "unattended-authorization-consumed-2026-07-24.json"
+    )
+    assert not marker.exists()
+
+
+def test_failed_real_notification_send_aborts_before_the_driver_but_burns_the_day(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Real-shaped (fake_only=False) transports pass the cheap channel check,
+    # so the six-condition check clears and authorization IS consumed --
+    # then the actual real send (primary rejected) fails, halt_required is
+    # True, and this module raises before ever calling the driver. This is
+    # the notification-specific instance of the general burn-the-day cost
+    # (§10.3/§11.6/§15.1): a same-day retry is refused regardless.
+    driver = MagicMock()
+    monkeypatch.setattr(
+        subject, "run_g013_actual_canary_after_unattended_authorization", driver
+    )
+    with pytest.raises(
+        subject.V4UnattendedLiveOrchestrationError,
+        match="UNATTENDED_ORCHESTRATION_NOTIFICATION_SEND_FAILED",
+    ):
+        _run(tmp_path, notification_primary=_real_pushover(accepted=False))
+    driver.assert_not_called()
+    marker = (
+        tmp_path
+        / "h11_v4_unattended_live"
+        / f"generation-{'b' * 64}"
+        / "unattended-authorization-consumed-2026-07-24.json"
+    )
+    assert marker.is_file()
+
+
+def test_notification_sent_after_authorization_consumed_but_before_driver_called(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    order: list[str] = []
+    primary = _RealShapedPushoverTransport()
+
+    class _OrderTrackingPushover:
+        fake_only = False
+
+        def send_once(self, request: H11V4PushoverRequest) -> H11V4PushoverDelivery:
+            order.append("notify")
+            return primary.send_once(request)
+
+    def _fake_driver(**_kwargs: object) -> str:
+        order.append("driver")
+        return "CANARY_RESULT"
+
+    monkeypatch.setattr(
+        subject, "run_g013_actual_canary_after_unattended_authorization", _fake_driver
+    )
+    _run(
+        tmp_path,
+        notification_primary=cast(H11V4PushoverTransport, _OrderTrackingPushover()),
+    )
+    marker = (
+        tmp_path
+        / "h11_v4_unattended_live"
+        / f"generation-{'b' * 64}"
+        / "unattended-authorization-consumed-2026-07-24.json"
+    )
+    # Authorization consumption is a side effect of the proof constructor
+    # call, which necessarily happens before this order list starts (it
+    # doesn't append to `order`) -- what this test pins is notify-before-driver.
+    assert order == ["notify", "driver"]
+    assert marker.is_file()
 
 
 def test_second_call_same_day_is_refused_before_the_driver(

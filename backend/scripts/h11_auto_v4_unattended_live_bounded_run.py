@@ -34,6 +34,10 @@ from app.services import h11_v4_gmo_g013_canary as canary_module
 from app.services import h11_v4_unattended_live_orchestration as orchestration_module
 from app.services.h11_v4_gmo_actual_transport import V4GmoSealedCredentialPair
 from app.services.h11_v4_gmo_g013_canary import V4GmoG013PreparedSession
+from app.services.h11_v4_notification_binding_no_post import (
+    H11V4EmailTransport,
+    H11V4PushoverTransport,
+)
 from app.services.h11_v4_unattended_live_heartbeat_chain import V4HeartbeatChainStore
 
 _MAXIMUM_CYCLES = 240
@@ -57,12 +61,16 @@ _EXPECTED_NOT_YET_ERRORS = (
 # (e.g. a provider label with a bad charset slipping past the runner's
 # element check below) -- always a programming error, never a market
 # condition, so retrying it would only burn the cycle budget on repeat
-# failures. All must abort the run loudly.
+# failures. Fourth: a failed real notification send that already burned the
+# day's one authorization (§15.2) -- a significant, actionable event the
+# operator must see distinctly, and retrying is pointless regardless since
+# the day is already spent. All must abort the run loudly.
 _INTEGRITY_ABORT_LABELS = frozenset(
     {
         "G013_IMPLEMENTATION_CHANGED_BEFORE_PERMIT",
         "G013_GENERATION_CHANGED_BEFORE_PERMIT",
         "V4_CANARY_UNATTENDED_DECISION_INVALID",
+        "UNATTENDED_ORCHESTRATION_NOTIFICATION_SEND_FAILED",
     }
 )
 
@@ -94,7 +102,8 @@ def _run_one_cycle(
     risk_policy: PhaseBRiskPolicy,
     dead_man_store: DeadManStore,
     heartbeat_chain_store: V4HeartbeatChainStore,
-    notification_ready: bool,
+    notification_primary: H11V4PushoverTransport,
+    notification_secondary: H11V4EmailTransport,
     entry_gate_blocked_reasons: tuple[str, ...],
     credential_pair: V4GmoSealedCredentialPair,
     client: httpx.Client,
@@ -107,7 +116,8 @@ def _run_one_cycle(
             risk_policy=risk_policy,
             dead_man_store=dead_man_store,
             heartbeat_chain_store=heartbeat_chain_store,
-            notification_ready=notification_ready,
+            notification_primary=notification_primary,
+            notification_secondary=notification_secondary,
             entry_gate_blocked_reasons=entry_gate_blocked_reasons,
             credential_pair=credential_pair,
             client=client,
@@ -128,7 +138,8 @@ def main(
     risk_policy: PhaseBRiskPolicy,
     dead_man_store: DeadManStore,
     heartbeat_chain_store: V4HeartbeatChainStore,
-    notification_ready: bool,
+    notification_primary: H11V4PushoverTransport,
+    notification_secondary: H11V4EmailTransport,
     entry_gate_reason_provider: Callable[[datetime], tuple[str, ...]],
     credential_pair: V4GmoSealedCredentialPair,
     client: httpx.Client,
@@ -143,9 +154,16 @@ def main(
     (``V4UnattendedLiveRunnerError`` / the provider's own exception) --
     providers must map their own fetch failures to a blocking reason such
     as ``ENTRY_GATE_QUOTE_UNAVAILABLE``, never raise for market/network
-    conditions. ``notification_ready`` deliberately remains a static bool:
-    upgrading it honestly requires the credential-gated real-send slice
-    (design doc §13), not a provider wrapper around the same claim.
+    conditions.
+
+    ``notification_primary``/``notification_secondary`` (design doc §15.2)
+    are required, no-default caller-constructed transport objects, passed
+    through to the orchestration layer unchanged every cycle -- unlike the
+    entry-gate reasons, these are not per-cycle-derived values, so no
+    provider/callable wrapper is used here. The orchestration layer derives
+    the cheap per-cycle channel-ready signal from them and performs the one
+    real send at issuance time; a failed send aborts this run loudly (it is
+    in ``_INTEGRITY_ABORT_LABELS`` below), never retried.
     """
 
     parser = argparse.ArgumentParser(
@@ -180,7 +198,8 @@ def main(
             risk_policy=risk_policy,
             dead_man_store=dead_man_store,
             heartbeat_chain_store=heartbeat_chain_store,
-            notification_ready=notification_ready,
+            notification_primary=notification_primary,
+            notification_secondary=notification_secondary,
             entry_gate_blocked_reasons=entry_gate_blocked_reasons,
             credential_pair=credential_pair,
             client=client,

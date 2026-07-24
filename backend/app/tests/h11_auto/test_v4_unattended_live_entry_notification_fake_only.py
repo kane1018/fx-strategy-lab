@@ -363,12 +363,15 @@ def test_module_never_constructs_a_real_transport_or_touches_credentials() -> No
         assert token not in source, token
 
 
-def test_no_production_callers_outside_this_test_file() -> None:
+def test_has_exactly_one_authorized_production_caller() -> None:
     # Scope note (same as the sibling reachability tests in this track):
     # catches direct names, attributes, and aliased imports
     # (`import ... as X`, via ast.alias.name/asname); does NOT catch
-    # string-based/dynamic lookups.
+    # string-based/dynamic lookups. Originally asserted zero production
+    # callers; the orchestration module (its own AGENTS.md exception, its
+    # own review -- design doc §15) is now the single authorized caller.
     targets = {"H11V4EnabledDualRouteNotifier", "unattended_live_notification_channel_ready"}
+    authorized = "backend/app/services/h11_v4_unattended_live_orchestration.py"
     module_path = Path(subject.__file__)
     repo_root = module_path.parents[2]
     hits: list[str] = []
@@ -388,5 +391,7 @@ def test_no_production_callers_outside_this_test_file() -> None:
                     and (node.name in targets or node.asname in targets)
                 )
             ):
-                hits.append(str(path))
-    assert hits == []
+                hits.append(path.as_posix())
+    unauthorized = [hit for hit in hits if not hit.endswith(authorized)]
+    assert unauthorized == []
+    assert any(hit.endswith(authorized) for hit in hits)

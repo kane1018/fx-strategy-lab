@@ -50,7 +50,8 @@ def _kwargs(**overrides: object) -> dict[str, object]:
         "risk_policy": object(),
         "dead_man_store": object(),
         "heartbeat_chain_store": object(),
-        "notification_ready": True,
+        "notification_primary": object(),
+        "notification_secondary": object(),
         "entry_gate_reason_provider": lambda _now: (),
         "credential_pair": cast(V4GmoSealedCredentialPair, object()),
         "client": cast(httpx.Client, object()),
@@ -67,12 +68,70 @@ def test_main_signature_requires_every_dependency_with_no_default() -> None:
         "risk_policy",
         "dead_man_store",
         "heartbeat_chain_store",
-        "notification_ready",
+        "notification_primary",
+        "notification_secondary",
         "entry_gate_reason_provider",
         "credential_pair",
         "client",
     ):
         assert signature.parameters[name].default is inspect.Parameter.empty, name
+
+
+def test_notification_transports_reach_the_orchestration_call_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    primary = object()
+    secondary = object()
+    seen: list[dict[str, object]] = []
+
+    def _capture(**kwargs: object) -> None:
+        seen.append(kwargs)
+        raise activation_module.V4GmoCanaryActivationError(
+            "V4_CANARY_UNATTENDED_GATE_NOT_CLEAR"
+        )
+
+    monkeypatch.setattr(
+        orchestration_module, "run_unattended_live_entry_cycle_once", _capture
+    )
+    subject.main(
+        ["--max-cycles", "1", "--interval-seconds", "0"],
+        **_kwargs(notification_primary=primary, notification_secondary=secondary),
+    )
+    assert len(seen) == 1
+    assert seen[0]["notification_primary"] is primary
+    assert seen[0]["notification_secondary"] is secondary
+
+
+def test_notification_send_failed_label_is_in_the_abort_set() -> None:
+    assert (
+        "UNATTENDED_ORCHESTRATION_NOTIFICATION_SEND_FAILED"
+        in subject._INTEGRITY_ABORT_LABELS
+    )
+
+
+def test_notification_send_failure_aborts_the_run_instead_of_retrying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    call_count = 0
+
+    def _raise_notification_failed(**_kwargs: object) -> None:
+        nonlocal call_count
+        call_count += 1
+        raise orchestration_module.V4UnattendedLiveOrchestrationError(
+            "UNATTENDED_ORCHESTRATION_NOTIFICATION_SEND_FAILED"
+        )
+
+    monkeypatch.setattr(
+        orchestration_module,
+        "run_unattended_live_entry_cycle_once",
+        _raise_notification_failed,
+    )
+    with pytest.raises(
+        orchestration_module.V4UnattendedLiveOrchestrationError,
+        match="UNATTENDED_ORCHESTRATION_NOTIFICATION_SEND_FAILED",
+    ):
+        subject.main(["--max-cycles", "5", "--interval-seconds", "0"], **_kwargs())
+    assert call_count == 1
 
 
 def test_max_cycles_out_of_range_errors(capsys: pytest.CaptureFixture[str]) -> None:
