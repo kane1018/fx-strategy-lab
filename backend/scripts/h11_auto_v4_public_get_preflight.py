@@ -31,6 +31,7 @@ def main() -> int:
             operation_permit=permit,
         ).run_once()
         if not report.status.startswith("PASSED_"):
+            print(json.dumps(report.to_safe_dict(), sort_keys=True, indent=2))
             raise V4GmoPublicPreflightError("PUBLIC_GET_NOT_CLEAR")
         ledger.complete(V4PreparationOperation.PUBLIC_GET, operation_permit=permit)
     except (V4ActualPreparationGuardError, V4GmoPublicPreflightError) as error:

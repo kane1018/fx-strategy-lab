@@ -31,6 +31,7 @@ def main() -> int:
             operation_permit=operation_permit,
         ).run_once()
         if not report.account_wide_snapshot_clear:
+            print(json.dumps(report.to_safe_dict(), sort_keys=True, indent=2))
             raise V4GmoReadOnlyPreflightError(
                 "PRIVATE_GET_ACCOUNT_WIDE_SNAPSHOT_NOT_CLEAR"
             )
