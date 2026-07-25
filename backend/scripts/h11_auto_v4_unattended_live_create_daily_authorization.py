@@ -2,9 +2,7 @@
 """Operator-run CLI: create today's unattended live daily authorization artifact.
 
 This script is the operator's own manual action, run at most once per JST
-trading day. It is never invoked by a scheduler, cron, LaunchAgent, resident
-process, or any automated caller -- doing so is explicitly prohibited by the
-AGENTS.md exception this script is implemented under.
+trading day.
 
 The JST trading day is always "right now" -- there is no flag to author a
 past or future day. The generation digest must be typed explicitly; there is
