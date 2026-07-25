@@ -1471,20 +1471,53 @@ def test_smtp_recipient_exception_is_safely_classified(
         )
 
 
-def test_persistent_preparation_ledger_enforces_order_and_no_retry(
+def test_concurrent_begin_of_the_same_operation_is_rejected_not_retried(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    """A genuinely still-running attempt blocks a second begin() outright.
+
+    Retry is only safe to offer once the previous attempt's process is
+    actually gone (crashed/exited, which releases its OS-level process
+    lock) -- not while it may still be performing a real external action
+    (send/GET/kill). Two attempts racing to perform that action at once is
+    exactly what the lock rules out.
+    """
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    ledger.begin(V4PreparationOperation.PRESENCE)
+    with pytest.raises(V4ActualPreparationGuardError, match="IN_PROGRESS"):
+        V4PreparationAttemptLedger(external_gate=external_gate).begin(
+            V4PreparationOperation.PRESENCE,
+        )
+
+
+def test_persistent_preparation_ledger_enforces_order_and_allows_retry_until_passed(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
     ledger = V4PreparationAttemptLedger(external_gate=external_gate)
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
         ledger.begin(V4PreparationOperation.PUSHOVER)
+    # A begin() that never reaches PASSED (mismatch, transient error, a
+    # crashed process) does not lock the operator out for the rest of the
+    # day. This models a genuine crash: the prior attempt's process lock is
+    # explicitly released here, exactly as the OS would release it when
+    # that process actually exits -- only then is a fresh begin() for the
+    # same operation a legitimate retry rather than a race.
     presence_permit = ledger.begin(V4PreparationOperation.PRESENCE)
-    with pytest.raises(V4ActualPreparationGuardError, match="ALREADY_ATTEMPTED"):
-        V4PreparationAttemptLedger(external_gate=external_gate).begin(
-            V4PreparationOperation.PRESENCE,
+    ledger._locks[V4PreparationOperation.PRESENCE].release()
+    retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    retried_presence_permit = retry_ledger.begin(V4PreparationOperation.PRESENCE)
+    # The original (now-superseded) permit can no longer complete the step:
+    # the started marker's attempt token has moved on.
+    with pytest.raises(V4ActualPreparationGuardError, match="ATTEMPT_STATE_INVALID"):
+        _test_only_complete(
+            ledger, presence_permit, V4PreparationOperation.PRESENCE
         )
     _test_only_complete(
-        ledger, presence_permit, V4PreparationOperation.PRESENCE
+        retry_ledger, retried_presence_permit, V4PreparationOperation.PRESENCE
     )
+    # Once PASSED, the operation is final for the day -- no further retry.
+    with pytest.raises(V4ActualPreparationGuardError, match="ALREADY_ATTEMPTED"):
+        ledger.begin(V4PreparationOperation.PRESENCE)
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
         ledger.begin(V4PreparationOperation.PUSHOVER)
     access_permit = ledger.begin(V4PreparationOperation.KEYCHAIN_ACCESS)

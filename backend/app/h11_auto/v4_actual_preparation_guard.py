@@ -8,12 +8,14 @@ import os
 import platform
 import subprocess
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
 
+from app.h11_auto.persistence import H11AutoPersistenceError, H11AutoProcessLock
 from app.h11_auto.v4_gmo_contracts import v4_gmo_trading_day_jst
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from h11_v4_reviewed_digest import (
@@ -305,6 +307,7 @@ class V4PreparationOperationPermit:
         "_completion_report",
         "_reviewed_files_digest",
         "_generation_digest",
+        "_attempt_token",
     )
 
     def __init__(
@@ -314,6 +317,7 @@ class V4PreparationOperationPermit:
         operation: V4PreparationOperation,
         reviewed_files_digest: str,
         generation_digest: str,
+        attempt_token: str,
     ) -> None:
         if token is not _PERMIT_TOKEN:
             raise V4ActualPreparationGuardError("PREPARATION_OPERATION_PERMIT_INVALID")
@@ -324,6 +328,10 @@ class V4PreparationOperationPermit:
         self._completion_report: dict[str, object] | None = None
         self._reviewed_files_digest = reviewed_files_digest
         self._generation_digest = generation_digest
+        # Binds this permit to the specific begin() call that minted it, so a
+        # stale permit from a since-retried attempt can never complete() a
+        # step that a later begin() has superseded.
+        self._attempt_token = attempt_token
 
     def __repr__(self) -> str:
         return "V4PreparationOperationPermit(<redacted>)"
@@ -656,7 +664,23 @@ def _operation_report_is_clear(
 
 
 class V4PreparationAttemptLedger:
-    """Persistent no-reset sequence; attempt is written before external I/O."""
+    """Persistent sequence; a step is retryable same-day until it PASSES.
+
+    A failed or mismatched attempt (wrong confirmation phrase, transient send
+    error, etc.) does not lock the operator out for the rest of the trading
+    day: the stale ``started`` marker is replaced and the step may be
+    attempted again. Once an operation reaches ``PASSED`` for the day it is
+    final -- it cannot be re-attempted or reset without a new trading day.
+
+    Retry only replaces a marker; it never proves the previous attempt's
+    real external action (a Pushover/SMTP send, a private GET, a kill) did
+    not already happen before that attempt crashed. To at least prevent two
+    attempts of the same operation from actually running at once (which
+    would otherwise race to perform that external action twice), ``begin()``
+    holds an exclusive per-operation, per-trading-day process lock for the
+    life of this ledger; a concurrently running attempt is rejected outright
+    rather than allowed to retry.
+    """
 
     def __init__(
         self,
@@ -664,6 +688,7 @@ class V4PreparationAttemptLedger:
         external_gate: V4ExternalPreparationGate,
         now_utc: datetime | None = None,
     ) -> None:
+        self._locks: dict[V4PreparationOperation, H11AutoProcessLock] = {}
         require_external_preparation_gate(external_gate)
         unresolved = external_gate.state_root_for_internal_preparation_only()
         path_candidates = (
@@ -699,26 +724,59 @@ class V4PreparationAttemptLedger:
             raise V4ActualPreparationGuardError("PREPARATION_SEQUENCE_PREVIOUS_NOT_CLEAR")
         started = self._marker(operation, "started")
         passed = self._marker(operation, "passed")
-        if started.exists() or passed.exists():
+        if passed.exists():
             raise V4ActualPreparationGuardError("PREPARATION_OPERATION_ALREADY_ATTEMPTED")
+        if started.is_symlink():
+            raise V4ActualPreparationGuardError("PREPARATION_STATE_SYMLINK_FORBIDDEN")
+        # Retrying only ever replaces this marker file; it cannot prove the
+        # previous attempt's real external action (send/GET/kill) did not
+        # already fire before that attempt crashed. The one thing we CAN
+        # rule out is two attempts of the same operation actually running at
+        # once, which would otherwise race to perform that action twice --
+        # so a genuinely still-running attempt is rejected outright, not
+        # allowed to "retry".
+        lock = self._locks.setdefault(
+            operation, H11AutoProcessLock(self._lock_path(operation))
+        )
+        try:
+            acquired = lock.acquire()
+        except H11AutoPersistenceError as error:
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_ATTEMPT_LOCK_INVALID"
+            ) from error
+        if not acquired:
+            raise V4ActualPreparationGuardError("PREPARATION_OPERATION_IN_PROGRESS")
+        if started.exists():
+            try:
+                started.unlink()
+            except OSError as error:
+                lock.release()
+                raise V4ActualPreparationGuardError(
+                    "PREPARATION_ATTEMPT_NOT_PERSISTED"
+                ) from error
+        attempt_token = uuid.uuid4().hex
         try:
             self._write_marker(
                 started,
                 operation=operation,
-                status="ATTEMPT_STARTED_NO_RETRY",
+                status="ATTEMPT_STARTED",
                 generation_digest=self._generation_digest,
+                attempt_token=attempt_token,
             )
         except FileExistsError as error:
+            lock.release()
             raise V4ActualPreparationGuardError(
-                "PREPARATION_OPERATION_ALREADY_ATTEMPTED"
+                "PREPARATION_ATTEMPT_NOT_PERSISTED"
             ) from error
         except OSError as error:
+            lock.release()
             raise V4ActualPreparationGuardError("PREPARATION_ATTEMPT_NOT_PERSISTED") from error
         return V4PreparationOperationPermit(
             token=_PERMIT_TOKEN,
             operation=operation,
             reviewed_files_digest=self._reviewed_files_digest,
             generation_digest=self._generation_digest,
+            attempt_token=attempt_token,
         )
 
     def complete(
@@ -737,7 +795,8 @@ class V4PreparationAttemptLedger:
         if not self._marker_matches_review(
             started,
             operation=operation,
-            expected_status="ATTEMPT_STARTED_NO_RETRY",
+            expected_status="ATTEMPT_STARTED",
+            expected_attempt_token=operation_permit._attempt_token,
         ) or passed.exists():
             raise V4ActualPreparationGuardError("PREPARATION_ATTEMPT_STATE_INVALID")
         try:
@@ -755,6 +814,13 @@ class V4PreparationAttemptLedger:
             ) from error
         except OSError as error:
             raise V4ActualPreparationGuardError("PREPARATION_PASS_NOT_PERSISTED") from error
+        finally:
+            lock = self._locks.get(operation)
+            if lock is not None and lock.held:
+                lock.release()
+
+    def _lock_path(self, operation: V4PreparationOperation) -> Path:
+        return self.state_root / f"{operation.value}.{self._trading_day_jst}.lock"
 
     def _marker(self, operation: V4PreparationOperation, suffix: str) -> Path:
         return (
@@ -771,6 +837,7 @@ class V4PreparationAttemptLedger:
         completion_digest: str | None = None,
         completion_report: dict[str, object] | None = None,
         generation_digest: str,
+        attempt_token: str | None = None,
     ) -> None:
         payload = json.dumps(
             {
@@ -780,6 +847,7 @@ class V4PreparationAttemptLedger:
                 "completion_digest": completion_digest,
                 "completion_report": completion_report,
                 "generation_digest": generation_digest,
+                "attempt_token": attempt_token,
             },
             sort_keys=True,
         )
@@ -795,6 +863,7 @@ class V4PreparationAttemptLedger:
         *,
         operation: V4PreparationOperation,
         expected_status: str,
+        expected_attempt_token: str | None = None,
     ) -> bool:
         if path.is_symlink() or not path.is_file():
             return False
@@ -808,6 +877,10 @@ class V4PreparationAttemptLedger:
             and payload.get("status") == expected_status
             and payload.get("reviewed_files_digest") == self._reviewed_files_digest
             and payload.get("generation_digest") == self._generation_digest
+            and (
+                expected_attempt_token is None
+                or payload.get("attempt_token") == expected_attempt_token
+            )
         )
         if not base_matches or expected_status != "PASSED":
             return base_matches
@@ -930,7 +1003,7 @@ def preparation_state_root(
     reviewed_files_digest: str,
     generation_manifest_digest: str,
 ) -> Path:
-    """Bind every no-retry attempt set to source and generation digests."""
+    """Bind every trading day's attempt set to source and generation digests."""
 
     prefix = "sha256:"
     digest = reviewed_files_digest.removeprefix(prefix)

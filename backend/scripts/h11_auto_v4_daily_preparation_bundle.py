@@ -21,11 +21,13 @@ exactly as if you had typed it yourself (``python -m scripts.<name>``, in
 a fresh subprocess) -- this bundler adds no new preparation logic, no new
 safety checks, and never touches the ledger itself.
 
-Each of the 11 steps is one-shot per trading day (no retry): if a step in
-a stage fails partway, that step (and therefore that stage, and the whole
-day's sequence) is stuck until the next trading day. This bundler stops
-immediately at the first non-zero exit code in a stage rather than
-attempting the remaining steps in that stage.
+Each of the 11 steps stays retryable for the rest of the trading day until
+it actually passes -- a failed or mismatched attempt does not lock you out.
+Once a step has passed today, it is final and cannot be re-attempted until
+the next trading day. This bundler still stops immediately at the first
+non-zero exit code in a stage rather than attempting the remaining steps
+in that stage: re-run the same ``--stage`` command after fixing the cause
+shown in that step's own output.
 """
 
 from __future__ import annotations
@@ -94,9 +96,10 @@ def _run_stage(stage: tuple[tuple[str, tuple[str, ...]], ...]) -> int:
         if result.returncode != 0:
             print(
                 f"STOPPED at {label}: exit code {result.returncode}. "
-                "This step cannot be retried today (one-shot, no-retry by "
-                "design) -- see its own output above for the safe failure "
-                "label."
+                "See its own output above for the safe failure label, fix "
+                "the cause, then re-run this bundler with the same --stage "
+                "-- this step has not passed yet, so it is still retryable "
+                "today."
             )
             return result.returncode
     return 0
