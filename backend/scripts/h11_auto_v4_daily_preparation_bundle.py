@@ -96,10 +96,12 @@ def _run_stage(stage: tuple[tuple[str, tuple[str, ...]], ...]) -> int:
         if result.returncode != 0:
             print(
                 f"STOPPED at {label}: exit code {result.returncode}. "
-                "See its own output above for the safe failure label, fix "
-                "the cause, then re-run this bundler with the same --stage "
-                "-- this step has not passed yet, so it is still retryable "
-                "today."
+                "See its own output above for the safe failure label. If "
+                "it says ALREADY_ATTEMPTED, this step already passed today "
+                "-- move on to the next manual/automated step, do not "
+                "re-run this bundler stage. Otherwise, fix the cause and "
+                "re-run this bundler with the same --stage; this step is "
+                "still retryable today."
             )
             return result.returncode
     return 0
