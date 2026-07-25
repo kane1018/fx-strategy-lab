@@ -7,6 +7,28 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0AI. H-11 v4 unattended liveスケジューラ配線（タイマー機構のみ・2026-07-25・no-POST）
+
+- operatorは「無人ライブ実行のスケジューラ配線を実装して」と依頼し、範囲を「タイマー機構のみ
+  実装し、実Keychain credential／実通知transport構築の最後の1ミリはoperator自身が別途書く」
+  ことに明示的に限定した（既存のClaude/Codex＝実credential代行しないという方針、および
+  design doc §12.5の確立済み境界に沿う）。
+- 新規4ファイル: 非常駐`StartInterval`のみの新規LaunchAgent render/install
+  （`v4_gmo_unattended_scheduler_launchd.py`）、design doc §13が先送りしていたPublic-only・
+  credential-freeなentry-gate provider、operator向けlauncherテンプレート
+  （`h11_auto_v4_unattended_live_scheduled_launcher.py`）、対称構造のinstaller script。
+  26テスト追加、h11_auto 906件パス。
+- 独立レビュー(Safety PASS／Architecture VETO→修正→PASS／Operations PASS)で、
+  (1) launcherの予約ロックファイル名が既存の対話式G013/G014経路と異なり、実行時に
+  risk.json/dead-man.jsonが競合破損しうる欠陥、(2) heartbeat-chain policy定数が
+  「再凍結不要」と誤って主張されていたが実際は`confirm_v4_unattended_authorization_once`の
+  6条件の1つに直結するmoney-affecting値だった欠陥、の2件(共にHigh)を検出・修正。
+  launcherのplaceholder区画を3から4つ（heartbeat-chain policy確認を追加）へ拡張。
+  詳細: [design doc §12.6](H11_V4_UNATTENDED_LIVE_ADAPTER_DESIGN_20260724.md)。
+- このstepだけではスケジューラは実行不能のまま: LaunchAgentをinstallしても、実tickは
+  4つのplaceholderのいずれかで即座に停止し、実credential・実broker POST・実通知は
+  一切発生しない。operatorが4区画すべてを自分で埋めない限りentryは発生しない。
+
 ## 0AH. H-11 v4 G014 sequential entries-per-day改定 1→20（2026-07-25・no-POST・operator指示）
 
 - operatorは「本番を完成させたい」との明示指示で、`maximum_entries_per_day`を1から20へ改定。

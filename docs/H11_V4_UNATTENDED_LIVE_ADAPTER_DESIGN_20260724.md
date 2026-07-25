@@ -1307,6 +1307,87 @@ field now fails loudly instead of being silently stringified); and
 `_run_one_cycle`'s bare 2-tuple return became a small frozen
 `_CycleOutcome` dataclass for clarity at the call site.
 
+### 12.6 Scheduler implementation status (2026-07-25, timer-only, no real credential)
+
+Operator explicitly requested the scheduler implementation step §12.4/§12.5
+deferred ("pending separate authorization"), then chose the scoped option:
+implement only the timer/trigger mechanism, leaving real Keychain
+credential, real HTTP client, and real notification-transport construction
+as explicit placeholders for the operator to fill in themselves later,
+rather than writing that "last millimeter" in this step. Implemented under
+AGENTS.md's "H-11 v4 unattended liveスケジューラ配線 実装限定例外".
+
+Four new files: `v4_gmo_unattended_scheduler_launchd.py` (render/install for
+a new, non-resident `StartInterval`-only LaunchAgent -- `KeepAlive` always
+`False`, distinct label from the G012 monitor, baked
+`--expected-reviewed-files-digest`/`--expected-generation-digest` mirroring
+the monitor's own anti-tamper pattern), `h11_v4_unattended_live_entry_gate_provider.py`
+(discharges §13's own "future work, not this slice" deferral: a real,
+non-raising Public status+ticker reader wired to the existing
+`derive_unattended_entry_gate_blocked_reasons`, reusing the already-reviewed
+private parsing helpers from `h11_v4_gmo_public_preflight.py` rather than
+duplicating them), `h11_auto_v4_unattended_live_scheduled_launcher.py` (the
+operator-authored launcher §12.5 called for -- real digest re-verification,
+real session prep, real risk/dead-man store construction, real entry-gate
+wiring, but FOUR raising placeholders gating anything money-affecting --
+see below), and its installer script mirroring the monitor's own installer
+structure. 29 new tests (after the fix round below); full `h11_auto` suite
+910 passing (up from 881).
+Ruff clean.
+
+Independent review round (Safety PASS; Architecture VETO, Operations PASS)
+returned one blocking finding, fixed before closing this slice:
+
+- **Architecture VETO (High)**: the launcher used a distinct lock filename
+  (`unattended-scheduler.lock`) instead of the SAME lock file
+  (`process.lock`) the interactive G013/G014 canary path already uses at
+  the same `state_root` for the same generation. Since both paths open the
+  identical `risk.json`/`dead-man.json` files, an operator running the
+  interactive canary while a scheduled tick fires against the same
+  generation could corrupt either's risk/dead-man state via a lost update
+  -- unreachable *today* only because the placeholders block execution
+  before any store is touched, making this a landmine for the future
+  fill-in step rather than a live bug. Fixed: the launcher now acquires
+  `process.lock`, the same file, so the two paths correctly serialize.
+- **Architecture VETO (High), same round**: the launcher's heartbeat-chain
+  policy constants (`maximum_gap_seconds=60`, `minimum_continuous_seconds=300`)
+  were asserted in a code comment to "not require a generation re-freeze"
+  because the policy governs "continuity" rather than a yen amount.
+  Independent review traced the actual call chain
+  (`heartbeat_chain_store.assess(...)` is one of the six conditions
+  `confirm_v4_unattended_authorization_once` checks before minting a real
+  permit) and found this claim false -- the values ARE money-affecting, and
+  no operator-approved constant for this policy exists anywhere in the
+  codebase (only a test-only fixture with the same numbers, explicitly
+  labeled synthetic). Fixed: promoted to a fourth raising placeholder
+  (PLACEHOLDER 0) requiring the same explicit operator confirmation as the
+  credential/client/notification placeholders, with the false claim removed
+  from the comment.
+
+Additional Medium/Low findings addressed: `MAXIMUM_START_INTERVAL_SECONDS`
+tightened from 1800s to 600s (a 30-minute interval could, on unlucky phase
+alignment, miss most of a 30-minute G013 signal window before the next
+tick); `RunAtLoad: True`'s behavior (one immediate tick at bootstrap, not
+only after the first interval) is now both documented and covered by a
+dedicated test; the digest-staleness two-step flow (edit launcher -> the
+plist's baked digest goes stale -> must recompute `implementation_digest`
+in the frozen-generation JSON AND re-render/reinstall the LaunchAgent) is
+now documented in the launcher's own module docstring, including the
+specific uncaught `V4GmoGenerationError` that results if the JSON step is
+forgotten; added entry-gate-provider tests for ambiguous ticker rows,
+non-numeric bid/ask, and a missing timestamp field, all confirmed to
+collapse to `ENTRY_GATE_QUOTE_UNAVAILABLE` rather than raise; added an
+explicit test that the process lock is genuinely released (by re-acquiring
+the same real lock file) after a placeholder raise, not merely assumed from
+the `finally` clause's presence.
+
+This step does not make the scheduler runnable end-to-end: installing the
+LaunchAgent (an operator action, not performed here) starts a real,
+periodic, non-resident process, but every real tick still hits an unfilled
+placeholder and exits non-zero before any credential, broker POST, or
+notification send -- exactly as intended. No entry can occur until the
+operator edits all four placeholders themselves.
+
 ## 13. Entry-gate real derivation — design (2026-07-24)
 
 §9.2 item 4 (High) has two halves. This section discharges the

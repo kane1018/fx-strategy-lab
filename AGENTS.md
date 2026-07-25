@@ -1102,6 +1102,61 @@ design doc §14（Option A決定済み）をoperatorが実装承認した場合�
 - scheduler、cron、LaunchAgent、launchd、resident processの追加。
 - 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
 
+## H-11 v4 unattended liveスケジューラ配線 実装限定例外（タイマー機構のみ・実credential構築なし）
+
+上記design-only例外（scheduler部分）とdesign doc §12がOption B（非常駐・都度起動のbounded
+runner）をoperator決定済みとした上で、operatorが「無人ライブ実行のスケジューラ配線を実装して」と
+明示依頼し、その範囲について「タイマー機構のみを実装し、実Keychain credential／実通知transportを
+構築する『最後の1ミリ』はoperator自身が別途書く前提とする」ことを選択した場合に限り、以下を
+実装してよい。design doc §12.5がbounded runner CLIについて確立した境界（credential_pair/client
+はrequired・no-defaultで、このCLI自身はそれらを構築しない）を、スケジューラ層でも同じ厳格さで
+継続する。
+
+### この例外で限定的に許可すること
+
+- G012 monitor LaunchAgent（`v4_gmo_launchd.py`）と構造的に対をなす、しかし別labelの新規
+  LaunchAgent render/install関数を実装する。既存のmonitor LaunchAgentは変更しない。
+  新LaunchAgentは`KeepAlive=false`かつ`StartInterval`（非常駐・都度起動、Option Bの形状）を
+  使い、`RunAtLoad`/`KeepAlive=true`による常駐は一切設定しない。
+- 新LaunchAgentが起動するのは、bounded runner CLI（`h11_auto_v4_unattended_live_bounded_run.py`）
+  を直接ではなく、operator向けのlauncherスクリプト経由とする（同CLIは実行可能`__main__`を
+  持たない設計のため）。
+- design doc §13が「future work, not this slice」として先送りしたPublic-only・credential-free
+  な entry-gate provider（`market_open`と ticker status の両方を実際にPublic GETし、既存の
+  `derive_unattended_entry_gate_blocked_reasons`へ渡す、fetch失敗は`ENTRY_GATE_QUOTE_UNAVAILABLE`
+  へ収斂させ例外を投げない関数）を実装する。credential・Private API・broker writeは一切含まない。
+- operator向けlauncherスクリプト（テンプレート）を実装する。`prepare_g013_canary_session`・
+  risk/dead-manの2 store・上記entry-gate providerは実際に構築する。
+  ただし`credential_pair`（実Keychain）・`client`（実httpx）・`notification_primary`/
+  `notification_secondary`（実Pushover/SMTP transport）の構築は、明示的にコメントで区切られた
+  placeholderとし、未実装のまま実行されると固定safe labelで即座に停止する（bounded runner CLI
+  自身の「直接実行を拒否し理由を説明する」既存パターンを踏襲）。independent reviewの指摘
+  （2026-07-25 再検証）により、heartbeat-chain policy定数（`maximum_gap_seconds`／
+  `minimum_continuous_seconds`）も同じ扱いのplaceholderへ追加した — この値は
+  `confirm_v4_unattended_authorization_once`の6条件の1つに直結する money-affecting な値であり、
+  「continuityの設定だから再凍結不要」という当初の判断は誤りだったため。operatorがこれら4区画を
+  すべて自分で埋めない限り、このlauncherは実クレデンシャルも実permit issuanceも一切行わない。
+- 上記のinstall関数を呼び出すinstaller script（`h11_auto_v4_install_monitor_launchagent.py`と
+  対称の構造）を実装する。ただし、このinstaller scriptを実際に実行して本物のLaunchAgentを
+  system上へinstall・bootstrapするのはoperator自身の操作とし、この例外下ではコードの実装と
+  fake-only testに限る。
+- fake-only test（render/install・entry-gate provider・launcherのplaceholder-raises挙動）、
+  既存のimport-graph isolation testパターン（credential/transport/scheduler tokenの danger scan
+  含む）、AGENTS.md本体の必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- 実Keychain credential、実httpx client、実Pushover/SMTP transportの構築。launcherの
+  placeholder区画はoperator専用であり、Claude/Codexはこの区画にダミーであっても実装コードを
+  書かない。
+- 実際に`launchctl bootstrap`/installを実行してsystem上へLaunchAgentを配置すること。
+  コードの実装・fake-only testまでとし、実installはoperator自身が行う。
+- 常駐（`KeepAlive=true`・resident daemon）としてのLaunchAgent設定。
+- G012/G013コード、既存unattended-track moduleの変更（新規追加のみ許可、既存関数は変更しない）。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+  スケジューラが実際にentryを発生させるには、operator自身がlauncherのplaceholder区画を埋め、
+  installer scriptを自分で実行する、別途の明示的な操作が必要である。
+
 ## H-11 v4 notification decision層の結線 実装限定例外（fake-only・実transport構築なし）
 
 design doc §15の設計をoperatorが実装承認した場合に限り、以下2ファイルへの変更を
