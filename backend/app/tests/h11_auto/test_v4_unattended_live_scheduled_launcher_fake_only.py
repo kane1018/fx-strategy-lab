@@ -150,14 +150,19 @@ def _patch_up_to_placeholders(monkeypatch, tmp_path: Path) -> None:
     )
 
 
-def test_heartbeat_chain_policy_is_live_code_then_placeholder_1_raises(
+def test_placeholders_0_1_2_are_live_code_then_placeholder_3_raises(
     monkeypatch, tmp_path: Path
 ) -> None:
-    # PLACEHOLDER 0 (heartbeat-chain policy) is now operator-confirmed live
-    # code, not a raise -- this proves it actually constructs a real
-    # V4HeartbeatChainStore (no mock for it here) and execution reaches
-    # PLACEHOLDER 1 (credential pair), which still raises since it remains
-    # unfilled.
+    # Operator confirmed PLACEHOLDER 0 (heartbeat-chain policy, 2026-07-25)
+    # and filled in PLACEHOLDER 1/2 (real credential pair, real HTTP client,
+    # same date) themselves -- all three are now live code, not raises.
+    # Constructing V4GmoKeychainCredentialPair()/httpx.Client() here touches
+    # no real Keychain item or network socket (both are lazy), so this is
+    # safe to exercise for real rather than mock. Execution now reaches
+    # PLACEHOLDER 3 (notification transports), which still raises since it
+    # remains unfilled in this file (a real, tested transport implementation
+    # exists in h11_v4_notification_actual_transport.py, but has not yet
+    # been wired into this launcher's PLACEHOLDER 3).
     repository = _repository(tmp_path)
     generation_digest = "sha256:" + "b" * 64
     reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
@@ -166,7 +171,7 @@ def test_heartbeat_chain_policy_is_live_code_then_placeholder_1_raises(
     _patch_up_to_placeholders(monkeypatch, tmp_path)
     with pytest.raises(
         launcher.V4UnattendedSchedulerLauncherError,
-        match="PLACEHOLDER_1_CREDENTIAL_PAIR_NOT_CONFIGURED",
+        match="PLACEHOLDER_3_NOTIFICATION_PRIMARY_NOT_CONFIGURED",
     ):
         launcher.main(
             _argv_matching(
@@ -263,7 +268,16 @@ def test_lock_held_skips_tick_without_reaching_session_prep(
     assert "UNATTENDED_SCHEDULER_TICK_SKIPPED_LOCK_HELD" in capsys.readouterr().out
 
 
-def test_launcher_source_has_no_forbidden_credential_or_transport_construction() -> None:
+def test_launcher_source_has_no_forbidden_fake_transport_construction() -> None:
+    # Operator confirmed PLACEHOLDER 0 and filled in PLACEHOLDER 1/2
+    # themselves (2026-07-25), so V4GmoKeychainCredentialPair()/
+    # httpx.Client() are now expected, legitimate executable code -- no
+    # longer forbidden tokens. PLACEHOLDER 3 (notification transports)
+    # remains unfilled, so this test now narrows to guarding only that:
+    # a real transport implementation (h11_v4_notification_actual_transport.py)
+    # exists, but this file must never quietly wire in the *fake* transports
+    # as if they were real ones (that would defeat the whole
+    # fake_only-is-False contract the orchestration layer relies on).
     import inspect
 
     # Comment lines (the instructional examples inside each PLACEHOLDER
@@ -275,8 +289,6 @@ def test_launcher_source_has_no_forbidden_credential_or_transport_construction()
         if not line.strip().startswith("#")
     )
     forbidden = (
-        "V4GmoKeychainCredentialPair(",
-        "httpx.Client(",
         "H11V4FakePushoverTransport(",
         "H11V4FakeEmailTransport(",
     )

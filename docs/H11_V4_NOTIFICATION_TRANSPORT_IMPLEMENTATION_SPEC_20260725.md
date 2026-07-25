@@ -329,9 +329,22 @@ notification_secondary = _require_operator_configuration("PLACEHOLDER_3_NOTIFICA
 ```
 ↓
 ```python
-notification_primary = H11V4ActualPushoverTransport()
-notification_secondary = H11V4ActualEmailTransport()
+from app.services.h11_v4_notification_actual_preparation import (
+    H11V4NotificationCredentialBundle,
+)
+
+notification_primary = H11V4ActualPushoverTransport(
+    credentials=H11V4NotificationCredentialBundle(),
+    client=httpx.Client(timeout=10.0),
+)
+notification_secondary = H11V4ActualEmailTransport(
+    credentials=H11V4NotificationCredentialBundle(),
+)
 ```
+
+（独立レビュー2026-07-25の指摘により、`credentials`/`client`は必須引数へ変更された
+— このtrack全体の「クレデンシャル関連は常にrequired・no-default」という規約に合わせるため。
+`H11V4ActualPushoverTransport()`のような引数なし構築はできない。）
 
 その後、9.3 の digest 再計算・JSON更新と、LaunchAgent の再インストールが再度必要になる。
 
