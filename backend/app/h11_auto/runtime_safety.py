@@ -23,6 +23,14 @@ class AutoRiskStopState(str, Enum):
     KILLED = "KILLED"
 
 
+# Sequential-entry ceiling (operator decision, 2026-07-25): still a finite,
+# fail-closed cap -- not unbounded -- so a bug that churned entries could
+# never place more than this many per day regardless of how many times the
+# gate is evaluated. max_positions stays 1 (never more than one position
+# open at once); this only bounds how many times a FLAT day may re-enter.
+MAXIMUM_ENTRIES_PER_DAY_CEILING = 20
+
+
 @dataclass(frozen=True)
 class PhaseBRiskPolicy:
     policy_label: str
@@ -50,8 +58,11 @@ class PhaseBRiskPolicy:
             <= self.monthly_loss_limit_jpy
         ):
             raise H11AutoRuntimeSafetyError("risk policy limits are inconsistent")
-        if self.maximum_entries_per_day != 1:
-            raise H11AutoRuntimeSafetyError("maximum entries per day must remain one")
+        if not 1 <= self.maximum_entries_per_day <= MAXIMUM_ENTRIES_PER_DAY_CEILING:
+            raise H11AutoRuntimeSafetyError(
+                f"maximum entries per day must be between 1 and "
+                f"{MAXIMUM_ENTRIES_PER_DAY_CEILING}"
+            )
 
     @property
     def digest(self) -> str:

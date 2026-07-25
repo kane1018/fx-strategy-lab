@@ -18,6 +18,14 @@ from app.h11_auto.contracts import FormalHorizon, FormalSignal, SignalDecision
 from app.h11_auto.v4_gmo_evidence import H11_V4_GMO_CAPABILITY_EVIDENCE_HASH
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 
+# Duplicated from runtime_safety.py's MAXIMUM_ENTRIES_PER_DAY_CEILING rather
+# than imported: this module is reachable from import-graph-isolated code
+# (e.g. the shadow controller) that must never transitively reach
+# runtime_safety.py's `os` usage. The two values are kept consistent by the
+# generation/policy digest cross-check in v4_gmo_generation.py, not by a
+# shared import.
+_MAXIMUM_ENTRIES_PER_DAY_CEILING = 20
+
 V4_GMO_PROFILE_VERSION = (
     "H11_V4_GMO_MARKET_THEN_EXACT_OCO_FRIDAY_LIMITED_NO_POST_V2"
 )
@@ -168,7 +176,8 @@ class V4GmoExecutionPolicy:
             type(self.max_unprotected_seconds) is int
             and self.max_unprotected_seconds == 15,
             type(self.max_positions) is int and self.max_positions == 1,
-            type(self.max_entries_per_day) is int and self.max_entries_per_day == 1,
+            type(self.max_entries_per_day) is int
+            and 1 <= self.max_entries_per_day <= _MAXIMUM_ENTRIES_PER_DAY_CEILING,
             type(self.max_loss_per_trade_yen) is int
             and self.max_loss_per_trade_yen == 5_000,
             type(self.max_loss_per_day_yen) is int and self.max_loss_per_day_yen == 10_000,
@@ -227,7 +236,7 @@ class V4GmoExecutionPolicy:
                 "generic_opposite_close_allowed": False,
                 "hedging_allowed": False,
                 "max_consecutive_losses": 5,
-                "max_entries_per_day": 1,
+                "max_entries_per_day": self.max_entries_per_day,
                 "max_loss_per_day_yen": 10_000,
                 "max_loss_per_month_yen": 50_000,
                 "max_loss_per_trade_yen": 5_000,

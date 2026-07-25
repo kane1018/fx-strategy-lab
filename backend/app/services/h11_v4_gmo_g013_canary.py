@@ -18,6 +18,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import httpx
+
 from app.h11_auto.contracts import FormalHorizon, FormalSignal
 from app.h11_auto.v4_actual_preparation_guard import (
     V4CompletedPreparationEvidence,
@@ -29,10 +31,13 @@ from app.h11_auto.v4_actual_preparation_guard import (
 from app.h11_auto.v4_gmo_actual_coordinator import (
     V4FrozenSignalRisk,
     V4GmoActualCoordinatorStore,
+    _cycle_ref,
 )
 from app.h11_auto.v4_gmo_canary_activation import (
     V4CurrentTurnChallenge,
+    V4CurrentTurnConfirmationProof,
     V4GmoCanaryIntent,
+    V4MajorIncidentResumeProof,
     confirm_v4_current_turn_exact,
     confirm_v4_major_incident_resume_exact,
     issue_v4_gmo_actual_activation_permit,
@@ -55,6 +60,7 @@ from app.services.h11_v4_gmo_actual_runtime_binding import (
 )
 from app.services.h11_v4_gmo_actual_transport import (
     V4_GMO_SURFACEABLE_FAILURE_CLASSES,
+    V4GmoSealedCredentialPair,
 )
 from app.services.h11_v4_gmo_formal_canary_source import (
     MAXIMUM_FORMAL_SIGNAL_AGE_SECONDS,
@@ -207,7 +213,15 @@ def prepare_g013_canary_session(
         reviewed_files_digest=implementation_digest,
         generation_digest=generation.digest,
     )
-    if not generation.generation_label.endswith("G013"):
+    # Bumped in lockstep with docs/templates/h11_v4_gmo_frozen_generation.json's
+    # generation_label on every re-freeze (G013 -> G014 on 2026-07-25, raising
+    # maximum_entries_per_day from 1 to 20). This module only ever loads that
+    # one canonical template, so this check can never diverge from the label
+    # actually in use -- its purpose is to force an explicit, reviewed code
+    # change (and implementation_digest recompute) any time the operative
+    # generation changes, rather than silently accepting whatever the JSON
+    # file says.
+    if not generation.generation_label.endswith("G014"):
         raise V4GmoG013CanaryError("G013_GENERATION_REQUIRED")
     external_gate = load_external_preparation_gate(repository=repository)
     # Same instant as `current` below: today's preparation (00-60) must have
@@ -329,6 +343,73 @@ def run_g013_actual_canary_after_exact_confirmation(
         challenge=session.challenge,
         intent=session.intent,
     )
+    return _run_g013_actual_canary_from_refreshed_session(
+        session=session,
+        resume=resume,
+        confirmation=confirmation,
+        on_protected=on_protected,
+        credential_pair=None,
+        client=None,
+    )
+
+
+def run_g013_actual_canary_after_unattended_authorization(
+    *,
+    session: V4GmoG013PreparedSession,
+    resume_proof: V4MajorIncidentResumeProof,
+    confirmation_proof: V4CurrentTurnConfirmationProof,
+    credential_pair: V4GmoSealedCredentialPair,
+    client: httpx.Client,
+    on_protected: Callable[[V4GmoG013CanaryResult], None] | None = None,
+) -> V4GmoG013CanaryResult:
+    """Unattended equivalent of the function above: proofs instead of phrases.
+
+    ``resume_proof``/``confirmation_proof`` are expected to come from
+    ``confirm_v4_unattended_authorization_once``
+    (``app.h11_auto.v4_gmo_canary_activation``), not from typing a phrase.
+    Unlike the phrase-based function, ``credential_pair``/``client`` here are
+    required with no default of any kind -- neither fake nor real -- so a
+    caller can never silently reach ``bind_v4_gmo_actual_runtime``'s own
+    real-Keychain-on-``None`` behavior by omission. A real activation still
+    requires a human to construct the real credential pair and client and
+    pass them in explicitly; this function only gets from "proofs already
+    minted" to "permit obtained, handed to whatever credential/client the
+    caller supplied."
+
+    The type hints alone do not stop a caller from writing
+    ``credential_pair=None``/``client=None`` explicitly (Python does not
+    enforce them at runtime), so this is also checked here directly, fail
+    closed, rather than trusting the hints as the only guard.
+    """
+
+    if credential_pair is None or client is None:
+        raise V4GmoG013CanaryError("G013_UNATTENDED_CREDENTIAL_OR_CLIENT_REQUIRED")
+    session._use.consume_once()
+    _require_exact_session_binding(session)
+    session = _refresh_session_evidence_before_permit(session)
+    return _run_g013_actual_canary_from_refreshed_session(
+        session=session,
+        resume=resume_proof,
+        confirmation=confirmation_proof,
+        on_protected=on_protected,
+        credential_pair=credential_pair,
+        client=client,
+    )
+
+
+def _run_g013_actual_canary_from_refreshed_session(
+    *,
+    session: V4GmoG013PreparedSession,
+    resume: V4MajorIncidentResumeProof,
+    confirmation: V4CurrentTurnConfirmationProof,
+    on_protected: Callable[[V4GmoG013CanaryResult], None] | None,
+    credential_pair: V4GmoSealedCredentialPair | None,
+    client: httpx.Client | None,
+) -> V4GmoG013CanaryResult:
+    """Shared body for both confirmation paths above, given an already-refreshed
+    session and an already-obtained resume/confirmation proof pair -- proceeds
+    identically regardless of how those proofs were produced."""
+
     # Both exact confirmations succeeded: the operator has authorised THIS exact entry.
     # Only now commit — re-check the signal is still postable, then atomically reserve
     # the single per-generation cycle. Any failure up to here (mistyped/timed-out
@@ -359,38 +440,63 @@ def run_g013_actual_canary_after_exact_confirmation(
         frozen_atr_24=session.formal_input.frozen_atr_24,
         now_utc=datetime.now(UTC),
     )
-    # The single cycle now exists: require the resident dead-man supervisor to have
-    # observed it (cycle_present is True) and still be fresh and broker-quiet before the
-    # entry POST, so the position is monitored the instant it opens.
-    _require_fresh_monitor_heartbeat(
-        state_root=state_root,
-        require_cycle_present=True,
-    )
-    # Capture the permit clock only now, AFTER the two supervisor-heartbeat waits
-    # (each up to 20s). Capturing earlier could consume most of the permit's 30s
-    # lifetime before it is even issued, yielding a permit born (nearly) expired
-    # whose one-shot marker is already written — burning the generation with 0 POST.
-    now_monotonic = time.monotonic()
-    permit = issue_v4_gmo_actual_activation_permit(
-        intent=session.intent,
-        resume_proof=resume,
-        current_turn_proof=confirmation,
-        repository=session.repository,
-        now_monotonic=now_monotonic,
-    )
-    binding = bind_v4_gmo_actual_runtime(
-        repository=session.repository,
-        generation=session.generation,
-        activation_permit=permit,
+    # Pure and dependency-free (no DB touch): identical to the value
+    # `reserve_entry_cycle` itself just computed and persisted for this same
+    # signal, so this never depends on the store having already indexed it.
+    reserved_cycle_ref = _cycle_ref(
+        session.generation.digest, session.formal_input.signal.fingerprint
     )
     try:
-        return _run_bound_g013_canary(
-            session=session,
-            binding=binding,
-            on_protected=on_protected,
+        # From here to the actual market attempt inside `_run_bound_g013_canary`,
+        # everything is a routine, expected "not yet" outcome unless it engages
+        # unknown-halt: the entry window closing while the dead-man supervisor
+        # is confirmed fresh, a stale quote, or (the whole point of the
+        # 2026-07-25 change that raised maximum_entries_per_day above 1) today's
+        # entries-per-day/loss-limit/consecutive-loss cap already being reached.
+        # None of those should permanently occupy the single reserved-cycle
+        # slot, so any failure here releases the just-reserved cycle before
+        # re-raising -- release_unattempted_reservation is itself a no-op if a
+        # market attempt already happened or an unknown-halt was engaged,
+        # leaving a genuine incident in place for operator investigation.
+        #
+        # The single cycle now exists: require the resident dead-man supervisor to
+        # have observed it (cycle_present is True) and still be fresh and
+        # broker-quiet before the entry POST, so the position is monitored the
+        # instant it opens.
+        _require_fresh_monitor_heartbeat(
+            state_root=state_root,
+            require_cycle_present=True,
         )
-    finally:
-        binding.close()
+        # Capture the permit clock only now, AFTER the two supervisor-heartbeat waits
+        # (each up to 20s). Capturing earlier could consume most of the permit's 30s
+        # lifetime before it is even issued, yielding a permit born (nearly) expired
+        # whose one-shot marker is already written — burning the generation with 0 POST.
+        now_monotonic = time.monotonic()
+        permit = issue_v4_gmo_actual_activation_permit(
+            intent=session.intent,
+            resume_proof=resume,
+            current_turn_proof=confirmation,
+            repository=session.repository,
+            now_monotonic=now_monotonic,
+        )
+        binding = bind_v4_gmo_actual_runtime(
+            repository=session.repository,
+            generation=session.generation,
+            activation_permit=permit,
+            credential_pair=credential_pair,
+            client=client,
+        )
+        try:
+            return _run_bound_g013_canary(
+                session=session,
+                binding=binding,
+                on_protected=on_protected,
+            )
+        finally:
+            binding.close()
+    except BaseException:
+        session.store.release_unattempted_reservation(cycle_ref=reserved_cycle_ref)
+        raise
 
 
 def _refresh_session_evidence_before_permit(
@@ -486,10 +592,11 @@ def _run_bound_g013_canary(
     )
     _require_exact_session_binding(session)
     # Per-minute slot (not once-per-generation-forever): under daily rollover, the
-    # same generation legitimately reads a fresh FINAL_QUOTE on every trading day
-    # (and, in practice, at most once per day since reserve_entry_cycle then caps
-    # the day). Minute granularity is strictly finer than day granularity, so this
-    # is always at least as fresh a check as before.
+    # same generation legitimately reads a fresh FINAL_QUOTE on every trading day,
+    # and (operator decision 2026-07-25) potentially several times a day now that
+    # reserve_entry_cycle no longer caps by day -- the entries-per-day cap lives
+    # in the risk policy instead. Minute granularity is strictly finer than any
+    # per-entry granularity, so this is always at least as fresh a check as before.
     quote = read_g013_final_quote_once(
         operation_ledger=session.public_operation_ledger,
         operation=V4GmoG013PublicOperation.FINAL_QUOTE,
@@ -681,6 +788,7 @@ def _execution_policy(generation: V4GmoFrozenGeneration) -> V4GmoExecutionPolicy
         selected_horizon=FormalHorizon(generation.selected_horizon),
         protection_contract_hash=generation.protection_contract_hash,
         broker_capability_evidence_hash=generation.broker_capability_evidence_hash,
+        max_entries_per_day=generation.maximum_entries_per_day,
     )
 
 

@@ -910,9 +910,15 @@ def test_g013_run_reserves_cycle_after_confirmations_before_permit(
     order: list[str] = []
     session = SimpleNamespace(
         _use=SimpleNamespace(consume_once=lambda: None),
-        store=SimpleNamespace(reserve_entry_cycle=lambda **_kwargs: order.append("reserve")),
+        store=SimpleNamespace(
+            reserve_entry_cycle=lambda **_kwargs: order.append("reserve"),
+            release_unattempted_reservation=lambda **_kwargs: order.append("release"),
+        ),
         generation=SimpleNamespace(digest="sha256:" + "a" * 64),
-        formal_input=SimpleNamespace(signal=object(), frozen_atr_24=Decimal("0.1")),
+        formal_input=SimpleNamespace(
+            signal=SimpleNamespace(fingerprint="sha256:" + "f" * 64),
+            frozen_atr_24=Decimal("0.1"),
+        ),
         intent=object(),
         challenge=object(),
         repository=Path("/nonexistent"),
@@ -948,8 +954,10 @@ def test_g013_run_reserves_cycle_after_confirmations_before_permit(
             current_turn_phrase="ok",
         )
     # postable re-check, pre-reserve supervisor liveness, cycle reservation, then the
-    # post-reserve supervisor gate — all before the permit / any POST.
-    assert order == ["postable", "heartbeat", "reserve", "heartbeat"]
+    # post-reserve supervisor gate — all before the permit / any POST. The permit
+    # itself then fails, releasing the just-reserved (never market-attempted)
+    # cycle rather than leaving it stuck forever.
+    assert order == ["postable", "heartbeat", "reserve", "heartbeat", "release"]
 
 
 def test_require_fresh_monitor_heartbeat_matches_cycle_present_requirement(

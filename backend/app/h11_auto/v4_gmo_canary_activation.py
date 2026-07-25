@@ -14,10 +14,32 @@ import math
 import os
 import secrets
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
-from app.h11_auto.v4_gmo_contracts import V4GmoAction
+from app.h11_auto.runtime_safety import (
+    DeadManStore,
+    H11AutoRuntimeSafetyError,
+    PhaseBRiskPolicy,
+    PhaseBRiskStore,
+    evaluate_risk_before_entry,
+)
+from app.h11_auto.v4_gmo_contracts import V4GmoAction, v4_gmo_trading_day_jst
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
+from app.services.h11_v4_unattended_live_authorization import (
+    V4UnattendedLiveAuthorizationError,
+    check_operator_daily_authorization,
+    consume_operator_daily_authorization_once,
+)
+from app.services.h11_v4_unattended_live_heartbeat_chain import V4HeartbeatChainStore
+from app.services.h11_v4_unattended_live_paths import (
+    DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    v4_unattended_live_daily_authorization_path,
+)
+from app.services.h11_v4_unattended_live_permit_decision import (
+    V4UnattendedLivePermitDecisionError,
+    decide_unattended_permit_issuance,
+)
 
 
 class V4GmoCanaryActivationError(RuntimeError):
@@ -162,6 +184,132 @@ def confirm_v4_current_turn_exact(
     return V4CurrentTurnConfirmationProof(
         token=_CONFIRMATION_TOKEN,
         intent_digest=intent.digest,
+    )
+
+
+def confirm_v4_unattended_authorization_once(
+    *,
+    intent: V4GmoCanaryIntent,
+    state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    risk_store: PhaseBRiskStore,
+    risk_policy: PhaseBRiskPolicy,
+    dead_man_store: DeadManStore,
+    heartbeat_chain_store: V4HeartbeatChainStore,
+    notification_ready: bool,
+    entry_gate_blocked_reasons: tuple[str, ...],
+    now_utc: datetime,
+) -> tuple[V4MajorIncidentResumeProof, V4CurrentTurnConfirmationProof]:
+    """Unattended equivalent of the two G013 human-confirmation functions above.
+
+    Unlike ``confirm_v4_major_incident_resume_exact``/``confirm_v4_current_turn_exact``,
+    which verify a human typed a phrase back in the same process turn, this
+    function verifies six independent conditions itself, freshly re-read right
+    here at the moment of minting, rather than accepting any pre-computed
+    decision object as a substitute (see
+    ``docs/H11_V4_UNATTENDED_LIVE_ADAPTER_DESIGN_20260724.md`` §10).
+    ``notification_ready``/``entry_gate_blocked_reasons`` remain caller-supplied
+    by deliberate scope boundary (§10.2): verifying a real notification send or
+    re-deriving fresh market/signal gates is out of scope for this
+    historically network-free module, exactly as it always has been for the
+    two functions above.
+
+    The daily authorization is consumed as the FIRST write action once every
+    condition clears, before either proof is minted. A second call for the
+    same JST trading day -- a retry, a bug, or a concurrent process -- fails
+    at that consume step (via its own fresh internal check and O_EXCL write),
+    so at most one resume/current-turn proof pair can ever be minted per day,
+    regardless of how many times evaluation is attempted.
+
+    The authorization artifact's filename is never caller-supplied directly;
+    it is always derived from ``state_root`` via the same canonical helper the
+    operator's creation CLI uses (there is no ``authorization_artifact_path``
+    parameter to bypass that derivation). ``state_root`` itself remains a
+    caller-suppliable keyword argument, as it must be for tests; the future
+    wiring step is responsible for constraining it defensively at the call
+    site, exactly as design doc §9.3 already notes for the sibling CLI.
+
+    Callers must never construct a resume/current-turn proof pair for the
+    unattended path by calling ``confirm_v4_major_incident_resume_exact``/
+    ``confirm_v4_current_turn_exact`` directly -- doing so would bypass this
+    function's consume-first ordering entirely and reintroduce the exact
+    double-issue risk this function exists to close.
+    """
+
+    if type(intent) is not V4GmoCanaryIntent:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_INTENT_INVALID")
+    if now_utc.tzinfo is None:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_CLOCK_INVALID")
+    if type(notification_ready) is not bool or type(entry_gate_blocked_reasons) is not tuple:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_INPUT_INVALID")
+
+    authorization_artifact_path = v4_unattended_live_daily_authorization_path(
+        state_root=state_root, generation_digest=intent.generation_digest
+    )
+    try:
+        authorization_check = check_operator_daily_authorization(
+            artifact_path=authorization_artifact_path,
+            expected_generation_digest=intent.generation_digest,
+            now_utc=now_utc,
+        )
+    except V4UnattendedLiveAuthorizationError as error:
+        raise V4GmoCanaryActivationError(
+            "V4_CANARY_UNATTENDED_AUTHORIZATION_CHECK_INVALID"
+        ) from error
+
+    # §9.2 item 1: a missing risk-state file must refuse to run, not silently
+    # fabricate a fresh ACTIVE state (which PhaseBRiskStore.load() otherwise
+    # does) -- the persistence of a latched KILLED stop depends on this.
+    if not risk_store.path.is_file() or risk_store.path.is_symlink():
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_RISK_STATE_MISSING")
+    trading_day_jst = v4_gmo_trading_day_jst(now_utc)
+    try:
+        risk_state = risk_store.load()
+    except H11AutoRuntimeSafetyError as error:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_RISK_STATE_INVALID") from error
+    risk_gate = evaluate_risk_before_entry(
+        state=risk_state, policy=risk_policy, cycle_day_jst=trading_day_jst
+    )
+
+    dead_man_result = dead_man_store.evaluate(now_utc=now_utc)
+    heartbeat_assessment = heartbeat_chain_store.assess(now_utc=now_utc)
+
+    try:
+        decision = decide_unattended_permit_issuance(
+            authorization=authorization_check,
+            risk_gate=risk_gate,
+            dead_man=dead_man_result,
+            heartbeat_chain=heartbeat_assessment,
+            notification_ready=notification_ready,
+            entry_gate_blocked_reasons=entry_gate_blocked_reasons,
+            now_utc=now_utc,
+        )
+    except V4UnattendedLivePermitDecisionError as error:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_DECISION_INVALID") from error
+
+    if not decision.allowed:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_GATE_NOT_CLEAR")
+
+    # Consume-first: the first write side effect of this evaluation. A second
+    # call -- however it arises, including a genuinely concurrent one racing
+    # this exact line -- reaches this with its own fresh internal check and
+    # O_EXCL write, and refuses before either proof below is minted. Wrapped
+    # so a losing concurrent caller sees this module's own error type, not a
+    # leaked exception type from the authorization module.
+    try:
+        consume_operator_daily_authorization_once(
+            artifact_path=authorization_artifact_path,
+            expected_generation_digest=intent.generation_digest,
+            now_utc=now_utc,
+        )
+    except V4UnattendedLiveAuthorizationError as error:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_GATE_NOT_CLEAR") from error
+    return (
+        V4MajorIncidentResumeProof(
+            token=_RESUME_TOKEN, generation_digest=intent.generation_digest
+        ),
+        V4CurrentTurnConfirmationProof(
+            token=_CONFIRMATION_TOKEN, intent_digest=intent.digest
+        ),
     )
 
 

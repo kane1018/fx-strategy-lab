@@ -375,18 +375,22 @@ class V4GmoActualCoordinatorStore:
         frozen_atr_24: Decimal,
         now_utc: datetime,
     ) -> V4FrozenSignalRisk:
-        """Atomically reserve at most one cycle per JST trading day, then price it.
+        """Atomically reserve a new cycle, provided none is currently unresolved.
 
         Re-runs every precondition inside the same call and blocks fail-closed if
-        (a) a cycle already exists for TODAY's JST trading day (the real
-        ``maximum_entries_per_day=1`` cap, now enforced per calendar day instead of
-        once for the generation's entire lifetime), or (b) ANY earlier cycle — any
-        day — is still unresolved (``realized_pnl_jpy IS NULL``: reserved, entered,
-        or protected but not yet closed flat). (b) is the actual "at most one
-        position ever open" invariant; (a) is the daily-entry cap layered on top of
-        it. Together they let the same reviewed generation serve many trading days
-        (fresh 00-60 preparation each day, no code change or new generation
-        required) while a cycle, once it exists, can still never be superseded.
+        ANY earlier cycle — any day — is still unresolved (``realized_pnl_jpy IS
+        NULL``: reserved, entered, or protected but not yet closed flat). This is
+        the actual "at most one position ever open" invariant, and it alone gates
+        this reservation now (operator decision, 2026-07-25):
+        ``maximum_entries_per_day`` was raised from 1 to
+        ``MAXIMUM_ENTRIES_PER_DAY_CEILING`` (still a finite, fail-closed cap, not
+        unbounded) and is enforced separately, per calendar day, by the risk
+        policy's ``entries_today`` counter at the coordinated-actual-path layer
+        (``evaluate_risk_before_entry``/``record_risk_entry_attempt`` in
+        ``runtime_safety.py``) — not by this SQL guard. This lets the same
+        reviewed generation serve many trading days, and many sequential entries
+        within a day once flat, while a cycle, once it exists, can still never be
+        superseded until it resolves.
         """
 
         risk = self._validate_and_price_entry(
@@ -404,15 +408,12 @@ class V4GmoActualCoordinatorStore:
                 connection.execute("BEGIN IMMEDIATE")
                 if (
                     connection.execute(
-                        "SELECT 1 FROM cycles"
-                        " WHERE trading_day_jst=? OR realized_pnl_jpy IS NULL"
-                        " LIMIT 1",
-                        (trading_day,),
+                        "SELECT 1 FROM cycles WHERE realized_pnl_jpy IS NULL LIMIT 1"
                     ).fetchone()
                     is not None
                 ):
                     raise V4GmoActualCoordinatorError(
-                        "v4 canary already has a cycle today or an unresolved cycle"
+                        "v4 canary already has an unresolved cycle"
                     )
                 connection.execute(
                     """
@@ -440,6 +441,47 @@ class V4GmoActualCoordinatorStore:
         except sqlite3.IntegrityError as error:
             raise V4GmoActualCoordinatorError("duplicate v4 entry intent refused") from error
         return risk
+
+    def release_unattempted_reservation(self, *, cycle_ref: str) -> bool:
+        """Release a reserved cycle that never received a real market attempt.
+
+        Operator decision 2026-07-25 (the same change that raised
+        ``maximum_entries_per_day`` above 1) removed the day-based clause from
+        ``reserve_entry_cycle``'s guard, so the single "at most one open cycle"
+        slot is now occupied purely by ``realized_pnl_jpy IS NULL``. Without
+        this method, a routine and now-EXPECTED rejection that happens after
+        reservation but before any market attempt -- the entry window closing
+        while an operator confirms, or (the whole point of the 2026-07-25
+        change) today's entries-per-day/loss-limit/consecutive-loss cap
+        already being reached -- would leave that reservation permanently
+        unresolved, since nothing will ever close a position that was never
+        opened. With the day clause gone, that one stuck row would then block
+        every future reservation forever, on every future day, bricking the
+        generation the very first time its new higher cap is actually used.
+
+        Deletes the row only if it never received a market attempt
+        (``market_attempted_at_utc IS NULL``), was never resolved
+        (``realized_pnl_jpy IS NULL``), AND no unknown-halt has been engaged.
+        A genuine incident (e.g. the dead-man switch failing) always calls
+        ``engage_unknown_halt`` before or instead of raising for that reason,
+        so this is a no-op then -- the row is left in place by design, for
+        operator investigation, exactly as before this method existed.
+        Returns whether a row was actually released.
+        """
+
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            halted = connection.execute(
+                "SELECT value FROM metadata WHERE key='unknown_halt_latched'"
+            ).fetchone()
+            if halted is not None and halted["value"] == "true":
+                return False
+            cursor = connection.execute(
+                "DELETE FROM cycles WHERE cycle_ref=? "
+                "AND market_attempted_at_utc IS NULL AND realized_pnl_jpy IS NULL",
+                (cycle_ref,),
+            )
+            return cursor.rowcount == 1
 
     def prepare_entry_intent(
         self,
@@ -1528,13 +1570,15 @@ class V4GmoActualCoordinatorStore:
         """Read only non-identifying state for the single most recent cycle.
 
         Under daily rollover a generation can accumulate many CLOSED cycles over
-        time (one per trading day used). This watches only the chronologically
-        latest one — the only cycle that can possibly still be unresolved, since
-        ``reserve_entry_cycle`` refuses a new reservation while an earlier cycle
-        is unresolved — never an arbitrary or older historical one, or the
-        supervisor could latch a stale protection/exit deadline (or the driver
-        could spin forever on ``flat_reconciled``) against an already-flat cycle
-        from a previous day.
+        time -- up to ``maximum_entries_per_day`` per trading day used, once
+        flat between each (operator decision 2026-07-25 raised this above 1).
+        This watches only the chronologically latest one — the only cycle that
+        can possibly still be unresolved, since ``reserve_entry_cycle`` refuses
+        a new reservation while an earlier cycle is unresolved — never an
+        arbitrary or older historical one, or the supervisor could latch a
+        stale protection/exit deadline (or the driver could spin forever on
+        ``flat_reconciled``) against an already-flat cycle from a previous
+        entry or a previous day.
         """
 
         with self._connect() as connection:

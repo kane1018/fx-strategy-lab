@@ -138,7 +138,7 @@ class V4GmoFrozenGeneration:
             self.heartbeat_interval_seconds == 15,
             self.maximum_heartbeat_age_seconds == 60,
             self.adverse_slippage_allowance_pips == "5.0",
-            self.maximum_entries_per_day == 1,
+            self.maximum_entries_per_day == selections.maximum_entries_per_day,
             self.same_action_retry_allowed is False,
             self.same_action_repost_allowed is False,
             self.actual_post_authorized is False,
@@ -153,6 +153,7 @@ class V4GmoFrozenGeneration:
             selected_horizon=selections.selected_horizon,
             protection_contract_hash=self.protection_contract_hash,
             broker_capability_evidence_hash=self.broker_capability_evidence_hash,
+            max_entries_per_day=self.maximum_entries_per_day,
         )
         if self.policy_config_hash != derived_policy.config_hash:
             raise V4GmoGenerationError("v4 GMO policy config hash mismatch")

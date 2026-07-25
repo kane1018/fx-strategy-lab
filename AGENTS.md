@@ -418,6 +418,26 @@ current-turn確認後の初回actual canaryを実行してよい。この例外�
 この例外は利益、edge、live-ready、unattended liveの証明ではない。初回canaryの各actual writeはoperatorが
 確認したexact sheetとcurrent-turn challengeに限定される。
 
+## H-11 v4 G014 sequential entries-per-day改定（2026-07-25・no-POST・operator指示）
+
+operatorは「本番を完成させたい」との明示指示で、`maximum_entries_per_day`を**1から20**へ改定した
+（同時ポジションは引き続き最大1、これはsequential re-entry限定であり同時複数保有ではない）。
+G013の全conduct規律（この文書のG013セクション全体）はG014へそのまま引き継ぐ。世代labelを
+`H11_AUTO_30M_20260725_G014`へ改め、`maximum_entries_per_day`が変わったためprotection/policy/risk/
+implementation digestを新値で再凍結した。
+
+- 予算（5,000/10,000/50,000円・5連敗）、exit/friday/weekend profile、broker POST禁止、その他の安全条件は不変。
+- 予約guard（`reserve_entry_cycle`）は「未決済ポジションが1つもない」ことだけを見るよう単純化し、
+  暦日ベースの重複制約を撤廃した。1日あたりの上限は`PhaseBRiskPolicy.entries_today`が独立して担保する。
+- 上限到達などpermitより前の予約後棄却（entry window終了、risk gate拒否）でreservationが永久に
+  詰まらないよう、`release_unattempted_reservation`（market attempt未実施かつunknown-halt未発生の
+  場合のみ解放）を追加した。dead-man等の真のincidentはこれまで通り解放せず、operator確認を要求する。
+- generation labelの決め打ちcheckは`h11_v4_gmo_g013_canary.py`と`h11_v4_gmo_signal_preview.py`の
+  **2箇所**に存在する（後者はレビューの再検証で発覚、修正済み）。次のgeneration改定では両方を
+  同時に更新し、implementation_digestの再計算前に`grep -rn "H11_AUTO_30M_.*_G0"`等で他の
+  決め打ち箇所が残っていないか確認すること。
+- h11_auto 881件・full backend 8,475件パス。
+
 ## 最初に読む文書
 
 - `docs/CODEX_HANDOFF.md`
@@ -475,3 +495,722 @@ broker read/write、credential、外部通知を許可しない。
 - shadow intent、preview、過去canary confirmation、旧generation evidenceをlive authorizationへ流用すること。
 - `live_ready`、`unattended_live_supported`、`actual_post_authorized`のtrue化。live化は独立review、
   新reviewed generation、fresh external preparation、固定小額contractを必須とする別Stepで扱う。
+
+## H-11 v4 unattended Public-only finite shadow adapter/runner 限定例外
+
+上記no-POST shadow controller例外の境界は維持する。ただしoperatorが明示的に、完全自動売買へ向けた
+Public-only有限shadow adapterとbounded runnerの実装を依頼した場合に限り、既存の凍結signal／risk
+contractとno-POST controllerへ、GMO **Public** read-only市場データだけを供給するnetwork adapterと
+有限cycle runnerを実装してよい。この例外は設計・fake test・有限Public shadow専用であり、live
+activation、resident運転、Private API、credential、broker read/write、外部通知を許可しない。
+
+### この例外で限定的に許可すること
+
+- GMO Public read-only endpoint（`/public/v1/status`、`/public/v1/ticker`、`/public/v1/klines`の
+  M1／H1）だけを、既存の`GmoPublicMarketDataClient`経由で、完了済みM1 slotごとに有限回GETする。
+  same completed slotは`backend/shadow_exports/`配下のO_EXCL markerで一度だけclaimし、retryしない。
+- 凍結SHORT_V1／30分方向推論と、official H1だけからのATR(24)（`build_g013_formal_canary_input`と
+  同一結果をcross-check testで固定）を再利用し、caller非依存のformal signalとsanitized market
+  snapshotをメモリ内で作る。account flat／active orders／boot reconciliation／fresh broker snapshotは
+  Private GETなしに観測できないため、preflightでfail-closed（未観測=block）とする。よって
+  Public-only cycleは`SHADOW_WOULD_ENTER`へ到達せず、常にsafe blockに留まる。
+- no-POST controllerを1 cycle呼び、generation非依存のSQLite shadow ledgerへ非認可決定を記録する。
+- 有限のbounded runner（最大cycle数または固定interval。resident化・常駐loop・自動再起動なし）で
+  上記を駆動し、sanitized aggregateだけを出力する。direction、probability、price、raw candle、
+  実IDを表示・保存しない。
+- 上記adapter／runner／fake test／設計docを必要最小限で追加する。shadow結果は
+  `broker_post_authorized=false`、`actual_post_count=0`、`live_ready=false`、
+  `unattended_live_supported=false`を固定する。
+
+### この例外でも禁止し続けること
+
+- Private API、Keychain、credential、broker transport、hard guard、permit、actual coordinator／
+  transport／adapter、`order`／`cancelOrders`／`closeOrder`／OCO write経路のimport、呼出し、接続。
+- Public結果からaccount flat等を推測すること。account／position／order／risk stopの観測は
+  credential＋Private GETを使う別phaseで扱う。
+- scheduler、cron、LaunchAgent、launchd、resident process、background loop、自動再起動、
+  Pushover／SMTP送信。
+- shadow判定booleanをhard guardの`allow`へ接続するgeneric allow bridge、env／`.env`／`LIVE=true`に
+  よるlive解除。
+- shadow observation、intent、preview、過去canary confirmation、旧generation evidenceを
+  live authorization、live-ready、performance proofへ流用すること。
+- `live_ready`、`unattended_live_supported`、`actual_post_authorized`、`broker_post_authorized`の
+  true化。live化は独立review、新reviewed generation、fresh external preparation、固定小額contractを
+  必須とする別Stepで扱う。
+- 既存G013 canary／post-canary markerの変更・reset・削除・上書き、またはそれらの証拠流用。
+
+## H-11 v4 unattended shadow Private-GET account/order preflight 限定例外（slice 1・fake-only）
+
+上記Public-only shadow例外の境界は維持する。ただしoperatorが明示的に、Private GETを使う
+full operational read-only shadowへの着手を依頼した場合に限り、shadow preflightのうち
+`broker_snapshot_fresh`／`boot_reconciled`／`position_count`／`active_order_count`を
+`latestExecutions`／`openPositions`／`activeOrders`のsanitized Private GETから導出する型・
+snapshot・合成関数を実装してよい。この例外はslice 1（account/order観測のみ）専用であり、
+notification送信、daily／monthly／consecutive-loss stop追跡、host／dead-man状態、
+operator persistent HALT配線、runnerへの実結線は含まない。
+
+### この例外で限定的に許可すること
+
+- `latestExecutions`／`openPositions`／`activeOrders`用の、shadow専用・generation非依存の
+  read-only GET Protocolと、sanitized件数（`latest_executions_count`／`open_positions_count`／
+  `active_orders_count`／`account_flat`／`active_orders_zero`）だけを返すsnapshot型を実装する。
+- Phase 1のfail-closed preflightのうち`broker_snapshot_fresh`／`boot_reconciled`／
+  `position_count`／`active_order_count`だけを上記snapshotへ差し替える合成関数を実装する。
+  `notification_path_ready`、daily／monthly／consecutive-loss stop、`operator_halt_clear`は
+  この合成対象に含めず、Phase 1の値のまま変更しない。
+- HMAC署名ヘッダ生成には既存の純粋関数`app.private_api.auth.build_auth_headers`（呼び出し側が
+  渡した値だけを使い、credential store・env・fileを読まない）だけを再利用してよい。
+- fake credential pair、fake HTTP transportだけを使うtestを追加する。実Keychain reader関数は
+  このモジュールへ実装しない（＝defaultからの実credential到達経路を作らない）。
+- 設計docとtestを必要最小限で追加する。
+
+### この例外でも禁止し続けること
+
+- 実Keychain read、実credential値の読込・表示・保存。このモジュールへ実Keychain reader
+  （`security find-generic-password`等）を実装・importしないこと。
+- 実Private API endpointへの実HTTP呼出し、実broker read。testは常にfake transportだけを使う。
+- 本snapshot／合成関数をshadow runner CLIへ実結線すること。実結線は別途明示依頼と別reviewを
+  必須とする独立Stepとして扱う。
+- Pushover／SMTP送信、notification transportのimport・呼出し。
+- daily／monthly／consecutive-loss stop、host／dead-man状態、operator persistent HALTの実装・
+  claim。これらは別phaseで扱う。
+- broker write endpoint（`order`／`cancelOrders`／`closeOrder`／OCO）のimport・呼出し・接続。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+- 既存G013 canary／post-canary marker、`h11_v4_gmo_readonly_preflight.py`等の既存G013専用
+  preparation-gated moduleの変更、またはそれらのgate／permitへの結合。
+
+## H-11 v4 unattended shadow 通知判断layer 限定例外（slice 2・fake-only）
+
+上記slice 1の境界は維持する。ただしoperatorが明示的に、shadow cycleの結果を通知すべきか判断する
+layerの実装を依頼した場合に限り、既存の汎用・fake-only強制済み`H11V4DisabledDualRouteNotifier`
+（`app/services/h11_v4_notification_binding_no_post.py`）を再利用し、shadow controller報告から
+通知要否を判定する純粋関数を実装してよい。実Pushover/SMTP送信、runnerへの結線は含まない。
+
+### この例外で限定的に許可すること
+
+- `H11V4NotificationEvent`へ`SHADOW_ACTIONABLE_OBSERVED`（非critical）と`SHADOW_HALT_ENGAGED`
+  （critical、sticky HALTはclear/resetパスがないため）の2値を追加専用で追記する（既存値・既存
+  `CRITICAL_EVENTS`メンバーは変更しない）。
+- shadow controller の`V4ShadowControllerReport.status`と直前statusから、通知要否と
+  重複排除（同一statusが連続する限り再通知しない）を行う純粋関数を実装する。I/Oを持たない。
+- 送信自体は既存の`H11V4DisabledDualRouteNotifier.notify_once`をそのまま呼ぶだけとし、
+  新しいtransport実装、新しいPushover/SMTP接続コードは一切追加しない。
+- fake transport（`H11V4FakePushoverTransport`／`H11V4FakeEmailTransport`）だけを使うtestを
+  追加する。default（Refusing）transportでは送信不能であることも確認する。
+
+### この例外でも禁止し続けること
+
+- 実Pushover/SMTP transportの実装・接続、`H11V4DisabledDualRouteNotifier`のfake_only強制の
+  弱体化・迂回。
+- shadow runner CLIへの結線（別途明示依頼が必要な独立Step）。
+- daily／monthly／consecutive-loss stop、host／dead-man状態、operator persistent HALTの実装・
+  claim。
+- broker write endpoint、Private API、Keychain、credentialのimport・呼出し・接続。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+
+## H-11 v4 unattended live adapter 設計限定例外（design-only・コード実装なし）
+
+上記slice群の境界は維持する。ただしoperatorが明示的に、unattended live adapter（将来の実発注経路）の
+全体設計を依頼した場合に限り、**文書（design doc）とAGENTS.md本体の更新だけ**を行ってよい。
+このStepはPythonコードを一切書かない。既存のG012/G013 permit／action-proof／coordinator／
+exit dispatcher／hard guardコードを一切変更しない。実credential・実Private API・実broker write・
+scheduler・resident processへは一切接続しない。
+
+### この例外で限定的に許可すること
+
+- 既存のgeneration-bound one-use permit型（`v4_gmo_canary_activation.py`）、persisted action-proof
+  chain（`v4_gmo_persisted_authorization.py`）、real coordinator／coordinated-path
+  （`v4_gmo_actual_coordinator.py`／`h11_v4_gmo_coordinated_actual_path.py`）、pure OCO計算
+  （`build_exact_fill_oco_plan_no_post`）、exit dispatcher（`h11_v4_gmo_exit_dispatcher.py`）、
+  hard guard（`assert_real_broker_post_allowed`）を**読み取り調査**し、unattended文脈での再利用可否を
+  設計docへ記述する。
+- G013の人間確認2種（major-incident resume phrase、current-turn challenge）を置き換える、
+  unattended向けpermit発行判断の**設計案**（構造要件・複数の独立した安全条件・operatorレビュー
+  ポイント）を文書化する。この設計案自体はpermitを発行する実装ではない。
+- Phase 5昇格基準（機械判定可能なchecklist）を文書化する。
+- 新しいAGENTS.md本体限定例外（次の実装slice用）の草案を、実装前提を明記した上でこのdocへ含めてよい。
+
+### この例外でも禁止し続けること
+
+- 実装コード（Python）を一切書かない。型定義・関数実装・permit発行実装はすべて次の別Step。
+- 既存のG012/G013 permit／coordinator／transport／hard guardコードの変更。
+- 実credential、実Private API、実broker write、scheduler、resident processへの接続。
+- unattended permit発行判断の設計案を、実際のpermit発行や活性化として扱うこと。設計docの完成は
+  live-ready、performance proof、実装承認を意味しない。
+
+## H-11 v4 unattended live activation components 実装限定例外（fake-only・未結線）
+
+上記design-only例外の設計docをoperatorがレビューし、§3.2の6条件構造と§3.4の決定値
+（authorized window=1 JST営業日・authorization 1件あたり最大1 entry・cold-startはそのまま許容）を
+明示承認した場合に限り、その設計に対応する以下のcomponent群を、fake-only／未結線で実装してよい。
+この例外はPhase 4 component実装専用であり、実credential・実Private API・実broker write・
+実通知送信・scheduler・resident process・既存G012/G013コードの変更を一切含まない。
+
+### この例外で限定的に許可すること
+
+- (a) realized P&L risk ledger: 当初は専用SQLite台帳の新設を想定したが、調査の結果、既存の
+  reviewed済み`app/h11_auto/runtime_safety.py`（`PhaseBRiskPolicy/State/Store`・
+  `evaluate_risk_before_entry`・`record_closed_result_once`・JST日/月rollover・
+  cycle_refごとのdedup・凍結risk値5,000円/trade・10,000円/日・50,000円/月・5連敗）が
+  この要件を既に満たすため、**変更なしで再利用**する（重複実装によるdrift回避。2026-07-24
+  operator承認済みの設計doc §9に記録）。新規台帳は実装しない。既知の制約: `PhaseBRiskStore`は
+  state file欠損時に新規ACTIVE stateを生成するため、wiring時に「file欠損=起動拒否」の
+  bootstrap規律を別途必須とする（設計doc §9.2-1）。
+- (b) supervisor health/dead-man check: 既存`DeadManPolicy/Store`（recency）を再利用し、
+  新規moduleは「直前N秒間の連続健全性」（continuity chain）判定だけを追加する。
+  read-onlyのhost状態観測を含んでよいが、process kill・sleep・reboot・設定変更は行わない。
+- (c) operator authorization artifact型: operator-write-onlyの事前授権artifact
+  （1 JST営業日window・最大1 entry・O_EXCL one-use消費marker）。自動化側から
+  window延長・cap引き上げ・再発行を行うAPIを構造的に持たない。
+- (d) unattended live専用のoperator persistent HALT: 既存`engage_risk_kill`＋
+  `AutoRiskStopState.KILLED`（un-kill APIなし・auto-clearなし）を**変更なしで再利用**する
+  （(a)と同じ理由・同じ2026-07-24記録）。state rootはshadow ledgerと別であることをwiring時に
+  必須とし、(a)のbootstrap規律（file欠損=起動拒否）がHALTの永続性保証の前提となる。
+- (e) permit発行orchestration: (a)〜(d)と既存fail-closed gate群の全条件成立時だけ、
+  既存の**無変更**`issue_v4_gmo_actual_activation_permit`へ渡すproof objectを組み立てる
+  純粋な判断layer。ただし本例外の実装・testではpermitの実発行はfake state rootに対する
+  test内でのみ行い、実runtime state root・実coordinator・実transportへは接続しない。
+- 各componentのfake-only test、設計doc更新、AGENTS.md本体の必要最小限更新。
+- shadow系moduleと同様のimport-graph isolation test（actual transport・credential・
+  notification実送信・G013 canary orchestrationへの到達を拒否）。
+
+### この例外でも禁止し続けること
+
+- 実credential、実Keychain read、実Private API、実broker write、実Pushover/SMTP送信。
+- scheduler、cron、LaunchAgent、resident process、background loopの追加・install。
+- 既存G012/G013 permit／coordinator／transport／exit dispatcher／hard guardコードの変更。
+- (c)のauthorization artifactを自動化側から作成・延長・再発行するAPIの実装。artifactの
+  作成はoperator自身の明示的なCLI/手動操作として別Stepで設計する。
+- (e)から実coordinator・実transport・実runtime state rootへの結線。結線は全component
+  review完了後の別Step・別明示承認とする。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+- 本例外下の実装・test完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended live daily authorization artifact作成CLI 限定例外（operator手動実行専用）
+
+上記component例外は、authorization artifactの作成を「operator自身の明示的なCLI／手動操作として
+別Stepで設計する」と明記して先送りした。operatorが明示的にこのCLIの実装を依頼した場合に限り、
+その別Stepとして以下を実装してよい。artifactのconsume（消費）は既存の
+`h11_v4_unattended_live_authorization.py`のままとし、本例外はcreateだけを対象とする。
+
+### この例外で限定的に許可すること
+
+- generation-bound canonical path helper（`v4_gmo_runtime_paths.py`と同型のdigest検証、
+  `backend/market_data/h11_v4_unattended_live/generation-{digest}/`配下）を新設する。
+  既存のgitignore済み`backend/market_data/`配下に限定する。
+- operatorが手動実行するCLIスクリプト（`backend/scripts/`配下）を新設する。実行時のJST日付は
+  常に「実行時点の今日」固定とし、operatorによる日付指定・過去日・未来日オーバーライドを
+  受け付けない。`--generation-digest`は明示必須引数とし、暗黙のdefaultやfallback推定を持たない。
+  既存artifactが当日分で存在する場合は`--force`なしで上書きしない。
+- 生成したartifactに対して、既存の`check_operator_daily_authorization`をそのまま呼び、結果を
+  sanitizedに表示する（値の解釈・判断ロジックの新規実装はしない）。
+- 各componentのfake-only／ローカルfilesystemだけを使うtest、設計doc更新、AGENTS.md本体の
+  必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- このCLIをscheduler、cron、LaunchAgent、resident process、他のCodex/Claude自動実行から
+  呼び出すこと。呼出しは常にoperatorの手動実行に限る。
+- `h11_v4_unattended_live_authorization.py`の公開関数（check／consume）を変更・拡張すること。
+  本例外はcreate専用の別スクリプトとし、既存モジュールの「read-and-consume only」設計を
+  変更しない。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信、G012/G013コードの変更。
+- artifactの自動再発行・自動延長・cap自動引き上げの実装。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended proof constructor 設計限定例外（design-only・コード実装なし）
+
+これは、Phase 4設計docが「G013 permit moduleのprivate-token規律内に追加する、別途明示承認・別review
+必須の唯一のG013コード変更」として明示的に先送りした項目である。operatorが明示的にこの設計を
+依頼した場合に限り、**文書（design doc addendum）とAGENTS.md本体の更新だけ**を行ってよい。
+このStepはPythonコードを一切書かない。`v4_gmo_canary_activation.py`を含む既存G012/G013コードは
+一切変更しない。
+
+### この例外で限定的に許可すること
+
+- `v4_gmo_canary_activation.py`の`_RESUME_TOKEN`／`_CONFIRMATION_TOKEN`によるprivate-token規律を
+  読み取り調査し、unattended文脈でのproof発行に必要な新規関数の**設計**（シグネチャ・検証順序・
+  「decision.allowedをproof構築に流用しない」ための一次state再検証方針）を文書化する。
+- 既存の`issue_v4_gmo_actual_activation_permit`／`consume_v4_gmo_actual_activation_permit`／
+  `confirm_v4_major_incident_resume_exact`／`confirm_v4_current_turn_exact`を変更しないことを
+  設計の前提として明記する。
+- 「6条件評価を繰り返し呼んでも、同一JST日にresume/current-turn proofのペアを2回以上mintできない」
+  ことを保証する具体的な順序（authorization artifactの消費を、6条件クリア後の最初の書き込みとして
+  行う）を設計に含める。
+- この設計案自体はproofを発行する実装ではない。
+
+### この例外でも禁止し続けること
+
+- 実装コード（Python）を一切書かない。
+- `v4_gmo_canary_activation.py`を含む既存G012/G013コード（permit／coordinator／transport／
+  exit dispatcher／hard guard）の変更。
+- この設計案を、実際のproof発行やactivationとして扱うこと。設計doc完成はlive-ready、
+  performance proof、実装承認を意味しない。
+
+## H-11 v4 unattended proof constructor 実装限定例外（唯一のG012/G013コード追記・未結線）
+
+上記design-only例外で承認された設計（§10、Option A、consume-first順序、§9.2項目3の解決済み state
+root）をoperatorが実装承認した場合に限り、`v4_gmo_canary_activation.py`へ**追加専用**で新関数を
+実装してよい。これは本トラック全体で唯一のG012/G013コード変更である。既存関数
+（`V4GmoCanaryIntent`／`V4CurrentTurnChallenge`／`confirm_v4_major_incident_resume_exact`／
+`confirm_v4_current_turn_exact`／`issue_v4_gmo_actual_activation_permit`／
+`consume_v4_gmo_actual_activation_permit`）は一切変更しない。
+
+### この例外で限定的に許可すること
+
+- `v4_gmo_canary_activation.py`へ、`app.h11_auto.runtime_safety`（同一package。既存の
+  `v4_host_rehearsal.py`が`app.services`をimportしている前例に倣い、`app.services`のunattended
+  live moduleも直接importしてよい）を使い、authorization／risk／dead-man／heartbeat
+  continuityを**呼び出しの瞬間に新鮮読み込みし直す**新関数を1つ追加する。
+  `notification_ready`・`entry_gate_blocked_reasons`は呼び出し側供給のまま（§10.2の意図的な
+  scope境界）。
+- 新関数は既存の`decide_unattended_permit_issuance`（変更しない）を呼び、`allowed`なら
+  **真っ先に**`consume_operator_daily_authorization_once`を呼んでから（これが今回の評価での
+  最初の書き込み）、resume proofとcurrent-turn proofの両方を同一評価から同時にmintして返す。
+  consume呼び出し前にはいかなるproofもmintしない。
+- fake-only test（fake store／tmp pathだけを使う）に加え、consume-then-mintの順序を**真の並行
+  プロセス／スレッド**でレースさせ、同一JST日に2組目のproof pairが絶対にmintされないことを
+  検証する、実際に並行させるconcurrency testを追加する（設計doc §10.3/§10.4が要求する、
+  従来のsequential呼び出しだけのtestでは代替できない項目）。
+- 新関数のdocstringに、「既存の`confirm_v4_major_incident_resume_exact`／
+  `confirm_v4_current_turn_exact`をunattended経路から直接呼び出してこの新関数をバイパスしては
+  ならない」旨を明記する。orchestration moduleがまだ存在しないため、import-graph isolation
+  によるbypass防止の強制は、orchestration実装時の別Stepで扱う（本Stepでは文書化と、新関数
+  自体の閉じたtestまでとする）。
+- 設計doc §10.4の該当項目の更新、AGENTS.md本体の必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- 既存のG012/G013関数（上記6関数）の変更。新関数は追加専用。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信。
+- 新関数を実coordinator／実transport／実runtime state root／scheduler／resident processへ
+  結線すること。結線は別途明示承認が必要な独立Stepとする。
+- `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended orchestration wiring／scheduler 設計限定例外（design-only・コード実装なし）
+
+proof constructor実装時の例外（上記）が明示的に「結線は別途明示承認が必要な独立Step」として
+先送りした2項目 —(1) `confirm_v4_unattended_authorization_once`を実coordinator/実transport
+経路へ結線するorchestration wiring、および(2) resident/scheduler supervisor —について、
+operatorが明示的にこの設計を依頼した場合に限り、**文書（design doc addendum）とAGENTS.md
+本体の更新だけ**を行ってよい。このStepはPythonコードを一切書かない。既存のG012/G013
+コード・全既存unattended-track moduleは一切変更しない。
+
+### この例外で限定的に許可すること
+
+- `v4_gmo_actual_coordinator.py`／`h11_v4_gmo_coordinated_actual_path.py`／
+  `h11_v4_gmo_actual_adapter.py`／`h11_v4_gmo_actual_transport.py`／
+  `h11_v4_gmo_actual_runtime_binding.py`を読み取り調査し、新規orchestration moduleが
+  再利用できる既存の「required・no-default」注入点（`V4GmoCoordinatedActualPath.adapter`、
+  `V4GmoActualAdapter.transport`）を特定・文書化する。
+- `bind_v4_gmo_actual_runtime`の`credential_pair`/`client`が`None`の場合に実Keychain
+  credentialへ解決される既存挙動を明記し、新規orchestration moduleが**この関数を
+  呼ばないこと**を設計上の制約として記録する。
+- orchestration moduleの**設計**（署名・呼び出し順序・import-graph isolationで塞ぐべき
+  fragment一覧・「adapter/transportは呼び出し側供給必須でdefaultを持たない」という
+  構造的境界）を文書化する。
+- resident/scheduler supervisorについて、既存2パターン
+  （G012 LaunchAgent方式=heartbeat_broker_write固定False、Phase 1 bounded runner方式=
+  非常駐・cycle数固定）を比較し、live-order-issuing schedulerがどちらの形状を取るべきかの
+  設計上のオプションを文書化する（operatorの決定を仰ぐ設問として提示してよい）。
+- この設計案自体はwiringやscheduler installの実装ではない。
+
+### この例外でも禁止し続けること
+
+- 実装コード（Python）を一切書かない。
+- G012/G013コード、既存unattended-track module（proof constructor含む）の変更。
+- scheduler、cron、LaunchAgent、launchd、resident process、background loopの
+  実際のinstall・追加。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信。
+- この設計案を、実際のwiringやscheduler稼働として扱うこと。設計doc完成はlive-ready、
+  performance proof、実装承認を意味しない。
+
+## H-11 v4 proof-accepting G013 entry-cycle driver 実装限定例外（G012/G013コードへの2件目の変更・未結線）
+
+design doc §11.4a/§11.4bでoperatorが明示的に選択したPath 1を実装する例外。**これは
+本トラックの従来の宣言「本トラック全体で唯一のG012/G013コード変更」を明示的に見直し、
+撤回する。** 唯一性の主張そのものを撤回するのであって、黙って矛盾させるのではない。
+対象は`h11_v4_gmo_g013_canary.py`の`run_g013_actual_canary_after_exact_confirmation`
+一箇所のみ。他の全G012/G013ファイル（`v4_gmo_canary_activation.py`、coordinator、
+adapter、transport、exit dispatcher、hard guard、`v4_gmo_actual_runtime_binding.py`
+の`bind_v4_gmo_actual_runtime`自体）は一切変更しない。
+
+### この例外で限定的に許可すること
+
+- `run_g013_actual_canary_after_exact_confirmation`を、design doc §11.4bの通りに
+  分割する：session消費／binding確認／refreshと2つのphrase確認呼び出し（既存のまま、
+  一切ロジック変更なし）はそのまま残し、それ以降の全ロジック
+  （signal postable再確認・monitor heartbeat再確認・cycle予約・permit発行・
+  `bind_v4_gmo_actual_runtime`呼び出し・`_run_bound_g013_canary`呼び出し）を
+  新規private helper `_run_g013_actual_canary_from_refreshed_session`へ切り出す。
+  唯一の実質的な差分は、`bind_v4_gmo_actual_runtime`へ`credential_pair`/`client`を
+  **明示的に**渡すようになること（既存のphrase経路は`None`を明示的に渡し、今日と
+  完全に同じ real-Keychain-default挙動を再現する）。
+- 新規public関数`run_g013_actual_canary_after_unattended_authorization`を追加し、
+  phraseの代わりに`resume_proof: V4MajorIncidentResumeProof`／
+  `confirmation_proof: V4CurrentTurnConfirmationProof`（`confirm_v4_unattended_
+  authorization_once`が生成する型と同一）を受け取り、同じsession消費／binding確認
+  ／refreshを行った上で同じ`_run_g013_actual_canary_from_refreshed_session`を呼ぶ。
+  `credential_pair`・`client`は**必須引数・default一切なし**とする。
+- `issue_v4_gmo_actual_activation_permit`／`_run_bound_g013_canary`／
+  `bind_v4_gmo_actual_runtime`自体の署名・挙動は一切変更しない。
+- 既存のphrase経路（`run_g013_actual_canary_after_exact_confirmation`）の外部から
+  見た挙動が完全に不変であることを、既存G013 test suite全体を無変更のまま実行して
+  pinする。
+- fake-only test（fake credential_pair／fake client）を新規関数に追加し、実Keychain
+  ・実transportには一切触れないことを確認する。
+
+### この例外でも禁止し続けること
+
+- 上記1関数の分割以外、`h11_v4_gmo_g013_canary.py`内の他ロジックの変更。
+- `v4_gmo_canary_activation.py`を含む他の全G012/G013ファイルの変更。
+- `bind_v4_gmo_actual_runtime`自体の署名・default挙動の変更（既存のphrase経路への
+  影響を避けるため、呼び出し側で明示的にNoneを渡すことで対応する）。
+- 新規関数`run_g013_actual_canary_after_unattended_authorization`に
+  `credential_pair`/`client`のdefaultを持たせること（fakeでも実でも）。
+- 新規関数を実際に呼び出すorchestration moduleの実装・結線（design doc §11が
+  すでに指摘した、別途明示承認が必要な独立Step）。
+- scheduler、cron、LaunchAgent、launchd、resident processの追加。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended live orchestration module 実装限定例外（fake-only・scheduler未接続）
+
+design doc §11.6の設計をoperatorが実装承認した場合に限り、新規module
+`app/services/h11_v4_unattended_live_orchestration.py`を実装してよい。これは
+proof constructor（`confirm_v4_unattended_authorization_once`）とproof受け取り版
+driver（`run_g013_actual_canary_after_unattended_authorization`）を順に呼ぶだけの
+薄い橋渡しであり、判断ロジック・stateの追加・既存関数の変更は一切含まない。
+
+### この例外で限定的に許可すること
+
+- 新規moduleに関数`run_unattended_live_entry_cycle_once`を1つ実装する。順序は
+  §11.6の通り：(1) `credential_pair`/`client`の実行時non-Noneガード（driverの
+  同名ガードと二重・意図的な冗長）、(2) `confirm_v4_unattended_authorization_once`
+  を`session.intent`と呼び出し側供給storeで呼ぶ（日次認可のconsume-first・proof
+  pair発行）、(3) proofとsessionと呼び出し側供給の`credential_pair`/`client`を
+  `run_g013_actual_canary_after_unattended_authorization`へ渡す。それ以外の処理を
+  加えない。
+- `credential_pair`/`client`は必須引数・default一切なし（fakeでも実でも）。
+- 自module source上に`confirm_v4_major_incident_resume_exact`／
+  `confirm_v4_current_turn_exact`／`bind_v4_gmo_actual_runtime`／
+  `issue_v4_gmo_actual_activation_permit`／`V4GmoKeychainCredentialPair`／
+  `V4GmoHttpxPrivateTransport`への参照が一切ないことをASTで検証するtestを追加する
+  （§10.3のbypass防止義務を、この段階で初めて構造的に履行する）。
+- fake-only test（fake credential/client／tmp path store／driverのmonkeypatch）を
+  追加する。proof constructorが失敗した場合driverが一切呼ばれないことをpinする。
+- 既存test `test_v4_gmo_g013_unattended_authorization_fake_only.py`の
+  「driver呼び出し元ゼロ」assertion 1件のみを、「唯一の承認済み呼び出し元＝本
+  orchestration module、それ以外ゼロ」のallowlist形式へ更新する（本moduleの追加に
+  より旧assertionは必然的に失敗するため。他のtest・既存コードの変更は一切不可）。
+- design doc・AGENTS.mdの必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- 既存の全ファイル（G012/G013コード・全unattended-track module）の変更
+  （上記で明示的に許可した「driver呼び出し元test 1件のallowlist化」のみを唯一の
+  例外とする）。
+- 新moduleを呼び出すCLI・scheduler・cron・LaunchAgent・launchd・resident process
+  の実装・追加（bounded runner CLIは§12.4の方針決定済みだが、別途明示承認が必要な
+  次の独立Stepとする）。
+- 実credential、実Private API、実broker write、実Pushover/SMTP送信。
+- `credential_pair`/`client`へのdefault付与、実Keychain読み込みコードの記述。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended live bounded runner CLI 実装限定例外（fake-only・実行可能main一切なし）
+
+design doc §12.5の設計をoperatorが実装承認した場合に限り、新規script
+`backend/scripts/h11_auto_v4_unattended_live_bounded_run.py`を実装してよい。
+Phase 1 bounded shadow runner（`h11_auto_v4_unattended_shadow_run.py`）と同じ
+`--max-cycles`/`--interval-seconds`構造で、`run_unattended_live_entry_cycle_once`
+（§11.6・既存・変更不可）を呼ぶだけの薄いloopである。
+
+### この例外で限定的に許可すること
+
+- `main(argv: list[str], *, session, risk_store, risk_policy, dead_man_store,
+  heartbeat_chain_store, notification_ready, entry_gate_blocked_reasons,
+  credential_pair, client) -> int`を実装する。`session`を含む全キーワード引数は
+  必須・default一切なし（fakeでも実でも）。`session`はこのCLI自身が
+  `prepare_g013_canary_session`等で構築・refreshすることは一切なく、呼び出し側が
+  用意したものをそのまま各cycleへ渡す（`run_unattended_live_entry_cycle_once`と
+  同じ「呼び出し側供給必須」規律をそのまま踏襲する）。`--max-cycles`/
+  `--interval-seconds`のみargvから解析し、Phase 1と同じ範囲check（上限・下限）を
+  課す。
+- `if __name__ == "__main__":`ブロックは**実サイクルを一切実行しない**。このfile
+  を直接実行しても、「本fileはcredential_pair/clientを一切構築しないため直接実行
+  不可。operator自身が別途launcherを書き、`main()`をimportして実credentialを渡す
+  必要がある」という趣旨を明示するだけで即座に終了する。
+- 各cycleで、この呼び出し連鎖が返しうる既知のfixed safe labelの例外型
+  （`V4GmoCanaryActivationError`／`V4UnattendedLiveOrchestrationError`／
+  `V4GmoG013CanaryError`）のみをcatchし、safe statusとしてprintしてループを継続
+  する。それ以外の未知の例外は一切catchせず、そのままloopを中断する
+  （Phase 1の`_UNEXPECTED_IO_ERRORS`境界と同じ規律）。
+- cycleが例外なく正常return（＝driverが実際に走り何らかのresultを返した）した
+  場合、その日の認可は使い切られたとみなし、結果をprintしてループを早期終了する。
+- `notification_ready`/`entry_gate_blocked_reasons`も`main`の必須引数とし、
+  defaultを持たせない（§9.2項目4の義務を、このCLIも引き続き呼び出し側へ転送する）。
+- fake-only test（fake credential/client／driverのmonkeypatch／`__main__`が実サイクル
+  を一切起動しないことのAST・実行時両面での検証）を追加する。
+- 本CLIの追加により、既存test
+  `test_v4_unattended_live_orchestration_fake_only.py`の
+  「orchestration module呼び出し元ゼロ」assertion 1件のみを、「唯一の承認済み
+  呼び出し元＝本CLI script、それ以外ゼロ」のallowlist形式へ更新する（本CLIの
+  追加により旧assertionは必然的に失敗するため。他のtest・既存コードの変更は
+  一切不可）。
+- design doc・AGENTS.mdの必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- 既存の全ファイル（G012/G013コード・全unattended-track module）の変更
+  （上記で明示的に許可した「orchestration module呼び出し元test 1件の
+  allowlist化」のみを唯一の例外とする）。
+- `credential_pair`/`client`／`notification_ready`／`entry_gate_blocked_reasons`への
+  default付与。
+- `V4GmoKeychainCredentialPair`／`V4GmoHttpxPrivateTransport`の構築、実credential・
+  実Private API・実broker write・実Pushover/SMTP送信。
+- scheduler、cron、LaunchAgent、launchd、resident processの実装・追加・installation。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended entry-gate real derivation 実装限定例外（Public-only・credential-free）
+
+design doc §13の設計をoperatorが実装承認した場合に限り、以下を実装してよい。
+§9.2項目4のcredential不要な半分（entry_gate_blocked_reasonsの実導出）のみを扱う。
+notification_ready側（実Pushover/SMTP送信の検証）は通知Keychain credentialを要する
+別Stepであり、本例外の対象外。
+
+### この例外で限定的に許可すること
+
+- 新規module `app/services/h11_v4_unattended_live_entry_gate.py`に、純関数
+  `derive_unattended_entry_gate_blocked_reasons(bid, ask, quote_observed_at_utc,
+  market_open, now_utc) -> tuple[str, ...]`を1つ実装する。spread・freshnessは
+  一次データ（bid/ask/timestamp）から、`h11_v4_gmo_public_preflight`の凍結済み定数
+  （`MAXIMUM_QUOTE_AGE_SECONDS`／`MAXIMUM_QUOTE_CLOCK_SKEW_SECONDS`／
+  `G013_MAXIMUM_ENTRY_SPREAD_PIPS`）をimportして自前で再導出する。呼び出し側が
+  計算したbooleanを信用しない。market_openのみ厳密型checkのboolとして受け取る。
+  network accessは一切行わない。fetch失敗時にproviderが返すための定数label
+  `ENTRY_GATE_QUOTE_UNAVAILABLE`をexportする。
+- bounded runner CLI（`h11_auto_v4_unattended_live_bounded_run.py`）の`main`の
+  引数`entry_gate_blocked_reasons: tuple[str, ...]`を
+  `entry_gate_reason_provider: Callable[[datetime], tuple[str, ...]]`
+  （必須・default一切なし）へ変更し、各cycleでそのcycleの`now_utc`を渡して
+  ちょうど1回呼ぶ。providerがtuple以外、またはstr以外の要素を含むtupleを返した
+  場合は、新設の`V4UnattendedLiveRunnerError`（caught listに入れない）で即時・
+  大声でrun全体を中断する。providerが例外を投げた場合も同様にrunを中断する。
+  さらに、decision layerが入力不正として返す
+  `V4_CANARY_UNATTENDED_DECISION_INVALID`（常にプログラミングエラーであり
+  市場条件ではない）もabort label扱いとし、retryせずrunを中断する。
+- 上記CLI変更に伴う、既存test
+  `test_v4_unattended_live_bounded_run_fake_only.py`の必要最小限の更新
+  （provider化に伴う引数変更・新テスト追加。他のtestの変更は不可）。
+- 新moduleのfake-only test（凍結閾値との境界値・型不正・label charset・
+  network/credential token不在の検証）を追加する。
+- design doc・AGENTS.mdの必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- orchestration module・proof constructor・G012/G013コード等、上記2ファイル以外の
+  既存ファイルの変更。
+- 凍結済み閾値定数の値の変更・複製（importのみ可。新しい閾値を発明しない）。
+- 新module・CLIからのnetwork access・実credential・実Private API・実broker write・
+  実Pushover/SMTP送信。
+- `notification_ready`のprovider化・実送信検証（別Step）。
+- scheduler、cron、LaunchAgent、launchd、resident processの追加。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 real notification-send統合 設計限定例外（design-only・コード実装なし）
+
+design doc §9.2項目4の残り半分（notification_readyの実送信検証）について、
+operatorが明示的にこの設計を依頼した場合に限り、**文書（design doc addendum）と
+AGENTS.md本体の更新だけ**を行ってよい。このStepはPythonコードを一切書かない。
+既存の通知関連ファイル（`h11_v4_notification_binding_no_post.py`、
+`h11_v4_notification_actual_preparation.py`、`h11_v4_unattended_shadow_notification.py`
+等）は一切変更しない。
+
+### この例外で限定的に許可すること
+
+- 既存の実送信rehearsal機構（`run_actual_pushover_rehearsal_once`等）と、
+  fake-only notifier（`H11V4DisabledDualRouteNotifier`等）の構造を読み取り調査し、
+  無人経路で再利用可能な部分・不可能な部分を文書化する。
+- 実transport（`H11V4PushoverTransport`/`H11V4EmailTransport`を実装し実credentialで
+  実送信を行うクラス）の実装は、GMOのcredential/transportと同じ理由でこのAIの
+  実装対象外であることを設計上の制約として明記する。
+- `notification_ready`の意味論（毎cycle評価する軽量health-check案 vs
+  six-condition評価内で実送信を行う案）の2案を、両者のtrade-offとともに文書化する
+  （operatorの決定を仰ぐ設問として提示してよい）。
+- 将来の実装Stepが必要とする要素（新規additive enum member、新規additive
+  notifier class、新規AGENTS.md例外、fake-only test方針）を列挙する。
+- この設計案自体は実送信の実装ではない。
+
+### この例外でも禁止し続けること
+
+- 実装コード（Python）を一切書かない。
+- 既存の通知関連ファイル・G012/G013コード・他のunattended-track moduleの変更。
+- `H11V4DisabledDualRouteNotifier`を含む既存notifier classの変更
+  （新規additive classとしてのみ将来実装可能、既存classへの改変は不可）。
+- この設計案を、実際の通知送信や検証として扱うこと。設計doc完成はlive-ready、
+  performance proof、実装承認を意味しない。
+
+## H-11 v4 unattended live entry notification 実装限定例外（fake-only・実transport構築なし・未結線）
+
+design doc §14（Option A決定済み）をoperatorが実装承認した場合に限り、以下を
+実装してよい。実際にPushover/SMTPへ送信するtransport実装、実credential読み出しは
+一切含まない。
+
+### この例外で限定的に許可すること
+
+- `h11_v4_notification_binding_no_post.py`の`H11V4NotificationEvent`へ、新規
+  additive member `UNATTENDED_LIVE_ENTRY_ATTEMPTED`を1つ追加する
+  （`CRITICAL_EVENTS`には含めない＝emergency priority／既読確認は要求しない）。
+  既存member・既存`CRITICAL_EVENTS`・既存の`H11V4DisabledDualRouteNotifier`を
+  含む他の全既存コードは一切変更しない。この変更後、既存notification関連test
+  suite全体（`test_v4_notification_binding_fake_only.py`／
+  `test_v4_unattended_shadow_notification_fake_only.py`／
+  `test_v4_host_rehearsal_no_post.py`）を無変更のまま実行し、全件成功することを
+  確認する。
+- 新規module `app/services/h11_v4_unattended_live_entry_notification.py`に、
+  以下の2つのみを実装する：
+  1. 純関数`unattended_live_notification_channel_ready(*, primary, secondary) ->
+     bool`。型がProtocol契約を満たさない場合は例外を投げ、型は正しいが
+     `fake_only is not False`の場合はFalseを返す（§14.5 Option A：軽量・
+     no-I/Oのchannel health判定のみ。実送信は一切行わない）。
+  2. dataclass `H11V4EnabledDualRouteNotifier`（`H11V4DisabledDualRouteNotifier`の
+     実transport版・additiveな新規class）。`primary`/`secondary`は必須・
+     default一切なし。`__post_init__`で型契約と`fake_only is False`を要求し、
+     `notify_once`のロジックは`H11V4DisabledDualRouteNotifier`と完全に同一
+     （`reason_safe_label`の文字列のみ区別してよい）。このclass自体は
+     transportを構築せず、呼び出し側供給のtransportの`.send_once()`を呼ぶのみ。
+- fake-only test（`H11V4FakePushoverTransport`/`H11V4FakeEmailTransport`を
+  `fake_only=False`に見せかけたtest double、または同等の型契約を満たす
+  test-only stubを使用）を追加する。実transport・実credential・network access
+  は一切含まない。
+- design doc・AGENTS.mdの必要最小限更新（実装状況の記録）。
+
+### この例外でも禁止し続けること
+
+- 実際にPushover API／SMTPへ接続するtransport実装（`H11V4PushoverTransport`/
+  `H11V4EmailTransport`の実装であっても、実際にhttpx/smtplibでネットワークへ
+  接続するコードは一切書かない）。
+- 実credential読み出し（Keychain等）。
+- `H11V4DisabledDualRouteNotifier`を含む既存notification関連ファイルの、
+  上記enum追加以外の変更。
+- orchestration module・bounded runner CLIへの結線（`notify_once`を実際に
+  呼び出す配線は別途明示承認が必要な独立Step）。
+- `CRITICAL_EVENTS`への`UNATTENDED_LIVE_ENTRY_ATTEMPTED`追加、または既存の
+  emergency priority／既読確認要求の挙動変更。
+- scheduler、cron、LaunchAgent、launchd、resident processの追加。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 unattended liveスケジューラ配線 実装限定例外（タイマー機構のみ・実credential構築なし）
+
+上記design-only例外（scheduler部分）とdesign doc §12がOption B（非常駐・都度起動のbounded
+runner）をoperator決定済みとした上で、operatorが「無人ライブ実行のスケジューラ配線を実装して」と
+明示依頼し、その範囲について「タイマー機構のみを実装し、実Keychain credential／実通知transportを
+構築する『最後の1ミリ』はoperator自身が別途書く前提とする」ことを選択した場合に限り、以下を
+実装してよい。design doc §12.5がbounded runner CLIについて確立した境界（credential_pair/client
+はrequired・no-defaultで、このCLI自身はそれらを構築しない）を、スケジューラ層でも同じ厳格さで
+継続する。
+
+### この例外で限定的に許可すること
+
+- G012 monitor LaunchAgent（`v4_gmo_launchd.py`）と構造的に対をなす、しかし別labelの新規
+  LaunchAgent render/install関数を実装する。既存のmonitor LaunchAgentは変更しない。
+  新LaunchAgentは`KeepAlive=false`かつ`StartInterval`（非常駐・都度起動、Option Bの形状）を
+  使い、`RunAtLoad`/`KeepAlive=true`による常駐は一切設定しない。
+- 新LaunchAgentが起動するのは、bounded runner CLI（`h11_auto_v4_unattended_live_bounded_run.py`）
+  を直接ではなく、operator向けのlauncherスクリプト経由とする（同CLIは実行可能`__main__`を
+  持たない設計のため）。
+- design doc §13が「future work, not this slice」として先送りしたPublic-only・credential-free
+  な entry-gate provider（`market_open`と ticker status の両方を実際にPublic GETし、既存の
+  `derive_unattended_entry_gate_blocked_reasons`へ渡す、fetch失敗は`ENTRY_GATE_QUOTE_UNAVAILABLE`
+  へ収斂させ例外を投げない関数）を実装する。credential・Private API・broker writeは一切含まない。
+- operator向けlauncherスクリプト（テンプレート）を実装する。`prepare_g013_canary_session`・
+  risk/dead-man/heartbeat-chainの3 store・上記entry-gate providerは実際に構築する。
+  ただし`credential_pair`（実Keychain）・`client`（実httpx）・`notification_primary`/
+  `notification_secondary`（実Pushover/SMTP transport）の構築は、明示的にコメントで区切られた
+  placeholderとし、未実装のまま実行されると固定safe labelで即座に停止する（bounded runner CLI
+  自身の「直接実行を拒否し理由を説明する」既存パターンを踏襲）。independent reviewの指摘
+  （2026-07-25 再検証）により、heartbeat-chain policy定数（`maximum_gap_seconds`／
+  `minimum_continuous_seconds`）も同じ扱いのplaceholderへ一時的に追加した — この値は
+  `confirm_v4_unattended_authorization_once`の6条件の1つに直結する money-affecting な値であり、
+  「continuityの設定だから再凍結不要」という当初の判断は誤りだったため。operatorは同日
+  （2026-07-25）に提案値（60秒/300秒）をレビューし明示的に確認したため、このplaceholderは
+  実装済みのコードへ確定した。残る3区画（credential_pair・client・notification transport）は
+  引き続きplaceholderのままであり、Claude/Codexは実クレデンシャルの構築だけでなく、実
+  Pushover/SMTP transportの実装自体もこのtrackの標準方針として対象外とする
+  （`h11_v4_unattended_live_entry_notification.py`のmodule docstringに既存の明文）。operatorが
+  これら3区画をすべて自分で埋めない限り、このlauncherは実クレデンシャルも実permit issuanceも
+  実通知送信も一切行わない。
+- 上記のinstall関数を呼び出すinstaller script（`h11_auto_v4_install_monitor_launchagent.py`と
+  対称の構造）を実装する。ただし、このinstaller scriptを実際に実行して本物のLaunchAgentを
+  system上へinstall・bootstrapするのはoperator自身の操作とし、この例外下ではコードの実装と
+  fake-only testに限る。
+- fake-only test（render/install・entry-gate provider・launcherのplaceholder-raises挙動）、
+  既存のimport-graph isolation testパターン（credential/transport/scheduler tokenの danger scan
+  含む）、AGENTS.md本体の必要最小限更新。
+
+### この例外でも禁止し続けること
+
+- 実Keychain credential、実httpx client、実Pushover/SMTP transportの構築。launcherの
+  placeholder区画はoperator専用であり、Claude/Codexはこの区画にダミーであっても実装コードを
+  書かない。
+- 実際に`launchctl bootstrap`/installを実行してsystem上へLaunchAgentを配置すること。
+  コードの実装・fake-only testまでとし、実installはoperator自身が行う。
+- 常駐（`KeepAlive=true`・resident daemon）としてのLaunchAgent設定。
+- G012/G013コード、既存unattended-track moduleの変更（新規追加のみ許可、既存関数は変更しない）。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+  スケジューラが実際にentryを発生させるには、operator自身がlauncherのplaceholder区画を埋め、
+  installer scriptを自分で実行する、別途の明示的な操作が必要である。
+
+## H-11 v4 notification decision層の結線 実装限定例外（fake-only・実transport構築なし）
+
+design doc §15の設計をoperatorが実装承認した場合に限り、以下2ファイルへの変更を
+許可する。これは`h11_v4_unattended_live_orchestration.py`への2回目の変更、
+`h11_auto_v4_unattended_live_bounded_run.py`への4回目の変更であり、これを明示的に
+認める。
+
+### この例外で限定的に許可すること
+
+- `h11_v4_unattended_live_orchestration.py`の`run_unattended_live_entry_cycle_once`
+  の`notification_ready: bool`引数を、`notification_primary:
+  H11V4PushoverTransport`／`notification_secondary: H11V4EmailTransport`
+  （両方必須・default一切なし）に置き換える。既存のcredential_pair/client
+  ガードの直後に、`unattended_live_notification_channel_ready`で
+  `notification_ready`を算出するステップを追加し、既存の
+  `confirm_v4_unattended_authorization_once`呼び出しへ渡す（この呼び出し自体の
+  引数順序・ロジックは変更しない）。proof発行成功後、driverを呼ぶ**前**に、
+  `H11V4EnabledDualRouteNotifier(primary=notification_primary,
+  secondary=notification_secondary).notify_once(H11V4NotificationEvent
+  .UNATTENDED_LIVE_ENTRY_ATTEMPTED)`を1回だけ呼び、`halt_required`が真なら
+  新設のfixed labelで例外を送出しdriverを呼ばない。それ以外のロジック
+  （guard・proof constructor呼び出し・driver呼び出し）は変更しない。
+- `h11_auto_v4_unattended_live_bounded_run.py`の`main`／`_run_one_cycle`の
+  `notification_ready: bool`引数を、同じ`notification_primary`/
+  `notification_secondary`（必須・default一切なし）に置き換え、毎cycle
+  orchestrationへそのまま渡す（providerパターンにはしない）。新設の
+  通知送信失敗labelを、既存の`_INTEGRITY_ABORT_LABELS`に追加する
+  （retryせずrunを中断する）。
+- 上記2ファイルの変更に伴う、既存test
+  （`test_v4_unattended_live_orchestration_fake_only.py`／
+  `test_v4_unattended_live_bounded_run_fake_only.py`）の必要最小限の更新
+  （引数変更に伴うfixture/呼び出し箇所の更新、新規test追加）。
+- orchestration moduleが`H11V4EnabledDualRouteNotifier`／
+  `unattended_live_notification_channel_ready`を呼び出すようになることで
+  必然的に失敗する既存test
+  `test_v4_unattended_live_entry_notification_fake_only.py`の
+  「呼び出し元ゼロ」assertion 1件のみを、「唯一の承認済み呼び出し元＝
+  orchestration module、それ以外ゼロ」のallowlist形式へ更新する。
+  上記3ファイル以外のtestの変更は不可。
+- fake-only test（fake/real-shaped transport doubleを使用。実transport・
+  実credential・network accessは一切含まない）を追加する。
+- design doc・AGENTS.mdの必要最小限更新（実装状況の記録）。
+
+### この例外でも禁止し続けること
+
+- 上記2ファイル以外の既存ファイル（G012/G013コード・
+  `H11V4DisabledDualRouteNotifier`・`H11V4EnabledDualRouteNotifier`の
+  decision logic本体・proof constructor本体）の変更。
+- 実transport実装、実credential読み出し、実Pushover/SMTP送信。
+- scheduler、cron、LaunchAgent、launchd、resident processの追加。
+- 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。

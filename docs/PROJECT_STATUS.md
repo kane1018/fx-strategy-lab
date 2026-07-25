@@ -7,6 +7,59 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0AI. H-11 v4 unattended liveスケジューラ配線（タイマー機構のみ・2026-07-25・no-POST）
+
+- operatorは「無人ライブ実行のスケジューラ配線を実装して」と依頼し、範囲を「タイマー機構のみ
+  実装し、実Keychain credential／実通知transport構築の最後の1ミリはoperator自身が別途書く」
+  ことに明示的に限定した（既存のClaude/Codex＝実credential代行しないという方針、および
+  design doc §12.5の確立済み境界に沿う）。
+- 新規4ファイル: 非常駐`StartInterval`のみの新規LaunchAgent render/install
+  （`v4_gmo_unattended_scheduler_launchd.py`）、design doc §13が先送りしていたPublic-only・
+  credential-freeなentry-gate provider、operator向けlauncherテンプレート
+  （`h11_auto_v4_unattended_live_scheduled_launcher.py`）、対称構造のinstaller script。
+  26テスト追加、h11_auto 906件パス。
+- 独立レビュー(Safety PASS／Architecture VETO→修正→PASS／Operations PASS)で、
+  (1) launcherの予約ロックファイル名が既存の対話式G013/G014経路と異なり、実行時に
+  risk.json/dead-man.jsonが競合破損しうる欠陥、(2) heartbeat-chain policy定数が
+  「再凍結不要」と誤って主張されていたが実際は`confirm_v4_unattended_authorization_once`の
+  6条件の1つに直結するmoney-affecting値だった欠陥、の2件(共にHigh)を検出・修正。
+  launcherのplaceholder区画を3から4つ（heartbeat-chain policy確認を追加）へ拡張。
+  詳細: [design doc §12.6](H11_V4_UNATTENDED_LIVE_ADAPTER_DESIGN_20260724.md)。
+- このstepだけではスケジューラは実行不能のまま: LaunchAgentをinstallしても、実tickは
+  4つのplaceholderのいずれかで即座に停止し、実credential・実broker POST・実通知は
+  一切発生しない。operatorが4区画すべてを自分で埋めない限りentryは発生しない。
+- 追記(同日): operatorがheartbeat-chain policy提案値(60秒/300秒)をレビューし明示確認したため、
+  PLACEHOLDER 0は実装済みコードへ確定（残り3区画: credential_pair・client・notification
+  transport）。operatorは別途、残り3区画の実装をClaudeが代行するよう依頼したが、実クレデンシャル
+  構築・実Pushover/SMTP transport実装・LaunchAgentの実installはClaude自身の行動指針上の一線であり
+  （プロジェクトの過去記録ではなくClaude自身の制約のため）、承認の有無に関わらず対応不可と回答。
+  ①③(placeholder確認・実装以外の部分)とdigest計算のみ実施し、②③とinstallは手順書として
+  operatorへ提供する方針。h11_auto 911件パス。
+- 追記(同日): 実通知transport(`H11V4ActualPushoverTransport`/`H11V4ActualEmailTransport`)を
+  外部AI/エンジニアが依頼書通りに実装(commit `2984f03`)。独立レビュー2本とも初回VETO
+  （例外チェインが生レスポンスを漏らす欠陥、credential/client引数なし構築可能な欠陥 —
+  後者は私自身の仕様書サンプルコードの誤りが原因）→修正→両PASS。h11_auto 929件パス。
+  operator自身がPLACEHOLDER 3をこの実装で配線し、4区画すべてが実装済みコードとなった
+  （commit予定）。LaunchAgentの実installはClaude自身の行動指針上の一線として引き続き対応せず、
+  operator自身のターミナルでの実行が必要。この時点でLaunchAgentがinstallされれば、
+  スケジューラは実際に発注・実通知を行いうる状態になる。
+
+## 0AH. H-11 v4 G014 sequential entries-per-day改定 1→20（2026-07-25・no-POST・operator指示）
+
+- operatorは「本番を完成させたい」との明示指示で、`maximum_entries_per_day`を1から20へ改定。
+  同時ポジションは引き続き最大1（sequential re-entryのみ、同時複数保有ではない）。
+- 予算（5,000/10,000/50,000円・5連敗）、exit/friday/weekend profile、broker POST禁止、その他の
+  安全条件は不変。世代labelを`H11_AUTO_30M_20260725_G014`へ改め、protection/policy/risk/
+  implementation digestを新値で再凍結。AGENTS.mdへG014例外セクションを追加済み。
+- `reserve_entry_cycle`の予約guardを「未決済ポジションが1つもない」ことだけを見るよう単純化し、
+  暦日ベースの重複制約は撤廃（1日上限は`PhaseBRiskPolicy.entries_today`が独立担保）。上限到達等の
+  予約後・実発注前の棄却でreservationが永久に詰まらないよう`release_unattempted_reservation`
+  （真のincidentでは解放しない）を追加。
+- 独立レビュー2本（Safety／Architecture+Operations）を実施し、両VETOの指摘（上記の詰まりリスク・
+  G013ラベル決め打ちによるG014での機能不全）を修正。再検証でG013ラベル決め打ちがもう1箇所
+  （`h11_v4_gmo_signal_preview.py`、no-POST previewのみ・money/order経路なし）残っているのを検出し、
+  同様に修正。h11_auto 881件・full backend 8,475件パス、両レビューPASS。
+
 ## 0AG. H-11 v4 G013 数量改定 10,000→1,000通貨（2026-07-17・no-POST・operator指示）
 
 - operatorは初回actual canaryの数量を10,000通貨から**1,000通貨**へ改定した（証拠金所要と
