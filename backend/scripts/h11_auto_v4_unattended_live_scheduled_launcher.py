@@ -53,9 +53,14 @@ confusingly, refuse to match your edited file forever.
 from __future__ import annotations
 
 import argparse
+import httpx
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+
+_ROOT_PATH = Path(__file__).resolve().parents[1]
+if str(_ROOT_PATH) not in sys.path:
+    sys.path.insert(0, str(_ROOT_PATH))
 
 from app.h11_auto.persistence import H11AutoProcessLock
 from app.h11_auto.runtime_safety import DeadManStore, PhaseBRiskStore
@@ -209,12 +214,13 @@ def main(argv: list[str]) -> int:
         # deliberately withheld from every automated component in this
         # track. Writing it here is your explicit decision to connect this
         # scheduler to your real GMO Coin account -- not this launcher's.
-        credential_pair = _require_operator_configuration("PLACEHOLDER_1_CREDENTIAL_PAIR")
+        from app.services.h11_v4_gmo_actual_transport import V4GmoKeychainCredentialPair
+        credential_pair = V4GmoKeychainCredentialPair()
 
         # ================= PLACEHOLDER 2 of 3: real HTTP client =================
         # Replace the next statement with, e.g.:
         #     client = httpx.Client(timeout=5.0)
-        client = _require_operator_configuration("PLACEHOLDER_2_HTTP_CLIENT")
+        client = httpx.Client(timeout=5.0)
 
         # ================= PLACEHOLDER 3 of 3: real notification transports =================
         # No real (non-fake) Pushover/email transport class exists anywhere
