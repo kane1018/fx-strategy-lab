@@ -150,16 +150,23 @@ def _patch_up_to_placeholders(monkeypatch, tmp_path: Path) -> None:
     )
 
 
-def test_placeholder_0_heartbeat_policy_raises_before_placeholder_1_2_3(
+def test_heartbeat_chain_policy_is_live_code_then_placeholder_1_raises(
     monkeypatch, tmp_path: Path
 ) -> None:
+    # PLACEHOLDER 0 (heartbeat-chain policy) is now operator-confirmed live
+    # code, not a raise -- this proves it actually constructs a real
+    # V4HeartbeatChainStore (no mock for it here) and execution reaches
+    # PLACEHOLDER 1 (credential pair), which still raises since it remains
+    # unfilled.
     repository = _repository(tmp_path)
     generation_digest = "sha256:" + "b" * 64
     reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
+    state_root = tmp_path / "state"
+    monkeypatch.setattr(launcher, "v4_gmo_runtime_state_root", lambda **_kw: state_root)
     _patch_up_to_placeholders(monkeypatch, tmp_path)
     with pytest.raises(
         launcher.V4UnattendedSchedulerLauncherError,
-        match="PLACEHOLDER_0_HEARTBEAT_CHAIN_POLICY_NOT_CONFIGURED",
+        match="PLACEHOLDER_1_CREDENTIAL_PAIR_NOT_CONFIGURED",
     ):
         launcher.main(
             _argv_matching(
@@ -168,6 +175,42 @@ def test_placeholder_0_heartbeat_policy_raises_before_placeholder_1_2_3(
                 generation_digest=generation_digest,
             )
         )
+
+
+def test_heartbeat_chain_store_uses_the_confirmed_policy_values(
+    monkeypatch, tmp_path: Path
+) -> None:
+    repository = _repository(tmp_path)
+    generation_digest = "sha256:" + "b" * 64
+    reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
+    state_root = tmp_path / "state"
+    monkeypatch.setattr(launcher, "v4_gmo_runtime_state_root", lambda **_kw: state_root)
+    _patch_up_to_placeholders(monkeypatch, tmp_path)
+    captured: dict[str, object] = {}
+    real_store = launcher.V4HeartbeatChainStore
+
+    def spy_store(path, *, policy):
+        captured["path"] = path
+        captured["policy"] = policy
+        return real_store(path, policy=policy)
+
+    monkeypatch.setattr(launcher, "V4HeartbeatChainStore", spy_store)
+    with pytest.raises(launcher.V4UnattendedSchedulerLauncherError):
+        launcher.main(
+            _argv_matching(
+                repository,
+                reviewed_digest=reviewed_digest,
+                generation_digest=generation_digest,
+            )
+        )
+    policy = captured["policy"]
+    assert policy.policy_label == launcher._HEARTBEAT_CHAIN_POLICY_LABEL
+    assert policy.maximum_gap_seconds == launcher._HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS
+    assert (
+        policy.minimum_continuous_seconds
+        == launcher._HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS
+    )
+    assert captured["path"] == state_root / "unattended-heartbeat-chain.json"
 
 
 def test_lock_is_released_after_a_placeholder_raise(monkeypatch, tmp_path: Path) -> None:

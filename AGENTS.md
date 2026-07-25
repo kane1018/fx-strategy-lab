@@ -1126,16 +1126,22 @@ runner）をoperator決定済みとした上で、operatorが「無人ライブ�
   `derive_unattended_entry_gate_blocked_reasons`へ渡す、fetch失敗は`ENTRY_GATE_QUOTE_UNAVAILABLE`
   へ収斂させ例外を投げない関数）を実装する。credential・Private API・broker writeは一切含まない。
 - operator向けlauncherスクリプト（テンプレート）を実装する。`prepare_g013_canary_session`・
-  risk/dead-manの2 store・上記entry-gate providerは実際に構築する。
+  risk/dead-man/heartbeat-chainの3 store・上記entry-gate providerは実際に構築する。
   ただし`credential_pair`（実Keychain）・`client`（実httpx）・`notification_primary`/
   `notification_secondary`（実Pushover/SMTP transport）の構築は、明示的にコメントで区切られた
   placeholderとし、未実装のまま実行されると固定safe labelで即座に停止する（bounded runner CLI
   自身の「直接実行を拒否し理由を説明する」既存パターンを踏襲）。independent reviewの指摘
   （2026-07-25 再検証）により、heartbeat-chain policy定数（`maximum_gap_seconds`／
-  `minimum_continuous_seconds`）も同じ扱いのplaceholderへ追加した — この値は
+  `minimum_continuous_seconds`）も同じ扱いのplaceholderへ一時的に追加した — この値は
   `confirm_v4_unattended_authorization_once`の6条件の1つに直結する money-affecting な値であり、
-  「continuityの設定だから再凍結不要」という当初の判断は誤りだったため。operatorがこれら4区画を
-  すべて自分で埋めない限り、このlauncherは実クレデンシャルも実permit issuanceも一切行わない。
+  「continuityの設定だから再凍結不要」という当初の判断は誤りだったため。operatorは同日
+  （2026-07-25）に提案値（60秒/300秒）をレビューし明示的に確認したため、このplaceholderは
+  実装済みのコードへ確定した。残る3区画（credential_pair・client・notification transport）は
+  引き続きplaceholderのままであり、Claude/Codexは実クレデンシャルの構築だけでなく、実
+  Pushover/SMTP transportの実装自体もこのtrackの標準方針として対象外とする
+  （`h11_v4_unattended_live_entry_notification.py`のmodule docstringに既存の明文）。operatorが
+  これら3区画をすべて自分で埋めない限り、このlauncherは実クレデンシャルも実permit issuanceも
+  実通知送信も一切行わない。
 - 上記のinstall関数を呼び出すinstaller script（`h11_auto_v4_install_monitor_launchagent.py`と
   対称の構造）を実装する。ただし、このinstaller scriptを実際に実行して本物のLaunchAgentを
   system上へinstall・bootstrapするのはoperator自身の操作とし、この例外下ではコードの実装と

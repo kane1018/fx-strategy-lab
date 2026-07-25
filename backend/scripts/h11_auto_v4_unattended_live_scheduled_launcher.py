@@ -12,26 +12,29 @@ each scheduled tick.
 Everything up to the marked PLACEHOLDER sections below is real, working
 code: it re-verifies the reviewed-files/generation digests baked into the
 plist at install time, prepares a fresh G013 session, and builds the risk/
-dead-man stores and the Public-only, credential-free entry-gate provider.
-There are FOUR PLACEHOLDER sections, not three -- independent review traced
-the heartbeat-chain policy constants (PLACEHOLDER 0) directly into
-``confirm_v4_unattended_authorization_once``'s six-condition permit-issuance
-check, so despite being a "continuity" setting rather than a yen amount, it
-IS money-affecting and gets the same explicit-confirmation treatment as
-PLACEHOLDERs 1-3 (real Keychain credential pair, real HTTP client, real
-Pushover/email transports). All four are intentionally left unimplemented
-and RAISE with a clear message if reached. This is a deliberate project
-boundary (AGENTS.md "H-11 v4 unattended liveスケジューラ配線 実装限定例外"),
-not an oversight: connecting this scheduler to a real broker account, and
-confirming the values that gate its permit issuance, are decisions only the
-operator makes, in code the operator writes themselves, in this exact file.
+dead-man/heartbeat-chain stores and the Public-only, credential-free
+entry-gate provider. Operator confirmed the heartbeat-chain policy
+constants (2026-07-25, the suggested 60s/300s values -- see the
+module-level comment above ``_HEARTBEAT_CHAIN_POLICY_LABEL``), so that
+placeholder is now live code, not a raise.
 
-To activate: edit all FOUR PLACEHOLDER blocks below, following the
-instructions in each -- filling in only some still leaves the rest raising,
-so there is no path to a real cycle attempt with any of them unfilled. Do
-not remove the digest re-verification, the "not yet" handling, or anything
-above the placeholders -- those are the reviewed safety boundary, not
-scaffolding.
+THREE PLACEHOLDER sections remain: real Keychain credential pair, real
+HTTP client, real Pushover/email transports. All three are intentionally
+left unimplemented and RAISE with a clear message if reached. This is a
+deliberate project boundary (AGENTS.md "H-11 v4 unattended liveスケジューラ
+配線 実装限定例外"; also independently documented in
+``h11_v4_unattended_live_entry_notification.py``'s own module docstring
+for the notification-transport half specifically), not an oversight:
+connecting this scheduler to a real broker account, and to real
+notification transports, are decisions only the operator makes, in code
+the operator writes themselves, in this exact file.
+
+To activate: edit all THREE remaining PLACEHOLDER blocks below, following
+the instructions in each -- filling in only some still leaves the rest
+raising, so there is no path to a real cycle attempt with any of them
+unfilled. Do not remove the digest re-verification, the "not yet" handling,
+or anything above the placeholders -- those are the reviewed safety
+boundary, not scaffolding.
 
 Editing this file changes its own reviewed-files digest (it is itself
 REVIEWED_FILES-listed), which changes ``implementation_digest``. After
@@ -68,23 +71,24 @@ from app.services.h11_v4_gmo_g013_canary import prepare_g013_canary_session
 from app.services.h11_v4_unattended_live_entry_gate_provider import (
     unattended_live_entry_gate_provider,
 )
+from app.services.h11_v4_unattended_live_heartbeat_chain import (
+    V4HeartbeatChainPolicy,
+    V4HeartbeatChainStore,
+)
 from scripts import h11_auto_v4_unattended_live_bounded_run as bounded_run
 
 # Heartbeat-chain continuity thresholds for this scheduler specifically --
 # NOT part of the frozen generation contract (no operator-approved constant
-# exists for this anywhere in the codebase yet). Independent review traced
-# these directly into confirm_v4_unattended_authorization_once's six-condition
-# permit-issuance check (heartbeat_chain_store.assess(...) is one of the six),
-# so despite governing "continuity" rather than yen amounts, this IS
-# money-affecting and does need explicit operator sign-off before real use --
-# an earlier version of this comment incorrectly claimed otherwise. The
-# suggested values below are precedent-matched, not operator-approved:
+# existed for this anywhere in the codebase before this track). Independent
+# review traced these directly into
+# confirm_v4_unattended_authorization_once's six-condition permit-issuance
+# check (heartbeat_chain_store.assess(...) is one of the six), so despite
+# governing "continuity" rather than yen amounts, this IS money-affecting --
+# an earlier version of this comment incorrectly claimed it wasn't. Operator
+# reviewed and explicitly confirmed these suggested values (2026-07-25):
 # maximum_gap mirrors the already-approved dead-man maximum_heartbeat_age_seconds
 # (60s); minimum_continuous matches a value already used in this track's own
-# orchestration TEST fixtures (300s, explicitly labeled test-only there) --
-# neither has been reviewed by the operator for this real, if still
-# placeholder-gated, use. Treated as PLACEHOLDER 0 below: raises until the
-# operator explicitly confirms (or changes) these two numbers themselves.
+# orchestration TEST fixtures (300s, explicitly labeled test-only there).
 _HEARTBEAT_CHAIN_POLICY_LABEL = "H11_V4_UNATTENDED_SCHEDULER_CHAIN_V1"
 _HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS = 60
 _HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS = 300
@@ -181,33 +185,21 @@ def main(argv: list[str]) -> int:
             state_root / "dead-man.json", policy=v4_gmo_dead_man_policy()
         )
 
-        # ========= PLACEHOLDER 0 of 4: heartbeat-chain policy confirmation =========
-        # heartbeat_chain_store.assess(...) is one of the six conditions
-        # confirm_v4_unattended_authorization_once checks before minting a
-        # real permit -- this IS money-affecting, despite governing
-        # "continuity" rather than a yen amount, and has no operator-approved
-        # value anywhere in this codebase yet (see the module-level comment
-        # above _HEARTBEAT_CHAIN_POLICY_LABEL for the suggested values and
-        # their precedent). Review those two numbers, then replace this
-        # statement with the policy construction below (as-is if you accept
-        # the suggested values, or with your own numbers):
-        #     from app.services.h11_v4_unattended_live_heartbeat_chain import (
-        #         V4HeartbeatChainPolicy,
-        #         V4HeartbeatChainStore,
-        #     )
-        #     heartbeat_chain_store = V4HeartbeatChainStore(
-        #         state_root / "unattended-heartbeat-chain.json",
-        #         policy=V4HeartbeatChainPolicy(
-        #             policy_label=_HEARTBEAT_CHAIN_POLICY_LABEL,
-        #             maximum_gap_seconds=_HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS,
-        #             minimum_continuous_seconds=_HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS,
-        #         ),
-        #     )
-        heartbeat_chain_store = _require_operator_configuration(
-            "PLACEHOLDER_0_HEARTBEAT_CHAIN_POLICY"
+        # PLACEHOLDER 0 (heartbeat-chain policy confirmation) -- operator
+        # reviewed and confirmed the suggested values (2026-07-25): 60s/300s,
+        # matching the approved dead-man maximum_heartbeat_age_seconds and
+        # this track's own orchestration test precedent respectively (see
+        # the module-level comment above _HEARTBEAT_CHAIN_POLICY_LABEL).
+        heartbeat_chain_store = V4HeartbeatChainStore(
+            state_root / "unattended-heartbeat-chain.json",
+            policy=V4HeartbeatChainPolicy(
+                policy_label=_HEARTBEAT_CHAIN_POLICY_LABEL,
+                maximum_gap_seconds=_HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS,
+                minimum_continuous_seconds=_HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS,
+            ),
         )
 
-        # ================= PLACEHOLDER 1 of 4: real broker credential =================
+        # ================= PLACEHOLDER 1 of 3: real broker credential =================
         # Replace the next statement with, e.g.:
         #     from app.services.h11_v4_gmo_actual_transport import (
         #         V4GmoKeychainCredentialPair,
@@ -219,12 +211,12 @@ def main(argv: list[str]) -> int:
         # scheduler to your real GMO Coin account -- not this launcher's.
         credential_pair = _require_operator_configuration("PLACEHOLDER_1_CREDENTIAL_PAIR")
 
-        # ================= PLACEHOLDER 2 of 4: real HTTP client =================
+        # ================= PLACEHOLDER 2 of 3: real HTTP client =================
         # Replace the next statement with, e.g.:
         #     client = httpx.Client(timeout=5.0)
         client = _require_operator_configuration("PLACEHOLDER_2_HTTP_CLIENT")
 
-        # ================= PLACEHOLDER 3 of 4: real notification transports =================
+        # ================= PLACEHOLDER 3 of 3: real notification transports =================
         # No real (non-fake) Pushover/email transport class exists anywhere
         # in this repository yet -- only H11V4FakePushoverTransport/
         # H11V4FakeEmailTransport (app/services/h11_v4_notification_binding_no_post.py)
