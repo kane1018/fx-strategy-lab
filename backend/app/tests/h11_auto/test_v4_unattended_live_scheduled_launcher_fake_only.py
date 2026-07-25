@@ -1,9 +1,15 @@
 """Fake-only tests for the operator-facing scheduled-launcher template.
 
-Everything up to the PLACEHOLDER sections is real code and is exercised for
-real here (digest re-verification, session-prep "not yet" handling, the
-process lock). The PLACEHOLDER sections themselves are never filled in by
-these tests -- proving they still raise, in order, is the point.
+All four PLACEHOLDER sections are now operator-confirmed live code
+(2026-07-25): heartbeat-chain policy, real credential pair, real HTTP
+client, real notification transports. Constructing
+``V4GmoKeychainCredentialPair()``/``httpx.Client()``/the real transport
+classes here touches no real Keychain item, network socket, or provider API
+(all are lazy until actually used), so these tests exercise the real
+construction rather than mocking it -- but ``bounded_run.main`` (the point
+where those objects would actually be used for a real network/credential
+operation) is always mocked, so no test here can perform a real broker or
+notification action.
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.services.h11_v4_gmo_actual_transport import V4GmoKeychainCredentialPair
 from scripts import h11_auto_v4_unattended_live_scheduled_launcher as launcher
 
 
@@ -130,7 +137,9 @@ def test_session_not_yet_is_routine_and_returns_zero(
     assert "ENTRY_TIME_BLOCKED" in output
 
 
-def _patch_up_to_placeholders(monkeypatch, tmp_path: Path) -> None:
+def _patch_up_to_bounded_run(
+    monkeypatch, tmp_path: Path, *, bounded_run_main
+) -> None:
     monkeypatch.setattr(
         launcher, "prepare_g013_canary_session", lambda **_kw: SimpleNamespace()
     )
@@ -142,44 +151,55 @@ def _patch_up_to_placeholders(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         launcher,
         "bounded_run",
-        SimpleNamespace(
-            main=lambda *_a, **_kw: (_ for _ in ()).throw(
-                AssertionError("must not reach bounded_run.main -- placeholders unfilled")
-            )
-        ),
+        SimpleNamespace(main=bounded_run_main),
     )
 
 
-def test_placeholders_0_1_2_are_live_code_then_placeholder_3_raises(
+def test_all_placeholders_are_live_code_and_reach_bounded_run_main(
     monkeypatch, tmp_path: Path
 ) -> None:
-    # Operator confirmed PLACEHOLDER 0 (heartbeat-chain policy, 2026-07-25)
-    # and filled in PLACEHOLDER 1/2 (real credential pair, real HTTP client,
-    # same date) themselves -- all three are now live code, not raises.
-    # Constructing V4GmoKeychainCredentialPair()/httpx.Client() here touches
-    # no real Keychain item or network socket (both are lazy), so this is
-    # safe to exercise for real rather than mock. Execution now reaches
-    # PLACEHOLDER 3 (notification transports), which still raises since it
-    # remains unfilled in this file (a real, tested transport implementation
-    # exists in h11_v4_notification_actual_transport.py, but has not yet
-    # been wired into this launcher's PLACEHOLDER 3).
+    # All four PLACEHOLDER sections are now operator-confirmed live code
+    # (2026-07-25): heartbeat-chain policy, real credential pair, real HTTP
+    # client, real notification transports. Constructing
+    # V4GmoKeychainCredentialPair()/httpx.Client()/the real transport
+    # classes here touches no real Keychain item, network socket, or
+    # provider API (all are lazy until actually used), so this exercises
+    # the real construction rather than mocking it. Only bounded_run.main
+    # -- the point where those objects would actually be used for a real
+    # operation -- is mocked, here to capture what it was called with
+    # rather than to perform anything real.
     repository = _repository(tmp_path)
     generation_digest = "sha256:" + "b" * 64
     reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
-    state_root = tmp_path / "state"
-    monkeypatch.setattr(launcher, "v4_gmo_runtime_state_root", lambda **_kw: state_root)
-    _patch_up_to_placeholders(monkeypatch, tmp_path)
-    with pytest.raises(
-        launcher.V4UnattendedSchedulerLauncherError,
-        match="PLACEHOLDER_3_NOTIFICATION_PRIMARY_NOT_CONFIGURED",
-    ):
-        launcher.main(
-            _argv_matching(
-                repository,
-                reviewed_digest=reviewed_digest,
-                generation_digest=generation_digest,
-            )
+    captured: dict[str, object] = {}
+
+    def fake_bounded_run_main(*_argv, **kwargs):
+        captured.update(kwargs)
+        return 0
+
+    _patch_up_to_bounded_run(
+        monkeypatch, tmp_path, bounded_run_main=fake_bounded_run_main
+    )
+
+    exit_code = launcher.main(
+        _argv_matching(
+            repository,
+            reviewed_digest=reviewed_digest,
+            generation_digest=generation_digest,
         )
+    )
+
+    assert exit_code == 0
+    assert isinstance(captured["credential_pair"], V4GmoKeychainCredentialPair)
+    assert isinstance(captured["client"], launcher.httpx.Client)
+    assert isinstance(
+        captured["notification_primary"], launcher.H11V4ActualPushoverTransport
+    )
+    assert isinstance(
+        captured["notification_secondary"], launcher.H11V4ActualEmailTransport
+    )
+    assert captured["notification_primary"].fake_only is False
+    assert captured["notification_secondary"].fake_only is False
 
 
 def test_heartbeat_chain_store_uses_the_confirmed_policy_values(
@@ -190,7 +210,6 @@ def test_heartbeat_chain_store_uses_the_confirmed_policy_values(
     reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
     state_root = tmp_path / "state"
     monkeypatch.setattr(launcher, "v4_gmo_runtime_state_root", lambda **_kw: state_root)
-    _patch_up_to_placeholders(monkeypatch, tmp_path)
     captured: dict[str, object] = {}
     real_store = launcher.V4HeartbeatChainStore
 
@@ -200,14 +219,19 @@ def test_heartbeat_chain_store_uses_the_confirmed_policy_values(
         return real_store(path, policy=policy)
 
     monkeypatch.setattr(launcher, "V4HeartbeatChainStore", spy_store)
-    with pytest.raises(launcher.V4UnattendedSchedulerLauncherError):
-        launcher.main(
-            _argv_matching(
-                repository,
-                reviewed_digest=reviewed_digest,
-                generation_digest=generation_digest,
-            )
+    _patch_up_to_bounded_run(
+        monkeypatch, tmp_path, bounded_run_main=lambda *_a, **_kw: 0
+    )
+
+    exit_code = launcher.main(
+        _argv_matching(
+            repository,
+            reviewed_digest=reviewed_digest,
+            generation_digest=generation_digest,
         )
+    )
+
+    assert exit_code == 0
     policy = captured["policy"]
     assert policy.policy_label == launcher._HEARTBEAT_CHAIN_POLICY_LABEL
     assert policy.maximum_gap_seconds == launcher._HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS
@@ -218,18 +242,28 @@ def test_heartbeat_chain_store_uses_the_confirmed_policy_values(
     assert captured["path"] == state_root / "unattended-heartbeat-chain.json"
 
 
-def test_lock_is_released_after_a_placeholder_raise(monkeypatch, tmp_path: Path) -> None:
-    # The finally: lock.release() must run even when a placeholder raises
-    # partway through -- proven here by re-acquiring the SAME real lock file
-    # after main() raises, rather than only trusting the finally clause exists.
+def test_lock_is_released_after_bounded_run_raises(monkeypatch, tmp_path: Path) -> None:
+    # The finally: lock.release() must run even when the real cycle attempt
+    # itself fails downstream -- proven here by re-acquiring the SAME real
+    # lock file after main() propagates bounded_run.main's failure, rather
+    # than only trusting the finally clause exists. (Previously this test
+    # relied on a placeholder raising before bounded_run.main was ever
+    # reached; now that all four placeholders are live code, the failure is
+    # simulated at bounded_run.main itself instead.)
     repository = _repository(tmp_path)
     generation_digest = "sha256:" + "b" * 64
     reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
     state_root = tmp_path / "state"
     monkeypatch.setattr(launcher, "v4_gmo_runtime_state_root", lambda **_kw: state_root)
-    _patch_up_to_placeholders(monkeypatch, tmp_path)
 
-    with pytest.raises(launcher.V4UnattendedSchedulerLauncherError):
+    def failing_bounded_run_main(*_a, **_kw):
+        raise RuntimeError("simulated downstream cycle failure")
+
+    _patch_up_to_bounded_run(
+        monkeypatch, tmp_path, bounded_run_main=failing_bounded_run_main
+    )
+
+    with pytest.raises(RuntimeError, match="simulated downstream cycle failure"):
         launcher.main(
             _argv_matching(
                 repository,

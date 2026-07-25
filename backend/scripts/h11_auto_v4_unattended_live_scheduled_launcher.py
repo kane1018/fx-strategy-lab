@@ -52,11 +52,16 @@ confusingly, refuse to match your edited file forever.
 
 from __future__ import annotations
 
+# ruff: noqa: E402  -- imports below intentionally follow the sys.path
+# bootstrap: launchd invokes this script by absolute path (not `python -m`),
+# so `backend/` is not otherwise on sys.path and the `app.*` imports below
+# would fail to resolve without this.
 import argparse
-import httpx
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+
+import httpx
 
 _ROOT_PATH = Path(__file__).resolve().parents[1]
 if str(_ROOT_PATH) not in sys.path:
@@ -73,6 +78,13 @@ from app.h11_auto.v4_gmo_generation import (
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from app.services import h11_v4_gmo_g013_canary as canary_module
 from app.services.h11_v4_gmo_g013_canary import prepare_g013_canary_session
+from app.services.h11_v4_notification_actual_preparation import (
+    H11V4NotificationCredentialBundle,
+)
+from app.services.h11_v4_notification_actual_transport import (
+    H11V4ActualEmailTransport,
+    H11V4ActualPushoverTransport,
+)
 from app.services.h11_v4_unattended_live_entry_gate_provider import (
     unattended_live_entry_gate_provider,
 )
@@ -223,18 +235,12 @@ def main(argv: list[str]) -> int:
         client = httpx.Client(timeout=5.0)
 
         # ================= PLACEHOLDER 3 of 3: real notification transports =================
-        # No real (non-fake) Pushover/email transport class exists anywhere
-        # in this repository yet -- only H11V4FakePushoverTransport/
-        # H11V4FakeEmailTransport (app/services/h11_v4_notification_binding_no_post.py)
-        # exist today. You must implement a real transport satisfying the
-        # H11V4PushoverTransport/H11V4EmailTransport Protocols (real HTTP
-        # POST to Pushover's API; real SMTP send) and construct instances
-        # here, replacing both of the next two statements.
-        notification_primary = _require_operator_configuration(
-            "PLACEHOLDER_3_NOTIFICATION_PRIMARY"
+        notification_primary = H11V4ActualPushoverTransport(
+            credentials=H11V4NotificationCredentialBundle(),
+            client=httpx.Client(timeout=10.0),
         )
-        notification_secondary = _require_operator_configuration(
-            "PLACEHOLDER_3_NOTIFICATION_SECONDARY"
+        notification_secondary = H11V4ActualEmailTransport(
+            credentials=H11V4NotificationCredentialBundle(),
         )
 
         return bounded_run.main(

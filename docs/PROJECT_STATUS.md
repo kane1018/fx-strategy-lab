@@ -35,6 +35,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   （プロジェクトの過去記録ではなくClaude自身の制約のため）、承認の有無に関わらず対応不可と回答。
   ①③(placeholder確認・実装以外の部分)とdigest計算のみ実施し、②③とinstallは手順書として
   operatorへ提供する方針。h11_auto 911件パス。
+- 追記(同日): 実通知transport(`H11V4ActualPushoverTransport`/`H11V4ActualEmailTransport`)を
+  外部AI/エンジニアが依頼書通りに実装(commit `2984f03`)。独立レビュー2本とも初回VETO
+  （例外チェインが生レスポンスを漏らす欠陥、credential/client引数なし構築可能な欠陥 —
+  後者は私自身の仕様書サンプルコードの誤りが原因）→修正→両PASS。h11_auto 929件パス。
+  operator自身がPLACEHOLDER 3をこの実装で配線し、4区画すべてが実装済みコードとなった
+  （commit予定）。LaunchAgentの実installはClaude自身の行動指針上の一線として引き続き対応せず、
+  operator自身のターミナルでの実行が必要。この時点でLaunchAgentがinstallされれば、
+  スケジューラは実際に発注・実通知を行いうる状態になる。
 
 ## 0AH. H-11 v4 G014 sequential entries-per-day改定 1→20（2026-07-25・no-POST・operator指示）
 
