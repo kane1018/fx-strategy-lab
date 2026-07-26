@@ -88,7 +88,18 @@ def _valid_digests(monkeypatch, generation_digest: str) -> tuple[str, str]:
     monkeypatch.setattr(
         launcher,
         "load_v4_gmo_frozen_generation",
-        lambda **_kw: SimpleNamespace(digest=generation_digest),
+        lambda **_kw: SimpleNamespace(
+            digest=generation_digest,
+            live_ready=True,
+            unattended_live_supported=True,
+        ),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "V4UnattendedLiveArmStore",
+        lambda _path: SimpleNamespace(
+            check=lambda **_kw: SimpleNamespace(armed=True, blocked_reasons=())
+        ),
     )
     return reviewed_digest, generation_digest
 
@@ -102,6 +113,75 @@ def _argv_matching(repository: Path, *, reviewed_digest: str, generation_digest:
         "--expected-generation-digest",
         generation_digest,
     ]
+
+
+def test_disarmed_tick_stops_before_session_or_credentials(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    repository = _repository(tmp_path)
+    generation_digest = "sha256:" + "b" * 64
+    reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
+    monkeypatch.setattr(
+        launcher,
+        "V4UnattendedLiveArmStore",
+        lambda _path: SimpleNamespace(
+            check=lambda **_kw: SimpleNamespace(
+                armed=False, blocked_reasons=("OPERATOR_DISARMED",)
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "prepare_g013_canary_session",
+        lambda **_kw: (_ for _ in ()).throw(AssertionError("must not prepare session")),
+    )
+    assert (
+        launcher.main(
+            _argv_matching(
+                repository,
+                reviewed_digest=reviewed_digest,
+                generation_digest=generation_digest,
+            )
+        )
+        == 0
+    )
+    output = capsys.readouterr().out
+    assert "UNATTENDED_SCHEDULER_TICK_DISARMED" in output
+    assert "broker_write=false" in output
+    assert "actual_post_count=0" in output
+
+
+def test_uncommissioned_generation_stops_before_arm_or_session(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    repository = _repository(tmp_path)
+    digest = "sha256:" + "a" * 64
+    generation_digest = "sha256:" + "b" * 64
+    monkeypatch.setattr(launcher, "reviewed_files_digest", lambda **_kw: digest)
+    monkeypatch.setattr(
+        launcher,
+        "load_v4_gmo_frozen_generation",
+        lambda **_kw: SimpleNamespace(
+            digest=generation_digest,
+            live_ready=False,
+            unattended_live_supported=False,
+        ),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "V4UnattendedLiveArmStore",
+        lambda _path: (_ for _ in ()).throw(AssertionError("must not read arm")),
+    )
+    assert launcher.main(
+        _argv_matching(
+            repository,
+            reviewed_digest=digest,
+            generation_digest=generation_digest,
+        )
+    ) == 0
+    output = capsys.readouterr().out
+    assert "GENERATION_NOT_COMMISSIONED" in output
+    assert "broker_write=false" in output
 
 
 def test_session_not_yet_is_routine_and_returns_zero(

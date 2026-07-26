@@ -71,6 +71,7 @@ def test_explicit_none_credential_or_client_is_rejected_at_runtime(
             confirmation_proof=cast(canary_module.V4CurrentTurnConfirmationProof, object()),
             credential_pair=cast(V4GmoSealedCredentialPair, credential_pair),
             client=cast(httpx.Client, client),
+            before_market_transport=lambda: None,
         )
 
 
@@ -85,6 +86,7 @@ def test_explicit_none_client_alone_is_also_rejected_at_runtime() -> None:
             confirmation_proof=cast(canary_module.V4CurrentTurnConfirmationProof, object()),
             credential_pair=_fake_credential_pair(),
             client=cast(httpx.Client, None),
+            before_market_transport=lambda: None,
         )
 
 
@@ -111,6 +113,7 @@ def test_unattended_path_never_calls_the_phrase_confirmation_functions(
             confirmation_proof=cast(canary_module.V4CurrentTurnConfirmationProof, object()),
             credential_pair=_fake_credential_pair(),
             client=cast(httpx.Client, object()),
+            before_market_transport=lambda: None,
         )
     confirm_resume.assert_not_called()
     confirm_current.assert_not_called()
@@ -154,6 +157,7 @@ def test_unattended_path_reaches_the_same_shared_helper_as_the_phrase_path(
         confirmation_proof=cast(canary_module.V4CurrentTurnConfirmationProof, "proof-confirmation"),
         credential_pair=credential_pair,
         client=client,
+        before_market_transport=lambda: None,
     )
 
     assert len(calls) == 2
@@ -168,6 +172,7 @@ def test_unattended_path_reaches_the_same_shared_helper_as_the_phrase_path(
         "on_protected",
         "credential_pair",
         "client",
+        "before_market_transport",
     }
     assert phrase_call["resume"] == "phrase-resume"
     assert phrase_call["confirmation"] == "phrase-confirmation"
@@ -251,6 +256,7 @@ def test_unattended_path_passes_its_credential_and_client_through_to_bind_runtim
             confirmation_proof=cast(canary_module.V4CurrentTurnConfirmationProof, "confirmation"),
             credential_pair=credential_pair,
             client=client,
+        before_market_transport=lambda: None,
         )
     assert len(bind_calls) == 1
     assert bind_calls[0]["credential_pair"] is credential_pair
@@ -282,6 +288,7 @@ def test_unattended_path_still_consumes_session_once_and_refreshes_evidence(
             confirmation_proof=cast(canary_module.V4CurrentTurnConfirmationProof, object()),
             credential_pair=_fake_credential_pair(),
             client=cast(httpx.Client, object()),
+            before_market_transport=lambda: None,
         )
     assert order == ["consume", "require_binding", "refresh"]
 

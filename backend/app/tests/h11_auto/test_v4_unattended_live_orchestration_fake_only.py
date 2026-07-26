@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import inspect
-import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -32,15 +31,16 @@ from app.services.h11_v4_notification_binding_no_post import (
     H11V4PushoverRequest,
     H11V4PushoverTransport,
 )
-from app.services.h11_v4_unattended_live_authorization import (
-    V4_UNATTENDED_LIVE_AUTHORIZATION_SCHEMA,
+from app.services.h11_v4_unattended_live_arm_state import (
+    V4ArmDesiredState,
+    V4UnattendedLiveArmStore,
 )
 from app.services.h11_v4_unattended_live_heartbeat_chain import (
     V4HeartbeatChainPolicy,
     V4HeartbeatChainStore,
 )
 
-_UNATTENDED_EVENT = H11V4NotificationEvent.UNATTENDED_LIVE_ENTRY_ATTEMPTED
+_UNATTENDED_EVENT = H11V4NotificationEvent.UNATTENDED_LIVE_ENTRY_ATTEMPT_RESERVED
 
 
 # Test-only doubles satisfying the real transport protocol shape
@@ -105,7 +105,10 @@ def _intent() -> activation_module.V4GmoCanaryIntent:
 
 
 def _fake_session() -> SimpleNamespace:
-    return SimpleNamespace(intent=_intent())
+    return SimpleNamespace(
+        intent=_intent(),
+        generation=SimpleNamespace(implementation_digest="sha256:" + "e" * 64),
+    )
 
 
 def _fake_credential_pair() -> V4GmoSealedCredentialPair:
@@ -120,21 +123,20 @@ def _authorization_artifact(state_root: Path) -> None:
         state_root
         / "h11_v4_unattended_live"
         / f"generation-{'b' * 64}"
-        / "daily-authorization.json"
+        / "arm-state.json"
     )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(
-            {
-                "schema": V4_UNATTENDED_LIVE_AUTHORIZATION_SCHEMA,
-                "generation_digest": _GENERATION,
-                "trading_day_jst": "2026-07-24",
-                "maximum_entries": 1,
-                "operator_authorized": True,
-            },
-            sort_keys=True,
-        ),
-        encoding="utf-8",
+    store = V4UnattendedLiveArmStore(path)
+    if store.check(
+        expected_generation_digest=_GENERATION,
+        expected_reviewed_files_digest="sha256:" + "e" * 64,
+    ).revision:
+        return
+    store.set_desired_state(
+        desired_state=V4ArmDesiredState.ARMED,
+        expected_revision=0,
+        generation_digest=_GENERATION,
+        reviewed_files_digest="sha256:" + "e" * 64,
+        changed_at_utc=_NOW,
     )
 
 
@@ -261,6 +263,7 @@ def test_happy_path_runs_real_proof_constructor_then_hands_proofs_to_driver(
 
     def _fake_driver(**kwargs: object) -> str:
         driver_calls.append(kwargs)
+        cast(object, kwargs["before_market_transport"])()
         return "CANARY_RESULT"
 
     monkeypatch.setattr(
@@ -297,13 +300,13 @@ def test_happy_path_runs_real_proof_constructor_then_hands_proofs_to_driver(
     # exactly the unattended-live event.
     assert primary.calls == [_UNATTENDED_EVENT]
     assert secondary.calls == [_UNATTENDED_EVENT]
-    marker = (
+    arm_state = (
         tmp_path
         / "h11_v4_unattended_live"
         / f"generation-{'b' * 64}"
-        / "unattended-authorization-consumed-2026-07-24.json"
+        / "arm-state.json"
     )
-    assert marker.is_file()
+    assert arm_state.is_file()
 
 
 def test_blocked_condition_raises_and_driver_is_never_called(
@@ -359,6 +362,39 @@ def test_fake_notification_transports_block_via_the_channel_check(
     assert not marker.exists()
 
 
+def test_final_boundary_refuses_when_operator_turns_off_after_proof_mint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def driver(**kwargs: object) -> None:
+        arm_path = (
+            tmp_path
+            / "h11_v4_unattended_live"
+            / f"generation-{'b' * 64}"
+            / "arm-state.json"
+        )
+        V4UnattendedLiveArmStore(arm_path).set_desired_state(
+            desired_state=V4ArmDesiredState.DISARMED,
+            expected_revision=1,
+            generation_digest=_GENERATION,
+            reviewed_files_digest="sha256:" + "e" * 64,
+            changed_at_utc=_NOW,
+        )
+        callback = kwargs["before_market_transport"]
+        assert callable(callback)
+        callback()
+
+    monkeypatch.setattr(
+        subject,
+        "run_g013_actual_canary_after_unattended_authorization",
+        driver,
+    )
+    with pytest.raises(
+        subject.V4UnattendedLiveOrchestrationError,
+        match="UNATTENDED_ORCHESTRATION_FINAL_ARM_NOT_CLEAR",
+    ):
+        _run(tmp_path)
+
+
 def test_blocked_entry_gate_and_not_ready_notification_together_still_block(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -390,7 +426,7 @@ def test_blocked_entry_gate_and_not_ready_notification_together_still_block(
     assert not marker.exists()
 
 
-def test_failed_real_notification_send_aborts_before_the_driver_but_burns_the_day(
+def test_failed_real_notification_send_aborts_at_driver_market_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Real-shaped (fake_only=False) transports pass the cheap channel check,
@@ -399,7 +435,11 @@ def test_failed_real_notification_send_aborts_before_the_driver_but_burns_the_da
     # True, and this module raises before ever calling the driver. This is
     # the notification-specific instance of the general burn-the-day cost
     # (§10.3/§11.6/§15.1): a same-day retry is refused regardless.
-    driver = MagicMock()
+    def driver(**kwargs: object) -> None:
+        callback = kwargs["before_market_transport"]
+        assert callable(callback)
+        callback()
+
     monkeypatch.setattr(
         subject, "run_g013_actual_canary_after_unattended_authorization", driver
     )
@@ -408,17 +448,9 @@ def test_failed_real_notification_send_aborts_before_the_driver_but_burns_the_da
         match="UNATTENDED_ORCHESTRATION_NOTIFICATION_SEND_FAILED",
     ):
         _run(tmp_path, notification_primary=_real_pushover(accepted=False))
-    driver.assert_not_called()
-    marker = (
-        tmp_path
-        / "h11_v4_unattended_live"
-        / f"generation-{'b' * 64}"
-        / "unattended-authorization-consumed-2026-07-24.json"
-    )
-    assert marker.is_file()
 
 
-def test_notification_sent_after_authorization_consumed_but_before_driver_called(
+def test_notification_sent_inside_driver_at_final_market_boundary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     order: list[str] = []
@@ -431,8 +463,11 @@ def test_notification_sent_after_authorization_consumed_but_before_driver_called
             order.append("notify")
             return primary.send_once(request)
 
-    def _fake_driver(**_kwargs: object) -> str:
+    def _fake_driver(**kwargs: object) -> str:
         order.append("driver")
+        callback = kwargs["before_market_transport"]
+        assert callable(callback)
+        callback()
         return "CANARY_RESULT"
 
     monkeypatch.setattr(
@@ -442,20 +477,10 @@ def test_notification_sent_after_authorization_consumed_but_before_driver_called
         tmp_path,
         notification_primary=cast(H11V4PushoverTransport, _OrderTrackingPushover()),
     )
-    marker = (
-        tmp_path
-        / "h11_v4_unattended_live"
-        / f"generation-{'b' * 64}"
-        / "unattended-authorization-consumed-2026-07-24.json"
-    )
-    # Authorization consumption is a side effect of the proof constructor
-    # call, which necessarily happens before this order list starts (it
-    # doesn't append to `order`) -- what this test pins is notify-before-driver.
-    assert order == ["notify", "driver"]
-    assert marker.is_file()
+    assert order == ["driver", "notify"]
 
 
-def test_second_call_same_day_is_refused_before_the_driver(
+def test_second_call_same_day_is_allowed_while_persistent_arm_remains_clear(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     driver = MagicMock(return_value="CANARY_RESULT")
@@ -467,15 +492,11 @@ def test_second_call_same_day_is_refused_before_the_driver(
     stores = _healthy_stores(tmp_path)
     _run(tmp_path, stores=stores)
     assert driver.call_count == 1
-    with pytest.raises(
-        activation_module.V4GmoCanaryActivationError,
-        match="V4_CANARY_UNATTENDED_GATE_NOT_CLEAR",
-    ):
-        _run(tmp_path, stores=stores)
-    assert driver.call_count == 1
+    _run(tmp_path, stores=stores)
+    assert driver.call_count == 2
 
 
-def test_driver_failure_after_consumption_propagates_and_burns_the_day(
+def test_driver_failure_propagates_without_consuming_persistent_arm(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Pins the module's single most consequential documented behavior
@@ -495,19 +516,16 @@ def test_driver_failure_after_consumption_propagates_and_burns_the_day(
     with pytest.raises(_DriverBoundaryError, match="BROKER_REJECTED"):
         _run(tmp_path, stores=stores)
     assert driver.call_count == 1
-    marker = (
+    arm_state = (
         tmp_path
         / "h11_v4_unattended_live"
         / f"generation-{'b' * 64}"
-        / "unattended-authorization-consumed-2026-07-24.json"
+        / "arm-state.json"
     )
-    assert marker.is_file()
-    with pytest.raises(
-        activation_module.V4GmoCanaryActivationError,
-        match="V4_CANARY_UNATTENDED_GATE_NOT_CLEAR",
-    ):
+    assert arm_state.is_file()
+    with pytest.raises(_DriverBoundaryError, match="BROKER_REJECTED"):
         _run(tmp_path, stores=stores)
-    assert driver.call_count == 1
+    assert driver.call_count == 2
 
 
 def test_module_source_contains_no_exception_handlers_at_all() -> None:

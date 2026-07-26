@@ -85,7 +85,7 @@ def test_per_trade_bound_violation_kills_and_never_auto_resumes() -> None:
 
 
 def test_daily_loss_limit_binds_independently_of_the_raised_entries_per_day_cap() -> None:
-    # Operator decision 2026-07-25 raised maximum_entries_per_day from 1 to 20.
+    # Operator decision 2026-07-26 raised maximum_entries_per_day from 20 to 30.
     # This proves the daily loss limit still fails closed well before the
     # entries-per-day cap could ever bind on its own -- two losing trades at
     # the real per-trade bound exhaust the real daily limit at entry 2 of a
@@ -96,7 +96,7 @@ def test_daily_loss_limit_binds_independently_of_the_raised_entries_per_day_cap(
         daily_loss_limit_jpy=10_000,
         monthly_loss_limit_jpy=50_000,
         maximum_consecutive_losses=5,
-        maximum_entries_per_day=20,
+        maximum_entries_per_day=30,
     )
     state = PhaseBRiskState(policy_digest=policy.digest)
     stop = AutoRiskStopState.ACTIVE

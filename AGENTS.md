@@ -447,6 +447,18 @@ implementation digestを新値で再凍結した。
 - `docs/GMO_PUBLIC_API_PLAN.md`
 - `docs/PHASE2_SHADOW_TRADING_PLAN.md`
 
+## H-11 v4 G015 sequential entries-per-day改定（2026-07-26・no-POST・operator指示）
+
+G014の`maximum_entries_per_day=20`を30へ変更するoperator指示を受け、現行generationを
+`H11_AUTO_30M_20260726_G015`へ更新した。これは同時保有数を増やす変更ではなく、建玉がflatに
+なった後の逐次再entry上限だけを30へ変更するものである。同時保有数1、数量1,000通貨、
+`SHORT_V1`、30分、`USD_JPY`、MARKET、損失上限、OCO、retry/repost禁止は不変とする。
+
+G014のreviewed-files digest、generation digest、preparation marker、risk state、daily
+authorization、LaunchAgent設定はG015へ流用しない。G015は新digestで完全review後にのみ
+external preparationへ進める。日次operator authorization要件の撤廃、実credential、実通知、
+Private GET、broker POST、live activationはこの変更に含まれない。
+
 ## H-11 v4 G013 post-canary reconciliation 限定例外
 
 operatorが明示的にgeneration-bound post-canary reconciliationを依頼した場合だけ、既存のentry/exit経路を使わない専用laneを実装・実行してよい。対象は既存G013 canaryの自然OCO後のsanitized状態確認だけであり、新規entry、取消、決済、OCO変更、既存generation markerの変更を一切許可しない。
@@ -718,6 +730,43 @@ scheduler・resident processへは一切接続しない。
 - artifactの自動再発行・自動延長・cap自動引き上げの実装。
 - `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
 - 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
+
+## H-11 v4 persistent ON/OFF controller corrective generation限定例外
+
+operatorが2026-07-26に採用した、localhost手動UIの永続`ON`/`OFF`だけで新規entryを管理する
+安全モデルを実装・reviewする場合に限り、旧daily authorizationを新しい無人entry経路から外し、
+以下のno-POST実装とcorrective generation作成を許可する。既存のphrase-based canaryと旧daily
+authorization関数は互換・監査用に残し、自動削除やmarker resetをしない。
+
+### この例外で限定的に許可すること
+
+- generation digestとreviewed-files digestにbindした永続arm stateを、localhost manual UIの
+  CSRF保護された`ON`/`OFF`だけでatomic更新する。missing/malformed/symlink/digest mismatchは
+  `DISARMED`としてfail-closedにする。
+- 新しい無人proof constructorはpersistent arm、risk、dead-man、heartbeat continuity、通知経路、
+  entry gateをfresh評価する。arm artifactは消費せず、permit・cycle・actionは従来のone-use契約を
+  維持する。
+- 1 JST日最大30 `MARKET_ENTRY` attemptとする。同時30建玉ではなく、前cycleがauthoritativeに
+  flat-reconciledされた後だけ次cycleを許可する。coordinator SQLiteのattempt行を権威台帳とし、
+  `risk.json.entries_today`との不一致はpersistent HALTにする。
+- MARKET attemptとrisk counterを永続化した後、実transport呼出し直前にarmを再確認し、
+  `ENTRY_ATTEMPT_RESERVED`通知を1回だけ送る。OFFまたは通知失敗ならbroker writeを行わずHALTする。
+- arm再確認はMARKET entryだけに適用する。entry後にOFFとなった場合は`EXIT_ONLY`として新規entryを
+  禁止し、未約定残cancel、exact-size OCO、position-specific exit、monitor/reconciliationを止めない。
+- focused/related tests、Ruff、diff check、danger scan、workspace内独立Architecture/Safety/
+  Operations review、VETO修正、reviewed-files digest再計算、digest integrity確認、new corrective
+  generation作成を行う。
+
+### この例外でも禁止し続けること
+
+- Private API、Keychain、実通知、LaunchAgent install/restart、broker POST、permit実発行、実注文。
+- `ON`だけでpersistent HALT、loss limit、dead-man、heartbeat、account flat、active orders zero、
+  market/signal/quote/spread、one-use action gateを解除すること。
+- OFF時にgeneric opposite close、保護取消、未保護化、既存positionの管理停止を行うこと。
+- coordinator attempt、risk counter、no-retry marker、旧generation markerの削除・reset・書換え。
+- review未完了または`live_ready=false`/`unattended_live_supported=false`のgenerationをlive化すること。
+- commit/push、fresh external preparation、commissioning、実POST。これらはそれぞれ別の明示授権を
+  必須とする。
 
 ## H-11 v4 unattended proof constructor 設計限定例外（design-only・コード実装なし）
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Operator-facing launcher template invoked by the unattended scheduler.
+"""Operator-facing launcher invoked by the unattended scheduler.
 
 This is the "separate, operator-authored launcher" that
 ``h11_auto_v4_unattended_live_bounded_run.py`` (design doc §12.5) requires:
@@ -18,36 +18,17 @@ constants (2026-07-25, the suggested 60s/300s values -- see the
 module-level comment above ``_HEARTBEAT_CHAIN_POLICY_LABEL``), so that
 placeholder is now live code, not a raise.
 
-THREE PLACEHOLDER sections remain: real Keychain credential pair, real
-HTTP client, real Pushover/email transports. All three are intentionally
-left unimplemented and RAISE with a clear message if reached. This is a
-deliberate project boundary (AGENTS.md "H-11 v4 unattended liveスケジューラ
-配線 実装限定例外"; also independently documented in
-``h11_v4_unattended_live_entry_notification.py``'s own module docstring
-for the notification-transport half specifically), not an oversight:
-connecting this scheduler to a real broker account, and to real
-notification transports, are decisions only the operator makes, in code
-the operator writes themselves, in this exact file.
+The operator has already connected the real Keychain credential wrapper,
+HTTP client, and notification transports in this reviewed file. Construction
+is lazy; no credential or network operation occurs until the bounded runner.
+Every tick first re-verifies both digests and independently requires a frozen
+generation with ``live_ready=true`` and ``unattended_live_supported=true``,
+then requires the generation-bound persistent arm to be clear.
 
-To activate: edit all THREE remaining PLACEHOLDER blocks below, following
-the instructions in each -- filling in only some still leaves the rest
-raising, so there is no path to a real cycle attempt with any of them
-unfilled. Do not remove the digest re-verification, the "not yet" handling,
-or anything above the placeholders -- those are the reviewed safety
-boundary, not scaffolding.
-
-Editing this file changes its own reviewed-files digest (it is itself
-REVIEWED_FILES-listed), which changes ``implementation_digest``. After
-filling in the placeholders you must: (1) recompute
-``implementation_digest`` and update it in
-``docs/templates/h11_v4_gmo_frozen_generation.json`` -- this file will not
-tell you to do this; skipping it makes ``load_v4_gmo_frozen_generation``
-raise ``V4GmoGenerationError`` (not this file's own clean error class) the
-next time this launcher runs; and (2) re-render and reinstall the
-LaunchAgent (``h11_auto_v4_install_unattended_live_scheduler_launchagent.py``)
-so the plist bakes in the new digests -- the OLD plist's baked
-``--expected-reviewed-files-digest`` will otherwise correctly, but
-confusingly, refuse to match your edited file forever.
+Changing this file requires a new reviewed-files digest, corrective generation,
+fresh review/preparation, and LaunchAgent reinstall. The current no-POST
+generation is not commissioned, so this launcher exits before session,
+credential, notification, or broker construction.
 """
 
 from __future__ import annotations
@@ -85,12 +66,16 @@ from app.services.h11_v4_notification_actual_transport import (
     H11V4ActualEmailTransport,
     H11V4ActualPushoverTransport,
 )
+from app.services.h11_v4_unattended_live_arm_state import V4UnattendedLiveArmStore
 from app.services.h11_v4_unattended_live_entry_gate_provider import (
     unattended_live_entry_gate_provider,
 )
 from app.services.h11_v4_unattended_live_heartbeat_chain import (
     V4HeartbeatChainPolicy,
     V4HeartbeatChainStore,
+)
+from app.services.h11_v4_unattended_live_paths import (
+    v4_unattended_live_arm_state_path,
 )
 from scripts import h11_auto_v4_unattended_live_bounded_run as bounded_run
 
@@ -113,21 +98,6 @@ _HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS = 300
 
 class V4UnattendedSchedulerLauncherError(RuntimeError):
     """Fixed safe launcher failure (digest mismatch, missing placeholder)."""
-
-
-def _require_operator_configuration(placeholder_name: str):
-    """Raise until the named PLACEHOLDER block below is filled in for real.
-
-    Each of the three placeholders calls this independently, so filling in
-    only one (e.g. the credential pair) still leaves the other two raising
-    -- there is no path to `bounded_run.main` with any placeholder unfilled.
-    """
-
-    raise V4UnattendedSchedulerLauncherError(
-        f"SCHEDULER_{placeholder_name}_NOT_CONFIGURED: edit this block in "
-        "h11_auto_v4_unattended_live_scheduled_launcher.py to construct the "
-        "real object it describes before this scheduler can run for real."
-    )
 
 
 def _verify_baked_digests(
@@ -169,8 +139,30 @@ def main(argv: list[str]) -> int:
         expected_reviewed_files_digest=args.expected_reviewed_files_digest,
         expected_generation_digest=args.expected_generation_digest,
     )
+    if (
+        generation.live_ready is not True
+        or generation.unattended_live_supported is not True
+    ):
+        print(
+            "status=UNATTENDED_SCHEDULER_GENERATION_NOT_COMMISSIONED "
+            "broker_write=false actual_post_count=0"
+        )
+        return 0
+    arm_check = V4UnattendedLiveArmStore(
+        v4_unattended_live_arm_state_path(generation_digest=generation.digest)
+    ).check(
+        expected_generation_digest=generation.digest,
+        expected_reviewed_files_digest=digest,
+    )
+    if not arm_check.armed:
+        reason = arm_check.blocked_reasons[0] if arm_check.blocked_reasons else "OPERATOR_DISARMED"
+        print(
+            "status=UNATTENDED_SCHEDULER_TICK_DISARMED "
+            f"reason_label={reason} broker_write=false actual_post_count=0"
+        )
+        return 0
 
-    # Same lock filename ("process.lock") the interactive G013/G014 canary
+    # Same lock filename ("process.lock") the interactive G013-G016 canary
     # path uses (h11_v4_gmo_actual_runtime_binding.py) -- NOT a distinct
     # scheduler-only name. Both paths open the identical risk.json/
     # dead-man.json files under the same state_root; a different lock name
@@ -216,25 +208,13 @@ def main(argv: list[str]) -> int:
             ),
         )
 
-        # ================= PLACEHOLDER 1 of 3: real broker credential =================
-        # Replace the next statement with, e.g.:
-        #     from app.services.h11_v4_gmo_actual_transport import (
-        #         V4GmoKeychainCredentialPair,
-        #     )
-        #     credential_pair = V4GmoKeychainCredentialPair()
-        # This one line is the entire "last millimeter" this project has
-        # deliberately withheld from every automated component in this
-        # track. Writing it here is your explicit decision to connect this
-        # scheduler to your real GMO Coin account -- not this launcher's.
+        # Real objects are constructed only after digest, commissioning, arm,
+        # and process-lock gates. Credential/network use remains inside runner.
         from app.services.h11_v4_gmo_actual_transport import V4GmoKeychainCredentialPair
         credential_pair = V4GmoKeychainCredentialPair()
 
-        # ================= PLACEHOLDER 2 of 3: real HTTP client =================
-        # Replace the next statement with, e.g.:
-        #     client = httpx.Client(timeout=5.0)
         client = httpx.Client(timeout=5.0)
 
-        # ================= PLACEHOLDER 3 of 3: real notification transports =================
         notification_primary = H11V4ActualPushoverTransport(
             credentials=H11V4NotificationCredentialBundle(),
             client=httpx.Client(timeout=10.0),

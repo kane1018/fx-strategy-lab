@@ -214,14 +214,14 @@ def prepare_g013_canary_session(
         generation_digest=generation.digest,
     )
     # Bumped in lockstep with docs/templates/h11_v4_gmo_frozen_generation.json's
-    # generation_label on every re-freeze (G013 -> G014 on 2026-07-25, raising
-    # maximum_entries_per_day from 1 to 20). This module only ever loads that
+    # generation_label on every re-freeze. G016 binds persistent ON/OFF while
+    # retaining the G015 30-attempt policy. This module only ever loads that
     # one canonical template, so this check can never diverge from the label
     # actually in use -- its purpose is to force an explicit, reviewed code
     # change (and implementation_digest recompute) any time the operative
     # generation changes, rather than silently accepting whatever the JSON
     # file says.
-    if not generation.generation_label.endswith("G014"):
+    if not generation.generation_label.endswith("G016"):
         raise V4GmoG013CanaryError("G013_GENERATION_REQUIRED")
     external_gate = load_external_preparation_gate(repository=repository)
     # Same instant as `current` below: today's preparation (00-60) must have
@@ -350,6 +350,7 @@ def run_g013_actual_canary_after_exact_confirmation(
         on_protected=on_protected,
         credential_pair=None,
         client=None,
+        before_market_transport=lambda: None,
     )
 
 
@@ -360,6 +361,7 @@ def run_g013_actual_canary_after_unattended_authorization(
     confirmation_proof: V4CurrentTurnConfirmationProof,
     credential_pair: V4GmoSealedCredentialPair,
     client: httpx.Client,
+    before_market_transport: Callable[[], None],
     on_protected: Callable[[V4GmoG013CanaryResult], None] | None = None,
 ) -> V4GmoG013CanaryResult:
     """Unattended equivalent of the function above: proofs instead of phrases.
@@ -394,6 +396,7 @@ def run_g013_actual_canary_after_unattended_authorization(
         on_protected=on_protected,
         credential_pair=credential_pair,
         client=client,
+        before_market_transport=before_market_transport,
     )
 
 
@@ -405,6 +408,7 @@ def _run_g013_actual_canary_from_refreshed_session(
     on_protected: Callable[[V4GmoG013CanaryResult], None] | None,
     credential_pair: V4GmoSealedCredentialPair | None,
     client: httpx.Client | None,
+    before_market_transport: Callable[[], None] = lambda: None,
 ) -> V4GmoG013CanaryResult:
     """Shared body for both confirmation paths above, given an already-refreshed
     session and an already-obtained resume/confirmation proof pair -- proceeds
@@ -485,6 +489,7 @@ def _run_g013_actual_canary_from_refreshed_session(
             activation_permit=permit,
             credential_pair=credential_pair,
             client=client,
+            before_market_transport=before_market_transport,
         )
         try:
             return _run_bound_g013_canary(

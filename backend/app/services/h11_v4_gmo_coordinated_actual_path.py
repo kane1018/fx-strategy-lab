@@ -139,6 +139,7 @@ class V4GmoCoordinatedActualPath:
     risk_policy: PhaseBRiskPolicy
     dead_man_store: DeadManStore
     after_persist_before_transport: Callable[[], None] = lambda: None
+    before_market_transport: Callable[[], None] = lambda: None
     wall_clock: Callable[[], datetime] = lambda: datetime.now(UTC)
     monotonic_clock: Callable[[], float] = time.monotonic
     reconciliation_wait: Callable[[float], None] = time.sleep
@@ -354,6 +355,14 @@ class V4GmoCoordinatedActualPath:
             now_utc=now_utc,
             cycle_day_jst=cycle_day_jst,
         )
+        ledger_count_before = self.store.market_attempt_count_for_day(
+            trading_day_jst=cycle_day_jst
+        )
+        if ledger_count_before != risk_state.entries_today:
+            self.store.engage_unknown_halt()
+            raise V4GmoCoordinatedPathError(
+                "V4_COORDINATED_ENTRY_COUNTER_MISMATCH"
+            )
         entry_authorization = self._entry_authorizations.pop(signal_fingerprint, None)
         if entry_authorization is None:
             raise V4GmoCoordinatedPathError(
@@ -377,7 +386,17 @@ class V4GmoCoordinatedActualPath:
                 cycle_day_jst=cycle_day_jst,
             )
             self.risk_store.save(risk_state)
+            if (
+                self.store.market_attempt_count_for_day(
+                    trading_day_jst=cycle_day_jst
+                )
+                != risk_state.entries_today
+            ):
+                raise V4GmoCoordinatedPathError(
+                    "V4_COORDINATED_ENTRY_COUNTER_MISMATCH"
+                )
             self.after_persist_before_transport()
+            self.before_market_transport()
             self._pace_before_private_post()
             self._require_transport_boundary_dead_man()
             outcome = self.adapter.perform_once(

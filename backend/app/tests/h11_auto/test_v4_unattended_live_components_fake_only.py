@@ -25,6 +25,7 @@ from app.h11_auto.runtime_safety import (
     evaluate_risk_before_entry,
     record_closed_result,
 )
+from app.services import h11_v4_unattended_live_arm_state as arm_module
 from app.services import h11_v4_unattended_live_authorization as authorization_module
 from app.services import h11_v4_unattended_live_heartbeat_chain as chain_module
 from app.services import h11_v4_unattended_live_permit_decision as decision_module
@@ -113,9 +114,7 @@ def test_chain_policy_is_validated() -> None:
 
 
 def test_fresh_chain_is_not_yet_continuously_healthy(tmp_path: Path) -> None:
-    store = chain_module.V4HeartbeatChainStore(
-        tmp_path / "chain.json", policy=_chain_policy()
-    )
+    store = chain_module.V4HeartbeatChainStore(tmp_path / "chain.json", policy=_chain_policy())
     store.beat(now_utc=_NOW)
     assessment = store.assess(now_utc=_NOW + timedelta(seconds=10))
     assert assessment.continuously_healthy is False
@@ -142,9 +141,7 @@ def test_gap_resets_the_chain_continuity(tmp_path: Path) -> None:
 
 
 def test_stale_missing_future_and_corrupt_chain_fail_closed(tmp_path: Path) -> None:
-    store = chain_module.V4HeartbeatChainStore(
-        tmp_path / "chain.json", policy=_chain_policy()
-    )
+    store = chain_module.V4HeartbeatChainStore(tmp_path / "chain.json", policy=_chain_policy())
     assert store.assess(now_utc=_NOW).reason_safe_label == "HEARTBEAT_CHAIN_MISSING"
     store.beat(now_utc=_NOW)
     stale = store.assess(now_utc=_NOW + timedelta(seconds=120))
@@ -160,9 +157,7 @@ def test_gap_exactly_at_maximum_keeps_the_chain(tmp_path: Path) -> None:
     # Inclusive boundary: a gap of exactly maximum_gap_seconds keeps continuity
     # (and an age of exactly maximum_gap_seconds is not stale). Load-bearing
     # semantics pinned so a refactor cannot silently flip <= to <.
-    store = chain_module.V4HeartbeatChainStore(
-        tmp_path / "chain.json", policy=_chain_policy()
-    )
+    store = chain_module.V4HeartbeatChainStore(tmp_path / "chain.json", policy=_chain_policy())
     start = _NOW - timedelta(seconds=360)
     store.beat(now_utc=start)
     store.beat(now_utc=start + timedelta(seconds=60))  # exactly the maximum gap
@@ -173,9 +168,7 @@ def test_gap_exactly_at_maximum_keeps_the_chain(tmp_path: Path) -> None:
 
 
 def test_continuity_exactly_at_minimum_is_healthy(tmp_path: Path) -> None:
-    store = chain_module.V4HeartbeatChainStore(
-        tmp_path / "chain.json", policy=_chain_policy()
-    )
+    store = chain_module.V4HeartbeatChainStore(tmp_path / "chain.json", policy=_chain_policy())
     start = _NOW - timedelta(seconds=300)
     for offset in range(0, 301, 30):
         store.beat(now_utc=start + timedelta(seconds=offset))
@@ -187,9 +180,7 @@ def test_continuity_exactly_at_minimum_is_healthy(tmp_path: Path) -> None:
 
 
 def test_backwards_beat_is_refused(tmp_path: Path) -> None:
-    store = chain_module.V4HeartbeatChainStore(
-        tmp_path / "chain.json", policy=_chain_policy()
-    )
+    store = chain_module.V4HeartbeatChainStore(tmp_path / "chain.json", policy=_chain_policy())
     store.beat(now_utc=_NOW)
     with pytest.raises(
         chain_module.V4UnattendedLiveHeartbeatError, match="HEARTBEAT_CHAIN_TIME_BACKWARDS"
@@ -198,18 +189,14 @@ def test_backwards_beat_is_refused(tmp_path: Path) -> None:
 
 
 def test_chain_written_under_a_different_policy_is_refused(tmp_path: Path) -> None:
-    store = chain_module.V4HeartbeatChainStore(
-        tmp_path / "chain.json", policy=_chain_policy()
-    )
+    store = chain_module.V4HeartbeatChainStore(tmp_path / "chain.json", policy=_chain_policy())
     store.beat(now_utc=_NOW)
     other_policy = chain_module.V4HeartbeatChainPolicy(
         policy_label="H11_V4_UNATTENDED_CHAIN_OTHER_V1",
         maximum_gap_seconds=60,
         minimum_continuous_seconds=300,
     )
-    other = chain_module.V4HeartbeatChainStore(
-        tmp_path / "chain.json", policy=other_policy
-    )
+    other = chain_module.V4HeartbeatChainStore(tmp_path / "chain.json", policy=other_policy)
     assert other.assess(now_utc=_NOW).reason_safe_label == "HEARTBEAT_CHAIN_STATE_INVALID"
 
 
@@ -359,12 +346,8 @@ def test_consumption_marker_carries_a_distinct_schema(tmp_path: Path) -> None:
     )
     marker = tmp_path / f"unattended-authorization-consumed-{_TODAY_JST}.json"
     payload = json.loads(marker.read_text(encoding="utf-8"))
-    assert payload["schema"] == (
-        authorization_module.V4_UNATTENDED_LIVE_CONSUMPTION_SCHEMA
-    )
-    assert payload["schema"] != (
-        authorization_module.V4_UNATTENDED_LIVE_AUTHORIZATION_SCHEMA
-    )
+    assert payload["schema"] == (authorization_module.V4_UNATTENDED_LIVE_CONSUMPTION_SCHEMA)
+    assert payload["schema"] != (authorization_module.V4_UNATTENDED_LIVE_AUTHORIZATION_SCHEMA)
     # A marker can never itself pass the artifact check.
     as_artifact = authorization_module.check_operator_daily_authorization(
         artifact_path=marker, expected_generation_digest=_GENERATION, now_utc=_NOW
@@ -396,9 +379,7 @@ def _decide(
             state=state, policy=risk_policy, cycle_day_jst=_TODAY_JST
         ),
         "dead_man": _alive_dead_man(tmp_path),
-        "heartbeat_chain": _healthy_chain(tmp_path).assess(
-            now_utc=_NOW + timedelta(seconds=10)
-        ),
+        "heartbeat_chain": _healthy_chain(tmp_path).assess(now_utc=_NOW + timedelta(seconds=10)),
         "notification_ready": True,
         "entry_gate_blocked_reasons": (),
         "now_utc": _NOW,
@@ -419,6 +400,63 @@ def test_all_six_conditions_clear_allows_without_issuing_anything(
     assert decision.live_ready is False
     assert bool(decision) is False
     assert decision.to_safe_dict()["permit_issued"] is False
+
+
+def test_persistent_arm_replaces_daily_artifact_without_claiming_live_activity(
+    tmp_path: Path,
+) -> None:
+    arm_path = tmp_path / "arm-state.json"
+    arm_module.V4UnattendedLiveArmStore(arm_path).set_desired_state(
+        desired_state=arm_module.V4ArmDesiredState.ARMED,
+        expected_revision=0,
+        generation_digest=_GENERATION,
+        reviewed_files_digest="sha256:" + "b" * 64,
+        changed_at_utc=_NOW,
+    )
+    arm = arm_module.V4UnattendedLiveArmStore(arm_path).check(
+        expected_generation_digest=_GENERATION,
+        expected_reviewed_files_digest="sha256:" + "b" * 64,
+    )
+    risk_policy = _risk_policy()
+    decision = decision_module.decide_persistent_arm_permit_issuance(
+        arm_state=arm,
+        risk_gate=evaluate_risk_before_entry(
+            state=PhaseBRiskState(policy_digest=risk_policy.digest),
+            policy=risk_policy,
+            cycle_day_jst=_TODAY_JST,
+        ),
+        dead_man=_alive_dead_man(tmp_path),
+        heartbeat_chain=_healthy_chain(tmp_path).assess(now_utc=_NOW + timedelta(seconds=10)),
+        notification_ready=True,
+        entry_gate_blocked_reasons=(),
+        now_utc=_NOW,
+    )
+    assert decision.allowed is True
+    assert decision.permit_issued is False
+    assert decision.broker_post_authorized is False
+
+
+def test_disarmed_persistent_state_blocks_permit_decision(tmp_path: Path) -> None:
+    risk_policy = _risk_policy()
+    arm = arm_module.V4UnattendedLiveArmStore(tmp_path / "missing-arm-state.json").check(
+        expected_generation_digest=_GENERATION,
+        expected_reviewed_files_digest="sha256:" + "b" * 64,
+    )
+    decision = decision_module.decide_persistent_arm_permit_issuance(
+        arm_state=arm,
+        risk_gate=evaluate_risk_before_entry(
+            state=PhaseBRiskState(policy_digest=risk_policy.digest),
+            policy=risk_policy,
+            cycle_day_jst=_TODAY_JST,
+        ),
+        dead_man=_alive_dead_man(tmp_path),
+        heartbeat_chain=_healthy_chain(tmp_path).assess(now_utc=_NOW + timedelta(seconds=10)),
+        notification_ready=True,
+        entry_gate_blocked_reasons=(),
+        now_utc=_NOW,
+    )
+    assert decision.allowed is False
+    assert "PERSISTENT_ARM_NOT_CLEAR" in decision.blocked_reasons
 
 
 def test_operator_kill_blocks_through_the_reused_risk_gate(tmp_path: Path) -> None:
@@ -459,9 +497,7 @@ def test_per_trade_discipline_violation_blocks_through_the_reused_ledger(
 
 
 def test_unclear_authorization_blocks(tmp_path: Path) -> None:
-    decision = _decide(
-        tmp_path, authorization=_check(tmp_path, operator_authorized=False)
-    )
+    decision = _decide(tmp_path, authorization=_check(tmp_path, operator_authorized=False))
     assert decision.allowed is False
     assert "OPERATOR_DAILY_AUTHORIZATION_NOT_CLEAR" in decision.blocked_reasons
     assert "AUTHORIZATION_NOT_GRANTED_BY_OPERATOR" in decision.blocked_reasons
@@ -484,9 +520,7 @@ def test_insufficient_heartbeat_continuity_blocks(tmp_path: Path) -> None:
         tmp_path / "young-chain.json", policy=_chain_policy()
     )
     store.beat(now_utc=_NOW)
-    decision = _decide(
-        tmp_path, heartbeat_chain=store.assess(now_utc=_NOW + timedelta(seconds=10))
-    )
+    decision = _decide(tmp_path, heartbeat_chain=store.assess(now_utc=_NOW + timedelta(seconds=10)))
     assert decision.allowed is False
     assert "HEARTBEAT_CHAIN_CONTINUITY_INSUFFICIENT" in decision.blocked_reasons
 
@@ -498,9 +532,7 @@ def test_notification_not_ready_blocks(tmp_path: Path) -> None:
 
 
 def test_entry_gate_reasons_pass_through_and_block(tmp_path: Path) -> None:
-    decision = _decide(
-        tmp_path, entry_gate_blocked_reasons=("SPREAD_LIMIT_EXCEEDED",)
-    )
+    decision = _decide(tmp_path, entry_gate_blocked_reasons=("SPREAD_LIMIT_EXCEEDED",))
     assert decision.allowed is False
     assert "SPREAD_LIMIT_EXCEEDED" in decision.blocked_reasons
 
@@ -519,7 +551,6 @@ def test_blocked_risk_gate_with_empty_reasons_still_blocks(tmp_path: Path) -> No
     # reasons tuple is constructible. That combination must still block via
     # the unconditional sentinel -- it previously failed OPEN.
 
-
     forged = PhaseBRiskGateResult(
         allowed=False,
         stop_state=AutoRiskStopState.KILLED,
@@ -534,8 +565,6 @@ def test_blocked_risk_gate_with_empty_reasons_still_blocks(tmp_path: Path) -> No
 def test_latched_stop_state_blocks_even_with_inconsistent_allowed_true(
     tmp_path: Path,
 ) -> None:
-
-
     forged = PhaseBRiskGateResult(
         allowed=True,
         stop_state=AutoRiskStopState.KILLED,
@@ -685,9 +714,7 @@ def _reachable_app_modules(*, root_module: str, app_root: Path) -> set[str]:
         pending.extend(".".join(parts[:length]) for length in range(1, len(parts)))
         tree = ast.parse(module_path.read_text(encoding="utf-8"), filename=str(module_path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith(
-                "app."
-            ):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("app."):
                 pending.append(node.module)
             elif isinstance(node, ast.Import):
                 pending.extend(

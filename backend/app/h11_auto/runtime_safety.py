@@ -23,12 +23,12 @@ class AutoRiskStopState(str, Enum):
     KILLED = "KILLED"
 
 
-# Sequential-entry ceiling (operator decision, 2026-07-25): still a finite,
+# Sequential-entry ceiling (operator decision, 2026-07-26): still a finite,
 # fail-closed cap -- not unbounded -- so a bug that churned entries could
 # never place more than this many per day regardless of how many times the
 # gate is evaluated. max_positions stays 1 (never more than one position
 # open at once); this only bounds how many times a FLAT day may re-enter.
-MAXIMUM_ENTRIES_PER_DAY_CEILING = 20
+MAXIMUM_ENTRIES_PER_DAY_CEILING = 30
 
 
 @dataclass(frozen=True)

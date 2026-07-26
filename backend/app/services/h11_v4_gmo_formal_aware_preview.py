@@ -18,7 +18,12 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from app.h11_manual.data import DEFAULT_DATA_ROOT, CandleRepository, candles_to_frame, load_candle_csv
+from app.h11_manual.data import (
+    DEFAULT_DATA_ROOT,
+    CandleRepository,
+    candles_to_frame,
+    load_candle_csv,
+)
 from app.services.h11_v4_gmo_formal_canary_source import (
     G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS,
     V4GmoFormalCanarySourceError,
@@ -110,13 +115,9 @@ def _validate_fresh_completed_h1(*, now_utc: datetime, sleeper: Callable[[float]
     date_label = now_utc.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y%m%d")
     try:
         sleeper(G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS)
-        candles = client.fetch_candles(
-            "USD_JPY", "H1", limit=0, price_type="BID", date=date_label
-        )
+        candles = client.fetch_candles("USD_JPY", "H1", limit=0, price_type="BID", date=date_label)
     except GmoPublicError as error:
-        raise G013FormalAwarePreviewError(
-            "G013_FORMAL_AWARE_H1_REFRESH_FAILED_NO_RETRY"
-        ) from error
+        raise G013FormalAwarePreviewError("G013_FORMAL_AWARE_H1_REFRESH_FAILED_NO_RETRY") from error
     finally:
         client.client.close()
     try:

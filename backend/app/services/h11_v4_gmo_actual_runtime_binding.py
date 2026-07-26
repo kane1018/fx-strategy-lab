@@ -88,6 +88,7 @@ def bind_v4_gmo_actual_runtime(
     credential_pair: V4GmoSealedCredentialPair | None = None,
     client: httpx.Client | None = None,
     monotonic_factory: Callable[[], float] = time.monotonic,
+    before_market_transport: Callable[[], None] = lambda: None,
 ) -> V4GmoActualRuntimeBinding:
     """Consume one permit and assemble only canonical generation state paths."""
 
@@ -142,6 +143,7 @@ def bind_v4_gmo_actual_runtime(
             risk_policy=risk_policy,
             dead_man_store=dead_man_store,
             monotonic_clock=monotonic_factory,
+            before_market_transport=before_market_transport,
         )
     except BaseException:
         if transport is not None:

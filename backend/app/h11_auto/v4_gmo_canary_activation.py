@@ -26,6 +26,10 @@ from app.h11_auto.runtime_safety import (
 )
 from app.h11_auto.v4_gmo_contracts import V4GmoAction, v4_gmo_trading_day_jst
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
+from app.services.h11_v4_unattended_live_arm_state import (
+    V4UnattendedLiveArmStateError,
+    V4UnattendedLiveArmStore,
+)
 from app.services.h11_v4_unattended_live_authorization import (
     V4UnattendedLiveAuthorizationError,
     check_operator_daily_authorization,
@@ -34,10 +38,12 @@ from app.services.h11_v4_unattended_live_authorization import (
 from app.services.h11_v4_unattended_live_heartbeat_chain import V4HeartbeatChainStore
 from app.services.h11_v4_unattended_live_paths import (
     DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    v4_unattended_live_arm_state_path,
     v4_unattended_live_daily_authorization_path,
 )
 from app.services.h11_v4_unattended_live_permit_decision import (
     V4UnattendedLivePermitDecisionError,
+    decide_persistent_arm_permit_issuance,
     decide_unattended_permit_issuance,
 )
 
@@ -309,6 +315,91 @@ def confirm_v4_unattended_authorization_once(
         ),
         V4CurrentTurnConfirmationProof(
             token=_CONFIRMATION_TOKEN, intent_digest=intent.digest
+        ),
+    )
+
+
+def confirm_v4_persistent_arm_authorization_once(
+    *,
+    intent: V4GmoCanaryIntent,
+    expected_reviewed_files_digest: str,
+    state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    risk_store: PhaseBRiskStore,
+    risk_policy: PhaseBRiskPolicy,
+    dead_man_store: DeadManStore,
+    heartbeat_chain_store: V4HeartbeatChainStore,
+    notification_ready: bool,
+    entry_gate_blocked_reasons: tuple[str, ...],
+    now_utc: datetime,
+) -> tuple[V4MajorIncidentResumeProof, V4CurrentTurnConfirmationProof]:
+    """Mint one-use proofs from persistent ON plus fresh runtime gates.
+
+    The arm artifact is not consumed. Exact-once transport safety remains in
+    the generation-bound permit, coordinator attempt table, and risk counter.
+    """
+
+    if type(intent) is not V4GmoCanaryIntent:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_INTENT_INVALID")
+    if now_utc.tzinfo is None:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_CLOCK_INVALID")
+    if (
+        type(expected_reviewed_files_digest) is not str
+        or type(notification_ready) is not bool
+        or type(entry_gate_blocked_reasons) is not tuple
+    ):
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_INPUT_INVALID")
+    try:
+        arm_check = V4UnattendedLiveArmStore(
+            v4_unattended_live_arm_state_path(
+                state_root=state_root,
+                generation_digest=intent.generation_digest,
+            )
+        ).check(
+            expected_generation_digest=intent.generation_digest,
+            expected_reviewed_files_digest=expected_reviewed_files_digest,
+        )
+    except V4UnattendedLiveArmStateError as error:
+        raise V4GmoCanaryActivationError(
+            "V4_CANARY_UNATTENDED_ARM_STATE_INVALID"
+        ) from error
+    if not risk_store.path.is_file() or risk_store.path.is_symlink():
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_RISK_STATE_MISSING")
+    trading_day_jst = v4_gmo_trading_day_jst(now_utc)
+    try:
+        risk_state = risk_store.load()
+    except H11AutoRuntimeSafetyError as error:
+        raise V4GmoCanaryActivationError(
+            "V4_CANARY_UNATTENDED_RISK_STATE_INVALID"
+        ) from error
+    risk_gate = evaluate_risk_before_entry(
+        state=risk_state,
+        policy=risk_policy,
+        cycle_day_jst=trading_day_jst,
+    )
+    try:
+        decision = decide_persistent_arm_permit_issuance(
+            arm_state=arm_check,
+            risk_gate=risk_gate,
+            dead_man=dead_man_store.evaluate(now_utc=now_utc),
+            heartbeat_chain=heartbeat_chain_store.assess(now_utc=now_utc),
+            notification_ready=notification_ready,
+            entry_gate_blocked_reasons=entry_gate_blocked_reasons,
+            now_utc=now_utc,
+        )
+    except V4UnattendedLivePermitDecisionError as error:
+        raise V4GmoCanaryActivationError(
+            "V4_CANARY_UNATTENDED_DECISION_INVALID"
+        ) from error
+    if not decision.allowed:
+        raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_GATE_NOT_CLEAR")
+    return (
+        V4MajorIncidentResumeProof(
+            token=_RESUME_TOKEN,
+            generation_digest=intent.generation_digest,
+        ),
+        V4CurrentTurnConfirmationProof(
+            token=_CONFIRMATION_TOKEN,
+            intent_digest=intent.digest,
         ),
     )
 

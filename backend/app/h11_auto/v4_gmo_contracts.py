@@ -24,7 +24,7 @@ from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 # runtime_safety.py's `os` usage. The two values are kept consistent by the
 # generation/policy digest cross-check in v4_gmo_generation.py, not by a
 # shared import.
-_MAXIMUM_ENTRIES_PER_DAY_CEILING = 20
+_MAXIMUM_ENTRIES_PER_DAY_CEILING = 30
 
 V4_GMO_PROFILE_VERSION = (
     "H11_V4_GMO_MARKET_THEN_EXACT_OCO_FRIDAY_LIMITED_NO_POST_V2"

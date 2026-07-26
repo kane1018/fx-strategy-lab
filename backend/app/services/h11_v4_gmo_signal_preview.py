@@ -134,11 +134,10 @@ def _load_prerequisite(*, repository: Path) -> _PreviewPrerequisite:
     if evidence.get("generation_manifest_digest") != generation.digest:
         raise G013SignalPreviewError("G013_PREVIEW_GENERATION_INVALID")
     # Bumped in lockstep with docs/templates/h11_v4_gmo_frozen_generation.json's
-    # generation_label on every re-freeze (G013 -> G014 on 2026-07-25, raising
-    # maximum_entries_per_day from 1 to 20) -- same reasoning and same required
-    # explicit bump as h11_v4_gmo_g013_canary.py's equivalent check.
+    # generation_label on every re-freeze. G016 binds persistent ON/OFF while
+    # retaining the G015 30-attempt policy.
     if (
-        generation.generation_label != "H11_AUTO_30M_20260725_G014"
+        generation.generation_label != "H11_AUTO_30M_20260726_G016"
         or generation.strategy_version != "SHORT_V1"
         or generation.selected_horizon != "30m"
         or generation.symbol != "USD_JPY"

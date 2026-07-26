@@ -1,0 +1,83 @@
+.unattended-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+  padding: 7px 9px;
+  border: 1px solid #304865;
+  border-radius: 11px;
+  background: linear-gradient(135deg, rgba(11, 29, 49, .98), rgba(18, 42, 70, .92));
+}
+
+.unattended-control-copy {
+  display: grid;
+  min-width: 0;
+  line-height: 1.05;
+}
+
+.unattended-control-copy span,
+.unattended-control-copy small {
+  color: #8fa4be;
+  font-size: 9px;
+}
+
+.unattended-control-copy strong {
+  margin: 3px 0;
+  color: #e5eef9;
+  font-size: 13px;
+}
+
+.unattended-control-copy small {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unattended-control-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.unattended-control-actions button {
+  border: 1px solid #3b5879;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #13243a;
+  color: #9fb2c8;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.unattended-control-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+
+.unattended-control[data-state^="ON"] {
+  border-color: rgba(45, 212, 191, .68);
+}
+
+.unattended-control[data-state="EXIT_ONLY"] {
+  border-color: rgba(251, 191, 36, .72);
+}
+
+.unattended-control[data-state="HALTED"] {
+  border-color: rgba(251, 113, 133, .75);
+  background: linear-gradient(135deg, rgba(51, 19, 31, .98), rgba(69, 24, 39, .92));
+}
+
+@media (max-width: 980px) {
+  .unattended-control {
+    min-width: 220px;
+  }
+}
+
+@media (max-width: 720px) {
+  .unattended-control {
+    order: 1;
+    width: 100%;
+  }
+}

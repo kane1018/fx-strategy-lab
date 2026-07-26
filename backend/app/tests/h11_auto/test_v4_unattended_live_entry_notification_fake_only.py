@@ -72,7 +72,10 @@ def _real_email(**overrides: object) -> H11V4EmailTransport:
 
 
 def test_new_event_is_not_a_critical_event() -> None:
-    assert H11V4NotificationEvent.UNATTENDED_LIVE_ENTRY_ATTEMPTED not in CRITICAL_EVENTS
+    assert (
+        H11V4NotificationEvent.UNATTENDED_LIVE_ENTRY_ATTEMPT_RESERVED
+        not in CRITICAL_EVENTS
+    )
 
 
 def test_new_event_has_no_ack_requirement() -> None:
@@ -87,6 +90,18 @@ def test_new_event_has_no_ack_requirement() -> None:
     assert request.receipt_required is False
     assert request.retry_seconds is None
     assert request.expire_seconds is None
+
+
+def test_reserved_event_has_no_ack_requirement() -> None:
+    from app.services.h11_v4_notification_binding_no_post import (
+        build_h11_v4_pushover_request,
+    )
+
+    request = build_h11_v4_pushover_request(
+        H11V4NotificationEvent.UNATTENDED_LIVE_ENTRY_ATTEMPT_RESERVED
+    )
+    assert request.emergency_priority is False
+    assert request.receipt_required is False
 
 
 # ------------------------------------------------------- channel-ready check

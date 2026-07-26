@@ -1492,6 +1492,7 @@ def test_integrated_path_commits_attempt_before_adapter_and_restart_cannot_send(
     assert lock.acquire() is True
     risk_store, risk_policy, dead_man = _runtime_safety(runtime_root)
     first_transport = _FakeTransport(responses=[{"status": 0}])
+    market_boundary_observations: list[int] = []
     clock = _Clock()
     path = V4GmoCoordinatedActualPath(
         repository=tmp_path,
@@ -1504,6 +1505,9 @@ def test_integrated_path_commits_attempt_before_adapter_and_restart_cannot_send(
         dead_man_store=dead_man,
         wall_clock=clock.wall_now,
         monotonic_clock=clock.monotonic_now,
+        before_market_transport=lambda: market_boundary_observations.append(
+            len(first_transport.requests)
+        ),
     )
     _path_preflight(path, signal, cycle_ref)
     clock.advance(0.1)
@@ -1515,6 +1519,8 @@ def test_integrated_path_commits_attempt_before_adapter_and_restart_cannot_send(
         is V4GmoPrivateOutcome.ACCEPTED_SANITIZED
     )
     assert len(first_transport.requests) == 1
+    assert market_boundary_observations == [0]
+    assert store.market_attempt_count_for_day(trading_day_jst="2026-07-16") == 1
 
     restarted_transport = _FakeTransport(responses=[{"status": 0}])
     restarted = V4GmoCoordinatedActualPath(

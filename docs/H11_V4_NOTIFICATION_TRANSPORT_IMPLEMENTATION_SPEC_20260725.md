@@ -313,7 +313,7 @@ print('OK', g.generation_label, g.digest)
 "
 ```
 
-`OK H11_AUTO_30M_20260725_G014 sha256:...` と出れば整合している。
+`OK H11_AUTO_30M_20260726_G016 sha256:...` と出れば整合している。
 
 ---
 

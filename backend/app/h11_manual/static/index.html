@@ -6,6 +6,7 @@
     <meta name="color-scheme" content="dark" />
     <title>FX Strategy Lab — シグナル</title>
     <link rel="stylesheet" href="/static/styles.css?v=20260715-5" />
+    <link rel="stylesheet" href="/static/unattended-control.css?v=20260726-1" />
   </head>
   <body>
     <header class="topbar">
@@ -21,6 +22,17 @@
         <button class="nav-item" data-tab="validation">検証</button>
       </nav>
       <div class="top-actions">
+        <section id="unattended-control" class="unattended-control" aria-label="自動売買運転状態">
+          <div class="unattended-control-copy">
+            <span>自動売買</span>
+            <strong id="unattended-control-state">確認中</strong>
+            <small id="unattended-control-reason">generationを確認しています</small>
+          </div>
+          <div class="unattended-control-actions" role="group" aria-label="自動売買ON OFF">
+            <button id="unattended-control-on" type="button" disabled>ON</button>
+            <button id="unattended-control-off" type="button" disabled>OFF</button>
+          </div>
+        </section>
         <span class="local-badge"><i></i>ローカル</span>
         <button id="refresh-button" class="refresh-button" type="button">データを更新</button>
       </div>
@@ -171,5 +183,6 @@
       <span>GMO Private GETのみ · broker write / order POST なし</span>
     </footer>
     <script src="/static/app.js?v=20260715-5" defer></script>
+    <script src="/static/unattended-control.js?v=20260726-1"></script>
   </body>
 </html>

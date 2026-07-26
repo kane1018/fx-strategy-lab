@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.h11_manual.api import router
 from app.h11_manual.service import ManualSignalService
+from app.h11_manual.unattended_control_api import router as unattended_control_router
 
 STATIC_ROOT = Path(__file__).resolve().parent / "h11_manual" / "static"
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
@@ -38,6 +39,7 @@ async def localhost_only(request: Request, call_next):
 
 
 app.include_router(router)
+app.include_router(unattended_control_router)
 app.mount("/static", StaticFiles(directory=STATIC_ROOT), name="manual-static")
 
 

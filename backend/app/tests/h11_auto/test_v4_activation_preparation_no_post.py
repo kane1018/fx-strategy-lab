@@ -33,7 +33,7 @@ def test_approved_operator_selections_are_frozen_and_not_activation() -> None:
     assert selected.daily_loss_limit_jpy == 10_000
     assert selected.monthly_loss_limit_jpy == 50_000
     assert selected.maximum_consecutive_losses == 5
-    assert selected.maximum_entries_per_day == 20
+    assert selected.maximum_entries_per_day == 30
     assert selected.heartbeat_interval_seconds == 15
     assert selected.maximum_heartbeat_age_seconds == 60
     assert selected.account_ownership is V4AccountOwnershipMode.EXCLUSIVE_DURING_AUTO

@@ -36,7 +36,9 @@ def _candles(frame: pd.DataFrame) -> list[Candle]:
     ]
 
 
-def test_non_actionable_m1_does_not_fetch_h1(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_non_actionable_m1_does_not_fetch_h1(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(
         subject,
         "run_g013_signal_preview",
@@ -94,7 +96,11 @@ def test_candidate_fetches_one_h1_and_keeps_input_in_memory(
         lambda **_kwargs: SimpleNamespace(candidate_actionable=True),
     )
     monkeypatch.setattr(subject, "GmoPublicMarketDataClient", FakeClient)
-    monkeypatch.setattr(subject, "load_candle_csv", lambda _path: _h1_frame(end=datetime(2026, 7, 21, 4, 0, tzinfo=UTC)))
+    monkeypatch.setattr(
+        subject,
+        "load_candle_csv",
+        lambda _path: _h1_frame(end=datetime(2026, 7, 21, 4, 0, tzinfo=UTC)),
+    )
     sleeps: list[float] = []
 
     result = subject.run_g013_formal_aware_preview(

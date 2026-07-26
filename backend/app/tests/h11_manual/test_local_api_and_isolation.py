@@ -24,8 +24,16 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         assert "今の判断" not in page.text
         script = client.get("/static/app.js")
         styles = client.get("/static/styles.css")
+        control_script = client.get("/static/unattended-control.js")
+        control_styles = client.get("/static/unattended-control.css")
         assert script.status_code == 200
         assert styles.status_code == 200
+        assert control_script.status_code == 200
+        assert control_styles.status_code == 200
+        assert 'id="unattended-control-on"' in page.text
+        assert 'id="unattended-control-off"' in page.text
+        assert "/api/manual/unattended-control" in control_script.text
+        assert "X-H11-V4-Control-CSRF" in control_script.text
         assert '["10m", "30m", "24h", "realtime"]' in script.text
         assert "data-signal-key" in script.text
         assert "signalSparkline" in script.text
@@ -144,7 +152,10 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         assert exit_status.json()["exit_signal"]["code"] == "NO_MANUAL_POSITION"
         broker_sync = client.get("/api/manual/broker-sync")
         assert broker_sync.status_code == 200
-        assert broker_sync.json()["status"] == "NOT_CONFIGURED"
+        assert (
+            broker_sync.json()["status"]
+            == "AUTO_MODE_EXCLUSIVE_PRIVATE_CLIENT_BLOCKED"
+        )
         assert broker_sync.json()["safety"]["actual_post"] is False
         positions = client.get("/api/manual/positions")
         assert positions.status_code == 200
@@ -196,6 +207,9 @@ def test_public_entrypoint_does_not_expose_manual_ui() -> None:
     assert client.post("/api/manual/exit-plan/actual-fill").status_code == 404
     assert client.post("/api/manual/exit-plan/close").status_code == 404
     assert client.post("/api/manual/decisions").status_code == 404
+    assert client.get("/api/manual/unattended-control").status_code == 404
+    assert client.post("/api/manual/unattended-control/on").status_code == 404
+    assert client.post("/api/manual/unattended-control/off").status_code == 404
 
 
 def test_manual_package_has_no_forbidden_execution_imports() -> None:

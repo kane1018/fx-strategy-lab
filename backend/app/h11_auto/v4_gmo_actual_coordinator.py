@@ -204,6 +204,24 @@ class V4GmoActualCoordinatorStore:
         connection.row_factory = sqlite3.Row
         return connection
 
+    def market_attempt_count_for_day(self, *, trading_day_jst: str) -> int:
+        """Return the immutable MARKET-attempt count for one JST trading day."""
+
+        if (
+            not isinstance(trading_day_jst, str)
+            or len(trading_day_jst) != 10
+        ):
+            raise V4GmoActualCoordinatorError("v4 trading day is invalid")
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS n FROM attempts "
+                "JOIN cycles USING(cycle_ref) "
+                "WHERE attempts.action='MARKET_ENTRY' "
+                "AND cycles.trading_day_jst=?",
+                (trading_day_jst,),
+            ).fetchone()
+        return int(row["n"])
+
     def _initialize(self, *, latch_pending_restart_halt: bool = True) -> None:
         with self._connect() as connection:
             connection.executescript(

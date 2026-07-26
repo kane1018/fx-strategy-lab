@@ -7,6 +7,24 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0AK. H-11 v4 G016 persistent ON/OFF controller（2026-07-26・no-POST）
+
+- localhost manual UIにgeneration/reviewed-digest-boundの永続`ON`/`OFF`を追加した。
+- 新しい無人経路はdaily authorizationを消費せず、persistent armとfresh runtime gatesから
+  one-use proofを作る。旧daily authorization関数・markerは互換と監査用に保持する。
+- coordinator SQLiteの`MARKET_ENTRY`を当日attempt権威台帳とし、`risk.json.entries_today`との
+  不一致はHALTする。最大30 attempt/日、同時建玉は1、flat後だけ逐次再entry。
+- MARKET attempt/risk永続化後かつHTTP前にarmを再確認し、Pushover/SMTP両routeの
+  `ENTRY_ATTEMPT_RESERVED`通知を必須化した。OFFは新規entryだけを止め、建玉中は`EXIT_ONLY`として
+  OCO・cancel・position-specific exit・監視を継続する。
+- independent Architecture/Safety/Operations reviewはVETO修正後すべてCLEAR。最終関連テスト234件、
+  Ruff、diff check、danger scanはclear。
+- reviewed-files digest=`sha256:be56dcdff1090f038ab16e214a0b9a391cc1a9aa35d8dc48d79b45cb1ffc3c8b`。
+  generation=`H11_AUTO_30M_20260726_G016`、
+  digest=`sha256:977aa2cde6e9cdf26c2df3c440baafdcc2f7ceaeaab608696ba2c4aaac1e6588`。
+- `actual_post_authorized=false`、`live_ready=false`、`unattended_live_supported=false`。
+  external preparation、commissioning、LaunchAgent再install、実POSTは未実施。
+
 ## 0AI. H-11 v4 unattended liveスケジューラ配線（タイマー機構のみ・2026-07-25・no-POST）
 
 - operatorは「無人ライブ実行のスケジューラ配線を実装して」と依頼し、範囲を「タイマー機構のみ
@@ -59,6 +77,14 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
   G013ラベル決め打ちによるG014での機能不全）を修正。再検証でG013ラベル決め打ちがもう1箇所
   （`h11_v4_gmo_signal_preview.py`、no-POST previewのみ・money/order経路なし）残っているのを検出し、
   同様に修正。h11_auto 881件・full backend 8,475件パス、両レビューPASS。
+
+## 0AJ. H-11 v4 G015 sequential entries-per-day改定 20→30（2026-07-26・no-POST・operator指示）
+
+- 建玉は最大1つのまま、flat後の逐次再entry上限だけを20から30へ変更する。
+- 1 entryあたり5,000円、日次10,000円、月次50,000円、最大5連敗の損失上限は変更しない。
+- G014の準備証拠、risk state、daily authorization、LaunchAgent digestは流用せず、G015の新digestで再作成する。
+- 本変更はgeneration凍結とno-POST検証の範囲であり、日次operator authorization要件の撤廃、external preparation、
+  broker POST、live activationを含まない。
 
 ## 0AG. H-11 v4 G013 数量改定 10,000→1,000通貨（2026-07-17・no-POST・operator指示）
 

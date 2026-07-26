@@ -23,7 +23,7 @@ from app.h11_auto.contracts import FormalHorizon
 # runtime_safety.py (which uses `os`) for isolation tests elsewhere in this
 # track. Kept consistent via the operator_selection_digest/policy binding
 # chain, not a shared import.
-_MAXIMUM_ENTRIES_PER_DAY_CEILING = 20
+_MAXIMUM_ENTRIES_PER_DAY_CEILING = 30
 
 V4_ACTIVATION_PREPARATION_VERSION = "H11_V4_ACTIVATION_PREPARATION_NO_POST_V1"
 
@@ -64,10 +64,10 @@ class V4ApprovedOperatorSelections:
     daily_loss_limit_jpy: int = 10_000
     monthly_loss_limit_jpy: int = 50_000
     maximum_consecutive_losses: int = 5
-    # Raised from 1 to 20 by operator decision (2026-07-25): still a finite,
+    # Raised from 20 to 30 by operator decision (2026-07-26): still a finite,
     # fail-closed sequential-entry ceiling, not unbounded -- max_positions
     # stays 1 (never more than one position open at once).
-    maximum_entries_per_day: int = 20
+    maximum_entries_per_day: int = 30
     heartbeat_interval_seconds: int = 15
     maximum_heartbeat_age_seconds: int = 60
     account_ownership: V4AccountOwnershipMode = (

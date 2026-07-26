@@ -39,6 +39,9 @@ from app.h11_auto.runtime_safety import (
     DeadManResult,
     PhaseBRiskGateResult,
 )
+from app.services.h11_v4_unattended_live_arm_state import (
+    V4UnattendedLiveArmCheck,
+)
 from app.services.h11_v4_unattended_live_authorization import (
     V4UnattendedLiveAuthorizationCheck,
 )
@@ -185,6 +188,63 @@ def decide_unattended_permit_issuance(
         allowed=not reasons,
         blocked_reasons=tuple(dict.fromkeys(reasons)),
         trading_day_jst=today_jst,
+    )
+
+
+def decide_persistent_arm_permit_issuance(
+    *,
+    arm_state: V4UnattendedLiveArmCheck,
+    risk_gate: PhaseBRiskGateResult,
+    dead_man: DeadManResult,
+    heartbeat_chain: V4HeartbeatChainAssessment,
+    notification_ready: bool,
+    entry_gate_blocked_reasons: tuple[str, ...],
+    now_utc: datetime,
+) -> V4UnattendedPermitDecision:
+    """Evaluate persistent operator intent plus every existing runtime gate."""
+
+    if (
+        type(arm_state) is not V4UnattendedLiveArmCheck
+        or type(risk_gate) is not PhaseBRiskGateResult
+        or type(dead_man) is not DeadManResult
+        or type(heartbeat_chain) is not V4HeartbeatChainAssessment
+        or type(notification_ready) is not bool
+        or type(entry_gate_blocked_reasons) is not tuple
+    ):
+        raise V4UnattendedLivePermitDecisionError("PERMIT_DECISION_INPUT_INVALID")
+    if now_utc.tzinfo is None:
+        raise V4UnattendedLivePermitDecisionError("PERMIT_DECISION_CLOCK_INVALID")
+    for reason in entry_gate_blocked_reasons:
+        _validate_safe_reason(reason)
+
+    reasons: list[str] = []
+    if not arm_state.armed:
+        reasons.append("PERSISTENT_ARM_NOT_CLEAR")
+        reasons.extend(arm_state.blocked_reasons)
+    if not risk_gate.allowed:
+        reasons.append("PERSISTENT_RISK_GATE_NOT_CLEAR")
+        reasons.extend(risk_gate.blocked_reasons)
+    if (
+        type(risk_gate.stop_state) is not AutoRiskStopState
+        or risk_gate.stop_state is not AutoRiskStopState.ACTIVE
+    ):
+        reasons.append("PERSISTENT_RISK_STOP_STATE_NOT_ACTIVE")
+    if not dead_man.alive:
+        reasons.append("DEAD_MAN_NOT_ALIVE")
+        _validate_safe_reason(dead_man.reason_safe_label)
+        reasons.append(dead_man.reason_safe_label)
+    if dead_man.halt_required is not False:
+        reasons.append("DEAD_MAN_HALT_REQUIRED")
+    if not heartbeat_chain.continuously_healthy:
+        _validate_safe_reason(heartbeat_chain.reason_safe_label)
+        reasons.append(heartbeat_chain.reason_safe_label)
+    if notification_ready is not True:
+        reasons.append("NOTIFICATION_PATH_NOT_READY")
+    reasons.extend(entry_gate_blocked_reasons)
+    return V4UnattendedPermitDecision(
+        allowed=not reasons,
+        blocked_reasons=tuple(dict.fromkeys(reasons)),
+        trading_day_jst=now_utc.astimezone(_JST).date().isoformat(),
     )
 
 

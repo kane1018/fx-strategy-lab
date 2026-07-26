@@ -11,6 +11,11 @@ from pydantic import BaseModel, Field
 
 from app.h11_manual.contracts import Direction, Horizon, ManualExitReason
 from app.h11_manual.service import ManualSignalService
+from app.h11_manual.settlement_sync import (
+    DisabledManualSettlementReadClient,
+    build_keychain_manual_settlement_client,
+)
+from app.h11_manual.unattended_control_api import unattended_auto_mode_requested
 from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
 
 router = APIRouter(prefix="/api/manual", tags=["local-manual-signal"])
@@ -18,6 +23,7 @@ _refresh_lock = Lock()
 _broker_sync_lock = Lock()
 _service_init_lock = Lock()
 _manual_signal_service: ManualSignalService | None = None
+_manual_settlement_reader_initialized = False
 _last_refresh_monotonic = 0.0
 # The browser retries a just-closed M1 candle a bounded number of times when
 # the public kline feed publishes it a few seconds late.  Keep this below the
@@ -33,17 +39,33 @@ def get_manual_signal_service() -> ManualSignalService:
         return _manual_signal_service
     with _service_init_lock:
         if _manual_signal_service is None:
-            from app.h11_manual.settlement_sync import (
-                build_keychain_manual_settlement_client,
-            )
-
-            _manual_signal_service = ManualSignalService(
-                settlement_reader=build_keychain_manual_settlement_client()
-            )
+            _manual_signal_service = ManualSignalService()
     return _manual_signal_service
 
 
 ServiceDependency = Annotated[ManualSignalService, Depends(get_manual_signal_service)]
+
+
+def get_manual_settlement_service(service: ServiceDependency) -> ManualSignalService:
+    global _manual_settlement_reader_initialized
+
+    if unattended_auto_mode_requested():
+        with _service_init_lock:
+            service.settlement_reader = DisabledManualSettlementReadClient()
+            if service is _manual_signal_service:
+                _manual_settlement_reader_initialized = False
+        return service
+    if service is _manual_signal_service and not _manual_settlement_reader_initialized:
+        with _service_init_lock:
+            if not _manual_settlement_reader_initialized:
+                service.settlement_reader = build_keychain_manual_settlement_client()
+                _manual_settlement_reader_initialized = True
+    return service
+
+
+SettlementServiceDependency = Annotated[
+    ManualSignalService, Depends(get_manual_settlement_service)
+]
 
 
 class RealtimeTickRequest(BaseModel):
@@ -151,7 +173,17 @@ def exit_plan(service: ServiceDependency) -> dict:
 
 
 @router.get("/broker-sync")
-def broker_sync(service: ServiceDependency) -> dict:
+def broker_sync(service: SettlementServiceDependency) -> dict:
+    if unattended_auto_mode_requested():
+        return {
+            "status": "AUTO_MODE_EXCLUSIVE_PRIVATE_CLIENT_BLOCKED",
+            "configured": False,
+            "events": [],
+            "active_plans": [],
+            "actual_positions": [],
+            "in_progress": False,
+            "safety": service.broker_sync_safety_flags(actual_read=False),
+        }
     if not _broker_sync_lock.acquire(blocking=False):
         status = service.exit_plan_status()
         return {
