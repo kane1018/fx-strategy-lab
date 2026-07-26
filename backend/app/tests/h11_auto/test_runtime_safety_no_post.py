@@ -66,6 +66,49 @@ def test_entry_attempt_is_persistent_one_per_day_and_daily_rolls() -> None:
     assert state.entries_today == 0
 
 
+def test_thirty_sequential_flat_day_entries_allowed_and_thirty_first_blocked() -> None:
+    """The daily cap counts sequential entry attempts after each flat cycle."""
+
+    policy = _policy(maximum_entries_per_day=30)
+    state = PhaseBRiskState(policy_digest=policy.digest)
+
+    for entry_number in range(30):
+        gate = evaluate_risk_before_entry(
+            state=state,
+            policy=policy,
+            cycle_day_jst="2026-07-15",
+        )
+        assert gate.allowed is True, entry_number
+        record_risk_entry_attempt(
+            state=state,
+            policy=policy,
+            cycle_day_jst="2026-07-15",
+        )
+
+    assert state.entries_today == 30
+    blocked = evaluate_risk_before_entry(
+        state=state,
+        policy=policy,
+        cycle_day_jst="2026-07-15",
+    )
+    assert blocked.allowed is False
+    assert blocked.blocked_reasons == ("MAX_ENTRIES_PER_DAY_REACHED",)
+    with pytest.raises(H11AutoRuntimeSafetyError, match="entry attempt blocked"):
+        record_risk_entry_attempt(
+            state=state,
+            policy=policy,
+            cycle_day_jst="2026-07-15",
+        )
+
+    next_day = evaluate_risk_before_entry(
+        state=state,
+        policy=policy,
+        cycle_day_jst="2026-07-16",
+    )
+    assert next_day.allowed is True
+    assert state.entries_today == 0
+
+
 def test_per_trade_bound_violation_kills_and_never_auto_resumes() -> None:
     policy = _policy()
     state = PhaseBRiskState(policy_digest=policy.digest)
@@ -89,7 +132,7 @@ def test_daily_loss_limit_binds_independently_of_the_raised_entries_per_day_cap(
     # This proves the daily loss limit still fails closed well before the
     # entries-per-day cap could ever bind on its own -- two losing trades at
     # the real per-trade bound exhaust the real daily limit at entry 2 of a
-    # possible 20, so neither cap masks the other. Values mirror the real
+    # possible 30, so neither cap masks the other. Values mirror the real
     # frozen generation's production limits (5,000/10,000 yen).
     policy = _policy(
         per_trade_loss_bound_jpy=5_000,

@@ -14,6 +14,9 @@ notification action.
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -38,6 +41,31 @@ def _argv(repository: Path) -> list[str]:
         "--expected-generation-digest",
         "sha256:" + "b" * 64,
     ]
+
+
+def test_absolute_launcher_bootstraps_backend_imports_without_pythonpath(
+    tmp_path: Path,
+) -> None:
+    """LaunchAgent-style absolute execution must resolve ``app`` itself."""
+
+    repository = Path(__file__).resolve().parents[3]
+    launcher_path = (
+        repository
+        / "scripts/h11_auto_v4_unattended_live_scheduled_launcher.py"
+    )
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    result = subprocess.run(
+        [sys.executable, str(launcher_path), "--help"],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "usage:" in result.stdout
+    assert "ModuleNotFoundError" not in result.stderr
 
 
 def test_reviewed_files_digest_mismatch_aborts_before_session_prep(
