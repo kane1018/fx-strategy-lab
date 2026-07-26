@@ -1,5 +1,6 @@
 {
   "activation_permit_issued": false,
+  "actual_post_authorized": false,
   "architecture_review_clear": true,
   "broker_post_authorized": false,
   "danger_scan_passed": true,
