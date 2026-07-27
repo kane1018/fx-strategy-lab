@@ -186,15 +186,15 @@ def require_g013_entry_enabled(
     generation_entry_disabled: bool,
     reconciliation_contract_digest: str | None,
 ) -> None:
-    """Fail closed when this reviewed generation is reconciliation-only."""
+    """Fail closed when this reviewed generation is explicitly reconciliation-only."""
+    if generation_entry_disabled is not True:
+        return
 
     path = repository.resolve() / _CONTRACT_PATH
     if not path.exists():
-        if generation_entry_disabled is True:
-            raise V4GmoPostCanaryReconciliationError(
-                "G013_POST_CANARY_CONTRACT_MISMATCH"
-            )
-        return
+        raise V4GmoPostCanaryReconciliationError(
+            "G013_POST_CANARY_CONTRACT_MISMATCH"
+        )
     payload = _load_contract(path)
     _require_contract_safety(payload)
     if (

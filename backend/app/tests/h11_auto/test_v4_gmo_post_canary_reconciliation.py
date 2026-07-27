@@ -197,6 +197,19 @@ def test_reconciliation_only_contract_disables_entry(tmp_path: Path) -> None:
         )
 
 
+def test_entry_enabled_generation_skips_post_canary_contract(tmp_path: Path) -> None:
+    contract = tmp_path / "docs/templates/h11_v4_g013_post_canary_reconciliation.json"
+    contract.parent.mkdir(parents=True)
+    contract.write_text("{}", encoding="utf-8")
+    subject.require_g013_entry_enabled(
+        repository=tmp_path,
+        reviewed_files_digest="sha256:" + "b" * 64,
+        generation_digest="sha256:" + "c" * 64,
+        generation_entry_disabled=False,
+        reconciliation_contract_digest="sha256:" + "d" * 64,
+    )
+
+
 def test_reconciliation_contract_missing_safety_field_fails_closed(
     tmp_path: Path,
 ) -> None:
