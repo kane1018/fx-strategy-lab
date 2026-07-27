@@ -1,0 +1,18 @@
+{
+  "active_orders_attempt_limit": 1,
+  "active_orders_zero_required": true,
+  "broker_write_attempt_limit": 0,
+  "entry_disabled": true,
+  "flat_required": true,
+  "latest_executions_attempt_limit": 1,
+  "one_use_marker_required": true,
+  "open_positions_attempt_limit": 1,
+  "origin_generation_digest": "sha256:9a01ea35afe97b164562a3ad0255af854d9cd19da05d67662190785dec727ceb",
+  "origin_halt_reset_allowed": false,
+  "origin_state_mutation_allowed": false,
+  "reviewed_files_digest": "sha256:db92ca99e03461f9c534d3e2f7dd0802da2b5f19577d9787799536e9ad61d809",
+  "same_operation_retry_allowed": false,
+  "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
+  "status": "RECONCILIATION_ONLY_NO_ENTRY",
+  "target_generation_digest": "sha256:b42760d795a0c4d2463eae4ec9c6eadb3d124163cb339a4d374173931572bc56"
+}

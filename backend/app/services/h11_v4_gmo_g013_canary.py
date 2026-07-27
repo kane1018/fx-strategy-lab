@@ -212,16 +212,18 @@ def prepare_g013_canary_session(
         repository=repository,
         reviewed_files_digest=implementation_digest,
         generation_digest=generation.digest,
+        generation_entry_disabled=generation.entry_disabled,
+        reconciliation_contract_digest=generation.reconciliation_contract_digest,
     )
     # Bumped in lockstep with docs/templates/h11_v4_gmo_frozen_generation.json's
-    # generation_label on every re-freeze. G016 binds persistent ON/OFF while
+    # generation_label on every re-freeze. G017 binds persistent ON/OFF while
     # retaining the G015 30-attempt policy. This module only ever loads that
     # one canonical template, so this check can never diverge from the label
     # actually in use -- its purpose is to force an explicit, reviewed code
     # change (and implementation_digest recompute) any time the operative
     # generation changes, rather than silently accepting whatever the JSON
     # file says.
-    if not generation.generation_label.endswith("G016"):
+    if not generation.generation_label.endswith("G017"):
         raise V4GmoG013CanaryError("G013_GENERATION_REQUIRED")
     external_gate = load_external_preparation_gate(repository=repository)
     # Same instant as `current` below: today's preparation (00-60) must have

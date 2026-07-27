@@ -169,14 +169,97 @@ def test_reconciliation_only_contract_disables_entry(tmp_path: Path) -> None:
     contract = tmp_path / "docs/templates/h11_v4_g013_post_canary_reconciliation.json"
     contract.parent.mkdir(parents=True)
     contract.write_text(json.dumps({
+        "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
+        "status": "RECONCILIATION_ONLY_NO_ENTRY",
         "reviewed_files_digest": "sha256:" + "b" * 64,
-        "generation_digest": "sha256:" + "c" * 64,
+        "target_generation_digest": "sha256:" + "c" * 64,
         "origin_generation_digest": "sha256:" + "a" * 64,
         "entry_disabled": True,
+        "latest_executions_attempt_limit": 1,
+        "open_positions_attempt_limit": 1,
+        "active_orders_attempt_limit": 1,
+        "same_operation_retry_allowed": False,
+        "broker_write_attempt_limit": 0,
+        "origin_state_mutation_allowed": False,
+        "origin_halt_reset_allowed": False,
+        "flat_required": True,
+        "active_orders_zero_required": True,
+        "one_use_marker_required": True,
     }), encoding="utf-8")
     with pytest.raises(subject.V4GmoPostCanaryReconciliationError, match="ENTRY_DISABLED"):
+        payload = json.loads(contract.read_text(encoding="utf-8"))
         subject.require_g013_entry_enabled(
             repository=tmp_path,
             reviewed_files_digest="sha256:" + "b" * 64,
             generation_digest="sha256:" + "c" * 64,
+            generation_entry_disabled=True,
+            reconciliation_contract_digest=subject._contract_digest(payload),
+        )
+
+
+def test_reconciliation_contract_missing_safety_field_fails_closed(
+    tmp_path: Path,
+) -> None:
+    contract = tmp_path / "docs/templates/h11_v4_g013_post_canary_reconciliation.json"
+    contract.parent.mkdir(parents=True)
+    contract.write_text(
+        json.dumps(
+            {
+                "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
+                "status": "RECONCILIATION_ONLY_NO_ENTRY",
+                "reviewed_files_digest": "sha256:" + "b" * 64,
+                "generation_digest": "sha256:" + "c" * 64,
+                "origin_generation_digest": "sha256:" + "a" * 64,
+                "entry_disabled": True,
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        subject.V4GmoPostCanaryReconciliationError,
+        match="CONTRACT_MISMATCH",
+    ):
+        subject.load_post_canary_origin_generation_digest(
+            repository=tmp_path,
+            reviewed_files_digest="sha256:" + "b" * 64,
+            generation_digest="sha256:" + "c" * 64,
+            generation_entry_disabled=True,
+            reconciliation_contract_digest="sha256:" + "d" * 64,
+        )
+
+
+def test_reconciliation_contract_requires_the_exact_target_generation(
+    tmp_path: Path,
+) -> None:
+    contract = tmp_path / "docs/templates/h11_v4_g013_post_canary_reconciliation.json"
+    contract.parent.mkdir(parents=True)
+    payload = {
+        "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
+        "status": "RECONCILIATION_ONLY_NO_ENTRY",
+        "reviewed_files_digest": "sha256:" + "b" * 64,
+        "target_generation_digest": "sha256:" + "c" * 64,
+        "origin_generation_digest": "sha256:" + "a" * 64,
+        "entry_disabled": True,
+        "latest_executions_attempt_limit": 1,
+        "open_positions_attempt_limit": 1,
+        "active_orders_attempt_limit": 1,
+        "same_operation_retry_allowed": False,
+        "broker_write_attempt_limit": 0,
+        "origin_state_mutation_allowed": False,
+        "origin_halt_reset_allowed": False,
+        "flat_required": True,
+        "active_orders_zero_required": True,
+        "one_use_marker_required": True,
+    }
+    contract.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(
+        subject.V4GmoPostCanaryReconciliationError,
+        match="CONTRACT_MISMATCH",
+    ):
+        subject.load_post_canary_origin_generation_digest(
+            repository=tmp_path,
+            reviewed_files_digest="sha256:" + "b" * 64,
+            generation_digest="sha256:" + "d" * 64,
+            generation_entry_disabled=True,
+            reconciliation_contract_digest=subject._contract_digest(payload),
         )

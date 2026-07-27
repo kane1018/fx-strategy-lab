@@ -38,6 +38,8 @@ def main() -> int:
             repository=repository,
             reviewed_files_digest=digest,
             generation_digest=generation.digest,
+            generation_entry_disabled=generation.entry_disabled,
+            reconciliation_contract_digest=generation.reconciliation_contract_digest,
         )
         origin_root = v4_gmo_runtime_state_root(
             repository=repository, generation_digest=origin_digest

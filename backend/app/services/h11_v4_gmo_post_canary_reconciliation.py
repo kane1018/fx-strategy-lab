@@ -7,8 +7,10 @@ client can perform only three fixed private GET operations.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -50,6 +52,21 @@ _ENDPOINTS = (
     ),
 )
 _PACING_SECONDS = 0.25
+_REQUIRED_CONTRACT_SAFETY = {
+    "entry_disabled": True,
+    "latest_executions_attempt_limit": 1,
+    "open_positions_attempt_limit": 1,
+    "active_orders_attempt_limit": 1,
+    "same_operation_retry_allowed": False,
+    "broker_write_attempt_limit": 0,
+    "origin_state_mutation_allowed": False,
+    "origin_halt_reset_allowed": False,
+    "flat_required": True,
+    "active_orders_zero_required": True,
+    "one_use_marker_required": True,
+}
+_CONTRACT_DIGEST_EXCLUDED_FIELDS = frozenset({"target_generation_digest"})
+_SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class V4GmoPostCanaryReconciliationError(RuntimeError):
@@ -162,17 +179,34 @@ class V4GmoHttpxPostCanaryReadOnlyClient:
 
 
 def require_g013_entry_enabled(
-    *, repository: Path, reviewed_files_digest: str, generation_digest: str
+    *,
+    repository: Path,
+    reviewed_files_digest: str,
+    generation_digest: str,
+    generation_entry_disabled: bool,
+    reconciliation_contract_digest: str | None,
 ) -> None:
     """Fail closed when this reviewed generation is reconciliation-only."""
 
     path = repository.resolve() / _CONTRACT_PATH
     if not path.exists():
+        if generation_entry_disabled is True:
+            raise V4GmoPostCanaryReconciliationError(
+                "G013_POST_CANARY_CONTRACT_MISMATCH"
+            )
         return
     payload = _load_contract(path)
-    if payload.get("reviewed_files_digest") != reviewed_files_digest:
+    _require_contract_safety(payload)
+    if (
+        payload.get("reviewed_files_digest") != reviewed_files_digest
+        or payload.get("target_generation_digest") != generation_digest
+    ):
         raise V4GmoPostCanaryReconciliationError("G013_POST_CANARY_CONTRACT_MISMATCH")
-    if payload.get("generation_digest") != generation_digest:
+    if (
+        generation_entry_disabled is not True
+        or not isinstance(reconciliation_contract_digest, str)
+        or _contract_digest(payload) != reconciliation_contract_digest
+    ):
         raise V4GmoPostCanaryReconciliationError("G013_POST_CANARY_CONTRACT_MISMATCH")
     if payload.get("entry_disabled") is True:
         raise V4GmoPostCanaryReconciliationError(
@@ -181,21 +215,54 @@ def require_g013_entry_enabled(
 
 
 def load_post_canary_origin_generation_digest(
-    *, repository: Path, reviewed_files_digest: str, generation_digest: str
+    *,
+    repository: Path,
+    reviewed_files_digest: str,
+    generation_digest: str,
+    generation_entry_disabled: bool,
+    reconciliation_contract_digest: str | None,
 ) -> str:
     """Load only a reviewed target-to-origin binding; never an operator input."""
 
     payload = _load_contract(repository.resolve() / _CONTRACT_PATH)
+    _require_contract_safety(payload)
     origin = payload.get("origin_generation_digest")
     if (
         payload.get("reviewed_files_digest") != reviewed_files_digest
-        or payload.get("generation_digest") != generation_digest
+        or payload.get("target_generation_digest") != generation_digest
+        or generation_entry_disabled is not True
+        or not isinstance(reconciliation_contract_digest, str)
+        or _contract_digest(payload) != reconciliation_contract_digest
         or not isinstance(origin, str)
         or len(origin) != 71
         or not origin.startswith("sha256:")
     ):
         raise V4GmoPostCanaryReconciliationError("G013_POST_CANARY_CONTRACT_MISMATCH")
     return origin
+
+
+def _require_contract_safety(payload: Mapping[str, Any]) -> None:
+    if (
+        payload.get("schema") != "H11_V4_G013_POST_CANARY_RECONCILIATION_V1"
+        or payload.get("status") != "RECONCILIATION_ONLY_NO_ENTRY"
+        or any(payload.get(key) != value for key, value in _REQUIRED_CONTRACT_SAFETY.items())
+        or not isinstance(payload.get("target_generation_digest"), str)
+        or not _SHA256.fullmatch(payload["target_generation_digest"])
+    ):
+        raise V4GmoPostCanaryReconciliationError("G013_POST_CANARY_CONTRACT_MISMATCH")
+
+
+def _contract_digest(payload: Mapping[str, Any]) -> str:
+    # The manifest stores this digest, while the contract stores the manifest's
+    # canonical digest. Excluding only that back-reference prevents a hash
+    # cycle; it is still mandatory and compared to the runtime generation.
+    bound_payload = {
+        key: value
+        for key, value in payload.items()
+        if key not in _CONTRACT_DIGEST_EXCLUDED_FIELDS
+    }
+    canonical = json.dumps(bound_payload, sort_keys=True, separators=(",", ":"))
+    return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
 
 
 @dataclass

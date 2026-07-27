@@ -411,6 +411,8 @@ class V4GmoActualCoordinatorStore:
         superseded until it resolves.
         """
 
+        if generation.entry_disabled:
+            raise V4GmoActualCoordinatorError("v4 generation is entry disabled")
         risk = self._validate_and_price_entry(
             generation=generation,
             signal=signal,

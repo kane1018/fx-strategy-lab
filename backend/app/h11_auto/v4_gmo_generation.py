@@ -90,6 +90,8 @@ class V4GmoFrozenGeneration:
     maximum_entries_per_day: int
     same_action_retry_allowed: bool
     same_action_repost_allowed: bool
+    entry_disabled: bool = False
+    reconciliation_contract_digest: str | None = None
     actual_post_authorized: bool = False
     live_ready: bool = False
     unattended_live_supported: bool = False
@@ -141,6 +143,16 @@ class V4GmoFrozenGeneration:
             self.maximum_entries_per_day == selections.maximum_entries_per_day,
             self.same_action_retry_allowed is False,
             self.same_action_repost_allowed is False,
+            type(self.entry_disabled) is bool,
+            (
+                self.entry_disabled is False
+                and self.reconciliation_contract_digest is None
+            )
+            or (
+                self.entry_disabled is True
+                and isinstance(self.reconciliation_contract_digest, str)
+                and bool(_SHA256.fullmatch(self.reconciliation_contract_digest))
+            ),
             self.actual_post_authorized is False,
             self.live_ready is False,
             self.unattended_live_supported is False,
