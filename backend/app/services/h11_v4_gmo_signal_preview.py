@@ -137,7 +137,7 @@ def _load_prerequisite(*, repository: Path) -> _PreviewPrerequisite:
     # generation_label on every re-freeze. G016 binds persistent ON/OFF while
     # retaining the G015 30-attempt policy.
     if (
-        generation.generation_label != "H11_AUTO_30M_20260726_G016"
+        generation.generation_label != "H11_AUTO_30M_20260727_G018"
         or generation.strategy_version != "SHORT_V1"
         or generation.selected_horizon != "30m"
         or generation.symbol != "USD_JPY"
