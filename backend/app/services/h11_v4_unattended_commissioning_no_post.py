@@ -29,6 +29,12 @@ _G018_GENERATION_LABEL = "H11_AUTO_30M_20260727_G018"
 _G018_GENERATION_DIGEST = (
     "sha256:9a01ea35afe97b164562a3ad0255af854d9cd19da05d67662190785dec727ceb"
 )
+_G018_LEGACY_RECONCILIATION_BINDING_PATH = (
+    "docs/templates/h11_v4_g018_legacy_reconciliation_binding.json"
+)
+_G018_LEGACY_RECONCILIATION_BINDING_SCHEMA = (
+    "H11_V4_G018_LEGACY_RECONCILIATION_BINDING_V1"
+)
 _RESTART_SAFE_EXIT_ACTUAL_IMPLEMENTED = False
 _G020_LEGACY_PREDECESSOR_COMMISSIONING_SUPPORTED = False
 
@@ -283,7 +289,10 @@ def bind_g018_predecessor_canary_completion(
     if not ledger.is_file() or ledger.is_symlink():
         raise V4PredecessorCanaryCompletionError("V4_PREDECESSOR_LEDGER_INVALID")
     ledger_summary = _read_g018_ledger_summary(ledger)
-    candidate = _find_g018_reconciliation_pair(runtime_root)
+    legacy_binding = _load_g018_legacy_reconciliation_binding(repository.resolve())
+    candidate = _find_g018_reconciliation_pair(
+        runtime_root, legacy_binding=legacy_binding
+    )
     return build_predecessor_canary_completion_artifact(
         prior_canary_generation_label=_G018_GENERATION_LABEL,
         prior_canary_generation_digest=_G018_GENERATION_DIGEST,
@@ -660,7 +669,58 @@ def _read_g018_ledger_summary(ledger: Path) -> dict[str, int | bool]:
     }
 
 
-def _find_g018_reconciliation_pair(runtime_root: Path) -> dict[str, str | bool | int]:
+def _load_g018_legacy_reconciliation_binding(repository: Path) -> dict[str, object]:
+    path = repository / _G018_LEGACY_RECONCILIATION_BINDING_PATH
+    if path.is_symlink() or not path.is_file():
+        raise V4PredecessorCanaryCompletionError(
+            "V4_PREDECESSOR_RECONCILIATION_BINDING_INVALID"
+        )
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise V4PredecessorCanaryCompletionError(
+            "V4_PREDECESSOR_RECONCILIATION_BINDING_INVALID"
+        ) from error
+    if not isinstance(payload, dict):
+        raise V4PredecessorCanaryCompletionError(
+            "V4_PREDECESSOR_RECONCILIATION_BINDING_INVALID"
+        )
+    expected_keys = {
+        "schema",
+        "artifact_digest",
+        "origin_generation_digest",
+        "runtime_generation_digest",
+        "started_marker_digest",
+        "passed_marker_digest",
+        "status",
+        "broker_write",
+    }
+    digest_payload = {
+        key: value for key, value in payload.items() if key != "artifact_digest"
+    }
+    if (
+        set(payload) != expected_keys
+        or payload.get("schema") != _G018_LEGACY_RECONCILIATION_BINDING_SCHEMA
+        or payload.get("origin_generation_digest") != _G018_GENERATION_DIGEST
+        or not isinstance(payload.get("runtime_generation_digest"), str)
+        or not _SHA256.fullmatch(payload["runtime_generation_digest"])
+        or not isinstance(payload.get("started_marker_digest"), str)
+        or not _SHA256.fullmatch(payload["started_marker_digest"])
+        or not isinstance(payload.get("passed_marker_digest"), str)
+        or not _SHA256.fullmatch(payload["passed_marker_digest"])
+        or payload.get("status") != "REVIEWED_HISTORICAL_BINDING_NO_BROKER_POST"
+        or payload.get("broker_write") is not False
+        or payload.get("artifact_digest") != _artifact_digest(digest_payload)
+    ):
+        raise V4PredecessorCanaryCompletionError(
+            "V4_PREDECESSOR_RECONCILIATION_BINDING_INVALID"
+        )
+    return payload
+
+
+def _find_g018_reconciliation_pair(
+    runtime_root: Path, *, legacy_binding: dict[str, object]
+) -> dict[str, str | bool | int]:
     candidates: list[dict[str, str | bool | int]] = []
     for started in runtime_root.glob("generation-*/post-canary-reconciliation.started.json"):
         passed = started.with_name("post-canary-reconciliation.passed.json")
@@ -676,21 +736,39 @@ def _find_g018_reconciliation_pair(runtime_root: Path) -> dict[str, str | bool |
             passed_payload = json.loads(passed.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
+        runtime_digest = "sha256:" + started.parent.name.removeprefix("generation-")
+        if not _SHA256.fullmatch(runtime_digest):
+            continue
+        started_digest = _file_digest(started)
+        passed_digest = _file_digest(passed)
         if (
             started_payload.get("schema")
             != "H11_V4_G013_POST_CANARY_RECONCILIATION_V1"
             or started_payload.get("origin_generation_digest")
             != _G018_GENERATION_DIGEST
-            or started_payload.get("target_generation_digest")
-            != "sha256:" + started.parent.name.removeprefix("generation-")
             or started_payload.get("broker_write_attempt_count") != 0
-            or passed_payload.get("schema")
-            != "H11_V4_G013_POST_CANARY_RECONCILIATION_V1"
-            or passed_payload.get("origin_generation_digest")
-            != _G018_GENERATION_DIGEST
-            or passed_payload.get("started_marker_digest") != _file_digest(started)
-            or passed_payload.get("target_generation_digest")
-            != "sha256:" + started.parent.name.removeprefix("generation-")
+            or (
+                "target_generation_digest" in started_payload
+                and started_payload.get("target_generation_digest") != runtime_digest
+            )
+            or (
+                "schema" in passed_payload
+                and passed_payload.get("schema")
+                != "H11_V4_G013_POST_CANARY_RECONCILIATION_V1"
+            )
+            or (
+                "origin_generation_digest" in passed_payload
+                and passed_payload.get("origin_generation_digest")
+                != _G018_GENERATION_DIGEST
+            )
+            or (
+                "started_marker_digest" in passed_payload
+                and passed_payload.get("started_marker_digest") != started_digest
+            )
+            or (
+                "target_generation_digest" in passed_payload
+                and passed_payload.get("target_generation_digest") != runtime_digest
+            )
             or passed_payload.get("status") != "G013_POST_CANARY_FLAT_CONFIRMED"
             or passed_payload.get("result_known") is not True
             or passed_payload.get("subject_entry_observed") is not True
@@ -702,14 +780,27 @@ def _find_g018_reconciliation_pair(runtime_root: Path) -> dict[str, str | bool |
             or passed_payload.get("identifier_exposed") is not False
         ):
             continue
-        runtime_digest = "sha256:" + started.parent.name.removeprefix("generation-")
-        if not _SHA256.fullmatch(runtime_digest):
-            continue
+        native_binding_fields = {
+            "schema",
+            "origin_generation_digest",
+            "started_marker_digest",
+            "target_generation_digest",
+        }
+        if not native_binding_fields.issubset(passed_payload):
+            if (
+                runtime_digest
+                != legacy_binding.get("runtime_generation_digest")
+                or started_digest != legacy_binding.get("started_marker_digest")
+                or passed_digest != legacy_binding.get("passed_marker_digest")
+            ):
+                raise V4PredecessorCanaryCompletionError(
+                    "V4_PREDECESSOR_RECONCILIATION_UNBOUND_OR_AMBIGUOUS"
+                )
         candidates.append(
             {
                 "reconciliation_runtime_generation_digest": runtime_digest,
-                "reconciliation_started_marker_digest": _file_digest(started),
-                "reconciliation_passed_marker_digest": _file_digest(passed),
+                "reconciliation_started_marker_digest": started_digest,
+                "reconciliation_passed_marker_digest": passed_digest,
                 "reconciliation_origin_generation_digest": _G018_GENERATION_DIGEST,
                 "reconciliation_status": "G013_POST_CANARY_FLAT_CONFIRMED",
                 "reconciliation_result_known": True,

@@ -7,6 +7,23 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0AM. H-11 v4 G024 legacy reconciliation binding corrective（2026-07-28・no-POST）
+
+- G023の20-slot Public shadow観測はbroker POST 0、broker write falseで完了したが、one-use sealは
+  G018 predecessor reconciliation markerの旧形式を後発の必須fieldで検証していたためsafe refuseした。
+- corrective実装は、G018 origin、reconciliation runtime generation、started/passed marker両方の
+  SHA-256、broker write falseをtracked self-digested binding artifactへ固定する。旧markerはこのartifactと
+  完全一致する場合だけ受理し、コピー置換、追加候補、存在する任意binding fieldの不一致をfail-closedで拒否する。
+- reviewed-files digestは
+  `sha256:638bc3ace364f0d004029d584d38ceacc6454fede5df1785943aef5f39685550`、generation digestは
+  `sha256:4a1499d48d33e6a08770be9bedf84b7181e0760ba3b0aea8e6ec90d317294487`、
+  generation labelは`H11_AUTO_30M_20260728_G024`である。
+- focused/related tests、Ruff、diff check、danger scanはclear。独立Architecture/Safety/Operations
+  reviewは初回VETO 2件を修正後、3本ともCLEAR。local-only sanitized binderもbroker write falseで成立した。
+- actual POST、Private API、Keychain、通知、persistent ARM、LaunchAgent、permitは使用・許可していない。
+- **次に実行できる最大範囲**: clean mainでMonday self-check後、G024固有のPublic-only shadow slotを
+  最大20個新規記録し、異常0件の場合だけone-use sealとno-POST controller tickを各1回実行する。
+
 ## 0AL. H-11 v4 G023 current-generation shadow commissioning（2026-07-28・no-POST）
 
 - G022の既存review境界を変更せず、current-generation shadow commissioningを

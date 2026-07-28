@@ -1,0 +1,10 @@
+{
+  "artifact_digest": "sha256:41dcfa59df4c01ca4a1472e704a4dce40d7d13d59402d62ea01bf4ba3cae83e2",
+  "broker_write": false,
+  "origin_generation_digest": "sha256:9a01ea35afe97b164562a3ad0255af854d9cd19da05d67662190785dec727ceb",
+  "passed_marker_digest": "sha256:234447347f780f7e117f22c03e1cbe58d4638f76c20586d27aecdd0b150d491a",
+  "runtime_generation_digest": "sha256:b42760d795a0c4d2463eae4ec9c6eadb3d124163cb339a4d374173931572bc56",
+  "schema": "H11_V4_G018_LEGACY_RECONCILIATION_BINDING_V1",
+  "started_marker_digest": "sha256:04198a77ff0f5d7d6d63069e5e8cdd7118bfdb8eae2666123b8a537672fd055f",
+  "status": "REVIEWED_HISTORICAL_BINDING_NO_BROKER_POST"
+}

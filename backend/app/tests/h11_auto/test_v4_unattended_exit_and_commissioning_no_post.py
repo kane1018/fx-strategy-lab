@@ -420,7 +420,6 @@ def test_g018_predecessor_completion_binder_uses_a_temporary_sanitized_fixture(
             {
                 "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
                 "origin_generation_digest": "sha256:" + origin_digest,
-                "target_generation_digest": "sha256:" + reconciliation_digest,
                 "broker_write_attempt_count": 0,
             }
         ),
@@ -430,11 +429,6 @@ def test_g018_predecessor_completion_binder_uses_a_temporary_sanitized_fixture(
     (reconciliation / "post-canary-reconciliation.passed.json").write_text(
         json.dumps(
             {
-                "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
-                "origin_generation_digest": "sha256:" + origin_digest,
-                "target_generation_digest": "sha256:" + reconciliation_digest,
-                "started_marker_digest": "sha256:"
-                + hashlib.sha256(started.read_bytes()).hexdigest(),
                 "status": "G013_POST_CANARY_FLAT_CONFIRMED",
                 "result_known": True,
                 "subject_entry_observed": True,
@@ -448,6 +442,33 @@ def test_g018_predecessor_completion_binder_uses_a_temporary_sanitized_fixture(
         ),
         encoding="utf-8",
     )
+    binding_payload = {
+        "schema": "H11_V4_G018_LEGACY_RECONCILIATION_BINDING_V1",
+        "origin_generation_digest": "sha256:" + origin_digest,
+        "runtime_generation_digest": "sha256:" + reconciliation_digest,
+        "started_marker_digest": "sha256:"
+        + hashlib.sha256(started.read_bytes()).hexdigest(),
+        "passed_marker_digest": "sha256:"
+        + hashlib.sha256(
+            (reconciliation / "post-canary-reconciliation.passed.json").read_bytes()
+        ).hexdigest(),
+        "status": "REVIEWED_HISTORICAL_BINDING_NO_BROKER_POST",
+        "broker_write": False,
+    }
+    binding_payload["artifact_digest"] = "sha256:" + hashlib.sha256(
+        json.dumps(
+            binding_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    binding = (
+        tmp_path
+        / "docs/templates/h11_v4_g018_legacy_reconciliation_binding.json"
+    )
+    binding.parent.mkdir(parents=True)
+    binding.write_text(json.dumps(binding_payload), encoding="utf-8")
 
     artifact = bind_g018_predecessor_canary_completion(repository=tmp_path)
     artifact_path = tmp_path / "completion.json"
@@ -459,11 +480,32 @@ def test_g018_predecessor_completion_binder_uses_a_temporary_sanitized_fixture(
     assert artifact.exact_size_oco_protection_attempt_count == 1
     assert load_predecessor_canary_completion_artifact(artifact_path) == artifact
 
+    passed = reconciliation / "post-canary-reconciliation.passed.json"
+    legacy_started_payload = json.loads(started.read_text(encoding="utf-8"))
+    legacy_passed_payload = json.loads(passed.read_text(encoding="utf-8"))
+    mismatched_optional_bindings = (
+        (started, "target_generation_digest", "sha256:" + ("d" * 64)),
+        (passed, "schema", "WRONG_SCHEMA"),
+        (passed, "origin_generation_digest", "sha256:" + ("d" * 64)),
+        (passed, "started_marker_digest", "sha256:" + ("d" * 64)),
+        (passed, "target_generation_digest", "sha256:" + ("d" * 64)),
+    )
+    for marker, key, value in mismatched_optional_bindings:
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+        payload[key] = value
+        marker.write_text(json.dumps(payload), encoding="utf-8")
+        with pytest.raises(
+            V4PredecessorCanaryCompletionError,
+            match="V4_PREDECESSOR_RECONCILIATION_UNBOUND_OR_AMBIGUOUS",
+        ):
+            bind_g018_predecessor_canary_completion(repository=tmp_path)
+        started.write_text(json.dumps(legacy_started_payload), encoding="utf-8")
+        passed.write_text(json.dumps(legacy_passed_payload), encoding="utf-8")
+
     duplicate = origin.parent / f"generation-{'c' * 64}"
     duplicate.mkdir()
     duplicate_started = duplicate / "post-canary-reconciliation.started.json"
     duplicate_started_payload = json.loads(started.read_text(encoding="utf-8"))
-    duplicate_started_payload["target_generation_digest"] = "sha256:" + ("c" * 64)
     duplicate_started.write_text(
         json.dumps(duplicate_started_payload), encoding="utf-8"
     )
@@ -472,10 +514,6 @@ def test_g018_predecessor_completion_binder_uses_a_temporary_sanitized_fixture(
             encoding="utf-8"
         )
     )
-    duplicate_passed["target_generation_digest"] = "sha256:" + ("c" * 64)
-    duplicate_passed["started_marker_digest"] = "sha256:" + hashlib.sha256(
-        duplicate_started.read_bytes()
-    ).hexdigest()
     (duplicate / "post-canary-reconciliation.passed.json").write_text(
         json.dumps(duplicate_passed), encoding="utf-8"
     )
