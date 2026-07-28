@@ -1,19 +1,20 @@
 {
   "activation_permit_issued": false,
   "actual_post_authorized": false,
-  "architecture_review_clear": false,
+  "architecture_review_clear": true,
   "broker_post_authorized": false,
   "danger_scan_passed": true,
   "diff_check_passed": true,
   "focused_tests_passed": true,
-  "generation_digest": "sha256:d51a7e3d671965bd6e6c69f00be251300731929caa3be488437c0f5d475b87bc",
-  "generation_label": "H11_AUTO_30M_20260728_G021",
-  "generation_manifest_digest": "sha256:d51a7e3d671965bd6e6c69f00be251300731929caa3be488437c0f5d475b87bc",
-  "operations_review_clear": false,
+  "generation_digest": "sha256:360b779d6aa69b396baa1f560511f9d315ecabe8f72cd64d609b8f4d6adff417",
+  "generation_label": "H11_AUTO_30M_20260728_G022",
+  "generation_manifest_digest": "sha256:360b779d6aa69b396baa1f560511f9d315ecabe8f72cd64d609b8f4d6adff417",
+  "independent_review_attestation_digest": "sha256:3ba27cb6396a08d35bea246bd7c9d59b0e3d3be80a7309649e8d235d46eed2e1",
+  "operations_review_clear": true,
   "related_tests_passed": true,
-  "reviewed_files_digest": "sha256:aa9d1b36d135088dce13abd5fca842df04383e47dfd96207a4f171613515ce7c",
+  "reviewed_files_digest": "sha256:724d0d57e9c3db37214397668d36ed425c3d3ad72d23ea83f4b92e26a1788223",
   "ruff_passed": true,
-  "safety_review_clear": false,
+  "safety_review_clear": true,
   "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
-  "status": "CORRECTIVE_GENERATION_PENDING_REVIEW_NO_BROKER_POST"
+  "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST"
 }

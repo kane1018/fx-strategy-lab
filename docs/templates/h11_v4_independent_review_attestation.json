@@ -1,0 +1,17 @@
+{
+  "architecture_status": "CLEAR",
+  "artifact_digest": "sha256:3ba27cb6396a08d35bea246bd7c9d59b0e3d3be80a7309649e8d235d46eed2e1",
+  "generation_digest": "sha256:360b779d6aa69b396baa1f560511f9d315ecabe8f72cd64d609b8f4d6adff417",
+  "generation_label": "H11_AUTO_30M_20260728_G022",
+  "operations_status": "CLEAR",
+  "review_method": "INDEPENDENT_MULTI_AGENT_READ_ONLY",
+  "review_scope": [
+    "NO_POST_INTEGRATED_CONTROLLER",
+    "G022_GENERATION_ROTATION",
+    "MONDAY_SELF_CHECK",
+    "EXTERNAL_PREPARATION_EVIDENCE"
+  ],
+  "reviewed_files_digest": "sha256:724d0d57e9c3db37214397668d36ed425c3d3ad72d23ea83f4b92e26a1788223",
+  "safety_status": "CLEAR",
+  "schema": "H11_V4_INDEPENDENT_REVIEW_ATTESTATION_V1"
+}

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +15,9 @@ from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
 EVIDENCE_PATH = Path("docs/templates/h11_v4_actual_preparation_evidence.json")
+REVIEW_ATTESTATION_PATH = Path(
+    "docs/templates/h11_v4_independent_review_attestation.json"
+)
 FOCUSED_TESTS = (
     "app/tests/h11_auto/test_v4_gmo_actual_coordinator_precanary.py",
     "app/tests/h11_auto/test_v4_unattended_live_scheduled_launcher_fake_only.py",
@@ -21,14 +26,24 @@ FOCUSED_TESTS = (
     "app/tests/h11_auto/test_v4_gmo_g019_exit_policy_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_exit_and_commissioning_no_post.py",
     "app/tests/h11_auto/test_v4_g020_shadow_observer_no_post.py",
+    "app/tests/h11_auto/test_v4_unattended_integrated_controller_no_post.py",
+    "app/tests/h11_auto/test_v4_unattended_controller_snapshot_no_post.py",
+    "app/tests/h11_auto/test_v4_unattended_controller_no_post_tick.py",
     "app/tests/h11_auto/test_h11_manual_auto_import_boundary_no_post.py",
     "app/tests/h11_auto/test_isolation_no_post.py",
+)
+RELATED_TESTS = (
+    "app/tests/h11_auto/test_v4_actual_preparation_fake_first.py",
+    "app/tests/h11_auto/test_v4_gmo_launchagent_runner_no_post.py",
 )
 RUFF_TARGETS = (
     "app/h11_auto/v4_gmo_g019_exit_policy.py",
     "app/services/h11_v4_unattended_exit_recovery_no_post.py",
     "app/services/h11_v4_unattended_commissioning_no_post.py",
     "app/services/h11_v4_g020_shadow_observer_no_post.py",
+    "app/services/h11_v4_unattended_integrated_controller_no_post.py",
+    "app/services/h11_v4_unattended_controller_snapshot_no_post.py",
+    "scripts/h11_auto_v4_unattended_controller_no_post_tick.py",
     "scripts/h11_auto_v4_g020_shadow_observer.py",
     "app/tests/h11_auto/test_v4_unattended_live_scheduled_launcher_fake_only.py",
     "app/tests/h11_auto/test_runtime_safety_no_post.py",
@@ -36,6 +51,9 @@ RUFF_TARGETS = (
     "app/tests/h11_auto/test_v4_gmo_actual_coordinator_precanary.py",
     "app/tests/h11_auto/test_v4_gmo_g019_exit_policy_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_exit_and_commissioning_no_post.py",
+    "app/tests/h11_auto/test_v4_unattended_integrated_controller_no_post.py",
+    "app/tests/h11_auto/test_v4_unattended_controller_snapshot_no_post.py",
+    "app/tests/h11_auto/test_v4_unattended_controller_no_post_tick.py",
     "app/tests/h11_auto/test_h11_manual_auto_import_boundary_no_post.py",
     "scripts/h11_auto_v4_monday_self_check.py",
     "h11_v4_reviewed_digest.py",
@@ -45,6 +63,9 @@ DANGER_SCAN_TARGETS = (
     "app/services/h11_v4_unattended_exit_recovery_no_post.py",
     "app/services/h11_v4_unattended_commissioning_no_post.py",
     "app/services/h11_v4_g020_shadow_observer_no_post.py",
+    "app/services/h11_v4_unattended_integrated_controller_no_post.py",
+    "app/services/h11_v4_unattended_controller_snapshot_no_post.py",
+    "scripts/h11_auto_v4_unattended_controller_no_post_tick.py",
 )
 DANGER_SCAN_TOKENS = (
     "import httpx",
@@ -60,6 +81,9 @@ DANGER_SCAN_TOKENS = (
 
 class MondaySelfCheckError(RuntimeError):
     """Safe failure for an offline readiness check."""
+
+
+_GENERATION_LABEL = re.compile(r"^H11_AUTO_30M_[0-9]{8}_G[0-9]{3}$")
 
 
 def _run(command: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -100,7 +124,7 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
         repository=repository,
         implementation_digest=reviewed_digest,
     )
-    if generation.generation_label != "H11_AUTO_30M_20260728_G021":
+    if _GENERATION_LABEL.fullmatch(generation.generation_label) is None:
         raise MondaySelfCheckError("SELF_CHECK_GENERATION_LABEL_MISMATCH")
     if generation.maximum_entries_per_day != 30:
         raise MondaySelfCheckError("SELF_CHECK_ENTRY_CAP_MISMATCH")
@@ -118,8 +142,20 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
         evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise MondaySelfCheckError("SELF_CHECK_EVIDENCE_INVALID") from error
+    review_fields = (
+        "architecture_review_clear",
+        "safety_review_clear",
+        "operations_review_clear",
+    )
+    if (
+        evidence.get("status")
+        == "CORRECTIVE_GENERATION_PENDING_REVIEW_NO_BROKER_POST"
+        or any(evidence.get(field) is not True for field in review_fields)
+    ):
+        raise MondaySelfCheckError("SELF_CHECK_REVIEW_PENDING")
     expected = {
-        "status": "CORRECTIVE_GENERATION_PENDING_REVIEW_NO_BROKER_POST",
+        "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
+        "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST",
         "reviewed_files_digest": reviewed_digest,
         "generation_digest": generation.digest,
         "generation_manifest_digest": generation.digest,
@@ -127,9 +163,9 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
         "actual_post_authorized": False,
         "broker_post_authorized": False,
         "activation_permit_issued": False,
-        "architecture_review_clear": False,
-        "safety_review_clear": False,
-        "operations_review_clear": False,
+        "architecture_review_clear": True,
+        "safety_review_clear": True,
+        "operations_review_clear": True,
         "danger_scan_passed": True,
         "diff_check_passed": True,
         "focused_tests_passed": True,
@@ -138,7 +174,41 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
     }
     if any(evidence.get(key) != value for key, value in expected.items()):
         raise MondaySelfCheckError("SELF_CHECK_EVIDENCE_MISMATCH")
-    raise MondaySelfCheckError("SELF_CHECK_REVIEW_PENDING")
+    try:
+        attestation = json.loads(
+            (repository / REVIEW_ATTESTATION_PATH).read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as error:
+        raise MondaySelfCheckError("SELF_CHECK_REVIEW_ATTESTATION_INVALID") from error
+    if (
+        not isinstance(attestation, dict)
+        or attestation.get("schema")
+        != "H11_V4_INDEPENDENT_REVIEW_ATTESTATION_V1"
+        or attestation.get("reviewed_files_digest") != reviewed_digest
+        or attestation.get("generation_digest") != generation.digest
+        or attestation.get("generation_label") != generation.generation_label
+        or attestation.get("architecture_status") != "CLEAR"
+        or attestation.get("safety_status") != "CLEAR"
+        or attestation.get("operations_status") != "CLEAR"
+        or attestation.get("artifact_digest")
+        != _canonical_artifact_digest(attestation)
+        or evidence.get("independent_review_attestation_digest")
+        != attestation.get("artifact_digest")
+    ):
+        raise MondaySelfCheckError("SELF_CHECK_REVIEW_ATTESTATION_MISMATCH")
+    return reviewed_digest, generation
+
+
+def _canonical_artifact_digest(payload: dict[str, Any]) -> str:
+    canonical = {
+        key: value for key, value in payload.items() if key != "artifact_digest"
+    }
+    encoded = json.dumps(
+        canonical,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
 
 
 def _run_local_checks(repository: Path) -> None:
@@ -157,6 +227,10 @@ def _run_local_checks(repository: Path) -> None:
     _require_success(
         _run([sys.executable, "-m", "pytest", "-q", *FOCUSED_TESTS], cwd=backend),
         "SELF_CHECK_FOCUSED_TESTS_FAILED",
+    )
+    _require_success(
+        _run([sys.executable, "-m", "pytest", "-q", *RELATED_TESTS], cwd=backend),
+        "SELF_CHECK_RELATED_TESTS_FAILED",
     )
     _require_success(
         _run([sys.executable, "-m", "ruff", "check", *RUFF_TARGETS], cwd=backend),
