@@ -85,18 +85,50 @@ def test_persistent_cycle_has_no_broker_id_raw_or_credential_fields() -> None:
     assert names.isdisjoint(forbidden)
 
 
-def test_manual_and_auto_packages_do_not_import_each_other() -> None:
+def test_manual_does_not_import_the_isolated_phase_a_paper_engine() -> None:
+    """``h11_manual`` must never import the old, isolated no-POST paper engine.
+
+    ``app.h11_auto`` also contains the v4 GMO real-trading system and its
+    shared infrastructure (``contracts``/``persistence``/``runtime_safety``/
+    ``boundary``/``formal_signal_feed``, all reused by v4 modules) -- the
+    unattended arm control panel in ``h11_manual`` legitimately depends on
+    that shared infra and on v4-specific modules (``v4_actual_preparation_guard``,
+    ``v4_gmo_actual_coordinator``, ``v4_gmo_generation``, ``v4_gmo_runtime_paths``)
+    to arm/disarm and display status for the real system. This test protects
+    only the phase-A-exclusive research modules below, which have zero v4
+    usage and no legitimate reason to be reachable from any manual trading
+    interface.
+    """
     repo_root = Path(__file__).resolve().parents[2]
-    auto_source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in (repo_root / "h11_auto").glob("*.py")
+    phase_a_only_modules = (
+        "engine",
+        "exit_policy",
+        "paper",
+        "paper_runner",
+        "recovery",
+        "report",
+        "risk",
+        "runtime_status",
+        "signal_adapter",
+        "soak",
+        "state_machine",
+        "status",
+        "wall_clock_soak",
     )
     manual_source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (repo_root / "h11_manual").glob("*.py")
     )
+    for module in phase_a_only_modules:
+        assert f"app.h11_auto.{module}" not in manual_source
+
+    # The reverse direction is unaffected by v4's evolution: the isolated
+    # research engine must never import the manual trading interface.
+    auto_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (repo_root / "h11_auto").glob("*.py")
+    )
     assert "app.h11_manual" not in auto_source
-    assert "app.h11_auto" not in manual_source
 
 
 def test_main_readonly_has_no_auto_package_binding() -> None:

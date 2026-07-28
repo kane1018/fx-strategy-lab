@@ -1765,20 +1765,20 @@ def test_v4_generation_bound_entry_time_policy_covers_all_frozen_boundaries(
     assert _policy().entry_time_allowed(now_utc=now_utc) is expected
 
 
-def test_v4_scheduled_time_exit_is_23h_except_friday_03_45jst_start() -> None:
+def test_v4_scheduled_time_exit_is_30m() -> None:
     thursday_entry = datetime(2026, 7, 16, 3, 0, tzinfo=UTC)  # Thu 12 JST
     friday_morning_entry = datetime(2026, 7, 17, 0, 0, tzinfo=UTC)  # Fri 09 JST
     friday_evening_entry = datetime(2026, 7, 17, 11, 0, tzinfo=UTC)  # Fri 20 JST
 
     assert v4_gmo_scheduled_time_exit_at(
         entry_time_utc=thursday_entry
-    ) == thursday_entry + timedelta(seconds=82_800)
+    ) == thursday_entry + timedelta(seconds=1_800)
     assert v4_gmo_scheduled_time_exit_at(
         entry_time_utc=friday_morning_entry
-    ) == datetime(2026, 7, 17, 18, 45, tzinfo=UTC)  # Sat 03:45 JST
+    ) == datetime(2026, 7, 17, 0, 30, tzinfo=UTC)  # Fri 09:30 JST
     assert v4_gmo_scheduled_time_exit_at(
         entry_time_utc=friday_evening_entry
-    ) == datetime(2026, 7, 17, 18, 45, tzinfo=UTC)  # Sat 03:45 JST
+    ) == datetime(2026, 7, 17, 11, 30, tzinfo=UTC)  # Fri 20:30 JST
     assert (
         v4_gmo_scheduled_time_exit_at(entry_time_utc=datetime(2026, 7, 17, 9, 0))
         is None
@@ -3083,7 +3083,7 @@ def test_amount_only_flat_result_is_unknown_and_latches_halt(
     lock.release()
 
 
-def test_time_exit_requires_23h_and_exact_protection_cancel_first(
+def test_time_exit_requires_30m_and_exact_protection_cancel_first(
     tmp_path: Path,
 ) -> None:
     signal = _signal()
@@ -3161,7 +3161,7 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
             snapshot=exact_snapshot,
             position_bundle_total=1_000,
             authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
-            now_utc=NOW + timedelta(seconds=82_800),
+            now_utc=NOW + timedelta(seconds=1_800),
         )
     attempt = store._record_risk_reducing_attempt_from_coordinated_path(
         issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
@@ -3170,12 +3170,12 @@ def test_time_exit_requires_23h_and_exact_protection_cancel_first(
         snapshot=exact_snapshot,
         position_bundle_total=1_000,
         authoritative_reconciliation_digest=RECONCILIATION_DIGEST,
-        now_utc=NOW + timedelta(seconds=82_801),
+        now_utc=NOW + timedelta(seconds=1_801),
     )
     assert attempt.action == V4GmoAction.CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT.value
 
 
-def test_friday_time_exit_uses_saturday_03_45jst_sequence_start(
+def test_time_exit_is_not_bound_by_saturday_03_45_after_30m_cap(
     tmp_path: Path,
 ) -> None:
     friday_entry = datetime(2026, 7, 17, 0, 0, tzinfo=UTC)  # Fri 09 JST
@@ -3201,7 +3201,7 @@ def test_friday_time_exit_uses_saturday_03_45jst_sequence_start(
         entry_status=V4GmoEntryStatus.FILLED,
         protection_status=V4GmoProtectionStatus.EXACT_MATCH,
     )
-    sequence_start = datetime(2026, 7, 17, 18, 45, tzinfo=UTC)  # Sat 03:45 JST
+    sequence_start = datetime(2026, 7, 17, 0, 30, tzinfo=UTC)  # Fri 09:30 JST
     with pytest.raises(V4GmoActualCoordinatorError, match="state mismatch"):
         store._record_risk_reducing_attempt_from_coordinated_path(
             issuer_token=_ENTRY_PREFLIGHT_ISSUER_TOKEN,
@@ -3233,12 +3233,12 @@ def test_full_time_exit_sequence_is_fixed_and_each_write_is_once_only(
     assert lock.acquire() is True
     risk_store, risk_policy, dead_man = _runtime_safety(
         runtime_root,
-        heartbeat_at=NOW + timedelta(seconds=82_801),
+        heartbeat_at=NOW + timedelta(seconds=1_801),
     )
     transport = _FakeTransport(responses=[{"status": 0}, {"status": 0}])
     clock = _Clock(
-        wall=NOW + timedelta(seconds=82_801),
-        monotonic=82_901.0,
+        wall=NOW + timedelta(seconds=1_801),
+        monotonic=1_901.0,
     )
     path = V4GmoCoordinatedActualPath(
         repository=tmp_path,
@@ -3362,11 +3362,11 @@ def test_foreground_driver_reads_real_coordinator_snapshot_and_dispatches(
     assert lock.acquire() is True
     risk_store, risk_policy, dead_man = _runtime_safety(
         runtime_root,
-        heartbeat_at=NOW + timedelta(seconds=82_801),
+        heartbeat_at=NOW + timedelta(seconds=1_801),
     )
     clock = _Clock(
-        wall=NOW + timedelta(seconds=82_801),
-        monotonic=82_901.0,
+        wall=NOW + timedelta(seconds=1_801),
+        monotonic=1_901.0,
     )
     path = V4GmoCoordinatedActualPath(
         repository=tmp_path,
@@ -3426,12 +3426,12 @@ def test_time_exit_non_open_or_stale_at_transport_retains_oco_and_halts(
     assert lock.acquire() is True
     risk_store, risk_policy, dead_man = _runtime_safety(
         runtime_root,
-        heartbeat_at=NOW + timedelta(seconds=82_801),
+        heartbeat_at=NOW + timedelta(seconds=1_801),
     )
     transport = _FakeTransport(responses=[])
     clock = _Clock(
-        wall=NOW + timedelta(seconds=82_801),
-        monotonic=82_901.0,
+        wall=NOW + timedelta(seconds=1_801),
+        monotonic=1_901.0,
     )
     path = V4GmoCoordinatedActualPath(
         repository=tmp_path,
@@ -3492,12 +3492,12 @@ def test_position_time_exit_requires_separate_fresh_open_at_transport_boundary(
     assert lock.acquire() is True
     risk_store, risk_policy, dead_man = _runtime_safety(
         runtime_root,
-        heartbeat_at=NOW + timedelta(seconds=82_801),
+        heartbeat_at=NOW + timedelta(seconds=1_801),
     )
     transport = _FakeTransport(responses=[{"status": 0}])
     clock = _Clock(
-        wall=NOW + timedelta(seconds=82_801),
-        monotonic=82_901.0,
+        wall=NOW + timedelta(seconds=1_801),
+        monotonic=1_901.0,
     )
     path = V4GmoCoordinatedActualPath(
         repository=tmp_path,

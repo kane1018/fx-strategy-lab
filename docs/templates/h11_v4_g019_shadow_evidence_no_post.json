@@ -1,0 +1,10 @@
+{
+  "abnormal_status_count": 0,
+  "actual_post_count": 0,
+  "artifact_digest": "sha256:d84958966edfb3080785a035cf7eb3b32085e8b19c8e5a9d0f0d233b5d17eeaa",
+  "broker_write": false,
+  "completed_slot_digests": [],
+  "generation_digest": "sha256:0fbc93890d69c8404fba99cdf8344722c19d71b937d4cb0f6155817c1b663b2e",
+  "reviewed_files_digest": "sha256:4639cd6a2116c02d12b34bde961d9417db12db631c7c26509a97c097c32ca79f",
+  "schema": "H11_V4_G019_SHADOW_EVIDENCE_NO_POST_V1"
+}

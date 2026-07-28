@@ -33,8 +33,11 @@ def test_generation_check_rejects_commissioned_flags(monkeypatch, tmp_path: Path
         '"reviewed_files_digest":"sha256:' + "a" * 64 + '",'
         '"generation_digest":"sha256:' + "b" * 64 + '",'
         '"generation_manifest_digest":"sha256:' + "b" * 64 + '",'
+        '"generation_label":"H11_AUTO_30M_20260728_G019",'
         '"actual_post_authorized":false,"broker_post_authorized":false,'
-        '"activation_permit_issued":false}',
+        '"activation_permit_issued":false,'
+        '"architecture_review_clear":true,"safety_review_clear":true,'
+        '"operations_review_clear":true}',
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -46,7 +49,7 @@ def test_generation_check_rejects_commissioned_flags(monkeypatch, tmp_path: Path
         self_check,
         "load_v4_gmo_frozen_generation",
         lambda **_kwargs: SimpleNamespace(
-            generation_label="H11_AUTO_30M_20260726_G016",
+            generation_label="H11_AUTO_30M_20260728_G019",
             maximum_entries_per_day=30,
             same_action_retry_allowed=False,
             same_action_repost_allowed=False,

@@ -39,6 +39,7 @@ REVIEWED_FILES = (
     "backend/app/h11_auto/v4_gmo_actual_coordinator.py",
     "backend/app/h11_auto/v4_gmo_canary_activation.py",
     "backend/app/h11_auto/v4_gmo_contracts.py",
+    "backend/app/h11_auto/v4_gmo_g019_exit_policy.py",
     "backend/app/h11_auto/v4_gmo_engine.py",
     "backend/app/h11_auto/v4_gmo_boundary.py",
     "backend/app/h11_auto/v4_gmo_evidence.py",
@@ -98,6 +99,8 @@ REVIEWED_FILES = (
     "backend/app/services/h11_v4_unattended_live_entry_notification.py",
     "backend/app/services/h11_v4_unattended_live_orchestration.py",
     "backend/app/services/h11_v4_unattended_live_paths.py",
+    "backend/app/services/h11_v4_unattended_exit_recovery_no_post.py",
+    "backend/app/services/h11_v4_unattended_commissioning_no_post.py",
     "backend/scripts/h11_auto_v4_unattended_live_scheduled_launcher.py",
     "backend/scripts/h11_auto_v4_install_unattended_live_scheduler_launchagent.py",
     "backend/scripts/h11_auto_v4_monday_self_check.py",
@@ -112,6 +115,9 @@ REVIEWED_FILES = (
     "backend/app/tests/h11_manual/test_local_api_and_isolation.py",
     "backend/app/tests/h11_auto/test_v4_unattended_scheduler_launchagent_installer_no_post.py",
     "backend/app/tests/h11_auto/test_v4_monday_self_check_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_gmo_g019_exit_policy_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_unattended_exit_and_commissioning_no_post.py",
+    "backend/app/tests/h11_auto/test_h11_manual_auto_import_boundary_no_post.py",
     "backend/app/tests/h11_auto/test_v4_actual_preparation_fake_first.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g013_fake_only.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g013_unattended_authorization_fake_only.py",
@@ -141,6 +147,8 @@ REVIEWED_FILES = (
     "docs/OPERATOR_V4_EDGE_IMPLEMENTATION_PROPOSAL_NO_POST_20260716.md",
     "docs/H11_V4_PERSISTENT_ARM_CONTROL_DESIGN.md",
     "docs/H11_V4_PERSISTENT_ARM_CONTROL_RUNBOOK.md",
+    "docs/H11_V4_G019_RESTART_SAFE_EXIT_AND_COMMISSIONING_DESIGN.md",
+    "docs/H11_V4_G018_EXIT_30M_COMPLETION_HANDOFF.md",
 )
 
 

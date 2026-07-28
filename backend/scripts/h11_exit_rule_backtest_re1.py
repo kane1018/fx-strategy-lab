@@ -362,13 +362,16 @@ def _simulate_prod_replay(
     faces: PriceFaces,
     atr: np.ndarray,
     minutes_index: np.ndarray,
+    *,
+    timeout_minutes: int = 23 * 60,
 ) -> list[Trade]:
-    """PROD-G014-REPLAY: 1.5ATR SL / 1.5R TP / 23h. Regression check only."""
+    """Replay 1.5ATR SL / 1.5R TP with an explicit time limit."""
 
     trades: list[Trade] = []
     busy_until = -1
     total = len(faces.bid_close)
-    timeout_minutes = 23 * 60
+    if timeout_minutes <= 0:
+        raise ValueError("PROD_REPLAY_TIMEOUT_INVALID")
     for row, side in signals:
         if row <= busy_until:
             continue
@@ -655,12 +658,27 @@ def main() -> int:
     prod_trades_reused = _simulate_prod_replay(
         reused_holdout_signals, faces, atr, minutes_index
     )
+    g019_trades_dev = _simulate_prod_replay(
+        is_signals, faces, atr, minutes_index, timeout_minutes=30
+    )
+    g019_trades_reused = _simulate_prod_replay(
+        reused_holdout_signals,
+        faces,
+        atr,
+        minutes_index,
+        timeout_minutes=30,
+    )
 
     headline_cost = active_cost_models[headline_cost_id]
     print("-- 回帰確認 (development / reused holdout) --")
+    regression_replays: list[dict[str, object]] = []
     for label, trades in (
         ("A0 (30分固定、SLTPなし)", a0_trades_dev + a0_trades_reused),
         ("PROD-G014-REPLAY (1.5ATR/1.5R/23h、簡易比較)", prod_trades_dev + prod_trades_reused),
+        (
+            "PROD-G019-CANDIDATE (1.5ATR/1.5R/30m、簡易比較)",
+            g019_trades_dev + g019_trades_reused,
+        ),
     ):
         pips = (
             np.array([t.raw_pips - headline_cost for t in trades])
@@ -673,6 +691,15 @@ def main() -> int:
         print(
             f"  {label}: n={n}, net_yen({headline_cost_id})={total_yen:,.0f}, "
             f"avg_pips({headline_cost_id})={avg_pips:.3f}"
+        )
+        regression_replays.append(
+            {
+                "label": label,
+                "trade_count": n,
+                "headline_cost_id": headline_cost_id,
+                "net_yen": total_yen,
+                "average_net_pips": avg_pips,
+            }
         )
     print()
 
@@ -833,6 +860,7 @@ def main() -> int:
         json.dumps(
             {
                 "price_mode": price_mode,
+                "regression_replays": regression_replays,
                 "candidates": candidate_rows,
                 "bootstrap": bootstrap_results,
                 "fdr_survivors": survivors,
