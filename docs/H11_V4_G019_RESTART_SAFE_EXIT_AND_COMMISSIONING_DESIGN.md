@@ -179,3 +179,18 @@ position ownership, current active protection, and matching protection/exit
 cycle bindings before reporting an exit scope for separate review. Storage
 unavailability reports `STORAGE_UNAVAILABLE_NO_POST` and does not falsely claim
 that a durable halt was recorded.
+
+`h11_v4_unattended_controller_snapshot_no_post.py` and
+`h11_auto_v4_unattended_controller_no_post_tick.py` provide the first offline
+scheduler integration layer. They load only local generation, risk, ARM,
+commissioning, shadow, and historical predecessor artifacts. Commissioning and
+shadow paths are derived from the loaded generation suffix; missing or stale
+current-generation artifacts are refused. Historical predecessor evidence is
+accepted only when its label, generation digest, handoff digest, and
+reconciliation digest exactly match the current commissioning artifact. Facts
+that would require Public/Private APIs, credentials, actual notifications, or a
+process lock are fixed to conservative unavailable values. The tick writes only
+its separate local no-POST SQLite state, reports sanitized phase-specific
+failure labels, and cannot import the live bounded runner or actual transports.
+Wiring this decision in front of the actual scheduler remains a separately
+reviewed change.
