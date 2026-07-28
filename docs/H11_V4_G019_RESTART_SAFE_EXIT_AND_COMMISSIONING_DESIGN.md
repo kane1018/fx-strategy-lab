@@ -93,18 +93,18 @@ Even complete evidence only produces
 `READY_FOR_SEPARATE_LIVE_REVIEW`. It does not change ARM state and does not
 authorize a broker POST. The pure gate is
 `h11_v4_unattended_commissioning_no_post.py`.
-The current fail-closed artifact is
+The historical G019 fail-closed artifact is
 `docs/templates/h11_v4_g019_commissioning_no_post.json`; it is self-digested,
 Its bound shadow artifact is
 `docs/templates/h11_v4_g019_shadow_evidence_no_post.json`; it currently has no
 completed-slot digests and is also fail-closed.
 
-The reviewed shadow-evidence producer is not implemented in this phase.
-Accordingly, `SHADOW_EVIDENCE_PRODUCER_IMPLEMENTED` is fixed to `False` and
-`READY_FOR_SEPARATE_LIVE_REVIEW` is intentionally unreachable. A future
-reviewed phase must implement the producer and bind exact G018 predecessor
-generation, reconciliation-artifact, and handoff digests before changing that
-constant.
+The active successor contract is G020. Its reviewed shadow producer and
+artifacts are documented in `H11_V4_G020_SHADOW_COMMISSIONING_DESIGN.md` and
+the bound G020 templates. Shadow production is implemented, but commissioning
+remains intentionally unreachable because legacy G018 predecessor evidence is
+not supported and restart-safe actual exit is not implemented. Only a future
+reviewed non-synthetic V2 predecessor producer may change that boundary.
 
 ## Explicitly not implemented
 
@@ -113,7 +113,7 @@ constant.
 - LaunchAgent installation for the exit worker.
 - Scheduler or UI wiring to commissioning evidence.
 - Persistent ARM ON.
-- G019 generation freeze, external preparation, or live activation.
+- G020 commissioned generation freeze, external preparation, or live activation.
 - Any broker GET/POST, credential access, or notification send.
 
 These remain review-gated phases. The next implementation may not reuse the
@@ -138,8 +138,44 @@ whose started and passed markers both bind the same origin and target
 generation, and whose passed marker binds the exact started-marker digest, may
 produce a canonical predecessor completion artifact.
 
+The integrated controller also enforces that boundary on both flat-entry and
+open-position paths. A legacy G018 predecessor artifact cannot unlock
+monitoring or exit-scope status. Those statuses remain unreachable until a
+separately reviewed, non-synthetic V2 producer and commissioning contract are
+implemented.
+
 If the local SQLite store itself is unavailable, the fake-only module reports
 `STORAGE_UNAVAILABLE_NO_POST` and does not apply an outcome. It deliberately
 does not claim that a durable halt was recorded when storage was unavailable.
 A future actual-close phase must refuse before any transport boundary unless
 durable storage is known available.
+
+## Integrated no-POST controller
+
+`h11_v4_unattended_integrated_controller_no_post.py` now composes the reviewed
+generation boundary, persistent ARM binding, commissioning state, independent
+review flags, process lock, persistent HALT, dead-man, heartbeat continuity,
+notification readiness, market/signal/quote/spread conditions, account state,
+exact protection, scheduled exit, daily entry count, realized-loss limits, and
+consecutive-loss limit into one pure lifecycle decision. Daily and monthly
+loss inputs use the same positive accumulated-loss convention as the reviewed
+Phase B runtime-safety store. Operational facts are
+accepted only through a canonical typed evidence envelope bound to the reviewed
+files, generation, cycle, risk policy, observation time, and a maximum
+120-second validity interval. The envelope's self-digest is reverified and its
+validity interval is checked against the process's current UTC clock before any
+lifecycle branch.
+
+The decision never issues a permit and cannot be converted to a true boolean.
+An entry or exit candidate produces only a `*_SCOPE_REVIEW_REQUIRED_NO_POST`
+status with `broker_post_authorized=false` and `actual_post_count=0`. Actual
+transport integration remains fixed false and requires a separate reviewed
+phase. Open-position monitoring does not infer a new entry, and an unknown,
+pending, unprotected, or flat-with-active-orders state persistently halts.
+
+The controller's local SQLite store records each generation/cycle status and
+latches a sanitized HALT across process restart. It also requires exact current
+position ownership, current active protection, and matching protection/exit
+cycle bindings before reporting an exit scope for separate review. Storage
+unavailability reports `STORAGE_UNAVAILABLE_NO_POST` and does not falsely claim
+that a durable halt was recorded.

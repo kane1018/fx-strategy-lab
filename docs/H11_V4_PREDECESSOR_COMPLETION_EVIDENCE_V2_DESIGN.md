@@ -58,13 +58,28 @@ changes the fixed fail-closed commissioning gates, the result remains
 
 ## Required future implementation order
 
-1. Add a new V2 reconciliation schema and fake-only producer tests.
-2. Add binder acceptance and rejection tests using temporary synthetic files.
-3. Perform independent Architecture, Safety, and Operations review.
-4. Freeze a new reviewed generation and create fresh external evidence only
+1. A synthetic-only producer writes the isolated
+   `H11_V4_PREDECESSOR_COMPLETION_V2_FAKE_ONLY_V1` pair for shape and
+   cross-binding tests. Its marker names and schema are intentionally rejected
+   by the commissioning binder.
+2. Implement the separate actual V2 producer only after a new review; it must
+   retain the same cross-binding but may not reuse the synthetic schema or
+   marker names.
+3. Add binder acceptance and rejection tests using temporary synthetic files.
+4. Perform independent Architecture, Safety, and Operations review.
+5. Freeze a new reviewed generation and create fresh external evidence only
    under separate operator authorization.
-5. Keep G018 markers untouched and do not backfill, migrate, or infer V2
+6. Keep G018 markers untouched and do not backfill, migrate, or infer V2
    evidence from legacy files.
+
+## Fresh-evidence design boundary
+
+The first non-synthetic V2 producer must be generation-bound and one-use. It
+may be considered only after the reviewed generation, its reconciliation
+contract, and all independent reviews are frozen together. Its future
+external evidence operation must begin from a clean main worktree and must not
+reuse G018 facts, markers, confirmation, credentials, notification outcomes,
+or broker results. This document does not authorize that operation.
 
 No actual reconciliation, broker access, notification, ARM operation, or
 commissioning activation is authorized by this document.

@@ -6,7 +6,7 @@ import hashlib
 import json
 import re
 import sqlite3
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from enum import Enum
 from pathlib import Path
 
@@ -134,6 +134,20 @@ class V4CommissioningDecision:
     broker_post_authorized: bool = False
     broker_write: bool = False
     actual_post_count: int = 0
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.separate_live_review_required) is not bool
+            or type(self.persistent_arm_change_allowed) is not bool
+            or type(self.broker_post_authorized) is not bool
+            or type(self.broker_write) is not bool
+            or type(self.actual_post_count) is not int
+            or self.persistent_arm_change_allowed is not False
+            or self.broker_post_authorized is not False
+            or self.broker_write is not False
+            or self.actual_post_count != 0
+        ):
+            raise ValueError("V4_COMMISSIONING_LIVE_CLAIM_REFUSED")
 
     def __bool__(self) -> bool:
         """A commissioning result is evidence, never a transport allow value."""
@@ -347,6 +361,133 @@ def evaluate_commissioning(
         separate_live_review_required=True,
         persistent_arm_change_allowed=False,
     )
+
+
+def commissioning_evidence_is_canonical(
+    artifact: V4CommissioningArtifact,
+    shadow: V4ShadowEvidenceArtifact,
+    predecessor: V4PredecessorCanaryCompletionArtifact | None = None,
+) -> bool:
+    """Require canonical evidence plus a supported commissioning predecessor."""
+
+    return (
+        commissioning_historical_evidence_is_canonical(
+            artifact,
+            shadow,
+            predecessor,
+        )
+        and _G020_LEGACY_PREDECESSOR_COMMISSIONING_SUPPORTED is True
+    )
+
+
+def commissioning_historical_evidence_is_canonical(
+    artifact: V4CommissioningArtifact,
+    shadow: V4ShadowEvidenceArtifact,
+    predecessor: V4PredecessorCanaryCompletionArtifact | None = None,
+) -> bool:
+    """Validate historical evidence integrity without making it commissionable."""
+
+    contract = _COMMISSIONING_CONTRACTS.get((artifact.schema, shadow.schema))
+    return (
+        type(artifact) is V4CommissioningArtifact
+        and type(shadow) is V4ShadowEvidenceArtifact
+        and type(predecessor) is V4PredecessorCanaryCompletionArtifact
+        and contract is not None
+        and artifact.generation_label == contract.generation_label
+        and artifact.prior_canary_generation_label
+        == contract.prior_canary_generation_label
+        and _exact_evidence_field_types(artifact, shadow, predecessor)
+        and _commissioning_artifact_is_canonical(artifact)
+        and _shadow_artifact_is_canonical(shadow)
+        and _commissioning_binds_historical_predecessor(artifact, predecessor)
+        and artifact.shadow_evidence_digest == shadow.artifact_digest
+        and artifact.shadow_reviewed_files_digest
+        == artifact.reviewed_files_digest
+        == shadow.reviewed_files_digest
+        and artifact.shadow_generation_digest
+        == artifact.generation_digest
+        == shadow.generation_digest
+    )
+
+
+def _exact_evidence_field_types(
+    artifact: V4CommissioningArtifact,
+    shadow: V4ShadowEvidenceArtifact,
+    predecessor: V4PredecessorCanaryCompletionArtifact,
+) -> bool:
+    artifact_bools = {
+        "commissioning_entry_disabled",
+        "prior_canary_cycle_complete",
+        "prior_canary_flat_reconciled",
+        "account_wide_active_orders_zero_evidence",
+        "restart_safe_exit_contract_clear",
+        "notification_contract_clear",
+        "architecture_review_clear",
+        "safety_review_clear",
+        "operations_review_clear",
+    }
+    artifact_ints = {"shadow_scheduler_cycles_clear"}
+    shadow_bools = {"broker_write"}
+    shadow_ints = {"abnormal_status_count", "actual_post_count"}
+    predecessor_bools = {
+        "entry_fill_recorded",
+        "protection_plan_recorded",
+        "protection_confirmed",
+        "commissioning_eligible",
+        "reconciliation_result_known",
+        "subject_entry_observed",
+        "account_flat",
+        "active_orders_zero",
+        "raw_response_retained",
+        "identifier_exposed",
+    }
+    predecessor_ints = {
+        "coordinator_cycle_count",
+        "market_entry_attempt_count",
+        "exact_size_oco_protection_attempt_count",
+        "broker_read_count",
+        "broker_write_attempt_count",
+    }
+    return (
+        _exact_dataclass_types(artifact, artifact_bools, artifact_ints)
+        and _exact_dataclass_types(
+            shadow,
+            shadow_bools,
+            shadow_ints,
+            tuple_fields={"completed_slot_digests"},
+        )
+        and _exact_dataclass_types(
+            predecessor,
+            predecessor_bools,
+            predecessor_ints,
+        )
+    )
+
+
+def _exact_dataclass_types(
+    value: object,
+    bool_fields: set[str],
+    int_fields: set[str],
+    *,
+    tuple_fields: set[str] | None = None,
+) -> bool:
+    tuple_fields = tuple_fields or set()
+    for item in fields(value):
+        field_value = getattr(value, item.name)
+        if item.name in bool_fields:
+            if type(field_value) is not bool:
+                return False
+        elif item.name in int_fields:
+            if type(field_value) is not int:
+                return False
+        elif item.name in tuple_fields:
+            if type(field_value) is not tuple or any(
+                type(element) is not str for element in field_value
+            ):
+                return False
+        elif type(field_value) is not str:
+            return False
+    return True
 
 
 def _commissioning_artifact_is_canonical(
