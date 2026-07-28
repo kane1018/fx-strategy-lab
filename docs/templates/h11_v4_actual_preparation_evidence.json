@@ -1,19 +1,19 @@
 {
   "activation_permit_issued": false,
   "actual_post_authorized": false,
-  "architecture_review_clear": true,
+  "architecture_review_clear": false,
   "broker_post_authorized": false,
   "danger_scan_passed": true,
   "diff_check_passed": true,
   "focused_tests_passed": true,
-  "generation_digest": "sha256:79f5c3b983f9e68dab0acef028ce110c9641e8b1b1476e6ca135a512785ef174",
-  "generation_label": "H11_AUTO_30M_20260728_G020",
-  "generation_manifest_digest": "sha256:79f5c3b983f9e68dab0acef028ce110c9641e8b1b1476e6ca135a512785ef174",
-  "operations_review_clear": true,
+  "generation_digest": "sha256:d51a7e3d671965bd6e6c69f00be251300731929caa3be488437c0f5d475b87bc",
+  "generation_label": "H11_AUTO_30M_20260728_G021",
+  "generation_manifest_digest": "sha256:d51a7e3d671965bd6e6c69f00be251300731929caa3be488437c0f5d475b87bc",
+  "operations_review_clear": false,
   "related_tests_passed": true,
-  "reviewed_files_digest": "sha256:57920b48b05ddcd88e1fc302dc39d757701d6faf0c9d6bee899b86248fcb8cec",
+  "reviewed_files_digest": "sha256:aa9d1b36d135088dce13abd5fca842df04383e47dfd96207a4f171613515ce7c",
   "ruff_passed": true,
-  "safety_review_clear": true,
+  "safety_review_clear": false,
   "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
-  "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST"
+  "status": "CORRECTIVE_GENERATION_PENDING_REVIEW_NO_BROKER_POST"
 }

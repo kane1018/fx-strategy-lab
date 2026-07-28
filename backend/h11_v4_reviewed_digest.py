@@ -152,6 +152,9 @@ REVIEWED_FILES = (
     "docs/H11_V4_PERSISTENT_ARM_CONTROL_RUNBOOK.md",
     "docs/H11_V4_G019_RESTART_SAFE_EXIT_AND_COMMISSIONING_DESIGN.md",
     "docs/H11_V4_G020_SHADOW_COMMISSIONING_DESIGN.md",
+    "docs/H11_V4_G020_INDEPENDENT_REVIEW_20260728.md",
+    "docs/templates/h11_v4_g020_shadow_evidence_no_post.json",
+    "docs/templates/h11_v4_g020_commissioning_no_post.json",
     "docs/H11_V4_G018_EXIT_30M_COMPLETION_HANDOFF.md",
 )
 

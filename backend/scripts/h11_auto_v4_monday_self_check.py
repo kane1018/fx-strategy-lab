@@ -100,7 +100,7 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
         repository=repository,
         implementation_digest=reviewed_digest,
     )
-    if generation.generation_label != "H11_AUTO_30M_20260728_G020":
+    if generation.generation_label != "H11_AUTO_30M_20260728_G021":
         raise MondaySelfCheckError("SELF_CHECK_GENERATION_LABEL_MISMATCH")
     if generation.maximum_entries_per_day != 30:
         raise MondaySelfCheckError("SELF_CHECK_ENTRY_CAP_MISMATCH")
@@ -119,7 +119,7 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
     except (OSError, json.JSONDecodeError) as error:
         raise MondaySelfCheckError("SELF_CHECK_EVIDENCE_INVALID") from error
     expected = {
-        "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST",
+        "status": "CORRECTIVE_GENERATION_PENDING_REVIEW_NO_BROKER_POST",
         "reviewed_files_digest": reviewed_digest,
         "generation_digest": generation.digest,
         "generation_manifest_digest": generation.digest,
@@ -127,9 +127,9 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
         "actual_post_authorized": False,
         "broker_post_authorized": False,
         "activation_permit_issued": False,
-        "architecture_review_clear": True,
-        "safety_review_clear": True,
-        "operations_review_clear": True,
+        "architecture_review_clear": False,
+        "safety_review_clear": False,
+        "operations_review_clear": False,
         "danger_scan_passed": True,
         "diff_check_passed": True,
         "focused_tests_passed": True,
@@ -138,7 +138,7 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
     }
     if any(evidence.get(key) != value for key, value in expected.items()):
         raise MondaySelfCheckError("SELF_CHECK_EVIDENCE_MISMATCH")
-    return reviewed_digest, generation
+    raise MondaySelfCheckError("SELF_CHECK_REVIEW_PENDING")
 
 
 def _run_local_checks(repository: Path) -> None:

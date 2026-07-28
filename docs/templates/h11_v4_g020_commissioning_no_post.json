@@ -1,12 +1,12 @@
 {
   "account_wide_active_orders_zero_evidence": false,
-  "architecture_review_clear": false,
-  "artifact_digest": "sha256:e082d68c866c9ac9f6844091410860f1b94a88622a07edd3dddf07032e47880e",
+  "architecture_review_clear": true,
+  "artifact_digest": "sha256:1d6d9a14a7b97bd9c8cc32cb636ef292aac625899c5cf96c33e50bd760fc79ad",
   "commissioning_entry_disabled": true,
   "generation_digest": "sha256:79f5c3b983f9e68dab0acef028ce110c9641e8b1b1476e6ca135a512785ef174",
   "generation_label": "H11_AUTO_30M_20260728_G020",
   "notification_contract_clear": false,
-  "operations_review_clear": false,
+  "operations_review_clear": true,
   "prior_canary_cycle_complete": false,
   "prior_canary_flat_reconciled": false,
   "prior_canary_generation_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
@@ -15,10 +15,10 @@
   "prior_canary_reconciliation_artifact_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
   "restart_safe_exit_contract_clear": false,
   "reviewed_files_digest": "sha256:57920b48b05ddcd88e1fc302dc39d757701d6faf0c9d6bee899b86248fcb8cec",
-  "safety_review_clear": false,
+  "safety_review_clear": true,
   "schema": "H11_V4_G020_COMMISSIONING_NO_POST_V1",
-  "shadow_evidence_digest": "sha256:878e79fb8545eed419882a0e399717c82a31be4285074ebfae5caf89abb2bd0a",
+  "shadow_evidence_digest": "sha256:644d6214222dadbd0de3a0aeee95c9d468588f4a0634bc5f66c2f522cbab5f65",
   "shadow_generation_digest": "sha256:79f5c3b983f9e68dab0acef028ce110c9641e8b1b1476e6ca135a512785ef174",
   "shadow_reviewed_files_digest": "sha256:57920b48b05ddcd88e1fc302dc39d757701d6faf0c9d6bee899b86248fcb8cec",
-  "shadow_scheduler_cycles_clear": 0
+  "shadow_scheduler_cycles_clear": 20
 }
