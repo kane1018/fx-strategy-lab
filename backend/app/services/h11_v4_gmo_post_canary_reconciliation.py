@@ -278,7 +278,11 @@ class V4GmoPostCanaryReconciler:
         root = v4_gmo_runtime_state_root(
             repository=self.repository, generation_digest=self.target_generation_digest
         )
-        _claim_once(root=root, origin_generation_digest=self.origin_generation_digest)
+        _claim_once(
+            root=root,
+            origin_generation_digest=self.origin_generation_digest,
+            target_generation_digest=self.target_generation_digest,
+        )
         read_count = 0
         try:
             executions = self.client.get_latest_executions()
@@ -318,7 +322,12 @@ class V4GmoPostCanaryReconciler:
                 broker_read_count=read_count,
             )
         try:
-            _write_result_once(root=root, result=result)
+            _write_result_once(
+                root=root,
+                result=result,
+                origin_generation_digest=self.origin_generation_digest,
+                target_generation_digest=self.target_generation_digest,
+            )
         except OSError:
             return V4GmoPostCanaryResult(
                 status="G013_POST_CANARY_RESULT_UNKNOWN_PERSISTENT_HALT",
@@ -343,12 +352,18 @@ def _load_contract(path: Path) -> dict[str, object]:
     return payload
 
 
-def _claim_once(*, root: Path, origin_generation_digest: str) -> None:
+def _claim_once(
+    *,
+    root: Path,
+    origin_generation_digest: str,
+    target_generation_digest: str,
+) -> None:
     root.mkdir(parents=True, exist_ok=True)
     path = root / "post-canary-reconciliation.started.json"
     payload = {
         "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
         "origin_generation_digest": origin_generation_digest,
+        "target_generation_digest": target_generation_digest,
         "broker_write_attempt_count": 0,
     }
     try:
@@ -362,16 +377,31 @@ def _claim_once(*, root: Path, origin_generation_digest: str) -> None:
         handle.write("\n")
 
 
-def _write_result_once(*, root: Path, result: V4GmoPostCanaryResult) -> None:
+def _write_result_once(
+    *,
+    root: Path,
+    result: V4GmoPostCanaryResult,
+    origin_generation_digest: str,
+    target_generation_digest: str,
+) -> None:
     name = (
         "post-canary-reconciliation.passed.json"
         if result.status == "G013_POST_CANARY_FLAT_CONFIRMED"
         else "post-canary-reconciliation.halt.json"
     )
     path = root / name
+    started = root / "post-canary-reconciliation.started.json"
+    payload = {
+        **result.safe_dict(),
+        "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
+        "origin_generation_digest": origin_generation_digest,
+        "target_generation_digest": target_generation_digest,
+        "started_marker_digest": "sha256:"
+        + hashlib.sha256(started.read_bytes()).hexdigest(),
+    }
     descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        json.dump(result.safe_dict(), handle, sort_keys=True, separators=(",", ":"))
+        json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
         handle.write("\n")
 
 

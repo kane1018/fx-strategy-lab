@@ -119,6 +119,8 @@ REVIEWED_FILES = (
     "backend/app/tests/h11_auto/test_v4_monday_self_check_no_post.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g019_exit_policy_no_post.py",
     "backend/app/tests/h11_auto/test_v4_unattended_exit_and_commissioning_no_post.py",
+    "backend/app/services/h11_v4_unattended_restart_safe_exit_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_unattended_restart_safe_exit_no_post.py",
     "backend/app/tests/h11_auto/test_v4_g020_shadow_observer_no_post.py",
     "backend/app/tests/h11_auto/test_h11_manual_auto_import_boundary_no_post.py",
     "backend/app/tests/h11_auto/test_v4_actual_preparation_fake_first.py",

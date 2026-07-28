@@ -1,17 +1,27 @@
-from dataclasses import replace
+import hashlib
+import json
+import sqlite3
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 from app.services.h11_v4_unattended_commissioning_no_post import (
     G020_COMMISSIONING_SCHEMA,
     G020_SHADOW_EVIDENCE_SCHEMA,
     V4CommissioningArtifact,
     V4CommissioningStatus,
+    V4PredecessorCanaryCompletionArtifact,
+    V4PredecessorCanaryCompletionError,
     V4ShadowEvidenceArtifact,
+    bind_g018_predecessor_canary_completion,
     build_commissioning_artifact,
+    build_predecessor_canary_completion_artifact,
     build_shadow_evidence_artifact,
     evaluate_commissioning,
     load_commissioning_artifact,
+    load_predecessor_canary_completion_artifact,
     load_shadow_evidence_artifact,
 )
 from app.services.h11_v4_unattended_exit_recovery_no_post import (
@@ -93,6 +103,42 @@ def _commissioning_artifact(
     }
     values.update(overrides)
     return build_commissioning_artifact(**values)
+
+
+def _predecessor_completion_artifact(
+    **overrides: bool | int | str,
+) -> V4PredecessorCanaryCompletionArtifact:
+    values: dict[str, bool | int | str] = {
+        "prior_canary_generation_label": "H11_AUTO_30M_20260727_G018",
+        "prior_canary_generation_digest": (
+            "sha256:9a01ea35afe97b164562a3ad0255af854d9cd19da05d67662190785dec727ceb"
+        ),
+        "coordinator_ledger_digest": "sha256:" + ("a" * 64),
+        "coordinator_cycle_count": 1,
+        "market_entry_attempt_count": 1,
+        "exact_size_oco_protection_attempt_count": 1,
+        "entry_fill_recorded": True,
+        "protection_plan_recorded": True,
+        "protection_confirmed": True,
+        "reconciliation_runtime_generation_digest": "sha256:" + ("b" * 64),
+        "reconciliation_started_marker_digest": "sha256:" + ("c" * 64),
+        "reconciliation_passed_marker_digest": "sha256:" + ("d" * 64),
+        "reconciliation_origin_generation_digest": (
+            "sha256:9a01ea35afe97b164562a3ad0255af854d9cd19da05d67662190785dec727ceb"
+        ),
+        "reconciliation_status": "G013_POST_CANARY_FLAT_CONFIRMED",
+        "commissioning_eligible": False,
+        "reconciliation_result_known": True,
+        "subject_entry_observed": True,
+        "account_flat": True,
+        "active_orders_zero": True,
+        "broker_read_count": 3,
+        "broker_write_attempt_count": 0,
+        "raw_response_retained": False,
+        "identifier_exposed": False,
+    }
+    values.update(overrides)
+    return build_predecessor_canary_completion_artifact(**values)
 
 
 def test_recovery_tick_is_local_only_and_not_truthy() -> None:
@@ -315,8 +361,127 @@ def test_g020_producer_only_reaches_separate_live_review() -> None:
         operations_review_clear=True,
     )
 
-    decision = evaluate_commissioning(artifact, shadow)
+    predecessor = _predecessor_completion_artifact(
+        reconciliation_passed_marker_digest=artifact.prior_canary_reconciliation_artifact_digest,
+    )
+    artifact_fields = asdict(artifact)
+    artifact_fields.pop("artifact_digest")
+    artifact_fields["prior_canary_generation_digest"] = (
+        predecessor.prior_canary_generation_digest
+    )
+    artifact_fields["prior_canary_reconciliation_artifact_digest"] = (
+        predecessor.reconciliation_passed_marker_digest
+    )
+    artifact_fields["prior_canary_handoff_digest"] = predecessor.artifact_digest
+    artifact = build_commissioning_artifact(**artifact_fields)
+    decision = evaluate_commissioning(artifact, shadow, predecessor)
 
-    assert decision.status is V4CommissioningStatus.READY_FOR_SEPARATE_LIVE_REVIEW
+    assert decision.status is V4CommissioningStatus.NOT_READY
     assert decision.persistent_arm_change_allowed is False
     assert decision.broker_post_authorized is False
+
+
+def test_g018_predecessor_completion_binder_uses_a_temporary_sanitized_fixture(
+    tmp_path: Path,
+) -> None:
+    origin_digest = "9a01ea35afe97b164562a3ad0255af854d9cd19da05d67662190785dec727ceb"
+    reconciliation_digest = "b" * 64
+    origin = (
+        tmp_path
+        / "backend/market_data/h11_v4_gmo_actual_runtime"
+        / f"generation-{origin_digest}"
+    )
+    origin.mkdir(parents=True)
+    database = origin / "coordinator.sqlite3"
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute(
+            """
+            CREATE TABLE cycles (
+                entry_average_fill_price TEXT,
+                protection_plan_digest TEXT,
+                protection_confirmed_at_utc TEXT
+            )
+            """
+        )
+        connection.execute("CREATE TABLE attempts (action TEXT)")
+        connection.execute("INSERT INTO cycles VALUES ('x', 'y', 'z')")
+        connection.executemany(
+            "INSERT INTO attempts VALUES (?)",
+            [("MARKET_ENTRY",), ("EXACT_SIZE_OCO_PROTECTION",)],
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    reconciliation = origin.parent / f"generation-{reconciliation_digest}"
+    reconciliation.mkdir()
+    (reconciliation / "post-canary-reconciliation.started.json").write_text(
+        json.dumps(
+            {
+                "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
+                "origin_generation_digest": "sha256:" + origin_digest,
+                "target_generation_digest": "sha256:" + reconciliation_digest,
+                "broker_write_attempt_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    started = reconciliation / "post-canary-reconciliation.started.json"
+    (reconciliation / "post-canary-reconciliation.passed.json").write_text(
+        json.dumps(
+            {
+                "schema": "H11_V4_G013_POST_CANARY_RECONCILIATION_V1",
+                "origin_generation_digest": "sha256:" + origin_digest,
+                "target_generation_digest": "sha256:" + reconciliation_digest,
+                "started_marker_digest": "sha256:"
+                + hashlib.sha256(started.read_bytes()).hexdigest(),
+                "status": "G013_POST_CANARY_FLAT_CONFIRMED",
+                "result_known": True,
+                "subject_entry_observed": True,
+                "account_flat": True,
+                "active_orders_zero": True,
+                "broker_read_count": 3,
+                "broker_write_attempt_count": 0,
+                "raw_response_retained": False,
+                "identifier_exposed": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    artifact = bind_g018_predecessor_canary_completion(repository=tmp_path)
+    artifact_path = tmp_path / "completion.json"
+    artifact_path.write_text(json.dumps(asdict(artifact)), encoding="utf-8")
+
+    assert artifact.commissioning_eligible is False
+    assert artifact.coordinator_cycle_count == 1
+    assert artifact.market_entry_attempt_count == 1
+    assert artifact.exact_size_oco_protection_attempt_count == 1
+    assert load_predecessor_canary_completion_artifact(artifact_path) == artifact
+
+    duplicate = origin.parent / f"generation-{'c' * 64}"
+    duplicate.mkdir()
+    duplicate_started = duplicate / "post-canary-reconciliation.started.json"
+    duplicate_started_payload = json.loads(started.read_text(encoding="utf-8"))
+    duplicate_started_payload["target_generation_digest"] = "sha256:" + ("c" * 64)
+    duplicate_started.write_text(
+        json.dumps(duplicate_started_payload), encoding="utf-8"
+    )
+    duplicate_passed = json.loads(
+        (reconciliation / "post-canary-reconciliation.passed.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    duplicate_passed["target_generation_digest"] = "sha256:" + ("c" * 64)
+    duplicate_passed["started_marker_digest"] = "sha256:" + hashlib.sha256(
+        duplicate_started.read_bytes()
+    ).hexdigest()
+    (duplicate / "post-canary-reconciliation.passed.json").write_text(
+        json.dumps(duplicate_passed), encoding="utf-8"
+    )
+
+    with pytest.raises(
+        V4PredecessorCanaryCompletionError,
+        match="V4_PREDECESSOR_RECONCILIATION_UNBOUND_OR_AMBIGUOUS",
+    ):
+        bind_g018_predecessor_canary_completion(repository=tmp_path)

@@ -119,3 +119,27 @@ constant.
 These remain review-gated phases. The next implementation may not reuse the
 entry permit, synthesize an allow boolean, use a generic opposite close, retry
 an unknown write, or infer broker identifiers.
+
+## G022 fake-only durable claim implementation
+
+`h11_v4_unattended_restart_safe_exit_no_post.py` now implements the local
+portion of this contract: a SQLite-backed one-use scope claim and a pure
+synthetic outcome input. It invokes no executor. Completion requires a known
+synthetic flat result; unknown, non-fake, duplicate, mismatched-generation,
+or restart-after-claim outcomes persist a halt. It has no actual transport,
+credential, Private API, notification, LaunchAgent, or scheduler dependency.
+A future actual-close phase must be separately reviewed and may not replace
+this claim-before-attempt / unknown-halt behavior.
+
+The historical G018 reconciliation marker lacks a cross-marker digest binding.
+Its local facts may be inspected as historical context, but the predecessor
+binder refuses it as commissioning evidence. Only a reconciliation format
+whose started and passed markers both bind the same origin and target
+generation, and whose passed marker binds the exact started-marker digest, may
+produce a canonical predecessor completion artifact.
+
+If the local SQLite store itself is unavailable, the fake-only module reports
+`STORAGE_UNAVAILABLE_NO_POST` and does not apply an outcome. It deliberately
+does not claim that a durable halt was recorded when storage was unavailable.
+A future actual-close phase must refuse before any transport boundary unless
+durable storage is known available.
