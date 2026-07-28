@@ -20,6 +20,7 @@ FOCUSED_TESTS = (
     "app/tests/h11_auto/test_v4_monday_self_check_no_post.py",
     "app/tests/h11_auto/test_v4_gmo_g019_exit_policy_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_exit_and_commissioning_no_post.py",
+    "app/tests/h11_auto/test_v4_g020_shadow_observer_no_post.py",
     "app/tests/h11_auto/test_h11_manual_auto_import_boundary_no_post.py",
     "app/tests/h11_auto/test_isolation_no_post.py",
 )
@@ -27,6 +28,8 @@ RUFF_TARGETS = (
     "app/h11_auto/v4_gmo_g019_exit_policy.py",
     "app/services/h11_v4_unattended_exit_recovery_no_post.py",
     "app/services/h11_v4_unattended_commissioning_no_post.py",
+    "app/services/h11_v4_g020_shadow_observer_no_post.py",
+    "scripts/h11_auto_v4_g020_shadow_observer.py",
     "app/tests/h11_auto/test_v4_unattended_live_scheduled_launcher_fake_only.py",
     "app/tests/h11_auto/test_runtime_safety_no_post.py",
     "app/tests/h11_auto/test_v4_monday_self_check_no_post.py",
@@ -41,6 +44,7 @@ DANGER_SCAN_TARGETS = (
     "app/h11_auto/v4_gmo_g019_exit_policy.py",
     "app/services/h11_v4_unattended_exit_recovery_no_post.py",
     "app/services/h11_v4_unattended_commissioning_no_post.py",
+    "app/services/h11_v4_g020_shadow_observer_no_post.py",
 )
 DANGER_SCAN_TOKENS = (
     "import httpx",
@@ -96,7 +100,7 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
         repository=repository,
         implementation_digest=reviewed_digest,
     )
-    if generation.generation_label != "H11_AUTO_30M_20260728_G019":
+    if generation.generation_label != "H11_AUTO_30M_20260728_G020":
         raise MondaySelfCheckError("SELF_CHECK_GENERATION_LABEL_MISMATCH")
     if generation.maximum_entries_per_day != 30:
         raise MondaySelfCheckError("SELF_CHECK_ENTRY_CAP_MISMATCH")

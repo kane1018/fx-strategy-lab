@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
+from h11_v4_reviewed_digest import compute_reviewed_files_digest
 from scripts import h11_auto_v4_monday_self_check as self_check
 
 
@@ -33,7 +35,7 @@ def test_generation_check_rejects_commissioned_flags(monkeypatch, tmp_path: Path
         '"reviewed_files_digest":"sha256:' + "a" * 64 + '",'
         '"generation_digest":"sha256:' + "b" * 64 + '",'
         '"generation_manifest_digest":"sha256:' + "b" * 64 + '",'
-        '"generation_label":"H11_AUTO_30M_20260728_G019",'
+        '"generation_label":"H11_AUTO_30M_20260728_G020",'
         '"actual_post_authorized":false,"broker_post_authorized":false,'
         '"activation_permit_issued":false,'
         '"architecture_review_clear":true,"safety_review_clear":true,'
@@ -49,7 +51,7 @@ def test_generation_check_rejects_commissioned_flags(monkeypatch, tmp_path: Path
         self_check,
         "load_v4_gmo_frozen_generation",
         lambda **_kwargs: SimpleNamespace(
-            generation_label="H11_AUTO_30M_20260728_G019",
+            generation_label="H11_AUTO_30M_20260728_G020",
             maximum_entries_per_day=30,
             same_action_retry_allowed=False,
             same_action_repost_allowed=False,
@@ -65,3 +67,16 @@ def test_generation_check_rejects_commissioned_flags(monkeypatch, tmp_path: Path
         assert str(error) == "SELF_CHECK_GENERATION_NOT_NO_POST"
     else:
         raise AssertionError("commissioned flags must be rejected")
+
+
+def test_repository_frozen_generation_matches_current_reviewed_digest() -> None:
+    repository = Path(__file__).resolve().parents[4]
+
+    reviewed_digest = compute_reviewed_files_digest(repository=repository)
+    generation = load_v4_gmo_frozen_generation(
+        repository=repository,
+        implementation_digest=reviewed_digest,
+    )
+
+    assert generation.generation_label == "H11_AUTO_30M_20260728_G020"
+    assert generation.implementation_digest == reviewed_digest

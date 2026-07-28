@@ -3,6 +3,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from app.services.h11_v4_unattended_commissioning_no_post import (
+    G020_COMMISSIONING_SCHEMA,
+    G020_SHADOW_EVIDENCE_SCHEMA,
     V4CommissioningArtifact,
     V4CommissioningStatus,
     V4ShadowEvidenceArtifact,
@@ -247,6 +249,20 @@ def test_repository_commissioning_template_is_canonical_and_not_ready() -> None:
     )
 
 
+def test_repository_g020_templates_are_canonical_and_not_ready() -> None:
+    repository = Path(__file__).resolve().parents[4]
+    artifact = load_commissioning_artifact(
+        repository / "docs/templates/h11_v4_g020_commissioning_no_post.json"
+    )
+    shadow = load_shadow_evidence_artifact(
+        repository / "docs/templates/h11_v4_g020_shadow_evidence_no_post.json"
+    )
+
+    assert artifact.generation_label == "H11_AUTO_30M_20260728_G020"
+    assert artifact.shadow_evidence_digest == shadow.artifact_digest
+    assert evaluate_commissioning(artifact, shadow).status is V4CommissioningStatus.NOT_READY
+
+
 def test_recovery_uses_reviewed_deadline_not_caller_boolean() -> None:
     before = evaluate_exit_recovery(_recovery_snapshot())
     after = evaluate_exit_recovery(
@@ -261,3 +277,46 @@ def test_recovery_uses_reviewed_deadline_not_caller_boolean() -> None:
 
     assert before.status is V4ExitRecoveryStatus.MONITOR_TICK_SAFE_NO_WRITE
     assert after.status is V4ExitRecoveryStatus.EXIT_SCOPE_REQUIRED_NO_WRITE
+
+
+def test_g020_producer_only_reaches_separate_live_review() -> None:
+    shadow = build_shadow_evidence_artifact(
+        schema=G020_SHADOW_EVIDENCE_SCHEMA,
+        reviewed_files_digest="sha256:" + ("a" * 64),
+        generation_digest="sha256:" + ("b" * 64),
+        completed_slot_digests=tuple(
+            f"sha256:{index:064x}" for index in range(1, 21)
+        ),
+        abnormal_status_count=0,
+        broker_write=False,
+        actual_post_count=0,
+    )
+    artifact = build_commissioning_artifact(
+        schema=G020_COMMISSIONING_SCHEMA,
+        generation_label="H11_AUTO_30M_20260728_G020",
+        prior_canary_generation_label="H11_AUTO_30M_20260727_G018",
+        prior_canary_generation_digest="sha256:" + ("e" * 64),
+        prior_canary_reconciliation_artifact_digest="sha256:" + ("f" * 64),
+        prior_canary_handoff_digest="sha256:" + ("1" * 64),
+        commissioning_entry_disabled=True,
+        reviewed_files_digest=shadow.reviewed_files_digest,
+        generation_digest=shadow.generation_digest,
+        shadow_evidence_digest=shadow.artifact_digest,
+        shadow_reviewed_files_digest=shadow.reviewed_files_digest,
+        shadow_generation_digest=shadow.generation_digest,
+        shadow_scheduler_cycles_clear=20,
+        prior_canary_cycle_complete=True,
+        prior_canary_flat_reconciled=True,
+        account_wide_active_orders_zero_evidence=True,
+        restart_safe_exit_contract_clear=True,
+        notification_contract_clear=True,
+        architecture_review_clear=True,
+        safety_review_clear=True,
+        operations_review_clear=True,
+    )
+
+    decision = evaluate_commissioning(artifact, shadow)
+
+    assert decision.status is V4CommissioningStatus.READY_FOR_SEPARATE_LIVE_REVIEW
+    assert decision.persistent_arm_change_allowed is False
+    assert decision.broker_post_authorized is False

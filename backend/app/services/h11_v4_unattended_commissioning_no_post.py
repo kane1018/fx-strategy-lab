@@ -11,11 +11,31 @@ from pathlib import Path
 
 COMMISSIONING_SCHEMA = "H11_V4_G019_COMMISSIONING_NO_POST_V1"
 SHADOW_EVIDENCE_SCHEMA = "H11_V4_G019_SHADOW_EVIDENCE_NO_POST_V1"
-EXPECTED_GENERATION_LABEL = "H11_AUTO_30M_20260728_G019"
-EXPECTED_PRIOR_CANARY_GENERATION_LABEL = "H11_AUTO_30M_20260727_G018"
-SHADOW_EVIDENCE_PRODUCER_IMPLEMENTED = False
+G020_COMMISSIONING_SCHEMA = "H11_V4_G020_COMMISSIONING_NO_POST_V1"
+G020_SHADOW_EVIDENCE_SCHEMA = "H11_V4_G020_SHADOW_EVIDENCE_NO_POST_V1"
 _ZERO_DIGEST = "sha256:" + ("0" * 64)
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+@dataclass(frozen=True)
+class _CommissioningContract:
+    generation_label: str
+    prior_canary_generation_label: str
+    shadow_evidence_producer_implemented: bool
+
+
+_COMMISSIONING_CONTRACTS = {
+    (COMMISSIONING_SCHEMA, SHADOW_EVIDENCE_SCHEMA): _CommissioningContract(
+        generation_label="H11_AUTO_30M_20260728_G019",
+        prior_canary_generation_label="H11_AUTO_30M_20260727_G018",
+        shadow_evidence_producer_implemented=False,
+    ),
+    (G020_COMMISSIONING_SCHEMA, G020_SHADOW_EVIDENCE_SCHEMA): _CommissioningContract(
+        generation_label="H11_AUTO_30M_20260728_G020",
+        prior_canary_generation_label="H11_AUTO_30M_20260727_G018",
+        shadow_evidence_producer_implemented=True,
+    ),
+}
 
 
 class V4CommissioningStatus(str, Enum):
@@ -84,9 +104,10 @@ def build_shadow_evidence_artifact(
     abnormal_status_count: int,
     broker_write: bool,
     actual_post_count: int,
+    schema: str = SHADOW_EVIDENCE_SCHEMA,
 ) -> V4ShadowEvidenceArtifact:
     payload = {
-        "schema": SHADOW_EVIDENCE_SCHEMA,
+        "schema": schema,
         "reviewed_files_digest": reviewed_files_digest,
         "generation_digest": generation_digest,
         "completed_slot_digests": completed_slot_digests,
@@ -101,11 +122,13 @@ def build_shadow_evidence_artifact(
 
 
 def build_commissioning_artifact(
+    *,
+    schema: str = COMMISSIONING_SCHEMA,
     **fields: str | bool | int,
 ) -> V4CommissioningArtifact:
     """Build a canonical artifact; callers cannot supply their own digest."""
 
-    payload = {"schema": COMMISSIONING_SCHEMA, **fields}
+    payload = {"schema": schema, **fields}
     return V4CommissioningArtifact(
         artifact_digest=_artifact_digest(payload),
         **payload,
@@ -146,6 +169,7 @@ def evaluate_commissioning(
 ) -> V4CommissioningDecision:
     """Require complete exact evidence but grant no live authority."""
 
+    contract = _COMMISSIONING_CONTRACTS.get((artifact.schema, shadow.schema))
     boolean_fields = (
         artifact.commissioning_entry_disabled,
         artifact.prior_canary_cycle_complete,
@@ -160,18 +184,17 @@ def evaluate_commissioning(
     )
     slot_digests = shadow.completed_slot_digests
     ready = (
-        SHADOW_EVIDENCE_PRODUCER_IMPLEMENTED
+        contract is not None
+        and contract.shadow_evidence_producer_implemented
         and _commissioning_artifact_is_canonical(artifact)
         and _shadow_artifact_is_canonical(shadow)
         and all(type(value) is bool for value in boolean_fields)
         and type(artifact.shadow_scheduler_cycles_clear) is int
         and type(shadow.abnormal_status_count) is int
         and type(shadow.actual_post_count) is int
-        and artifact.schema == COMMISSIONING_SCHEMA
-        and shadow.schema == SHADOW_EVIDENCE_SCHEMA
-        and artifact.generation_label == EXPECTED_GENERATION_LABEL
+        and artifact.generation_label == contract.generation_label
         and artifact.prior_canary_generation_label
-        == EXPECTED_PRIOR_CANARY_GENERATION_LABEL
+        == contract.prior_canary_generation_label
         and bool(_SHA256.fullmatch(artifact.prior_canary_generation_digest))
         and bool(
             _SHA256.fullmatch(
