@@ -1,5 +1,18 @@
 # FX Strategy Lab — Codex 作業ルール
 
+## H-11 v4 G026 one-use Private GET snapshot producer限定例外
+
+operatorがG026 corrective generationを明示承認した場合に限り、reviewed
+generation-bound producerで`latestExecutions`、`openPositions`、
+`activeOrders`を各1回だけGETし、sanitized count/flat/zero-active evidenceを
+inert no-POST controllerへ渡してよい。credential値、headers、signature、raw
+response、実IDは表示・保存しない。credential/networkより先にApplication
+Support配下へO_EXCL started markerを作成し、失敗・結果不明・minute rolloverを
+含む全post-start failureは同generationでretryしない。broker POST、注文、取消、
+変更、決済、通知、persistent ARM変更、permit、LaunchAgent変更は禁止する。
+実Private GET実行は実装・独立review・corrective generation・commit/push・fresh
+shadow commissioning完了後の別generation-bound承認を必須とする。
+
 このリポジトリでは、目的達成に必要な最小限の変更だけを行う。
 
 ## 作業手順

@@ -29,6 +29,7 @@ FOCUSED_TESTS = (
     "app/tests/h11_auto/test_v4_unattended_integrated_controller_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_controller_snapshot_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_controller_no_post_tick.py",
+    "app/tests/h11_auto/test_v4_unattended_account_snapshot_producer_no_post.py",
     "app/tests/h11_auto/test_h11_manual_auto_import_boundary_no_post.py",
     "app/tests/h11_auto/test_isolation_no_post.py",
 )
@@ -43,7 +44,11 @@ RUFF_TARGETS = (
     "app/services/h11_v4_g020_shadow_observer_no_post.py",
     "app/services/h11_v4_unattended_integrated_controller_no_post.py",
     "app/services/h11_v4_unattended_controller_snapshot_no_post.py",
+    "app/services/h11_v4_unattended_account_snapshot_store_no_post.py",
+    "app/services/h11_v4_unattended_account_snapshot_producer_no_post.py",
+    "app/services/h11_v4_g026_private_get_keychain.py",
     "scripts/h11_auto_v4_unattended_controller_no_post_tick.py",
+    "scripts/h11_auto_v4_g026_private_snapshot_producer.py",
     "scripts/h11_auto_v4_g020_shadow_observer.py",
     "app/tests/h11_auto/test_v4_unattended_live_scheduled_launcher_fake_only.py",
     "app/tests/h11_auto/test_runtime_safety_no_post.py",
@@ -79,6 +84,22 @@ DANGER_SCAN_TOKENS = (
     ".post(",
     "closeOrder",
     "cancelOrders",
+)
+PRIVATE_GET_DANGER_SCAN_TARGETS = (
+    "app/services/h11_v4_unattended_account_snapshot_producer_no_post.py",
+    "scripts/h11_auto_v4_g026_private_snapshot_producer.py",
+)
+PRIVATE_GET_DANGER_SCAN_TOKENS = (
+    ".post(",
+    '"POST"',
+    "closeOrder",
+    "cancelOrders",
+    "changeOrder",
+    "assert_real_broker_post_allowed",
+    "ActualPushover",
+    "ActualEmail",
+    "set_desired_state",
+    "install_unattended",
 )
 
 
@@ -222,6 +243,13 @@ def _run_local_checks(repository: Path) -> None:
         except OSError as error:
             raise MondaySelfCheckError("SELF_CHECK_DANGER_SCAN_FAILED") from error
         if any(token in source for token in DANGER_SCAN_TOKENS):
+            raise MondaySelfCheckError("SELF_CHECK_DANGER_SCAN_FAILED")
+    for relative_path in PRIVATE_GET_DANGER_SCAN_TARGETS:
+        try:
+            source = (backend / relative_path).read_text(encoding="utf-8")
+        except OSError as error:
+            raise MondaySelfCheckError("SELF_CHECK_DANGER_SCAN_FAILED") from error
+        if any(token in source for token in PRIVATE_GET_DANGER_SCAN_TOKENS):
             raise MondaySelfCheckError("SELF_CHECK_DANGER_SCAN_FAILED")
     _require_success(
         _run(["git", "diff", "--check"], cwd=repository),

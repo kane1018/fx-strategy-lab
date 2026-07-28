@@ -3534,3 +3534,19 @@ Pushoverは配送後にoperatorがackしたが3分のrehearsal期限後で、ema
 SMTPは1 sendと固定safe failure分類を使用し、Pushover pass前には開始しない。
 
 詳細: [H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md](H11_V4_ACTUAL_ACTIVATION_PREPARATION_REPORT_20260716.md)
+
+## H-11 v4 G026 generation-bound Private snapshot producer (2026-07-29)
+
+- G026専用のgeneration-bound・one-use Private GET snapshot producerを実装。
+- started markerをcredential/client/networkより先にexclusive作成し、同generationでのretryを拒否。
+- `latestExecutions`、`openPositions`、`activeOrders`を各1回だけ取得する固定経路に限定。
+- credential、raw response、headers、signature、実IDを保存・表示せず、sanitized aggregateのみを保存。
+- passed/failed markerとevidence artifactをstrict digest/cycle bindingで検証し、inert no-POST controllerへ渡す。
+- broker POST、注文、取消、決済、通知、ARM変更、permit、LaunchAgent変更への到達経路は追加していない。
+- focused regression 115件、Ruff、diff check、実行コードdanger scanはCLEAR。
+- 独立Architecture/Safety/Operations reviewは、初期VETO修正後に3本すべてCLEAR。
+- 実Keychain readおよびPrivate GETは未実行。別のgeneration-bound one-use承認まで禁止。
+
+詳細:
+[設計](H11_V4_G026_PRIVATE_SNAPSHOT_PRODUCER_DESIGN.md) /
+[独立レビュー](H11_V4_G026_PRIVATE_SNAPSHOT_PRODUCER_INDEPENDENT_REVIEW_20260729.md)

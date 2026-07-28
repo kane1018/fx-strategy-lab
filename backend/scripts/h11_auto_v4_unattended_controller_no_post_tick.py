@@ -24,6 +24,9 @@ from app.services.h11_v4_current_generation_shadow_observer_no_post import (
     load_current_review_evidence,
     load_sealed_current_shadow_artifacts,
 )
+from app.services.h11_v4_unattended_account_snapshot_store_no_post import (
+    V4AccountSnapshotStoreNoPost,
+)
 from app.services.h11_v4_unattended_commissioning_no_post import (
     bind_g018_predecessor_canary_completion,
 )
@@ -37,6 +40,7 @@ from app.services.h11_v4_unattended_integrated_controller_no_post import (
 )
 from app.services.h11_v4_unattended_live_arm_state import V4UnattendedLiveArmStore
 from app.services.h11_v4_unattended_live_paths import (
+    v4_unattended_account_snapshot_state_directory,
     v4_unattended_live_arm_state_path,
 )
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
@@ -91,6 +95,14 @@ def main() -> int:
             commissioning_shadow=shadow,
             predecessor_completion=bind_g018_predecessor_canary_completion(
                 repository=repository
+            ),
+            account_snapshot_evidence=V4AccountSnapshotStoreNoPost(
+                v4_unattended_account_snapshot_state_directory(
+                    generation_digest=generation.digest
+                )
+            ).load_completed(
+                expected_reviewed_files_digest=reviewed,
+                expected_generation_digest=generation.digest,
             ),
         )
         state_root = (

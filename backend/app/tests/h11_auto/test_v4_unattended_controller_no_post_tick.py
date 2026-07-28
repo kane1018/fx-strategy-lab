@@ -46,6 +46,7 @@ def test_offline_tick_application_imports_are_exactly_allowlisted() -> None:
         "app.h11_auto.v4_gmo_runtime_paths",
         "app.services.h11_v4_current_generation_shadow_observer_no_post",
         "app.services.h11_v4_unattended_commissioning_no_post",
+        "app.services.h11_v4_unattended_account_snapshot_store_no_post",
         "app.services.h11_v4_unattended_controller_snapshot_no_post",
         "app.services.h11_v4_unattended_integrated_controller_no_post",
         "app.services.h11_v4_unattended_live_arm_state",
