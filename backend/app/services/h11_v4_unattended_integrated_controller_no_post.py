@@ -31,10 +31,15 @@ from app.services.h11_v4_unattended_commissioning_no_post import (
     commissioning_historical_evidence_is_canonical,
     evaluate_commissioning,
 )
+from app.services.h11_v4_unattended_operational_readiness_no_post import (
+    V4OperationalReadinessEvidenceNoPost,
+    V4OperationalReadinessNoPostError,
+    validate_operational_readiness_evidence_no_post,
+)
 
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
-_EVIDENCE_SCHEMA = "H11_V4_UNATTENDED_CONTROLLER_EVIDENCE_NO_POST_V1"
+_EVIDENCE_SCHEMA = "H11_V4_UNATTENDED_CONTROLLER_EVIDENCE_NO_POST_V2"
 _ACTUAL_INTEGRATION_IMPLEMENTED = False
 _ZERO_DIGEST = "sha256:" + ("0" * 64)
 
@@ -92,6 +97,7 @@ class V4IntegratedControllerEvidence:
     observed_at_utc: str
     valid_until_utc: str
     account_snapshot_evidence_digest: str
+    operational_readiness_evidence_digest: str
     artifact_digest: str
 
 
@@ -132,6 +138,7 @@ def build_integrated_controller_evidence(
     observed_at_utc: str,
     valid_until_utc: str,
     account_snapshot_evidence_digest: str = _ZERO_DIGEST,
+    operational_readiness_evidence_digest: str = _ZERO_DIGEST,
 ) -> V4IntegratedControllerEvidence:
     payload: dict[str, object] = {
         "schema": _EVIDENCE_SCHEMA,
@@ -170,6 +177,7 @@ def build_integrated_controller_evidence(
         "observed_at_utc": observed_at_utc,
         "valid_until_utc": valid_until_utc,
         "account_snapshot_evidence_digest": account_snapshot_evidence_digest,
+        "operational_readiness_evidence_digest": operational_readiness_evidence_digest,
     }
     return V4IntegratedControllerEvidence(
         **payload,
@@ -189,6 +197,7 @@ class V4IntegratedControllerSnapshot:
     commissioning_shadow: V4ShadowEvidenceArtifact
     predecessor_completion: V4PredecessorCanaryCompletionArtifact | None
     account_snapshot_evidence: V4BoundAccountSnapshotEvidenceNoPost | None
+    operational_readiness_evidence: V4OperationalReadinessEvidenceNoPost | None
     evidence: V4IntegratedControllerEvidence
 
     def __getattr__(self, name: str) -> object:
@@ -545,7 +554,7 @@ def _entry_blockers(snapshot: V4IntegratedControllerSnapshot) -> tuple[str, ...]
         reasons.append("MONTHLY_REALIZED_LOSS_LIMIT_REACHED")
     if snapshot.consecutive_losses >= policy.maximum_consecutive_losses:
         reasons.append("CONSECUTIVE_LOSS_LIMIT_REACHED")
-    if _ACTUAL_INTEGRATION_IMPLEMENTED is not False:
+    if _ACTUAL_INTEGRATION_IMPLEMENTED is not True:
         reasons.append("ACTUAL_INTEGRATION_STATE_INVALID")
     return tuple(dict.fromkeys(reasons))
 
@@ -700,6 +709,45 @@ def _validate_snapshot(snapshot: V4IntegratedControllerSnapshot) -> None:
         raise V4IntegratedControllerError(
             "INTEGRATED_ACCOUNT_SNAPSHOT_EVIDENCE_UNEXPECTED"
         )
+    operational = snapshot.operational_readiness_evidence
+    if evidence.operational_readiness_evidence_digest != _ZERO_DIGEST:
+        if type(operational) is not V4OperationalReadinessEvidenceNoPost:
+            raise V4IntegratedControllerError(
+                "INTEGRATED_OPERATIONAL_READINESS_EVIDENCE_REQUIRED"
+            )
+        try:
+            validate_operational_readiness_evidence_no_post(
+                operational,
+                expected_reviewed_files_digest=snapshot.reviewed_files_digest,
+                expected_generation_digest=snapshot.generation_digest,
+                now_utc=datetime.now(UTC),
+            )
+        except V4OperationalReadinessNoPostError as error:
+            raise V4IntegratedControllerError(
+                "INTEGRATED_OPERATIONAL_READINESS_EVIDENCE_INVALID"
+            ) from error
+        if (
+            operational.artifact_digest
+            != evidence.operational_readiness_evidence_digest
+            or operational.process_lock_clear is not evidence.process_lock_clear
+            or operational.dead_man_clear is not evidence.dead_man_clear
+            or operational.heartbeat_chain_clear is not evidence.heartbeat_chain_clear
+            or operational.notification_ready is not evidence.notification_ready
+        ):
+            raise V4IntegratedControllerError(
+                "INTEGRATED_OPERATIONAL_READINESS_EVIDENCE_BINDING_MISMATCH"
+            )
+    elif operational is not None or any(
+        (
+            evidence.process_lock_clear,
+            evidence.dead_man_clear,
+            evidence.heartbeat_chain_clear,
+            evidence.notification_ready,
+        )
+    ):
+        raise V4IntegratedControllerError(
+            "INTEGRATED_OPERATIONAL_READINESS_EVIDENCE_UNEXPECTED"
+        )
 
 
 def _validate_evidence(
@@ -725,6 +773,7 @@ def _validate_evidence(
         evidence.arm_reviewed_files_digest,
         evidence.arm_generation_digest,
         evidence.account_snapshot_evidence_digest,
+        evidence.operational_readiness_evidence_digest,
     ):
         if type(digest) is not str or not _SHA256.fullmatch(digest):
             raise V4IntegratedControllerError("INTEGRATED_EVIDENCE_DIGEST_INVALID")
@@ -776,6 +825,17 @@ def _validate_evidence(
         or (
             not evidence.account_snapshot_known
             and evidence.account_snapshot_evidence_digest != _ZERO_DIGEST
+        )
+        or (
+            evidence.operational_readiness_evidence_digest == _ZERO_DIGEST
+            and any(
+                (
+                    evidence.process_lock_clear,
+                    evidence.dead_man_clear,
+                    evidence.heartbeat_chain_clear,
+                    evidence.notification_ready,
+                )
+            )
         )
     ):
         raise V4IntegratedControllerError("INTEGRATED_EVIDENCE_COUNTER_INVALID")

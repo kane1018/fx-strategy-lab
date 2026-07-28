@@ -24,6 +24,11 @@ from app.services.h11_v4_unattended_integrated_controller_no_post import (
     build_integrated_controller_evidence,
 )
 from app.services.h11_v4_unattended_live_arm_state import V4UnattendedLiveArmCheck
+from app.services.h11_v4_unattended_operational_readiness_no_post import (
+    V4OperationalReadinessEvidenceNoPost,
+    V4OperationalReadinessNoPostError,
+    validate_operational_readiness_evidence_no_post,
+)
 
 _SCHEMA = "H11_V4_UNATTENDED_CONTROLLER_OFFLINE_SNAPSHOT_NO_POST_V1"
 _ZERO_DIGEST = "sha256:" + ("0" * 64)
@@ -44,6 +49,7 @@ class V4UnattendedControllerOfflineSources:
     commissioning_shadow: V4ShadowEvidenceArtifact
     predecessor_completion: V4PredecessorCanaryCompletionArtifact
     account_snapshot_evidence: V4BoundAccountSnapshotEvidenceNoPost | None = None
+    operational_readiness_evidence: V4OperationalReadinessEvidenceNoPost | None = None
 
 
 def assemble_offline_controller_snapshot_no_post(
@@ -83,6 +89,30 @@ def assemble_offline_controller_snapshot_no_post(
         account_flat = account_evidence.account_flat
         active_orders_zero = account_evidence.active_orders_zero
         account_snapshot_evidence_digest = account_evidence.artifact_digest
+    operational_evidence = sources.operational_readiness_evidence
+    if operational_evidence is None:
+        process_lock_clear = False
+        dead_man_clear = False
+        heartbeat_chain_clear = False
+        notification_ready = False
+        operational_readiness_evidence_digest = _ZERO_DIGEST
+    else:
+        try:
+            validate_operational_readiness_evidence_no_post(
+                operational_evidence,
+                expected_reviewed_files_digest=sources.reviewed_files_digest,
+                expected_generation_digest=generation.digest,
+                now_utc=observed,
+            )
+        except V4OperationalReadinessNoPostError as error:
+            raise V4UnattendedControllerSnapshotNoPostError(
+                "OFFLINE_CONTROLLER_OPERATIONAL_READINESS_INVALID"
+            ) from error
+        process_lock_clear = operational_evidence.process_lock_clear
+        dead_man_clear = operational_evidence.dead_man_clear
+        heartbeat_chain_clear = operational_evidence.heartbeat_chain_clear
+        notification_ready = operational_evidence.notification_ready
+        operational_readiness_evidence_digest = operational_evidence.artifact_digest
     evidence = build_integrated_controller_evidence(
         reviewed_files_digest=sources.reviewed_files_digest,
         generation_digest=generation.digest,
@@ -94,11 +124,11 @@ def assemble_offline_controller_snapshot_no_post(
         arm_reviewed_files_digest=sources.arm_check.reviewed_files_digest,
         arm_generation_digest=sources.arm_check.generation_digest,
         arm_armed=sources.arm_check.armed,
-        process_lock_clear=False,
+        process_lock_clear=process_lock_clear,
         persistent_halt_clear=True,
-        dead_man_clear=False,
-        heartbeat_chain_clear=False,
-        notification_ready=False,
+        dead_man_clear=dead_man_clear,
+        heartbeat_chain_clear=heartbeat_chain_clear,
+        notification_ready=notification_ready,
         market_open=False,
         formal_signal_actionable=False,
         quote_fresh=False,
@@ -119,6 +149,7 @@ def assemble_offline_controller_snapshot_no_post(
         observed_at_utc=observed.isoformat(),
         valid_until_utc=(observed + timedelta(seconds=60)).isoformat(),
         account_snapshot_evidence_digest=account_snapshot_evidence_digest,
+        operational_readiness_evidence_digest=operational_readiness_evidence_digest,
     )
     return V4IntegratedControllerSnapshot(
         reviewed_files_digest=sources.reviewed_files_digest,
@@ -131,6 +162,7 @@ def assemble_offline_controller_snapshot_no_post(
         commissioning_shadow=sources.commissioning_shadow,
         predecessor_completion=sources.predecessor_completion,
         account_snapshot_evidence=account_evidence,
+        operational_readiness_evidence=operational_evidence,
         evidence=evidence,
     )
 
@@ -154,6 +186,11 @@ def _validate_sources(
             sources.account_snapshot_evidence is not None
             and type(sources.account_snapshot_evidence)
             is not V4BoundAccountSnapshotEvidenceNoPost
+        )
+        or (
+            sources.operational_readiness_evidence is not None
+            and type(sources.operational_readiness_evidence)
+            is not V4OperationalReadinessEvidenceNoPost
         )
     ):
         raise V4UnattendedControllerSnapshotNoPostError(

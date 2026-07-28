@@ -1,5 +1,20 @@
 # FX Strategy Lab — Codex 作業ルール
 
+## H-11 v4 G027 operational readiness no-POST限定例外
+
+operatorがG027 corrective generationを明示承認した場合に限り、既存の
+`H11AutoProcessLock`、`DeadManStore`、`V4HeartbeatChainStore`、dual-route
+notification transport contractを、credential read・notification send・broker
+read/writeなしで観測するgeneration-bound operational readiness evidenceを実装して
+よい。evidenceはreviewed-files digest、generation digest、有効期限へbindし、各状態を
+個別に記録するだけとする。aggregate allow値、permit、hard-guard解除値を生成せず、
+`__bool__`は常にfalse、broker POST authorizationは常にfalseとする。
+
+この実装Stepでは実通知送信、Keychain read、Private API、persistent ARM変更、
+LaunchAgent install/reinstall、permit発行、broker POST、注文、取消、変更、決済を
+行わない。G027では新しいPrivate GET producerを実装・実行しない。approvalと
+Private GET開始の原子化は、fresh shadow commissioning後の別generation・別reviewで扱う。
+
 ## H-11 v4 G026 one-use Private GET snapshot producer限定例外
 
 operatorがG026 corrective generationを明示承認した場合に限り、reviewed

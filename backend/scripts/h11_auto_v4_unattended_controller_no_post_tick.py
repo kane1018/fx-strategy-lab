@@ -42,6 +42,10 @@ from app.services.h11_v4_unattended_live_arm_state import V4UnattendedLiveArmSto
 from app.services.h11_v4_unattended_live_paths import (
     v4_unattended_account_snapshot_state_directory,
     v4_unattended_live_arm_state_path,
+    v4_unattended_operational_readiness_path,
+)
+from app.services.h11_v4_unattended_operational_readiness_no_post import (
+    V4OperationalReadinessStoreNoPost,
 )
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
@@ -103,6 +107,15 @@ def main() -> int:
             ).load_completed(
                 expected_reviewed_files_digest=reviewed,
                 expected_generation_digest=generation.digest,
+            ),
+            operational_readiness_evidence=V4OperationalReadinessStoreNoPost(
+                v4_unattended_operational_readiness_path(
+                    generation_digest=generation.digest
+                )
+            ).load(
+                expected_reviewed_files_digest=reviewed,
+                expected_generation_digest=generation.digest,
+                now_utc=datetime.now(UTC),
             ),
         )
         state_root = (

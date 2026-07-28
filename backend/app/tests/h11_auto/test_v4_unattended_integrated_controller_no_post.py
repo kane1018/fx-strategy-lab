@@ -23,6 +23,9 @@ from app.services.h11_v4_unattended_commissioning_no_post import (
     build_predecessor_canary_completion_artifact,
     build_shadow_evidence_artifact,
 )
+from app.services.h11_v4_unattended_operational_readiness_no_post import (
+    build_operational_readiness_evidence_no_post,
+)
 
 
 def _commissioning_evidence() -> tuple[
@@ -124,11 +127,11 @@ def _snapshot(**overrides: object) -> subject.V4IntegratedControllerSnapshot:
         "commissioning_artifact": artifact,
         "commissioning_shadow": shadow,
         "predecessor_completion": predecessor,
-        "process_lock_clear": True,
+        "process_lock_clear": False,
         "persistent_halt_clear": True,
-        "dead_man_clear": True,
-        "heartbeat_chain_clear": True,
-        "notification_ready": True,
+        "dead_man_clear": False,
+        "heartbeat_chain_clear": False,
+        "notification_ready": False,
         "market_open": True,
         "formal_signal_actionable": True,
         "quote_fresh": True,
@@ -159,9 +162,26 @@ def _snapshot(**overrides: object) -> subject.V4IntegratedControllerSnapshot:
     evidence_keys = {
         field
         for field in subject.V4IntegratedControllerEvidence.__dataclass_fields__
-        if field not in {"schema", "artifact_digest"}
+        if field
+        not in {
+            "schema",
+            "artifact_digest",
+            "operational_readiness_evidence_digest",
+        }
     }
     evidence_values = {key: values[key] for key in evidence_keys}
+    operational = build_operational_readiness_evidence_no_post(
+        reviewed_files_digest=str(values["reviewed_files_digest"]),
+        generation_digest=str(values["generation_digest"]),
+        observed_at_utc=datetime.fromisoformat(str(values["observed_at_utc"])),
+        process_lock_clear=values["process_lock_clear"] is True,
+        dead_man_clear=values["dead_man_clear"] is True,
+        heartbeat_chain_clear=values["heartbeat_chain_clear"] is True,
+        notification_ready=values["notification_ready"] is True,
+    )
+    evidence_values["operational_readiness_evidence_digest"] = (
+        operational.artifact_digest
+    )
     account_snapshot = None
     if values["account_snapshot_known"] is True:
         marker = build_account_snapshot_operation_marker_no_post(
@@ -209,6 +229,7 @@ def _snapshot(**overrides: object) -> subject.V4IntegratedControllerSnapshot:
     return subject.V4IntegratedControllerSnapshot(
         **snapshot_values,
         account_snapshot_evidence=account_snapshot,
+        operational_readiness_evidence=operational,
         evidence=evidence,
     )
 
@@ -328,11 +349,15 @@ def test_unknown_or_inconsistent_lifecycle_persistently_halts(
     assert decision.actual_post_count == 0
 
 
-def test_nonactionable_flat_cycle_is_idle() -> None:
+def test_nonactionable_flat_cycle_with_no_send_evidence_is_degraded() -> None:
     decision = subject.evaluate_integrated_controller(
         _snapshot(formal_signal_actionable=False)
     )
-    assert decision.status is subject.V4IntegratedControllerStatus.IDLE_NO_POST
+    assert (
+        decision.status
+        is subject.V4IntegratedControllerStatus.OPERATIONAL_DEGRADED_NO_POST
+    )
+    assert "NOTIFICATION_NOT_READY" in decision.blocked_reasons
 
 
 def test_nonactionable_flat_cycle_reports_operational_degradation() -> None:
@@ -398,8 +423,11 @@ def test_open_position_requires_active_current_cycle_bound_protection() -> None:
 
 
 def test_boolean_inputs_are_exactly_typed() -> None:
+    snapshot = _snapshot()
     with pytest.raises(subject.V4IntegratedControllerError, match="BOOLEAN_INVALID"):
-        subject.evaluate_integrated_controller(_snapshot(notification_ready=1))
+        subject.evaluate_integrated_controller(
+            _replace_evidence(snapshot, notification_ready=1)
+        )
 
 
 def test_durable_halt_survives_store_restart(tmp_path) -> None:
@@ -592,13 +620,12 @@ def test_unavailable_durable_store_never_claims_persisted_halt(tmp_path) -> None
 
 
 def test_invalid_digest_is_rejected() -> None:
+    snapshot = replace(
+        _snapshot(account_snapshot_known=False),
+        generation_digest="invalid",
+    )
     with pytest.raises(subject.V4IntegratedControllerError, match="DIGEST_INVALID"):
-        subject.evaluate_integrated_controller(
-            _snapshot(
-                generation_digest="invalid",
-                account_snapshot_known=False,
-            )
-        )
+        subject.evaluate_integrated_controller(snapshot)
 
 
 def test_integrated_controller_has_no_live_dependency_or_allow_bridge() -> None:

@@ -49,6 +49,7 @@ def test_offline_tick_application_imports_are_exactly_allowlisted() -> None:
         "app.services.h11_v4_unattended_account_snapshot_store_no_post",
         "app.services.h11_v4_unattended_controller_snapshot_no_post",
         "app.services.h11_v4_unattended_integrated_controller_no_post",
+        "app.services.h11_v4_unattended_operational_readiness_no_post",
         "app.services.h11_v4_unattended_live_arm_state",
         "app.services.h11_v4_unattended_live_paths",
         "h11_v4_reviewed_digest",
