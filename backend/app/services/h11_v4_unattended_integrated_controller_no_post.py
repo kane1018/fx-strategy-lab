@@ -17,6 +17,11 @@ from enum import Enum
 from pathlib import Path
 
 from app.h11_auto.runtime_safety import PhaseBRiskPolicy
+from app.services.h11_v4_unattended_account_snapshot_evidence_no_post import (
+    V4BoundAccountSnapshotEvidenceNoPost,
+    V4BoundAccountSnapshotEvidenceNoPostError,
+    validate_bound_account_snapshot_evidence_no_post,
+)
 from app.services.h11_v4_unattended_commissioning_no_post import (
     V4CommissioningArtifact,
     V4CommissioningStatus,
@@ -31,6 +36,7 @@ _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _EVIDENCE_SCHEMA = "H11_V4_UNATTENDED_CONTROLLER_EVIDENCE_NO_POST_V1"
 _ACTUAL_INTEGRATION_IMPLEMENTED = False
+_ZERO_DIGEST = "sha256:" + ("0" * 64)
 
 
 class V4IntegratedControllerError(ValueError):
@@ -85,6 +91,7 @@ class V4IntegratedControllerEvidence:
     consecutive_losses: int
     observed_at_utc: str
     valid_until_utc: str
+    account_snapshot_evidence_digest: str
     artifact_digest: str
 
 
@@ -124,6 +131,7 @@ def build_integrated_controller_evidence(
     consecutive_losses: int,
     observed_at_utc: str,
     valid_until_utc: str,
+    account_snapshot_evidence_digest: str = _ZERO_DIGEST,
 ) -> V4IntegratedControllerEvidence:
     payload: dict[str, object] = {
         "schema": _EVIDENCE_SCHEMA,
@@ -161,6 +169,7 @@ def build_integrated_controller_evidence(
         "consecutive_losses": consecutive_losses,
         "observed_at_utc": observed_at_utc,
         "valid_until_utc": valid_until_utc,
+        "account_snapshot_evidence_digest": account_snapshot_evidence_digest,
     }
     return V4IntegratedControllerEvidence(
         **payload,
@@ -179,6 +188,7 @@ class V4IntegratedControllerSnapshot:
     commissioning_artifact: V4CommissioningArtifact
     commissioning_shadow: V4ShadowEvidenceArtifact
     predecessor_completion: V4PredecessorCanaryCompletionArtifact | None
+    account_snapshot_evidence: V4BoundAccountSnapshotEvidenceNoPost | None
     evidence: V4IntegratedControllerEvidence
 
     def __getattr__(self, name: str) -> object:
@@ -259,6 +269,16 @@ class V4IntegratedControllerStore:
                 )
                 connection.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS integrated_account_snapshot_consumption (
+                        generation_digest TEXT NOT NULL,
+                        evidence_digest TEXT NOT NULL,
+                        consumed_at_utc TEXT NOT NULL,
+                        PRIMARY KEY (generation_digest, evidence_digest)
+                    )
+                    """
+                )
+                connection.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS integrated_generation_halt (
                         generation_digest TEXT PRIMARY KEY,
                         reviewed_files_digest TEXT NOT NULL,
@@ -282,7 +302,7 @@ class V4IntegratedControllerStore:
             connection.execute("BEGIN IMMEDIATE")
             generation_halt = connection.execute(
                 """
-                SELECT reviewed_files_digest
+                SELECT reviewed_files_digest, reason
                 FROM integrated_generation_halt
                 WHERE generation_digest=?
                 """,
@@ -290,7 +310,12 @@ class V4IntegratedControllerStore:
             ).fetchone()
             if generation_halt is not None:
                 connection.rollback()
-                return _halt("PERSISTENT_GENERATION_HALT_LATCHED")
+                if str(generation_halt[0]) != snapshot.reviewed_files_digest:
+                    return _halt("PERSISTED_HALT_REVIEW_BOUNDARY_MISMATCH")
+                return _halt(
+                    "PERSISTENT_GENERATION_HALT_LATCHED",
+                    _safe_persisted_halt_reason(generation_halt[1]),
+                )
             legacy_halt = connection.execute(
                 """
                 SELECT 1
@@ -319,6 +344,24 @@ class V4IntegratedControllerStore:
                     return decision
                 if previous_status == V4IntegratedControllerStatus.PERSISTENT_HALT_NO_POST.value:
                     decision = _halt("PERSISTENT_HALT_LATCHED")
+                    self._record_generation_halt(connection, snapshot, decision)
+                    connection.commit()
+                    return decision
+            if snapshot.account_snapshot_known:
+                consumed = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO integrated_account_snapshot_consumption
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        snapshot.generation_digest,
+                        snapshot.account_snapshot_evidence_digest,
+                        datetime.now(UTC).isoformat(),
+                    ),
+                )
+                if consumed.rowcount != 1:
+                    decision = _halt("ACCOUNT_SNAPSHOT_EVIDENCE_REUSED")
+                    self._record(connection, snapshot, decision)
                     self._record_generation_halt(connection, snapshot, decision)
                     connection.commit()
                     return decision
@@ -625,6 +668,38 @@ def _validate_snapshot(snapshot: V4IntegratedControllerSnapshot) -> None:
         )
     ):
         raise V4IntegratedControllerError("INTEGRATED_COMMISSIONING_EVIDENCE_INVALID")
+    account_snapshot = snapshot.account_snapshot_evidence
+    if evidence.account_snapshot_known:
+        if type(account_snapshot) is not V4BoundAccountSnapshotEvidenceNoPost:
+            raise V4IntegratedControllerError(
+                "INTEGRATED_ACCOUNT_SNAPSHOT_EVIDENCE_REQUIRED"
+            )
+        try:
+            validate_bound_account_snapshot_evidence_no_post(
+                account_snapshot,
+                expected_reviewed_files_digest=snapshot.reviewed_files_digest,
+                expected_generation_digest=snapshot.generation_digest,
+                expected_cycle_binding_digest=snapshot.cycle_binding_digest,
+                now_utc=datetime.now(UTC),
+            )
+        except V4BoundAccountSnapshotEvidenceNoPostError as error:
+            raise V4IntegratedControllerError(
+                "INTEGRATED_ACCOUNT_SNAPSHOT_EVIDENCE_INVALID"
+            ) from error
+        if (
+            account_snapshot.artifact_digest
+            != evidence.account_snapshot_evidence_digest
+            or account_snapshot.account_flat is not evidence.account_flat
+            or account_snapshot.active_orders_zero
+            is not evidence.active_orders_zero
+        ):
+            raise V4IntegratedControllerError(
+                "INTEGRATED_ACCOUNT_SNAPSHOT_EVIDENCE_BINDING_MISMATCH"
+            )
+    elif account_snapshot is not None:
+        raise V4IntegratedControllerError(
+            "INTEGRATED_ACCOUNT_SNAPSHOT_EVIDENCE_UNEXPECTED"
+        )
 
 
 def _validate_evidence(
@@ -649,6 +724,7 @@ def _validate_evidence(
         evidence.scheduled_exit_cycle_binding_digest,
         evidence.arm_reviewed_files_digest,
         evidence.arm_generation_digest,
+        evidence.account_snapshot_evidence_digest,
     ):
         if type(digest) is not str or not _SHA256.fullmatch(digest):
             raise V4IntegratedControllerError("INTEGRATED_EVIDENCE_DIGEST_INVALID")
@@ -693,6 +769,14 @@ def _validate_evidence(
         or evidence.daily_loss_jpy < 0
         or evidence.monthly_loss_jpy < 0
         or evidence.consecutive_losses < 0
+        or (
+            evidence.account_snapshot_known
+            and evidence.account_snapshot_evidence_digest == _ZERO_DIGEST
+        )
+        or (
+            not evidence.account_snapshot_known
+            and evidence.account_snapshot_evidence_digest != _ZERO_DIGEST
+        )
     ):
         raise V4IntegratedControllerError("INTEGRATED_EVIDENCE_COUNTER_INVALID")
     observed = _parse_utc(evidence.observed_at_utc)
@@ -717,6 +801,16 @@ def _parse_utc(value: object) -> datetime:
     if parsed.tzinfo is None or parsed.utcoffset() != UTC.utcoffset(parsed):
         raise V4IntegratedControllerError("INTEGRATED_EVIDENCE_TIME_INVALID")
     return parsed
+
+
+def _safe_persisted_halt_reason(value: object) -> str:
+    if (
+        type(value) is str
+        and 1 <= len(value) <= 128
+        and re.fullmatch(r"[A-Z0-9_]+", value) is not None
+    ):
+        return value
+    return "PERSISTED_HALT_REASON_INVALID"
 
 
 def _canonical_digest(payload: dict[str, object]) -> str:

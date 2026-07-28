@@ -33,6 +33,11 @@ import httpx
 
 from app.h11_auto.v4_gmo_contracts import V4GmoPreflightSnapshot
 from app.private_api.auth import build_auth_headers
+from app.services.h11_v4_unattended_account_snapshot_evidence_no_post import (
+    V4BoundAccountSnapshotEvidenceNoPost,
+    build_account_snapshot_operation_marker_no_post,
+    build_bound_account_snapshot_evidence_no_post,
+)
 
 GMO_V4_PRIVATE_BASE_URL = "https://forex-api.coin.z.com"
 # Reference only: this module never constructs a client against this URL
@@ -305,4 +310,56 @@ def augment_shadow_preflight_with_private_snapshot(
         broker_snapshot_fresh=True,
         position_count=private.open_positions_count,
         active_order_count=private.active_orders_count,
+    )
+
+
+def bind_private_snapshot_for_controller_no_post(
+    *,
+    private: V4UnattendedShadowPrivateSnapshot,
+    reviewed_files_digest: str,
+    generation_digest: str,
+    cycle_binding_digest: str,
+    observed_at_utc: str,
+    valid_until_utc: str,
+) -> V4BoundAccountSnapshotEvidenceNoPost:
+    """Convert one observed sanitized snapshot into inert controller evidence."""
+
+    if (
+        type(private) is not V4UnattendedShadowPrivateSnapshot
+        or private.status != "SHADOW_PRIVATE_SNAPSHOT_OBSERVED"
+        or private.credential_read_performed is not True
+        or private.broker_read_performed is not True
+        or private.broker_get_count != 3
+        or private.raw_response_retained is not False
+        or private.identifier_exposed is not False
+        or private.broker_write_performed is not False
+        or private.broker_post_count != 0
+    ):
+        raise V4UnattendedShadowPrivateError(
+            "SHADOW_PRIVATE_CONTROLLER_BINDING_INVALID"
+        )
+    marker = build_account_snapshot_operation_marker_no_post(
+        reviewed_files_digest=reviewed_files_digest,
+        generation_digest=generation_digest,
+        cycle_binding_digest=cycle_binding_digest,
+        observed_at_utc=observed_at_utc,
+        valid_until_utc=valid_until_utc,
+        broker_read_performed=True,
+        broker_get_count=private.broker_get_count,
+        open_positions_count=private.open_positions_count,
+        active_orders_count=private.active_orders_count,
+    )
+    return build_bound_account_snapshot_evidence_no_post(
+        reviewed_files_digest=reviewed_files_digest,
+        generation_digest=generation_digest,
+        cycle_binding_digest=cycle_binding_digest,
+        operation_marker=marker,
+        observed_at_utc=observed_at_utc,
+        valid_until_utc=valid_until_utc,
+        broker_read_performed=True,
+        broker_get_count=private.broker_get_count,
+        open_positions_count=private.open_positions_count,
+        active_orders_count=private.active_orders_count,
+        account_flat=private.account_flat,
+        active_orders_zero=private.active_orders_zero,
     )

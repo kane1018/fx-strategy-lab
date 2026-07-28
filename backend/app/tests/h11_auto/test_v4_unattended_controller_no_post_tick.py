@@ -110,7 +110,10 @@ def test_offline_tick_is_repeatable_and_concurrency_safe(tmp_path) -> None:
         concurrent = list(executor.map(lambda _index: run_once(), range(2)))
 
     assert first["blocked_reasons"] == ["ACCOUNT_SNAPSHOT_UNKNOWN"]
-    assert second["blocked_reasons"] == ["PERSISTENT_GENERATION_HALT_LATCHED"]
+    assert second["blocked_reasons"] == [
+        "PERSISTENT_GENERATION_HALT_LATCHED",
+        "ACCOUNT_SNAPSHOT_UNKNOWN",
+    ]
     assert concurrent == [second, second]
     assert first["broker_write"] is False
     assert first["actual_post_count"] == 0

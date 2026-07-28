@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -15,12 +15,19 @@ from app.h11_auto.v4_gmo_generation import (
 )
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 from app.services import h11_v4_unattended_controller_snapshot_no_post as subject
+from app.services.h11_v4_unattended_account_snapshot_evidence_no_post import (
+    build_account_snapshot_operation_marker_no_post,
+    build_bound_account_snapshot_evidence_no_post,
+)
 from app.services.h11_v4_unattended_commissioning_no_post import (
     CURRENT_COMMISSIONING_SCHEMA,
     CURRENT_SHADOW_EVIDENCE_SCHEMA,
     build_commissioning_artifact,
     build_predecessor_canary_completion_artifact,
     build_shadow_evidence_artifact,
+)
+from app.services.h11_v4_unattended_integrated_controller_no_post import (
+    V4IntegratedControllerStore,
 )
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
@@ -142,6 +149,106 @@ def test_offline_snapshot_fixes_all_external_facts_to_safe_values() -> None:
     assert snapshot.result_unknown is False
 
 
+def test_exact_bound_account_evidence_changes_only_account_facts() -> None:
+    sources = _sources()
+    now = datetime.now(UTC)
+    cycle = subject.controller_cycle_binding_no_post(
+        generation_digest=sources.generation.digest,
+        observed_at_utc=now,
+    )
+    marker = build_account_snapshot_operation_marker_no_post(
+        reviewed_files_digest=sources.reviewed_files_digest,
+        generation_digest=sources.generation.digest,
+        cycle_binding_digest=cycle,
+        observed_at_utc=(now - timedelta(seconds=1)).isoformat(),
+        valid_until_utc=(now + timedelta(seconds=30)).isoformat(),
+        broker_read_performed=True,
+        broker_get_count=3,
+        open_positions_count=0,
+        active_orders_count=0,
+    )
+    account = build_bound_account_snapshot_evidence_no_post(
+        reviewed_files_digest=sources.reviewed_files_digest,
+        generation_digest=sources.generation.digest,
+        cycle_binding_digest=cycle,
+        operation_marker=marker,
+        observed_at_utc=marker.observed_at_utc,
+        valid_until_utc=marker.valid_until_utc,
+        broker_read_performed=True,
+        broker_get_count=3,
+        open_positions_count=0,
+        active_orders_count=0,
+        account_flat=True,
+        active_orders_zero=True,
+    )
+    baseline = subject.assemble_offline_controller_snapshot_no_post(
+        sources=sources,
+        now_utc=now,
+    )
+    observed = subject.assemble_offline_controller_snapshot_no_post(
+        sources=replace(sources, account_snapshot_evidence=account),
+        now_utc=now,
+    )
+    assert observed.account_snapshot_known is True
+    assert observed.account_flat is True
+    assert observed.active_orders_zero is True
+    for field in (
+        "process_lock_clear",
+        "dead_man_clear",
+        "heartbeat_chain_clear",
+        "notification_ready",
+        "market_open",
+        "formal_signal_actionable",
+        "quote_fresh",
+        "spread_within_limit",
+    ):
+        assert getattr(observed, field) == getattr(baseline, field) is False
+
+
+@pytest.mark.parametrize(("positions", "active"), ((1, 0), (0, 2), (1, 2)))
+def test_bound_account_counts_are_preserved(
+    positions: int,
+    active: int,
+) -> None:
+    sources = _sources()
+    now = datetime.now(UTC)
+    cycle = subject.controller_cycle_binding_no_post(
+        generation_digest=sources.generation.digest,
+        observed_at_utc=now,
+    )
+    marker = build_account_snapshot_operation_marker_no_post(
+        reviewed_files_digest=sources.reviewed_files_digest,
+        generation_digest=sources.generation.digest,
+        cycle_binding_digest=cycle,
+        observed_at_utc=(now - timedelta(seconds=1)).isoformat(),
+        valid_until_utc=(now + timedelta(seconds=30)).isoformat(),
+        broker_read_performed=True,
+        broker_get_count=3,
+        open_positions_count=positions,
+        active_orders_count=active,
+    )
+    account = build_bound_account_snapshot_evidence_no_post(
+        reviewed_files_digest=sources.reviewed_files_digest,
+        generation_digest=sources.generation.digest,
+        cycle_binding_digest=cycle,
+        operation_marker=marker,
+        observed_at_utc=marker.observed_at_utc,
+        valid_until_utc=marker.valid_until_utc,
+        broker_read_performed=True,
+        broker_get_count=3,
+        open_positions_count=positions,
+        active_orders_count=active,
+        account_flat=positions == 0,
+        active_orders_zero=active == 0,
+    )
+    observed = subject.assemble_offline_controller_snapshot_no_post(
+        sources=replace(sources, account_snapshot_evidence=account),
+        now_utc=now,
+    )
+    assert observed.account_flat is (positions == 0)
+    assert observed.active_orders_zero is (active == 0)
+
+
 def test_source_binding_mismatch_is_rejected() -> None:
     sources = _sources()
     with pytest.raises(
@@ -193,6 +300,68 @@ def test_cross_artifact_binding_mismatch_is_rejected(mutation) -> None:
         subject.assemble_offline_controller_snapshot_no_post(
             sources=mutation(_sources()),
             now_utc=datetime.now(UTC),
+        )
+
+
+def test_bound_account_evidence_is_one_use_and_cannot_cross_cycles(tmp_path) -> None:
+    sources = _sources()
+    now = datetime.now(UTC)
+    cycle = subject.controller_cycle_binding_no_post(
+        generation_digest=sources.generation.digest,
+        observed_at_utc=now,
+    )
+    marker = build_account_snapshot_operation_marker_no_post(
+        reviewed_files_digest=sources.reviewed_files_digest,
+        generation_digest=sources.generation.digest,
+        cycle_binding_digest=cycle,
+        observed_at_utc=(now - timedelta(seconds=1)).isoformat(),
+        valid_until_utc=(now + timedelta(seconds=30)).isoformat(),
+        broker_read_performed=True,
+        broker_get_count=3,
+        open_positions_count=0,
+        active_orders_count=0,
+    )
+    account = build_bound_account_snapshot_evidence_no_post(
+        reviewed_files_digest=sources.reviewed_files_digest,
+        generation_digest=sources.generation.digest,
+        cycle_binding_digest=cycle,
+        operation_marker=marker,
+        observed_at_utc=marker.observed_at_utc,
+        valid_until_utc=marker.valid_until_utc,
+        broker_read_performed=True,
+        broker_get_count=3,
+        open_positions_count=0,
+        active_orders_count=0,
+        account_flat=True,
+        active_orders_zero=True,
+    )
+    bound_sources = replace(sources, account_snapshot_evidence=account)
+    snapshot = subject.assemble_offline_controller_snapshot_no_post(
+        sources=bound_sources,
+        now_utc=now,
+    )
+    database = tmp_path / "integrated.sqlite3"
+    store = V4IntegratedControllerStore(database)
+    first = store.evaluate_and_record(snapshot)
+    second = V4IntegratedControllerStore(database).evaluate_and_record(snapshot)
+    restarted = V4IntegratedControllerStore(database).evaluate_and_record(snapshot)
+    assert first.broker_write is False
+    assert first.actual_post_count == 0
+    assert second.persistent_halt is True
+    assert second.blocked_reasons == ("ACCOUNT_SNAPSHOT_EVIDENCE_REUSED",)
+    assert restarted.persistent_halt is True
+    assert restarted.blocked_reasons == (
+        "PERSISTENT_GENERATION_HALT_LATCHED",
+        "ACCOUNT_SNAPSHOT_EVIDENCE_REUSED",
+    )
+
+    with pytest.raises(
+        subject.V4UnattendedControllerSnapshotNoPostError,
+        match="OFFLINE_CONTROLLER_ACCOUNT_SNAPSHOT_INVALID",
+    ):
+        subject.assemble_offline_controller_snapshot_no_post(
+            sources=bound_sources,
+            now_utc=now + timedelta(minutes=1),
         )
 
 

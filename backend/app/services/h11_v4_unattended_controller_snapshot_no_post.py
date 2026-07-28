@@ -9,6 +9,11 @@ from datetime import UTC, datetime, timedelta
 
 from app.h11_auto.runtime_safety import PhaseBRiskPolicy, PhaseBRiskState
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
+from app.services.h11_v4_unattended_account_snapshot_evidence_no_post import (
+    V4BoundAccountSnapshotEvidenceNoPost,
+    V4BoundAccountSnapshotEvidenceNoPostError,
+    validate_bound_account_snapshot_evidence_no_post,
+)
 from app.services.h11_v4_unattended_commissioning_no_post import (
     V4CommissioningArtifact,
     V4PredecessorCanaryCompletionArtifact,
@@ -21,6 +26,7 @@ from app.services.h11_v4_unattended_integrated_controller_no_post import (
 from app.services.h11_v4_unattended_live_arm_state import V4UnattendedLiveArmCheck
 
 _SCHEMA = "H11_V4_UNATTENDED_CONTROLLER_OFFLINE_SNAPSHOT_NO_POST_V1"
+_ZERO_DIGEST = "sha256:" + ("0" * 64)
 
 
 class V4UnattendedControllerSnapshotNoPostError(ValueError):
@@ -37,6 +43,7 @@ class V4UnattendedControllerOfflineSources:
     commissioning_artifact: V4CommissioningArtifact
     commissioning_shadow: V4ShadowEvidenceArtifact
     predecessor_completion: V4PredecessorCanaryCompletionArtifact
+    account_snapshot_evidence: V4BoundAccountSnapshotEvidenceNoPost | None = None
 
 
 def assemble_offline_controller_snapshot_no_post(
@@ -53,6 +60,29 @@ def assemble_offline_controller_snapshot_no_post(
         generation_digest=generation.digest,
         observed_at_utc=observed,
     )
+    account_evidence = sources.account_snapshot_evidence
+    if account_evidence is None:
+        account_snapshot_known = False
+        account_flat = False
+        active_orders_zero = False
+        account_snapshot_evidence_digest = _ZERO_DIGEST
+    else:
+        try:
+            validate_bound_account_snapshot_evidence_no_post(
+                account_evidence,
+                expected_reviewed_files_digest=sources.reviewed_files_digest,
+                expected_generation_digest=generation.digest,
+                expected_cycle_binding_digest=cycle_binding,
+                now_utc=observed,
+            )
+        except V4BoundAccountSnapshotEvidenceNoPostError as error:
+            raise V4UnattendedControllerSnapshotNoPostError(
+                "OFFLINE_CONTROLLER_ACCOUNT_SNAPSHOT_INVALID"
+            ) from error
+        account_snapshot_known = True
+        account_flat = account_evidence.account_flat
+        active_orders_zero = account_evidence.active_orders_zero
+        account_snapshot_evidence_digest = account_evidence.artifact_digest
     evidence = build_integrated_controller_evidence(
         reviewed_files_digest=sources.reviewed_files_digest,
         generation_digest=generation.digest,
@@ -73,9 +103,9 @@ def assemble_offline_controller_snapshot_no_post(
         formal_signal_actionable=False,
         quote_fresh=False,
         spread_within_limit=False,
-        account_snapshot_known=False,
-        account_flat=False,
-        active_orders_zero=False,
+        account_snapshot_known=account_snapshot_known,
+        account_flat=account_flat,
+        active_orders_zero=active_orders_zero,
         exact_protection_confirmed=False,
         protection_observed_current=False,
         position_ownership_confirmed=False,
@@ -88,6 +118,7 @@ def assemble_offline_controller_snapshot_no_post(
         consecutive_losses=sources.risk_state.consecutive_losses,
         observed_at_utc=observed.isoformat(),
         valid_until_utc=(observed + timedelta(seconds=60)).isoformat(),
+        account_snapshot_evidence_digest=account_snapshot_evidence_digest,
     )
     return V4IntegratedControllerSnapshot(
         reviewed_files_digest=sources.reviewed_files_digest,
@@ -99,6 +130,7 @@ def assemble_offline_controller_snapshot_no_post(
         commissioning_artifact=sources.commissioning_artifact,
         commissioning_shadow=sources.commissioning_shadow,
         predecessor_completion=sources.predecessor_completion,
+        account_snapshot_evidence=account_evidence,
         evidence=evidence,
     )
 
@@ -118,6 +150,11 @@ def _validate_sources(
         or type(sources.commissioning_shadow) is not V4ShadowEvidenceArtifact
         or type(sources.predecessor_completion)
         is not V4PredecessorCanaryCompletionArtifact
+        or (
+            sources.account_snapshot_evidence is not None
+            and type(sources.account_snapshot_evidence)
+            is not V4BoundAccountSnapshotEvidenceNoPost
+        )
     ):
         raise V4UnattendedControllerSnapshotNoPostError(
             "OFFLINE_CONTROLLER_SOURCE_TYPE_INVALID"
@@ -162,7 +199,9 @@ def _validate_sources(
         )
 
 
-def _cycle_binding(*, generation_digest: str, observed_at_utc: datetime) -> str:
+def controller_cycle_binding_no_post(
+    *, generation_digest: str, observed_at_utc: datetime
+) -> str:
     payload = json.dumps(
         {
             "schema": _SCHEMA,
@@ -175,3 +214,6 @@ def _cycle_binding(*, generation_digest: str, observed_at_utc: datetime) -> str:
         separators=(",", ":"),
     ).encode()
     return "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+_cycle_binding = controller_cycle_binding_no_post

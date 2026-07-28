@@ -9,6 +9,10 @@ import pytest
 
 from app.h11_auto.runtime_safety import PhaseBRiskPolicy
 from app.services import h11_v4_unattended_integrated_controller_no_post as subject
+from app.services.h11_v4_unattended_account_snapshot_evidence_no_post import (
+    build_account_snapshot_operation_marker_no_post,
+    build_bound_account_snapshot_evidence_no_post,
+)
 from app.services.h11_v4_unattended_commissioning_no_post import (
     V4CommissioningArtifact,
     V4CommissioningDecision,
@@ -144,14 +148,51 @@ def _snapshot(**overrides: object) -> subject.V4IntegratedControllerSnapshot:
         "consecutive_losses": 0,
         "observed_at_utc": (now - timedelta(seconds=30)).isoformat(),
         "valid_until_utc": (now + timedelta(seconds=30)).isoformat(),
+        "account_snapshot_evidence_digest": "sha256:" + "e" * 64,
     }
     values.update(overrides)
+    if (
+        values["account_snapshot_known"] is False
+        and "account_snapshot_evidence_digest" not in overrides
+    ):
+        values["account_snapshot_evidence_digest"] = "sha256:" + ("0" * 64)
     evidence_keys = {
         field
         for field in subject.V4IntegratedControllerEvidence.__dataclass_fields__
         if field not in {"schema", "artifact_digest"}
     }
     evidence_values = {key: values[key] for key in evidence_keys}
+    account_snapshot = None
+    if values["account_snapshot_known"] is True:
+        marker = build_account_snapshot_operation_marker_no_post(
+            reviewed_files_digest=str(values["reviewed_files_digest"]),
+            generation_digest=str(values["generation_digest"]),
+            cycle_binding_digest=str(values["cycle_binding_digest"]),
+            observed_at_utc=str(values["observed_at_utc"]),
+            valid_until_utc=str(values["valid_until_utc"]),
+            broker_read_performed=True,
+            broker_get_count=3,
+            open_positions_count=0 if values["account_flat"] is True else 1,
+            active_orders_count=0 if values["active_orders_zero"] is True else 1,
+        )
+        account_snapshot = build_bound_account_snapshot_evidence_no_post(
+            reviewed_files_digest=str(values["reviewed_files_digest"]),
+            generation_digest=str(values["generation_digest"]),
+            cycle_binding_digest=str(values["cycle_binding_digest"]),
+            operation_marker=marker,
+            observed_at_utc=str(values["observed_at_utc"]),
+            valid_until_utc=str(values["valid_until_utc"]),
+            broker_read_performed=True,
+            broker_get_count=3,
+            open_positions_count=0 if values["account_flat"] is True else 1,
+            active_orders_count=0 if values["active_orders_zero"] is True else 1,
+            account_flat=values["account_flat"] is True,
+            active_orders_zero=values["active_orders_zero"] is True,
+        )
+        if "account_snapshot_evidence_digest" not in overrides:
+            evidence_values["account_snapshot_evidence_digest"] = (
+                account_snapshot.artifact_digest
+            )
     evidence = subject.build_integrated_controller_evidence(**evidence_values)
     snapshot_keys = {
         "reviewed_files_digest",
@@ -167,6 +208,7 @@ def _snapshot(**overrides: object) -> subject.V4IntegratedControllerSnapshot:
     snapshot_values = {key: values[key] for key in snapshot_keys}
     return subject.V4IntegratedControllerSnapshot(
         **snapshot_values,
+        account_snapshot_evidence=account_snapshot,
         evidence=evidence,
     )
 
@@ -373,6 +415,22 @@ def test_durable_halt_survives_store_restart(tmp_path) -> None:
     assert "PERSISTENT_GENERATION_HALT_LATCHED" in second.blocked_reasons
 
 
+def test_forged_account_snapshot_digest_is_rejected_by_direct_store(tmp_path) -> None:
+    database = tmp_path / "integrated.sqlite3"
+    store = subject.V4IntegratedControllerStore(database)
+    evidence_digest = "sha256:" + ("e" * 64)
+    with pytest.raises(
+        subject.V4IntegratedControllerError,
+        match="INTEGRATED_ACCOUNT_SNAPSHOT_EVIDENCE_BINDING_MISMATCH",
+    ):
+        store.evaluate_and_record(
+            _snapshot(
+                formal_signal_actionable=False,
+                account_snapshot_evidence_digest=evidence_digest,
+            )
+        )
+
+
 def test_generation_halt_cannot_be_bypassed_with_a_new_cycle(tmp_path) -> None:
     database = tmp_path / "integrated.sqlite3"
     first = subject.V4IntegratedControllerStore(database).evaluate_and_record(
@@ -535,7 +593,12 @@ def test_unavailable_durable_store_never_claims_persisted_halt(tmp_path) -> None
 
 def test_invalid_digest_is_rejected() -> None:
     with pytest.raises(subject.V4IntegratedControllerError, match="DIGEST_INVALID"):
-        subject.evaluate_integrated_controller(_snapshot(generation_digest="invalid"))
+        subject.evaluate_integrated_controller(
+            _snapshot(
+                generation_digest="invalid",
+                account_snapshot_known=False,
+            )
+        )
 
 
 def test_integrated_controller_has_no_live_dependency_or_allow_bridge() -> None:

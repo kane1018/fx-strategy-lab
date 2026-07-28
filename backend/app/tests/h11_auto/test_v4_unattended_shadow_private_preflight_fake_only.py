@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import inspect
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -112,6 +113,23 @@ def test_flat_account_snapshot_is_derived_from_three_fake_gets() -> None:
     assert bool(snapshot) is False
     assert "sanitized" in repr(snapshot)
     assert snapshot.to_safe_dict()["open_positions_count"] == 0
+
+
+def test_observed_snapshot_binds_to_inert_controller_evidence() -> None:
+    now = datetime.now(UTC)
+    snapshot = _read(transport=_handler(latest=2, positions=0, active=0))
+    evidence = subject.bind_private_snapshot_for_controller_no_post(
+        private=snapshot,
+        reviewed_files_digest="sha256:" + ("a" * 64),
+        generation_digest="sha256:" + ("b" * 64),
+        cycle_binding_digest="sha256:" + ("c" * 64),
+        observed_at_utc=now.isoformat(),
+        valid_until_utc=(now + timedelta(seconds=30)).isoformat(),
+    )
+    assert evidence.account_flat is True
+    assert evidence.active_orders_zero is True
+    assert evidence.broker_write is False
+    assert evidence.broker_post_count == 0
 
 
 def test_non_flat_and_active_order_counts_are_reported_honestly() -> None:

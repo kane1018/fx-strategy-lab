@@ -1,18 +1,18 @@
 {
   "architecture_status": "CLEAR",
-  "artifact_digest": "sha256:17320eb360ad6a3921e0d7cc88b597cf0ad478e9f9dbcac7899f9319f251317f",
-  "generation_digest": "sha256:4a1499d48d33e6a08770be9bedf84b7181e0760ba3b0aea8e6ec90d317294487",
-  "generation_label": "H11_AUTO_30M_20260728_G024",
+  "artifact_digest": "sha256:ddcc401918848836be398b297de9b40f768dccaa05065da077c4323b30f43599",
+  "generation_digest": "sha256:7117c2ecf4093ee608921ef74d8e4763bc8f95d3ab706fbe1e312a4e47a63190",
+  "generation_label": "H11_AUTO_30M_20260728_G025",
   "operations_status": "CLEAR",
   "review_method": "INDEPENDENT_MULTI_AGENT_READ_ONLY",
   "review_scope": [
     "CURRENT_GENERATION_SHADOW_COMMISSIONING_NO_POST",
     "NO_POST_INTEGRATED_CONTROLLER",
-    "G024_LEGACY_RECONCILIATION_BINDING_CORRECTIVE",
+    "G025_BOUND_ACCOUNT_SNAPSHOT_EVIDENCE_NO_POST",
     "MONDAY_SELF_CHECK",
     "EXTERNAL_PREPARATION_EVIDENCE"
   ],
-  "reviewed_files_digest": "sha256:638bc3ace364f0d004029d584d38ceacc6454fede5df1785943aef5f39685550",
+  "reviewed_files_digest": "sha256:e6a9fd6429d3f2ebbe610113d679a84e42d48ddb0f7f69c862437e34adb48e71",
   "safety_status": "CLEAR",
   "schema": "H11_V4_INDEPENDENT_REVIEW_ATTESTATION_V1"
 }
