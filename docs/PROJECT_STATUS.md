@@ -7,6 +7,34 @@ ChatGPT を横断して開発するための「現在何が完了し、次に何
 今後の基本運用は Codex 中心とする。Codex は作業開始時に [`../AGENTS.md`](../AGENTS.md) と
 [CODEX_HANDOFF.md](CODEX_HANDOFF.md) を読み、固定ルールと要約済み文脈を確認する。
 
+## 0AL. H-11 v4 G023 current-generation shadow commissioning（2026-07-28・no-POST）
+
+- G022の既存review境界を変更せず、current-generation shadow commissioningを
+  `H11_AUTO_30M_20260728_G023` corrective generationとして新規凍結した。
+- reviewed-files digestは
+  `sha256:77034fe70cd8ca3d52bc0f3e308e6e5ba90a0a89fff60649826b11982905c40c`、generation digestは
+  `sha256:d7407d01f0c2c50665ac7a1a558639ac68308895af6123e9f974fb672013ff31`である。
+- 実装中の経路は、現generationにbindした最大20個のcompleted Public `USD_JPY`/`BID`/`M1` slotを
+  opaque digestのみで記録し、G018のcanonical completion binderとreview evidenceへ束縛して、
+  ignored runtime rootへone-use sealする。価格、方向、確率、credential、Private API response、
+  broker権限は保存しない。
+- `SHADOW_COMMISSIONED_NO_POST`はshadow証跡が成立したことだけを表す。persistent ARM変更、permit、
+  notification、Private API、broker write、actual POSTはすべてfalse/zeroのままである。live ready、
+  unattended live support、実運用許可を意味しない。
+- Public観測の異常は1回だけ記録して同generationを恒久停止し、以後のPublic GETを行わない。
+  異常ledger更新より先にgeneration-bound terminal markerを作るため、ledger書込失敗時も次回GET前に停止する。
+  seal started marker作成後のartifact書込失敗も初回からpersistent HALTとして扱い、部分修復や
+  同generationでの再sealを禁止してcorrective generationを要求する。
+- focused tests 74件、Ruff、diff check、danger scanはclear。独立Architecture/Safety/Operations
+  reviewはVETO修正後に全てCLEAR。commissioning受理ではevidence schema/status/digestに加え、
+  independent review attestationのcanonical digestとG023 bindingも再照合する。
+- 現時点で実broker、Private API、Keychain、Pushover/SMTP、persistent ARM、LaunchAgent、実注文・
+  実決済へは触れていない。
+- **次に実行できる最大範囲**: clean mainでMonday self-checkを実行し、G023のPublic-only shadow slotを
+  最大20個記録する。20個・異常0件の場合のみone-use sealを実行し、その後no-POST controller tickで
+  canonical artifact受理を確認する。external preparation、persistent ARM、Private API、通知、
+  LaunchAgent、broker writeは別段階であり、このsectionでは実行しない。
+
 ## 0AK. H-11 v4 G016 persistent ON/OFF controller（2026-07-26・no-POST）
 
 - localhost manual UIにgeneration/reviewed-digest-boundの永続`ON`/`OFF`を追加した。

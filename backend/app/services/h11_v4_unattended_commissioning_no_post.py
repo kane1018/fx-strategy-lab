@@ -14,6 +14,12 @@ COMMISSIONING_SCHEMA = "H11_V4_G019_COMMISSIONING_NO_POST_V1"
 SHADOW_EVIDENCE_SCHEMA = "H11_V4_G019_SHADOW_EVIDENCE_NO_POST_V1"
 G020_COMMISSIONING_SCHEMA = "H11_V4_G020_COMMISSIONING_NO_POST_V1"
 G020_SHADOW_EVIDENCE_SCHEMA = "H11_V4_G020_SHADOW_EVIDENCE_NO_POST_V1"
+CURRENT_COMMISSIONING_SCHEMA = (
+    "H11_V4_CURRENT_GENERATION_COMMISSIONING_NO_POST_V1"
+)
+CURRENT_SHADOW_EVIDENCE_SCHEMA = (
+    "H11_V4_CURRENT_GENERATION_SHADOW_EVIDENCE_NO_POST_V1"
+)
 G020_PREDECESSOR_CANARY_COMPLETION_SCHEMA = (
     "H11_V4_G020_PREDECESSOR_CANARY_COMPLETION_NO_POST_V1"
 )
@@ -29,7 +35,7 @@ _G020_LEGACY_PREDECESSOR_COMMISSIONING_SUPPORTED = False
 
 @dataclass(frozen=True)
 class _CommissioningContract:
-    generation_label: str
+    generation_label: str | None
     prior_canary_generation_label: str
     shadow_evidence_producer_implemented: bool
 
@@ -45,10 +51,16 @@ _COMMISSIONING_CONTRACTS = {
         prior_canary_generation_label="H11_AUTO_30M_20260727_G018",
         shadow_evidence_producer_implemented=True,
     ),
+    (CURRENT_COMMISSIONING_SCHEMA, CURRENT_SHADOW_EVIDENCE_SCHEMA): _CommissioningContract(
+        generation_label=None,
+        prior_canary_generation_label="H11_AUTO_30M_20260727_G018",
+        shadow_evidence_producer_implemented=True,
+    ),
 }
 
 
 class V4CommissioningStatus(str, Enum):
+    SHADOW_COMMISSIONED_NO_POST = "SHADOW_COMMISSIONED_NO_POST"
     READY_FOR_SEPARATE_LIVE_REVIEW = "READY_FOR_SEPARATE_LIVE_REVIEW"
     NOT_READY = "NOT_READY"
 
@@ -93,6 +105,7 @@ class V4CommissioningArtifact:
     architecture_review_clear: bool
     safety_review_clear: bool
     operations_review_clear: bool
+    review_evidence_digest: str = ""
 
 
 @dataclass(frozen=True)
@@ -188,6 +201,8 @@ def build_commissioning_artifact(
     """Build a canonical artifact; callers cannot supply their own digest."""
 
     payload = {"schema": schema, **fields}
+    if payload.get("review_evidence_digest") == "":
+        payload.pop("review_evidence_digest")
     return V4CommissioningArtifact(
         artifact_digest=_artifact_digest(payload),
         **payload,
@@ -300,7 +315,7 @@ def evaluate_commissioning(
         shadow.broker_write,
     )
     slot_digests = shadow.completed_slot_digests
-    ready = (
+    shadow_ready = (
         contract is not None
         and contract.shadow_evidence_producer_implemented
         and _commissioning_artifact_is_canonical(artifact)
@@ -309,7 +324,7 @@ def evaluate_commissioning(
         and type(artifact.shadow_scheduler_cycles_clear) is int
         and type(shadow.abnormal_status_count) is int
         and type(shadow.actual_post_count) is int
-        and artifact.generation_label == contract.generation_label
+        and _contract_generation_matches(contract, artifact.generation_label)
         and artifact.prior_canary_generation_label
         == contract.prior_canary_generation_label
         and bool(_SHA256.fullmatch(artifact.prior_canary_generation_digest))
@@ -324,7 +339,6 @@ def evaluate_commissioning(
         != _ZERO_DIGEST
         and artifact.prior_canary_handoff_digest != _ZERO_DIGEST
         and _commissioning_binds_historical_predecessor(artifact, predecessor)
-        and _G020_LEGACY_PREDECESSOR_COMMISSIONING_SUPPORTED is True
         and artifact.commissioning_entry_disabled is True
         and bool(_SHA256.fullmatch(artifact.reviewed_files_digest))
         and bool(_SHA256.fullmatch(artifact.generation_digest))
@@ -335,6 +349,10 @@ def evaluate_commissioning(
         and artifact.shadow_generation_digest
         == artifact.generation_digest
         == shadow.generation_digest
+        and (
+            artifact.schema != CURRENT_COMMISSIONING_SCHEMA
+            or bool(_SHA256.fullmatch(artifact.review_evidence_digest))
+        )
         and artifact.shadow_scheduler_cycles_clear == len(slot_digests)
         and len(slot_digests) >= 20
         and len(set(slot_digests)) == len(slot_digests)
@@ -345,18 +363,26 @@ def evaluate_commissioning(
         and artifact.prior_canary_cycle_complete is True
         and artifact.prior_canary_flat_reconciled is True
         and artifact.account_wide_active_orders_zero_evidence is True
-        and artifact.restart_safe_exit_contract_clear is True
-        and _RESTART_SAFE_EXIT_ACTUAL_IMPLEMENTED is True
-        and artifact.notification_contract_clear is True
         and artifact.architecture_review_clear is True
         and artifact.safety_review_clear is True
         and artifact.operations_review_clear is True
     )
+    ready = (
+        shadow_ready
+        and artifact.restart_safe_exit_contract_clear is True
+        and _RESTART_SAFE_EXIT_ACTUAL_IMPLEMENTED is True
+        and artifact.notification_contract_clear is True
+    )
+    shadow_commissioned = shadow_ready and artifact.schema == CURRENT_COMMISSIONING_SCHEMA
     return V4CommissioningDecision(
         status=(
             V4CommissioningStatus.READY_FOR_SEPARATE_LIVE_REVIEW
             if ready
-            else V4CommissioningStatus.NOT_READY
+            else (
+                V4CommissioningStatus.SHADOW_COMMISSIONED_NO_POST
+                if shadow_commissioned
+                else V4CommissioningStatus.NOT_READY
+            )
         ),
         separate_live_review_required=True,
         persistent_arm_change_allowed=False,
@@ -376,7 +402,10 @@ def commissioning_evidence_is_canonical(
             shadow,
             predecessor,
         )
-        and _G020_LEGACY_PREDECESSOR_COMMISSIONING_SUPPORTED is True
+        and (
+            artifact.schema == CURRENT_COMMISSIONING_SCHEMA
+            or _G020_LEGACY_PREDECESSOR_COMMISSIONING_SUPPORTED is True
+        )
     )
 
 
@@ -393,7 +422,7 @@ def commissioning_historical_evidence_is_canonical(
         and type(shadow) is V4ShadowEvidenceArtifact
         and type(predecessor) is V4PredecessorCanaryCompletionArtifact
         and contract is not None
-        and artifact.generation_label == contract.generation_label
+        and _contract_generation_matches(contract, artifact.generation_label)
         and artifact.prior_canary_generation_label
         == contract.prior_canary_generation_label
         and _exact_evidence_field_types(artifact, shadow, predecessor)
@@ -408,6 +437,14 @@ def commissioning_historical_evidence_is_canonical(
         == artifact.generation_digest
         == shadow.generation_digest
     )
+
+
+def _contract_generation_matches(
+    contract: _CommissioningContract, generation_label: str
+) -> bool:
+    if contract.generation_label is not None:
+        return generation_label == contract.generation_label
+    return bool(re.fullmatch(r"H11_AUTO_30M_[0-9]{8}_G[0-9]{3}", generation_label))
 
 
 def _exact_evidence_field_types(
@@ -493,9 +530,10 @@ def _exact_dataclass_types(
 def _commissioning_artifact_is_canonical(
     artifact: V4CommissioningArtifact,
 ) -> bool:
-    return artifact.artifact_digest == _artifact_digest(
-        _payload_without_artifact_digest(artifact)
-    )
+    payload = _payload_without_artifact_digest(artifact)
+    if payload.get("review_evidence_digest") == "":
+        payload.pop("review_evidence_digest")
+    return artifact.artifact_digest == _artifact_digest(payload)
 
 
 def _predecessor_completion_is_valid(

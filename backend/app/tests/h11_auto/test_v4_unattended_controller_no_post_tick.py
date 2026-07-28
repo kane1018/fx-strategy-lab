@@ -44,6 +44,7 @@ def test_offline_tick_application_imports_are_exactly_allowlisted() -> None:
         "app.h11_auto.v4_actual_preparation_guard",
         "app.h11_auto.v4_gmo_generation",
         "app.h11_auto.v4_gmo_runtime_paths",
+        "app.services.h11_v4_current_generation_shadow_observer_no_post",
         "app.services.h11_v4_unattended_commissioning_no_post",
         "app.services.h11_v4_unattended_controller_snapshot_no_post",
         "app.services.h11_v4_unattended_integrated_controller_no_post",
@@ -108,9 +109,7 @@ def test_offline_tick_is_repeatable_and_concurrency_safe(tmp_path) -> None:
     with ThreadPoolExecutor(max_workers=2) as executor:
         concurrent = list(executor.map(lambda _index: run_once(), range(2)))
 
-    assert first["blocked_reasons"] == [
-        "COMMISSIONING_HISTORICAL_EVIDENCE_INVALID"
-    ]
+    assert first["blocked_reasons"] == ["ACCOUNT_SNAPSHOT_UNKNOWN"]
     assert second["blocked_reasons"] == ["PERSISTENT_GENERATION_HALT_LATCHED"]
     assert concurrent == [second, second]
     assert first["broker_write"] is False

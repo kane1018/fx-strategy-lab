@@ -20,10 +20,12 @@ from app.h11_auto.v4_gmo_generation import (
     v4_gmo_risk_policy,
 )
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
+from app.services.h11_v4_current_generation_shadow_observer_no_post import (
+    load_current_review_evidence,
+    load_sealed_current_shadow_artifacts,
+)
 from app.services.h11_v4_unattended_commissioning_no_post import (
     bind_g018_predecessor_canary_completion,
-    load_commissioning_artifact,
-    load_shadow_evidence_artifact,
 )
 from app.services.h11_v4_unattended_controller_snapshot_no_post import (
     V4UnattendedControllerOfflineSources,
@@ -54,17 +56,21 @@ def main() -> int:
             implementation_digest=reviewed,
         )
         risk_policy = v4_gmo_risk_policy()
-        commissioning_path, shadow_path = _current_artifact_paths(
-            repository=repository,
-            generation_label=generation.generation_label,
-        )
         runtime_root = v4_gmo_runtime_state_root(
             repository=repository,
             generation_digest=generation.digest,
         )
         phase = "LOCAL_EVIDENCE"
-        commissioning = load_commissioning_artifact(commissioning_path)
-        shadow = load_shadow_evidence_artifact(shadow_path)
+        shadow, commissioning = load_sealed_current_shadow_artifacts(
+            directory=runtime_root / "shadow-commissioning"
+        )
+        load_current_review_evidence(
+            repository=repository,
+            reviewed_files_digest=reviewed,
+            generation_digest=generation.digest,
+            generation_label=generation.generation_label,
+            expected_digest=commissioning.review_evidence_digest,
+        )
         sources = V4UnattendedControllerOfflineSources(
             reviewed_files_digest=reviewed,
             generation=generation,
@@ -121,26 +127,6 @@ def run_offline_tick_no_post(
         now_utc=now_utc,
     )
     return V4IntegratedControllerStore(database).evaluate_and_record(snapshot)
-
-
-def _current_artifact_paths(
-    *,
-    repository: Path,
-    generation_label: str,
-) -> tuple[Path, Path]:
-    suffix = generation_label.rsplit("_", maxsplit=1)[-1]
-    if (
-        len(suffix) != 4
-        or not suffix.startswith("G")
-        or not suffix[1:].isdigit()
-    ):
-        raise ValueError("UNATTENDED_CONTROLLER_GENERATION_LABEL_INVALID")
-    stem = f"h11_v4_{suffix.lower()}"
-    templates = repository / "docs/templates"
-    return (
-        templates / f"{stem}_commissioning_no_post.json",
-        templates / f"{stem}_shadow_evidence_no_post.json",
-    )
 
 
 def _safe_failure(phase: str) -> dict[str, object]:

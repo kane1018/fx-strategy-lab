@@ -63,8 +63,11 @@ DANGER_SCAN_TARGETS = (
     "app/services/h11_v4_unattended_exit_recovery_no_post.py",
     "app/services/h11_v4_unattended_commissioning_no_post.py",
     "app/services/h11_v4_g020_shadow_observer_no_post.py",
+    "app/services/h11_v4_current_generation_shadow_observer_no_post.py",
     "app/services/h11_v4_unattended_integrated_controller_no_post.py",
     "app/services/h11_v4_unattended_controller_snapshot_no_post.py",
+    "scripts/h11_auto_v4_current_generation_shadow_observer.py",
+    "scripts/h11_auto_v4_current_generation_shadow_commission.py",
     "scripts/h11_auto_v4_unattended_controller_no_post_tick.py",
 )
 DANGER_SCAN_TOKENS = (

@@ -16,6 +16,8 @@ from app.h11_auto.v4_gmo_generation import (
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 from app.services import h11_v4_unattended_controller_snapshot_no_post as subject
 from app.services.h11_v4_unattended_commissioning_no_post import (
+    CURRENT_COMMISSIONING_SCHEMA,
+    CURRENT_SHADOW_EVIDENCE_SCHEMA,
     build_commissioning_artifact,
     build_predecessor_canary_completion_artifact,
     build_shadow_evidence_artifact,
@@ -37,12 +39,13 @@ def _sources() -> subject.V4UnattendedControllerOfflineSources:
         max_entries_per_day=selected.maximum_entries_per_day,
     )
     generation = build_v4_gmo_frozen_generation(
-        generation_label="H11_AUTO_30M_20260728_G020",
+        generation_label="H11_AUTO_30M_20260728_G023",
         implementation_digest=reviewed,
         policy=policy,
     )
     risk = v4_gmo_risk_policy()
     shadow = build_shadow_evidence_artifact(
+        schema=CURRENT_SHADOW_EVIDENCE_SCHEMA,
         reviewed_files_digest=reviewed,
         generation_digest=generation.digest,
         completed_slot_digests=tuple(
@@ -82,7 +85,8 @@ def _sources() -> subject.V4UnattendedControllerOfflineSources:
         identifier_exposed=False,
     )
     commissioning = build_commissioning_artifact(
-        generation_label="H11_AUTO_30M_20260728_G020",
+        schema=CURRENT_COMMISSIONING_SCHEMA,
+        generation_label="H11_AUTO_30M_20260728_G023",
         prior_canary_generation_label="H11_AUTO_30M_20260727_G018",
         prior_canary_generation_digest=predecessor.prior_canary_generation_digest,
         prior_canary_reconciliation_artifact_digest=(
