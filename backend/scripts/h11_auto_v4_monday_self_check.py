@@ -46,7 +46,6 @@ RUFF_TARGETS = (
     "app/services/h11_v4_unattended_controller_snapshot_no_post.py",
     "app/services/h11_v4_unattended_account_snapshot_store_no_post.py",
     "app/services/h11_v4_unattended_account_snapshot_producer_no_post.py",
-    "app/services/h11_v4_g026_private_get_keychain.py",
     "scripts/h11_auto_v4_unattended_controller_no_post_tick.py",
     "scripts/h11_auto_v4_g026_private_snapshot_producer.py",
     "scripts/h11_auto_v4_g020_shadow_observer.py",
