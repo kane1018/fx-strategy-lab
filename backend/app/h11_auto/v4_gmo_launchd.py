@@ -105,7 +105,7 @@ def render_v4_gmo_monitor_launchagent(
         "WorkingDirectory": str(repository / "backend"),
         "RunAtLoad": True,
         "KeepAlive": False,
-        "ThrottleInterval": 30,
+        "ThrottleInterval": 5,
         "ProcessType": "Background",
         "StandardOutPath": str(state_root / "supervisor.stdout.log"),
         "StandardErrorPath": str(state_root / "supervisor.stderr.log"),
@@ -163,7 +163,7 @@ def install_and_restart_v4_gmo_monitor_launchagent(
     wall_clock: WallClock = lambda: datetime.now(UTC),
     monotonic_clock: MonotonicClock = time.monotonic,
     wait: Wait = time.sleep,
-    heartbeat_timeout_seconds: float = 50.0,
+    heartbeat_timeout_seconds: float = 60.0,
 ) -> V4GmoLaunchdResult:
     """Replace the exact monitor service once and prove a fresh safe heartbeat."""
 

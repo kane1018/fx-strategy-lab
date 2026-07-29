@@ -229,6 +229,7 @@ def test_launchagent_is_monitor_only_and_finite_restart_is_testable(
     assert payload["Label"] == V4_GMO_MONITOR_LABEL
     assert payload["RunAtLoad"] is True
     assert payload["KeepAlive"] is False
+    assert payload["ThrottleInterval"] == 5
     assert "h11_auto_v4_monitor_supervisor" in joined
     assert arguments[arguments.index("--expected-reviewed-files-digest") + 1] == (
         IMPLEMENTATION_DIGEST
@@ -326,6 +327,48 @@ def test_launchagent_boots_out_existing_exact_service_once_before_bootstrap(
         "bootstrap",
         "print",
     ]
+
+
+def test_launchagent_accepts_fresh_heartbeat_near_sixty_second_deadline(
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repo"
+    (repository / "backend").mkdir(parents=True)
+    generation = _generation()
+    content = render_v4_gmo_monitor_launchagent(
+        repository=repository,
+        generation=generation,
+        python_executable=Path(sys.executable),
+    )
+    heartbeat_path = tmp_path / "state" / "supervisor-heartbeat.json"
+    monotonic = {"value": 0.0}
+
+    def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    def wait(_seconds: float) -> None:
+        monotonic["value"] += 0.25
+        if monotonic["value"] == 59.75:
+            _write_safe_monitor_heartbeat(
+                heartbeat_path,
+                generation_digest=generation.digest,
+            )
+
+    result = install_and_restart_v4_gmo_monitor_launchagent(
+        plist_path=(tmp_path / "LaunchAgents" / f"{V4_GMO_MONITOR_LABEL}.plist"),
+        plist_content=content,
+        user_id=501,
+        runner=runner,
+        heartbeat_path=heartbeat_path,
+        expected_generation_digest=generation.digest,
+        monotonic_clock=lambda: monotonic["value"],
+        wait=wait,
+    )
+
+    assert result.heartbeat_fresh is True
+    assert result.heartbeat_generation_digest_match is True
+    assert result.broker_write is False
+    assert result.actual_post_count == 0
 
 
 def test_launchagent_aqua_domain_preflight_accepts_observed_stable_shape() -> None:
@@ -460,9 +503,9 @@ def test_launchagent_rejects_prebootstrap_heartbeat(
         heartbeat_path,
         generation_digest=generation.digest,
     )
-    # Clock must cross the 50s install heartbeat window (default) to reach the
+    # Clock must cross the 60s install heartbeat window (default) to reach the
     # deadline and reject the pre-bootstrap heartbeat.
-    monotonic_values = iter((0.0, 0.0, 51.0))
+    monotonic_values = iter((0.0, 0.0, 60.000001))
 
     with pytest.raises(V4GmoLaunchdError, match="HEARTBEAT_NOT_CLEAR"):
         install_and_restart_v4_gmo_monitor_launchagent(
