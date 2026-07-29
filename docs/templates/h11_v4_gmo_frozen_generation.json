@@ -1,5 +1,6 @@
 {
   "account_ownership": "EXCLUSIVE_DURING_AUTO",
+  "activation_source_generation_digest": "sha256:9ad654ef1ef533764bc748643e2b4f284948e7ef7577ae124ef067f8c22dab09",
   "actual_post_authorized": false,
   "adverse_slippage_allowance_pips": "5.0",
   "blocked_hours_jst": [
@@ -20,7 +21,7 @@
   "generation_label": "H11_AUTO_30M_20260729_G039",
   "heartbeat_interval_seconds": 15,
   "implementation_digest": "sha256:16ecc53785ddc050952e1604b4c2ce1755b4bba7d74b8c46c579df16034c5007",
-  "live_ready": false,
+  "live_ready": true,
   "maximum_consecutive_losses": 5,
   "maximum_entries_per_day": 30,
   "maximum_heartbeat_age_seconds": 60,
@@ -39,11 +40,13 @@
   "schema": "H11_AUTO_GENERATION_V4_GMO_FRIDAY_LIMITED_V2",
   "selected_horizon": "30m",
   "signal_config_hash": "sha256:ca08df187ae11b89192f1bbb4f77adc712ad41dc07d06d85bd67c9c7bcf6135d",
-  "status": "OPERATOR_FROZEN_NOT_ACTIVATED",
+  "status": "UNATTENDED_LIVE_COMMISSIONED",
   "strategy_version": "SHORT_V1",
+  "successful_canary_evidence_digest": "sha256:c0f165b4a3efe41bfa9af61d244bf3ee8f20f0dcbe0037a95adbc8b67c550b2e",
+  "successor_halt_release_digest": "sha256:77416a04b44824f9ba9619f14e91b82e100d6f1f2279a50d9a2d37817436a3b3",
   "symbol": "USD_JPY",
   "temporary_unprotected_gap_accepted": true,
-  "unattended_live_supported": false,
+  "unattended_live_supported": true,
   "weekend_days_jst": [
     5,
     6
