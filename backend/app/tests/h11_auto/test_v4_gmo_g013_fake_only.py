@@ -488,6 +488,19 @@ def test_g013_review_digest_includes_formal_direction_adapter() -> None:
     assert "backend/app/h11_auto/signal_adapter.py" in REVIEWED_FILES
 
 
+def test_g013_canary_binds_current_reviewed_generation_without_legacy_label() -> None:
+    source = Path(canary_module.__file__).read_text(encoding="utf-8")
+    prepare_source = source.split(
+        "def prepare_g013_canary_session(", maxsplit=1
+    )[1].split(
+        "\ndef run_g013_actual_canary_after_exact_confirmation(", maxsplit=1
+    )[0]
+
+    assert '.generation_label.endswith("G018")' not in prepare_source
+    assert "implementation_digest=implementation_digest" in prepare_source
+    assert "generation_digest=generation.digest" in prepare_source
+
+
 def test_g013_prepermit_refresh_rechecks_implementation_digest(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

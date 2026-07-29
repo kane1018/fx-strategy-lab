@@ -1,18 +1,19 @@
 {
   "architecture_status": "CLEAR",
-  "artifact_digest": "sha256:56e8e95265878eff0be6a373b67ac683a246fa6d37c5626ce12ca62e26f1cb1f",
-  "generation_digest": "sha256:c99d4af8fa113509daa67bc5b540749f706602af69b02d70b69bd0124915ba7a",
-  "generation_label": "H11_AUTO_30M_20260729_G031",
+  "artifact_digest": "sha256:40611aa426dfe69e3f94510dba94bb54e837edc40c01cee55d44047864356ef4",
+  "generation_digest": "sha256:cb70be73565767e011fa61feace2bafcdbbbb4220627503714defcf5daa7f506",
+  "generation_label": "H11_AUTO_30M_20260729_G032",
   "operations_status": "CLEAR",
   "review_method": "INDEPENDENT_MULTI_AGENT_READ_ONLY",
   "review_scope": [
-    "G031_EMAIL_CONFIRMATION_PRE_BEGIN_FIXED_PHRASE_VALIDATION",
-    "G031_MISMATCH_NO_MARKER_OR_PERMIT_CONSUMPTION",
-    "G031_CORRECT_CONFIRMATION_GENERATION_BOUND_NO_POST",
+    "G032_LEGACY_G018_LABEL_GATE_REMOVED",
+    "G032_CANONICAL_REVIEWED_GENERATION_BINDING",
+    "G032_CURRENT_DAY_PREPARATION_EVIDENCE_BINDING",
+    "G032_PREPERMIT_REVALIDATION_UNCHANGED",
     "NO_BROKER_POST_OR_AUTHORIZATION_CHANGE",
     "MONDAY_SELF_CHECK"
   ],
-  "reviewed_files_digest": "sha256:54e9c4cc191299e86b1f7bad37c0bfa4a23d441a16f10584a97c82b5fe223c49",
+  "reviewed_files_digest": "sha256:cd6cd151787f31f007d56658deb41a29940b6954a08ecfd92a5cfdda9892c395",
   "safety_status": "CLEAR",
   "schema": "H11_V4_INDEPENDENT_REVIEW_ATTESTATION_V1"
 }
