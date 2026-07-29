@@ -13,6 +13,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     confirm_email_delivery_exact,
     load_external_preparation_gate,
     require_clean_main,
+    validate_email_delivery_confirmation_exact,
 )
 
 REPOSITORY = Path(__file__).resolve().parents[2]
@@ -25,6 +26,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("confirmation")
     args = parser.parse_args(argv)
     try:
+        validate_email_delivery_confirmation_exact(phrase=args.confirmation)
         require_clean_main(repository=REPOSITORY)
         external_gate = load_external_preparation_gate(repository=REPOSITORY)
         ledger = V4PreparationAttemptLedger(external_gate=external_gate)

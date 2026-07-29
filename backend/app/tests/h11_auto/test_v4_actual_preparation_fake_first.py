@@ -58,6 +58,7 @@ from app.services.h11_v4_notification_actual_preparation import (
 from scripts import (
     h11_auto_v4_actual_host_kill_rehearsal as host_rehearsal_script,
 )
+from scripts import h11_auto_v4_email_delivery_confirm as email_confirm_script
 
 
 @dataclass(frozen=True)
@@ -1632,6 +1633,32 @@ def test_exact_operator_confirmations_do_not_authorize_broker_post(
     assert exclusive.exact_match is True
     assert email.broker_post_authorized is False
     assert exclusive.activation_permit_issued is False
+
+
+def test_email_confirmation_mismatch_is_rejected_before_ledger_begin(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def unexpected_call(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("mismatched phrase must not reach preparation state")
+
+    monkeypatch.setattr(email_confirm_script, "require_clean_main", unexpected_call)
+    monkeypatch.setattr(
+        email_confirm_script,
+        "load_external_preparation_gate",
+        unexpected_call,
+    )
+    monkeypatch.setattr(
+        email_confirm_script,
+        "V4PreparationAttemptLedger",
+        unexpected_call,
+    )
+
+    assert email_confirm_script.main(["not-the-fixed-confirmation"]) == 2
+    assert (
+        capsys.readouterr().out
+        == "V4_EMAIL_CONFIRMATION_BLOCKED: EMAIL_DELIVERY_CONFIRMATION_MISMATCH\n"
+    )
 
 
 def test_current_host_kill_rehearsal_kills_only_disposable_child_and_latches(

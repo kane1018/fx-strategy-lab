@@ -1098,13 +1098,12 @@ def preparation_state_root(
 def confirm_email_delivery_exact(
     *, phrase: str, operation_permit: V4PreparationOperationPermit
 ) -> V4OperatorConfirmationReport:
+    validate_email_delivery_confirmation_exact(phrase=phrase)
     require_operation_permit(
         operation_permit,
         expected_operation=V4PreparationOperation.EMAIL_CONFIRMATION,
         claim=True,
     )
-    if phrase != EMAIL_DELIVERY_CONFIRMATION:
-        raise V4ActualPreparationGuardError("EMAIL_DELIVERY_CONFIRMATION_MISMATCH")
     report = V4OperatorConfirmationReport(
         confirmation_kind="EMAIL_DELIVERY_OPERATOR_CONFIRMATION",
         exact_match=True,
@@ -1113,6 +1112,13 @@ def confirm_email_delivery_exact(
         operation_permit, report.to_safe_dict()
     )
     return report
+
+
+def validate_email_delivery_confirmation_exact(*, phrase: str) -> None:
+    """Reject a public fixed-phrase mismatch before any ledger attempt begins."""
+
+    if phrase != EMAIL_DELIVERY_CONFIRMATION:
+        raise V4ActualPreparationGuardError("EMAIL_DELIVERY_CONFIRMATION_MISMATCH")
 
 
 def confirm_account_exclusivity_exact(
