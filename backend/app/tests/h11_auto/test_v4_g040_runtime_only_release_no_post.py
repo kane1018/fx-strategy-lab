@@ -39,7 +39,7 @@ def test_runtime_only_carry_forward_cannot_be_publicly_minted() -> None:
     (
         "H11_AUTO_30M_20260729_G040",
         "H11_AUTO_30M_20260729_G041",
-        "H11_AUTO_30M_20260729_G045",
+        "H11_AUTO_30M_20260730_G046",
     ),
 )
 def test_runtime_only_monitor_carries_risk_and_coordinator_baseline(

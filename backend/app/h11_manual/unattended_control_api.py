@@ -39,13 +39,9 @@ from app.services.h11_v4_unattended_live_arm_state import (
     V4UnattendedLiveArmStateError,
     V4UnattendedLiveArmStore,
 )
-from app.services.h11_v4_unattended_live_authorization import (
-    check_operator_daily_authorization,
-)
 from app.services.h11_v4_unattended_live_paths import (
     DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
     v4_unattended_live_arm_state_path,
-    v4_unattended_live_daily_authorization_path,
 )
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
@@ -131,25 +127,15 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
     except V4G038ActivationError:
         supported = False
     runtime_state, entries_today = _runtime_projection(contract)
-    authorization = check_operator_daily_authorization(
-        artifact_path=v4_unattended_live_daily_authorization_path(
-            generation_digest=contract.generation.digest,
-        ),
-        expected_generation_digest=contract.generation.digest,
-        now_utc=datetime.now(UTC),
-    )
     if runtime_state == "HALTED":
         effective_state = "HALTED"
         reason = "RUNTIME_STATE_NOT_CLEAR"
     elif not check.armed and runtime_state == "POSITION_OPEN":
         effective_state = "EXIT_ONLY"
         reason = "OPERATOR_DISARMED_EXIT_MANAGEMENT_CONTINUES"
-    elif check.armed and supported and authorization.authorized:
-        effective_state = "ON_WAITING"
-        reason = "RUNTIME_GATES_PENDING"
     elif check.armed and supported:
         effective_state = "ON_WAITING"
-        reason = authorization.blocked_reasons[0]
+        reason = "RUNTIME_GATES_PENDING"
     elif check.armed:
         effective_state = "HALTED"
         reason = "GENERATION_NOT_COMMISSIONED_FOR_UNATTENDED_LIVE"
@@ -169,7 +155,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         "revision": check.revision,
         "reviewed_files_digest": contract.reviewed_files_digest,
         "unattended_live_supported": supported,
-        "daily_authorization_clear": authorization.authorized,
+        "daily_authorization_required": False,
     }
     if csrf_token is not None:
         result["csrf_token"] = csrf_token

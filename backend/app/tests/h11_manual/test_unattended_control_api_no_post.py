@@ -38,11 +38,6 @@ def _install_contract(monkeypatch, tmp_path: Path, *, supported: bool = True) ->
         lambda **_kw: tmp_path / "arm-state.json",
     )
     monkeypatch.setattr(subject, "require_clean_main", lambda **_kw: None)
-    monkeypatch.setattr(
-        subject,
-        "check_operator_daily_authorization",
-        lambda **_kw: SimpleNamespace(authorized=True, blocked_reasons=()),
-    )
     if supported:
         monkeypatch.setattr(
             subject,
@@ -87,6 +82,7 @@ def test_status_and_on_off_are_local_state_only(monkeypatch, tmp_path) -> None:
     )
     assert armed.status_code == 200
     assert armed.json()["desired_state"] == "ARMED"
+    assert armed.json()["daily_authorization_required"] is False
     assert armed.json()["broker_write"] is False
     monkeypatch.setattr(
         subject,

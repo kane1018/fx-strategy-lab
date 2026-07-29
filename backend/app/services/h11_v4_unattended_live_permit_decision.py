@@ -193,7 +193,6 @@ def decide_unattended_permit_issuance(
 
 def decide_persistent_arm_permit_issuance(
     *,
-    authorization: V4UnattendedLiveAuthorizationCheck,
     arm_state: V4UnattendedLiveArmCheck,
     risk_gate: PhaseBRiskGateResult,
     dead_man: DeadManResult,
@@ -205,8 +204,7 @@ def decide_persistent_arm_permit_issuance(
     """Evaluate persistent operator intent plus every existing runtime gate."""
 
     if (
-        type(authorization) is not V4UnattendedLiveAuthorizationCheck
-        or type(arm_state) is not V4UnattendedLiveArmCheck
+        type(arm_state) is not V4UnattendedLiveArmCheck
         or type(risk_gate) is not PhaseBRiskGateResult
         or type(dead_man) is not DeadManResult
         or type(heartbeat_chain) is not V4HeartbeatChainAssessment
@@ -220,12 +218,7 @@ def decide_persistent_arm_permit_issuance(
         _validate_safe_reason(reason)
 
     reasons: list[str] = []
-    if not authorization.authorized:
-        reasons.append("OPERATOR_DAILY_AUTHORIZATION_NOT_CLEAR")
-        reasons.extend(authorization.blocked_reasons)
     today_jst = now_utc.astimezone(_JST).date().isoformat()
-    if authorization.trading_day_jst != today_jst:
-        reasons.append("OPERATOR_AUTHORIZATION_DAY_STALE")
     if not arm_state.armed:
         reasons.append("PERSISTENT_ARM_NOT_CLEAR")
         reasons.extend(arm_state.blocked_reasons)

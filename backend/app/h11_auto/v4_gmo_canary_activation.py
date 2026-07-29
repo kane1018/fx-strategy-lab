@@ -349,15 +349,6 @@ def confirm_v4_persistent_arm_authorization_once(
     ):
         raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_INPUT_INVALID")
     try:
-        authorization_artifact_path = v4_unattended_live_daily_authorization_path(
-            state_root=state_root,
-            generation_digest=intent.generation_digest,
-        )
-        authorization_check = check_operator_daily_authorization(
-            artifact_path=authorization_artifact_path,
-            expected_generation_digest=intent.generation_digest,
-            now_utc=now_utc,
-        )
         arm_check = V4UnattendedLiveArmStore(
             v4_unattended_live_arm_state_path(
                 state_root=state_root,
@@ -387,7 +378,6 @@ def confirm_v4_persistent_arm_authorization_once(
     )
     try:
         decision = decide_persistent_arm_permit_issuance(
-            authorization=authorization_check,
             arm_state=arm_check,
             risk_gate=risk_gate,
             dead_man=dead_man_store.evaluate(now_utc=now_utc),
@@ -402,16 +392,6 @@ def confirm_v4_persistent_arm_authorization_once(
         ) from error
     if not decision.allowed:
         raise V4GmoCanaryActivationError("V4_CANARY_UNATTENDED_GATE_NOT_CLEAR")
-    try:
-        consume_operator_daily_authorization_once(
-            artifact_path=authorization_artifact_path,
-            expected_generation_digest=intent.generation_digest,
-            now_utc=now_utc,
-        )
-    except V4UnattendedLiveAuthorizationError as error:
-        raise V4GmoCanaryActivationError(
-            "V4_CANARY_UNATTENDED_GATE_NOT_CLEAR"
-        ) from error
     return (
         V4MajorIncidentResumeProof(
             token=_RESUME_TOKEN,

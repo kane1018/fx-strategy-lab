@@ -495,7 +495,7 @@ def test_notification_sent_inside_driver_at_final_market_boundary(
     assert order == ["driver", "notify"]
 
 
-def test_second_call_same_day_is_refused_after_daily_authorization_consumption(
+def test_multiple_cycles_are_allowed_while_persistent_arm_remains_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     driver = MagicMock(return_value="CANARY_RESULT")
@@ -507,23 +507,16 @@ def test_second_call_same_day_is_refused_after_daily_authorization_consumption(
     stores = _healthy_stores(tmp_path)
     _run(tmp_path, stores=stores)
     assert driver.call_count == 1
-    with pytest.raises(
-        activation_module.V4GmoCanaryActivationError,
-        match="V4_CANARY_UNATTENDED_GATE_NOT_CLEAR",
-    ):
-        _run(tmp_path, stores=stores)
-    assert driver.call_count == 1
+    _run(tmp_path, stores=stores)
+    assert driver.call_count == 2
 
 
 def test_driver_failure_propagates_without_consuming_persistent_arm(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Pins the module's single most consequential documented behavior
-    # (§10.3/§11.6 accepted cost): a driver failure AFTER the authorization
-    # was consumed (a) propagates unwrapped -- never caught, swallowed, or
-    # retried by this module; (b) leaves the day's consumption marker on
-    # disk; (c) a same-day retry is refused at the gate without the driver
-    # ever being called again.
+    # A driver failure propagates unwrapped and never disarms persistent ARM.
+    # Action-level no-retry remains owned by the real coordinator/permit path,
+    # not by a once-per-day operator artifact.
     class _DriverBoundaryError(RuntimeError):
         pass
 
@@ -542,11 +535,6 @@ def test_driver_failure_propagates_without_consuming_persistent_arm(
         / "arm-state.json"
     )
     assert arm_state.is_file()
-    with pytest.raises(
-        activation_module.V4GmoCanaryActivationError,
-        match="V4_CANARY_UNATTENDED_GATE_NOT_CLEAR",
-    ):
-        _run(tmp_path, stores=stores)
     assert driver.call_count == 1
 
 

@@ -402,7 +402,7 @@ def test_all_six_conditions_clear_allows_without_issuing_anything(
     assert decision.to_safe_dict()["permit_issued"] is False
 
 
-def test_persistent_arm_requires_daily_artifact_without_claiming_live_activity(
+def test_persistent_arm_allows_without_daily_artifact_or_live_claim(
     tmp_path: Path,
 ) -> None:
     arm_path = tmp_path / "arm-state.json"
@@ -419,7 +419,6 @@ def test_persistent_arm_requires_daily_artifact_without_claiming_live_activity(
     )
     risk_policy = _risk_policy()
     decision = decision_module.decide_persistent_arm_permit_issuance(
-        authorization=_check(tmp_path),
         arm_state=arm,
         risk_gate=evaluate_risk_before_entry(
             state=PhaseBRiskState(policy_digest=risk_policy.digest),
@@ -444,7 +443,6 @@ def test_disarmed_persistent_state_blocks_permit_decision(tmp_path: Path) -> Non
         expected_reviewed_files_digest="sha256:" + "b" * 64,
     )
     decision = decision_module.decide_persistent_arm_permit_issuance(
-        authorization=_check(tmp_path),
         arm_state=arm,
         risk_gate=evaluate_risk_before_entry(
             state=PhaseBRiskState(policy_digest=risk_policy.digest),
