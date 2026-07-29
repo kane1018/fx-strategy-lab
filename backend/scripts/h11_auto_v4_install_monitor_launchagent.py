@@ -310,9 +310,10 @@ def main() -> int:
                 "broker_write=false actual_post_count=0"
             )
             return 2
+    startup_process_lock: H11AutoProcessLock | None = None
     if getattr(generation, "generation_label", "") == _G040_GENERATION_LABEL:
-        process_lock = H11AutoProcessLock(state_root / "process.lock")
-        if not process_lock.acquire():
+        startup_process_lock = H11AutoProcessLock(state_root / "process.lock")
+        if not startup_process_lock.acquire():
             print(
                 "status=MONITOR_LAUNCHAGENT_PROCESS_LOCK_BLOCKED_"
                 "NO_MARKER_CLAIMED "
@@ -320,7 +321,6 @@ def main() -> int:
                 "broker_write=false actual_post_count=0"
             )
             return 2
-        process_lock.release()
         if not _probe_g040_launchd_runtime_startup(
             repository=repository,
             user_id=os.getuid(),
@@ -334,6 +334,7 @@ def main() -> int:
                 "failure_class=G040_RUNTIME_STARTUP_NOT_CLEAR "
                 "broker_write=false actual_post_count=0"
             )
+            startup_process_lock.release()
             return 2
     begin_state = V4MonitorLaunchagentBeginState.PRE_BEGIN
     try:
@@ -400,6 +401,8 @@ def main() -> int:
         )
         ledger.complete(operation, operation_permit=operation_permit)
     except Exception as error:
+        if startup_process_lock is not None:
+            startup_process_lock.release()
         failure_class = _safe_failure_class(error)
         if begin_state is V4MonitorLaunchagentBeginState.MARKER_PERSISTED:
             status = "MONITOR_LAUNCHAGENT_BLOCKED_NO_RETRY"
@@ -430,6 +433,8 @@ def main() -> int:
             "broker_write=false actual_post_count=0"
         )
         return 2
+    if startup_process_lock is not None:
+        startup_process_lock.release()
     print(
         "status=INSTALLED_RESTARTED_MONITOR_ONLY "
         f"broker_write={str(result.broker_write).lower()} "
