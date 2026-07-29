@@ -1186,6 +1186,10 @@ _G040_SOURCE_GENERATION_DIGEST = (
     "sha256:ff541122f94ba929edb5338918af2504f3edfe4401c8bde9bcf4cd56da1f5891"
 )
 _RUNTIME_CARRY_FORWARD_TOKEN = object()
+_RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
+    "H11_AUTO_30M_20260729_G040",
+    "H11_AUTO_30M_20260729_G041",
+}
 _G040_RUNTIME_CARRIED_OPERATIONS = tuple(
     operation
     for operation in V4PreparationOperation
@@ -1258,7 +1262,8 @@ def load_g040_runtime_only_carry_forward_evidence(
         ),
     )
     if (
-        target_generation.generation_label != "H11_AUTO_30M_20260729_G040"
+        target_generation.generation_label
+        not in _RUNTIME_ONLY_TARGET_GENERATION_LABELS
         or target_generation.digest != generation_digest
         or not target_ledger.state_root.name.endswith(
             generation_digest.removeprefix("sha256:")

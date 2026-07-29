@@ -41,6 +41,7 @@ _LAUNCHCTL_TIMEOUT_SECONDS = {
 }
 _G039_GENERATION_LABEL = "H11_AUTO_30M_20260729_G039"
 _G040_GENERATION_LABEL = "H11_AUTO_30M_20260729_G040"
+_G041_GENERATION_LABEL = "H11_AUTO_30M_20260729_G041"
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -83,7 +84,10 @@ def main() -> int:
                 "broker_write=false actual_post_count=0"
             )
             return 2
-    if getattr(generation, "generation_label", "") == _G040_GENERATION_LABEL:
+    if getattr(generation, "generation_label", "") in {
+        _G040_GENERATION_LABEL,
+        _G041_GENERATION_LABEL,
+    }:
         try:
             external_gate = load_external_preparation_gate(repository=repository)
             require_g040_runtime_only_monitor_completion(

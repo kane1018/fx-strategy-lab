@@ -188,10 +188,10 @@ def main(argv: list[str]) -> int:
             f"reason_label={reason} broker_write=false actual_post_count=0"
         )
         return 0
-    if (
-        getattr(generation, "generation_label", "")
-        == "H11_AUTO_30M_20260729_G040"
-    ):
+    if getattr(generation, "generation_label", "") in {
+        "H11_AUTO_30M_20260729_G040",
+        "H11_AUTO_30M_20260729_G041",
+    }:
         state_root = v4_gmo_runtime_state_root(
             repository=repository,
             generation_digest=generation.digest,

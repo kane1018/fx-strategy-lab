@@ -197,6 +197,10 @@ class V4GmoActualCoordinatorStore:
         Observers still read state and may explicitly ``engage_unknown_halt``.
         """
 
+        if not path.is_file() or path.is_symlink():
+            raise V4GmoActualCoordinatorError(
+                "v4 coordinator observer requires an existing ledger"
+            )
         return cls(path, _latch_pending_restart_halt=False)
 
     def _connect(self) -> sqlite3.Connection:
@@ -205,7 +209,7 @@ class V4GmoActualCoordinatorStore:
         return connection
 
     def market_attempt_count_for_day(self, *, trading_day_jst: str) -> int:
-        """Return the immutable MARKET-attempt count for one JST trading day."""
+        """Return inherited plus local immutable MARKET attempts for one JST day."""
 
         if (
             not isinstance(trading_day_jst, str)
@@ -220,7 +224,109 @@ class V4GmoActualCoordinatorStore:
                 "AND cycles.trading_day_jst=?",
                 (trading_day_jst,),
             ).fetchone()
-        return int(row["n"])
+            baseline_row = connection.execute(
+                "SELECT value FROM metadata WHERE key=?",
+                (f"inherited_market_attempt_baseline:{trading_day_jst}",),
+            ).fetchone()
+            generation_row = connection.execute(
+                "SELECT value FROM metadata WHERE key='generation_digest'"
+            ).fetchone()
+        baseline = 0
+        if baseline_row is not None:
+            try:
+                payload = json.loads(str(baseline_row["value"]))
+            except json.JSONDecodeError as error:
+                raise V4GmoActualCoordinatorError(
+                    "v4 inherited attempt baseline is invalid"
+                ) from error
+            if (
+                not isinstance(payload, dict)
+                or payload.get("trading_day_jst") != trading_day_jst
+                or generation_row is None
+                or payload.get("target_generation_digest")
+                != generation_row["value"]
+                or type(payload.get("attempt_count")) is not int
+                or payload["attempt_count"] < 0
+            ):
+                raise V4GmoActualCoordinatorError(
+                    "v4 inherited attempt baseline is invalid"
+                )
+            baseline = int(payload["attempt_count"])
+        return baseline + int(row["n"])
+
+    def initialize_inherited_market_attempt_baseline_once(
+        self,
+        *,
+        source_generation_digest: str,
+        target_generation_digest: str,
+        trading_day_jst: str,
+        attempt_count: int,
+    ) -> None:
+        """Persist a monotonic predecessor-attempt baseline without fake cycles."""
+
+        digest_values = (source_generation_digest, target_generation_digest)
+        try:
+            normalized_day = datetime.strptime(
+                trading_day_jst, "%Y-%m-%d"
+            ).date().isoformat()
+        except (TypeError, ValueError) as error:
+            raise V4GmoActualCoordinatorError(
+                "v4 inherited attempt baseline is invalid"
+            ) from error
+        if (
+            normalized_day != trading_day_jst
+            or any(
+                type(value) is not str
+                or len(value) != 71
+                or not value.startswith("sha256:")
+                for value in digest_values
+            )
+            or type(attempt_count) is not int
+            or attempt_count < 0
+        ):
+            raise V4GmoActualCoordinatorError(
+                "v4 inherited attempt baseline is invalid"
+            )
+        payload = json.dumps(
+            {
+                "attempt_count": attempt_count,
+                "source_generation_digest": source_generation_digest,
+                "target_generation_digest": target_generation_digest,
+                "trading_day_jst": trading_day_jst,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        key = f"inherited_market_attempt_baseline:{trading_day_jst}"
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            generation = connection.execute(
+                "SELECT value FROM metadata WHERE key='generation_digest'"
+            ).fetchone()
+            existing = connection.execute(
+                "SELECT value FROM metadata WHERE key=?", (key,)
+            ).fetchone()
+            local_activity = connection.execute(
+                "SELECT EXISTS(SELECT 1 FROM cycles) AS present"
+            ).fetchone()
+            if generation is None or generation["value"] != target_generation_digest:
+                raise V4GmoActualCoordinatorError(
+                    "v4 inherited attempt baseline is invalid"
+                )
+            if existing is not None:
+                if existing["value"] == payload:
+                    return
+                raise V4GmoActualCoordinatorError(
+                    "v4 inherited attempt baseline mismatch"
+                )
+            if local_activity["present"] != 0:
+                raise V4GmoActualCoordinatorError(
+                    "v4 inherited attempt baseline is invalid"
+                )
+            connection.execute(
+                "INSERT INTO metadata(key,value) VALUES(?,?)",
+                (key, payload),
+            )
 
     def _initialize(self, *, latch_pending_restart_halt: bool = True) -> None:
         with self._connect() as connection:

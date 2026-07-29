@@ -44,6 +44,7 @@ _LAUNCHCTL_TIMEOUT_SECONDS = {
 _G039_GENERATION_LABEL = "H11_AUTO_30M_20260729_G039"
 _G039_DESKTOP_ACCESS_PROBE_TIMEOUT_SECONDS = 15.0
 _G040_GENERATION_LABEL = "H11_AUTO_30M_20260729_G040"
+_G041_GENERATION_LABEL = "H11_AUTO_30M_20260729_G041"
 _G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS = 20.0
 
 
@@ -311,7 +312,10 @@ def main() -> int:
             )
             return 2
     startup_process_lock: H11AutoProcessLock | None = None
-    if getattr(generation, "generation_label", "") == _G040_GENERATION_LABEL:
+    if getattr(generation, "generation_label", "") in {
+        _G040_GENERATION_LABEL,
+        _G041_GENERATION_LABEL,
+    }:
         startup_process_lock = H11AutoProcessLock(state_root / "process.lock")
         if not startup_process_lock.acquire():
             print(
@@ -342,7 +346,10 @@ def main() -> int:
         ledger = V4PreparationAttemptLedger(external_gate=external_gate)
         operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
         runtime_carry_forward = None
-        if getattr(generation, "generation_label", "") == _G040_GENERATION_LABEL:
+        if getattr(generation, "generation_label", "") in {
+            _G040_GENERATION_LABEL,
+            _G041_GENERATION_LABEL,
+        }:
             runtime_carry_forward = (
                 load_g040_runtime_only_carry_forward_evidence(
                     repository=repository,
@@ -373,7 +380,10 @@ def main() -> int:
             expected_generation_digest=generation.digest,
             wall_clock=lambda: datetime.now(UTC),
         )
-        if getattr(generation, "generation_label", "") == _G040_GENERATION_LABEL:
+        if getattr(generation, "generation_label", "") in {
+            _G040_GENERATION_LABEL,
+            _G041_GENERATION_LABEL,
+        }:
             try:
                 heartbeat = json.loads(
                     (state_root / "supervisor-heartbeat.json").read_text(
