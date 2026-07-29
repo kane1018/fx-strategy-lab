@@ -1,8 +1,9 @@
-"""Public-only formal-aware G013 observer.
+"""Current-generation Public-only formal-aware G013 observer.
 
 This observer remains non-authorizing.  It first consumes the existing exact
-M1 preview slot.  Only an actionable M1 candidate causes one additional fresh
-H1 Public GET, used solely to prove that the frozen ATR(24) input is available.
+M1 preview slot, including its canonical reviewed-files and generation binding.
+Only an actionable M1 candidate causes one additional fresh H1 Public GET, used
+solely to prove that the frozen ATR(24) input is available for the same slot.
 It never writes candle caches, imports the actual canary, or exposes a trading
 direction, price, probability, order sheet, or confirmation challenge.
 """
@@ -18,12 +19,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from app.h11_manual.data import (
-    DEFAULT_DATA_ROOT,
-    CandleRepository,
-    candles_to_frame,
-    load_candle_csv,
-)
+from app.h11_manual.data import CandleRepository, candles_to_frame, load_candle_csv
 from app.services.h11_v4_gmo_formal_canary_source import (
     G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS,
     V4GmoFormalCanarySourceError,
@@ -36,6 +32,17 @@ from app.shadow.gmo_public import GmoPublicError, GmoPublicMarketDataClient
 
 class G013FormalAwarePreviewError(RuntimeError):
     """Fixed safe failure for the public-only formal-aware observer."""
+
+    def __init__(
+        self,
+        status: str,
+        *,
+        public_get_count: int,
+        candidate_actionable: bool,
+    ) -> None:
+        super().__init__(status)
+        self.public_get_count = public_get_count
+        self.candidate_actionable = candidate_actionable
 
 
 @dataclass(frozen=True, repr=False)
@@ -56,6 +63,8 @@ class G013FormalAwarePreviewReport:
     raw_market_data_exposed: bool = False
     order_sheet_exposed: bool = False
     challenge_exposed: bool = False
+    notification_attempted: bool = False
+    local_sound_attempted: bool = False
 
     def to_safe_dict(self) -> dict[str, object]:
         return {
@@ -75,6 +84,14 @@ class G013FormalAwarePreviewReport:
             "raw_market_data_exposed": False,
             "order_sheet_exposed": False,
             "challenge_exposed": False,
+            "notification_attempted": False,
+            "local_sound_attempted": False,
+            "observer_contract": "ONE_COMPLETED_SLOT_PER_INVOCATION",
+            "next_action": (
+                "STOP_FORMAL_ACTIONABLE"
+                if self.formal_candidate_actionable
+                else "WAIT_NEXT_COMPLETED_SLOT"
+            ),
         }
 
     def __repr__(self) -> str:
@@ -99,7 +116,11 @@ def run_g013_formal_aware_preview(
             public_get_count=1,
         )
 
-    _validate_fresh_completed_h1(now_utc=current, sleeper=sleeper)
+    _validate_fresh_completed_h1(
+        repository=repository.resolve(),
+        now_utc=current,
+        sleeper=sleeper,
+    )
     return G013FormalAwarePreviewReport(
         status="G013_FORMAL_AWARE_PREVIEW_FORMAL_ACTIONABLE",
         candidate_actionable=True,
@@ -108,7 +129,12 @@ def run_g013_formal_aware_preview(
     )
 
 
-def _validate_fresh_completed_h1(*, now_utc: datetime, sleeper: Callable[[float], None]) -> None:
+def _validate_fresh_completed_h1(
+    *,
+    repository: Path,
+    now_utc: datetime,
+    sleeper: Callable[[float], None],
+) -> None:
     """Read one current-day H1 response and validate the formal ATR basis in memory."""
 
     client = GmoPublicMarketDataClient()
@@ -117,13 +143,18 @@ def _validate_fresh_completed_h1(*, now_utc: datetime, sleeper: Callable[[float]
         sleeper(G013_PUBLIC_CANDLE_REQUEST_GAP_SECONDS)
         candles = client.fetch_candles("USD_JPY", "H1", limit=0, price_type="BID", date=date_label)
     except GmoPublicError as error:
-        raise G013FormalAwarePreviewError("G013_FORMAL_AWARE_H1_REFRESH_FAILED_NO_RETRY") from error
+        raise G013FormalAwarePreviewError(
+            "G013_FORMAL_AWARE_H1_REFRESH_FAILED_NO_RETRY",
+            public_get_count=2,
+            candidate_actionable=True,
+        ) from error
     finally:
         client.client.close()
     try:
-        repository = CandleRepository(DEFAULT_DATA_ROOT, supplemental_h1_paths=())
+        data_root = repository / "backend/market_data/h11_manual"
+        candle_repository = CandleRepository(data_root, supplemental_h1_paths=())
         merged = pd.concat(
-            [load_candle_csv(repository.h1_path), candles_to_frame(candles)],
+            [load_candle_csv(candle_repository.h1_path), candles_to_frame(candles)],
             ignore_index=True,
         )
         merged["time_utc"] = pd.to_datetime(merged["time_utc"], utc=True, errors="raise")
@@ -133,13 +164,26 @@ def _validate_fresh_completed_h1(*, now_utc: datetime, sleeper: Callable[[float]
             .reset_index(drop=True)
         )
         merged["time_utc"] = merged["time_utc"].map(lambda value: value.isoformat())
-        h1 = repository._completed(merged, minutes=60, now=now_utc)
-        _require_latest_completed_bar(
+        h1 = candle_repository._completed(merged, minutes=60, now=now_utc)
+        latest_h1_origin = _require_latest_completed_bar(
             h1,
             now_utc=now_utc,
             duration=timedelta(hours=1),
             error_code="G013_FORMAL_AWARE_H1_NOT_COMPLETED",
         )
+        expected_h1_origin = now_utc.replace(
+            minute=0,
+            second=0,
+            microsecond=0,
+        ) - timedelta(hours=1)
+        if latest_h1_origin != expected_h1_origin:
+            raise V4GmoFormalCanarySourceError(
+                "G013_FORMAL_AWARE_H1_NOT_COMPLETED"
+            )
         _completed_h1_atr_24(h1)
     except (OSError, ValueError, V4GmoFormalCanarySourceError) as error:
-        raise G013FormalAwarePreviewError("G013_FORMAL_AWARE_H1_INPUT_INVALID") from error
+        raise G013FormalAwarePreviewError(
+            "G013_FORMAL_AWARE_H1_INPUT_INVALID",
+            public_get_count=2,
+            candidate_actionable=True,
+        ) from error

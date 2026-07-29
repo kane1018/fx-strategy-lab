@@ -154,7 +154,7 @@ def test_preview_returns_only_non_authorizing_boolean_report(
     probability: float,
     expected: bool,
 ) -> None:
-    now = datetime(2026, 7, 20, 5, 30, 20, tzinfo=UTC)
+    now = datetime(2026, 7, 20, 16, 30, 20, tzinfo=UTC)
     slot = now.replace(second=0, microsecond=0) - timedelta(minutes=1)
     _arrange(monkeypatch, tmp_path, now)
     monkeypatch.setattr(preview, "predict_short_model", lambda *_args: probability)
@@ -177,7 +177,7 @@ def test_preview_returns_only_non_authorizing_boolean_report(
     assert report["candidate_actionable"] is expected
     assert len(_Client.calls) == 1
     assert _Client.calls[0][:3] == ("USD_JPY", "M1", 0)
-    assert _Client.calls[0][3] == {"price_type": "BID", "date": "20260720"}
+    assert _Client.calls[0][3] == {"price_type": "BID", "date": "20260721"}
     assert set(report) == {
         "status", "candidate_actionable", "signal_fresh", "signal_age_seconds",
         "public_get_count", "direction_exposed", "probability_exposed", "price_exposed",
@@ -266,7 +266,7 @@ def test_later_slot_is_a_distinct_observation(
     assert len(_Client.calls) == 2
 
 
-def test_active_public_bar_is_filtered_and_utc_date_is_used(
+def test_active_public_bar_is_filtered_and_jst_date_is_used(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     now = datetime(2026, 7, 19, 15, 30, 20, tzinfo=UTC)
@@ -290,7 +290,7 @@ def test_active_public_bar_is_filtered_and_utc_date_is_used(
         repository=tmp_path, now_utc=now, client_factory=_Client
     )
     assert report.to_safe_dict()["candidate_actionable"] is False
-    assert _Client.calls[0][3]["date"] == "20260719"
+    assert _Client.calls[0][3]["date"] == "20260720"
 
 
 def test_model_input_change_after_slot_claim_fails_closed(

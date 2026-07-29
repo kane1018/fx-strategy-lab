@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -411,12 +412,13 @@ def run_g013_signal_preview(
     candles: list[Candle] = []
     try:
         client = client_factory()
+        date_label = current.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y%m%d")
         candles = client.fetch_candles(
             "USD_JPY",
             "M1",
             0,
             price_type="BID",
-            date=current.strftime("%Y%m%d"),
+            date=date_label,
         )
     except Exception:
         public_failed = True
