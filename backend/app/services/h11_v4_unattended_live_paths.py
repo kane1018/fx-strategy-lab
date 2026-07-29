@@ -27,6 +27,9 @@ V4_UNATTENDED_LIVE_DAILY_AUTHORIZATION_FILENAME = "daily-authorization.json"
 V4_UNATTENDED_LIVE_ARM_STATE_FILENAME = "arm-state.json"
 V4_UNATTENDED_ACCOUNT_SNAPSHOT_DIRECTORY = "account-snapshot-producer"
 V4_UNATTENDED_OPERATIONAL_READINESS_FILENAME = "operational-readiness-no-post.json"
+V4_UNATTENDED_G037_CANARY_EVIDENCE_FILENAME = (
+    "g037-successful-canary-evidence-no-post.json"
+)
 DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT = (
     Path.home() / "Library" / "Application Support" / "fx-strategy-lab-h11-v4-unattended-live"
 )
@@ -88,6 +91,17 @@ def v4_unattended_operational_readiness_path(
             state_root=state_root, generation_digest=generation_digest
         )
         / V4_UNATTENDED_OPERATIONAL_READINESS_FILENAME
+    )
+
+
+def v4_unattended_g037_canary_evidence_path(
+    *, state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT, generation_digest: str
+) -> Path:
+    return (
+        v4_unattended_live_state_root(
+            state_root=state_root, generation_digest=generation_digest
+        )
+        / V4_UNATTENDED_G037_CANARY_EVIDENCE_FILENAME
     )
 
 
