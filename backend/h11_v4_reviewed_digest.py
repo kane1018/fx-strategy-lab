@@ -159,6 +159,7 @@ REVIEWED_FILES = (
     "backend/app/tests/h11_auto/test_v4_current_generation_shadow_observer_no_post.py",
     "backend/app/tests/h11_auto/test_h11_manual_auto_import_boundary_no_post.py",
     "backend/app/tests/h11_auto/test_v4_actual_preparation_fake_first.py",
+    "backend/app/tests/h11_auto/test_v4_g040_runtime_only_release_no_post.py",
     "backend/app/tests/h11_auto/test_v4_daily_preparation_bundle_no_post.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g013_fake_only.py",
     "backend/app/tests/h11_auto/test_v4_gmo_g013_unattended_authorization_fake_only.py",

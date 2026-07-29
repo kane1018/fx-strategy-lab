@@ -38,6 +38,7 @@ from __future__ import annotations
 # so `backend/` is not otherwise on sys.path and the `app.*` imports below
 # would fail to resolve without this.
 import argparse
+import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -50,7 +51,12 @@ if str(_ROOT_PATH) not in sys.path:
 
 from app.h11_auto.persistence import H11AutoProcessLock
 from app.h11_auto.runtime_safety import DeadManStore, PhaseBRiskStore
-from app.h11_auto.v4_actual_preparation_guard import reviewed_files_digest
+from app.h11_auto.v4_actual_preparation_guard import (
+    V4ActualPreparationGuardError,
+    load_external_preparation_gate,
+    require_g040_runtime_only_monitor_completion,
+    reviewed_files_digest,
+)
 from app.h11_auto.v4_gmo_generation import (
     load_v4_gmo_frozen_generation,
     v4_gmo_dead_man_policy,
@@ -76,8 +82,11 @@ from app.services.h11_v4_unattended_live_entry_gate_provider import (
     unattended_live_entry_gate_provider,
 )
 from app.services.h11_v4_unattended_live_heartbeat_chain import (
-    V4HeartbeatChainPolicy,
+    V4_UNATTENDED_RUNTIME_HEARTBEAT_MAXIMUM_GAP_SECONDS,
+    V4_UNATTENDED_RUNTIME_HEARTBEAT_MINIMUM_CONTINUOUS_SECONDS,
+    V4_UNATTENDED_RUNTIME_HEARTBEAT_POLICY_LABEL,
     V4HeartbeatChainStore,
+    v4_unattended_runtime_heartbeat_policy,
 )
 from app.services.h11_v4_unattended_live_paths import (
     v4_unattended_live_arm_state_path,
@@ -96,9 +105,13 @@ from scripts import h11_auto_v4_unattended_live_bounded_run as bounded_run
 # maximum_gap mirrors the already-approved dead-man maximum_heartbeat_age_seconds
 # (60s); minimum_continuous matches a value already used in this track's own
 # orchestration TEST fixtures (300s, explicitly labeled test-only there).
-_HEARTBEAT_CHAIN_POLICY_LABEL = "H11_V4_UNATTENDED_SCHEDULER_CHAIN_V1"
-_HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS = 60
-_HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS = 300
+_HEARTBEAT_CHAIN_POLICY_LABEL = V4_UNATTENDED_RUNTIME_HEARTBEAT_POLICY_LABEL
+_HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS = (
+    V4_UNATTENDED_RUNTIME_HEARTBEAT_MAXIMUM_GAP_SECONDS
+)
+_HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS = (
+    V4_UNATTENDED_RUNTIME_HEARTBEAT_MINIMUM_CONTINUOUS_SECONDS
+)
 
 
 class V4UnattendedSchedulerLauncherError(RuntimeError):
@@ -175,6 +188,69 @@ def main(argv: list[str]) -> int:
             f"reason_label={reason} broker_write=false actual_post_count=0"
         )
         return 0
+    if (
+        getattr(generation, "generation_label", "")
+        == "H11_AUTO_30M_20260729_G040"
+    ):
+        state_root = v4_gmo_runtime_state_root(
+            repository=repository,
+            generation_digest=generation.digest,
+        )
+        try:
+            require_g040_runtime_only_monitor_completion(
+                repository=repository,
+                external_gate=load_external_preparation_gate(
+                    repository=repository
+                ),
+                generation_digest=generation.digest,
+                now_utc=datetime.now(UTC),
+            )
+            heartbeat = json.loads(
+                (state_root / "supervisor-heartbeat.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            observed = datetime.fromisoformat(
+                str(heartbeat["observed_at_utc"])
+            )
+            heartbeat_age = (
+                datetime.now(UTC) - observed.astimezone(UTC)
+            ).total_seconds()
+            supervisor_lock = H11AutoProcessLock(
+                state_root / "supervisor.lock"
+            )
+            supervisor_is_running = not supervisor_lock.acquire()
+            if not supervisor_is_running:
+                supervisor_lock.release()
+        except (
+            V4ActualPreparationGuardError,
+            OSError,
+            KeyError,
+            TypeError,
+            ValueError,
+            json.JSONDecodeError,
+        ):
+            print(
+                "status=UNATTENDED_SCHEDULER_RUNTIME_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 0
+        if (
+            heartbeat.get("generation_digest") != generation.digest
+            or heartbeat.get("runtime_risk_ready") is not True
+            or heartbeat.get("dead_man_alive") is not True
+            or heartbeat.get("heartbeat_chain_beat") is not True
+            or heartbeat.get("broker_write") is not False
+            or heartbeat.get("actual_post_count") != 0
+            or heartbeat_age < 0
+            or heartbeat_age > 60
+            or not supervisor_is_running
+        ):
+            print(
+                "status=UNATTENDED_SCHEDULER_RUNTIME_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 0
 
     # Same lock filename ("process.lock") the interactive G013-G016 canary
     # path uses (h11_v4_gmo_actual_runtime_binding.py) -- NOT a distinct
@@ -215,11 +291,7 @@ def main(argv: list[str]) -> int:
         # the module-level comment above _HEARTBEAT_CHAIN_POLICY_LABEL).
         heartbeat_chain_store = V4HeartbeatChainStore(
             state_root / "unattended-heartbeat-chain.json",
-            policy=V4HeartbeatChainPolicy(
-                policy_label=_HEARTBEAT_CHAIN_POLICY_LABEL,
-                maximum_gap_seconds=_HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS,
-                minimum_continuous_seconds=_HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS,
-            ),
+            policy=v4_unattended_runtime_heartbeat_policy(),
         )
 
         # Real objects are constructed only after digest, commissioning, arm,

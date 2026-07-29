@@ -287,6 +287,50 @@ class V4CompletedPreparationEvidence:
         return False
 
 
+class V4RuntimeOnlyPreparationCarryForwardEvidence:
+    """Falsey evidence usable only as a fresh operation-60 predecessor."""
+
+    __slots__ = (
+        "_token",
+        "source_reviewed_files_digest",
+        "source_generation_digest",
+        "target_reviewed_files_digest",
+        "target_generation_digest",
+        "trading_day_jst",
+        "completed_operations",
+        "broker_post_authorized",
+        "activation_permit_issued",
+    )
+
+    def __init__(
+        self,
+        *,
+        token: object,
+        source_reviewed_files_digest: str,
+        source_generation_digest: str,
+        target_reviewed_files_digest: str,
+        target_generation_digest: str,
+        trading_day_jst: str,
+        completed_operations: tuple[str, ...],
+    ) -> None:
+        if token is not _RUNTIME_CARRY_FORWARD_TOKEN:
+            raise V4ActualPreparationGuardError(
+                "G040_RUNTIME_CARRY_FORWARD_INVALID"
+            )
+        self._token = token
+        self.source_reviewed_files_digest = source_reviewed_files_digest
+        self.source_generation_digest = source_generation_digest
+        self.target_reviewed_files_digest = target_reviewed_files_digest
+        self.target_generation_digest = target_generation_digest
+        self.trading_day_jst = trading_day_jst
+        self.completed_operations = completed_operations
+        self.broker_post_authorized = False
+        self.activation_permit_issued = False
+
+    def __bool__(self) -> bool:
+        return False
+
+
 class V4PreparationOperation(str, Enum):
     PRESENCE = "00_presence"
     KEYCHAIN_ACCESS = "05_keychain_access"
@@ -708,6 +752,7 @@ class V4PreparationAttemptLedger:
     ) -> None:
         self._locks: dict[V4PreparationOperation, H11AutoProcessLock] = {}
         require_external_preparation_gate(external_gate)
+        self._external_gate = external_gate
         unresolved = external_gate.state_root_for_internal_preparation_only()
         path_candidates = (
             unresolved,
@@ -735,6 +780,39 @@ class V4PreparationAttemptLedger:
         self,
         operation: V4PreparationOperation,
     ) -> V4PreparationOperationPermit:
+        return self._begin(operation=operation, runtime_predecessor_clear=False)
+
+    def begin_g040_runtime_only_monitor(
+        self,
+        *,
+        repository: Path,
+        generation_digest: str,
+    ) -> V4PreparationOperationPermit:
+        evidence = load_g040_runtime_only_carry_forward_evidence(
+            repository=repository,
+            external_gate=self._external_gate,
+            generation_digest=generation_digest,
+        )
+        if not _runtime_carry_forward_matches_target(
+            evidence=evidence,
+            reviewed_files_digest=self._reviewed_files_digest,
+            generation_digest=self._generation_digest,
+            trading_day_jst=self._trading_day_jst,
+        ):
+            raise V4ActualPreparationGuardError(
+                "G040_RUNTIME_CARRY_FORWARD_INVALID"
+            )
+        return self._begin(
+            operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
+            runtime_predecessor_clear=True,
+        )
+
+    def _begin(
+        self,
+        *,
+        operation: V4PreparationOperation,
+        runtime_predecessor_clear: bool,
+    ) -> V4PreparationOperationPermit:
         # One generation-level lock serializes predecessor validation, the
         # generation-wide unresolved scan, and durable started-marker creation.
         # Daily marker names remain useful evidence, but never form a lock scope.
@@ -752,11 +830,17 @@ class V4PreparationAttemptLedger:
                 V4PreparationFailureCode.OPERATION_IN_PROGRESS
             )
         previous = _PREVIOUS_OPERATION[operation]
-        if previous is not None and not self._marker_matches_review(
+        previous_is_current = previous is None or self._marker_matches_review(
             self._marker(previous, "passed"),
             operation=previous,
             expected_status="PASSED",
-        ):
+        )
+        previous_is_runtime_carry_forward = (
+            operation is V4PreparationOperation.MONITOR_LAUNCHAGENT
+            and previous is V4PreparationOperation.PRIVATE_GET
+            and runtime_predecessor_clear is True
+        )
+        if not (previous_is_current or previous_is_runtime_carry_forward):
             lock.release()
             raise V4ActualPreparationGuardError(
                 V4PreparationFailureCode.SEQUENCE_PREVIOUS_NOT_CLEAR
@@ -1093,6 +1177,207 @@ def preparation_state_root(
         / PREPARATION_STATE_RELATIVE
         / f"generation-{digest}-{generation_digest}"
     )
+
+
+_G040_SOURCE_REVIEWED_FILES_DIGEST = (
+    "sha256:16ecc53785ddc050952e1604b4c2ce1755b4bba7d74b8c46c579df16034c5007"
+)
+_G040_SOURCE_GENERATION_DIGEST = (
+    "sha256:ff541122f94ba929edb5338918af2504f3edfe4401c8bde9bcf4cd56da1f5891"
+)
+_RUNTIME_CARRY_FORWARD_TOKEN = object()
+_G040_RUNTIME_CARRIED_OPERATIONS = tuple(
+    operation
+    for operation in V4PreparationOperation
+    if operation is not V4PreparationOperation.MONITOR_LAUNCHAGENT
+)
+
+
+def _source_marker_payload(
+    *,
+    path: Path,
+    operation: V4PreparationOperation,
+    expected_status: str,
+    expected_attempt_token: str | None = None,
+) -> dict[str, object]:
+    current = path
+    while True:
+        if current.is_symlink():
+            raise V4ActualPreparationGuardError(
+                "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
+            )
+        if current.parent == current:
+            break
+        current = current.parent
+    if not path.is_file():
+        raise V4ActualPreparationGuardError(
+            "G040_RUNTIME_SOURCE_EVIDENCE_MISSING"
+        )
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise V4ActualPreparationGuardError(
+            "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
+        ) from error
+    if (
+        not isinstance(payload, dict)
+        or payload.get("operation") != operation.value
+        or payload.get("status") != expected_status
+        or payload.get("reviewed_files_digest")
+        != _G040_SOURCE_REVIEWED_FILES_DIGEST
+        or payload.get("generation_digest") != _G040_SOURCE_GENERATION_DIGEST
+        or (
+            expected_attempt_token is not None
+            and payload.get("attempt_token") != expected_attempt_token
+        )
+    ):
+        raise V4ActualPreparationGuardError(
+            "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
+        )
+    return payload
+
+
+def load_g040_runtime_only_carry_forward_evidence(
+    *,
+    repository: Path,
+    external_gate: V4ExternalPreparationGate,
+    generation_digest: str,
+    now_utc: datetime | None = None,
+) -> V4RuntimeOnlyPreparationCarryForwardEvidence:
+    """Validate G039 00-50 without reusing its failed operation 60."""
+
+    require_external_preparation_gate(external_gate)
+    target_ledger = V4PreparationAttemptLedger(
+        external_gate=external_gate,
+        now_utc=now_utc,
+    )
+    target_generation = load_v4_gmo_frozen_generation(
+        repository=repository,
+        implementation_digest=(
+            external_gate.reviewed_digest_for_internal_preparation_only()
+        ),
+    )
+    if (
+        target_generation.generation_label != "H11_AUTO_30M_20260729_G040"
+        or target_generation.digest != generation_digest
+        or not target_ledger.state_root.name.endswith(
+            generation_digest.removeprefix("sha256:")
+        )
+    ):
+        raise V4ActualPreparationGuardError("G040_RUNTIME_TARGET_MISMATCH")
+    source_root = preparation_state_root(
+        repository=repository,
+        reviewed_files_digest=_G040_SOURCE_REVIEWED_FILES_DIGEST,
+        generation_manifest_digest=_G040_SOURCE_GENERATION_DIGEST,
+    )
+    completed: list[str] = []
+    for operation in _G040_RUNTIME_CARRIED_OPERATIONS:
+        started = _source_marker_payload(
+            path=source_root
+            / f"{operation.value}.{target_ledger._trading_day_jst}.started.json",
+            operation=operation,
+            expected_status="ATTEMPT_STARTED",
+        )
+        attempt_token = started.get("attempt_token")
+        if (
+            not isinstance(attempt_token, str)
+            or len(attempt_token) != 32
+            or any(
+                character not in "0123456789abcdef"
+                for character in attempt_token
+            )
+        ):
+            raise V4ActualPreparationGuardError(
+                "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
+            )
+        passed = _source_marker_payload(
+            path=source_root
+            / f"{operation.value}.{target_ledger._trading_day_jst}.passed.json",
+            operation=operation,
+            expected_status="PASSED",
+            expected_attempt_token=attempt_token,
+        )
+        report = passed.get("completion_report")
+        if (
+            not isinstance(report, dict)
+            or not _operation_report_is_clear(operation, report)
+            or passed.get("completion_digest")
+            != _completion_digest(
+                operation=operation,
+                safe_report=report,
+                reviewed_files_digest=_G040_SOURCE_REVIEWED_FILES_DIGEST,
+                generation_digest=_G040_SOURCE_GENERATION_DIGEST,
+            )
+        ):
+            raise V4ActualPreparationGuardError(
+                "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
+            )
+        completed.append(operation.value)
+    return V4RuntimeOnlyPreparationCarryForwardEvidence(
+        token=_RUNTIME_CARRY_FORWARD_TOKEN,
+        source_reviewed_files_digest=_G040_SOURCE_REVIEWED_FILES_DIGEST,
+        source_generation_digest=_G040_SOURCE_GENERATION_DIGEST,
+        target_reviewed_files_digest=(
+            external_gate.reviewed_digest_for_internal_preparation_only()
+        ),
+        target_generation_digest=generation_digest,
+        trading_day_jst=target_ledger._trading_day_jst,
+        completed_operations=tuple(completed),
+    )
+
+
+def _runtime_carry_forward_matches_target(
+    *,
+    evidence: V4RuntimeOnlyPreparationCarryForwardEvidence,
+    reviewed_files_digest: str,
+    generation_digest: str,
+    trading_day_jst: str,
+) -> bool:
+    return (
+        getattr(evidence, "_token", None) is _RUNTIME_CARRY_FORWARD_TOKEN
+        and evidence.source_reviewed_files_digest
+        == _G040_SOURCE_REVIEWED_FILES_DIGEST
+        and evidence.source_generation_digest == _G040_SOURCE_GENERATION_DIGEST
+        and evidence.target_reviewed_files_digest == reviewed_files_digest
+        and evidence.target_generation_digest == generation_digest
+        and evidence.trading_day_jst == trading_day_jst
+        and evidence.completed_operations
+        == tuple(
+            operation.value for operation in _G040_RUNTIME_CARRIED_OPERATIONS
+        )
+        and evidence.broker_post_authorized is False
+        and evidence.activation_permit_issued is False
+        and bool(evidence) is False
+    )
+
+
+def require_g040_runtime_only_monitor_completion(
+    *,
+    repository: Path,
+    external_gate: V4ExternalPreparationGate,
+    generation_digest: str,
+    now_utc: datetime | None = None,
+) -> V4RuntimeOnlyPreparationCarryForwardEvidence:
+    evidence = load_g040_runtime_only_carry_forward_evidence(
+        repository=repository,
+        external_gate=external_gate,
+        generation_digest=generation_digest,
+        now_utc=now_utc,
+    )
+    ledger = V4PreparationAttemptLedger(
+        external_gate=external_gate,
+        now_utc=now_utc,
+    )
+    operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
+    if not ledger._marker_matches_review(
+        ledger._marker(operation, "passed"),
+        operation=operation,
+        expected_status="PASSED",
+    ):
+        raise V4ActualPreparationGuardError(
+            "G040_RUNTIME_MONITOR_NOT_COMPLETE"
+        )
+    return evidence
 
 
 def confirm_email_delivery_exact(

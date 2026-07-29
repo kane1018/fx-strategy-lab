@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 
+from app.h11_auto.persistence import H11AutoProcessLock
 from app.h11_auto.v4_actual_preparation_guard import (
     V4ActualPreparationGuardError,
     V4PreparationAttemptLedger,
@@ -17,6 +19,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4PreparationOperation,
     _attest_monitor_launchagent_success_internal,
     load_external_preparation_gate,
+    load_g040_runtime_only_carry_forward_evidence,
     require_operation_permit,
     reviewed_files_digest,
 )
@@ -40,6 +43,8 @@ _LAUNCHCTL_TIMEOUT_SECONDS = {
 }
 _G039_GENERATION_LABEL = "H11_AUTO_30M_20260729_G039"
 _G039_DESKTOP_ACCESS_PROBE_TIMEOUT_SECONDS = 15.0
+_G040_GENERATION_LABEL = "H11_AUTO_30M_20260729_G040"
+_G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS = 20.0
 
 
 class V4MonitorLaunchagentFailureCode(StrEnum):
@@ -183,6 +188,54 @@ def _probe_g039_launchd_desktop_access(
     )
 
 
+def _probe_g040_launchd_runtime_startup(
+    *,
+    repository: Path,
+    user_id: int,
+    python_executable: Path,
+    reviewed_files_digest_value: str,
+    generation_digest: str,
+) -> bool:
+    command = [
+        "launchctl",
+        "asuser",
+        str(user_id),
+        str(python_executable),
+        "-m",
+        "scripts.h11_auto_v4_monitor_supervisor",
+        "--repository",
+        str(repository),
+        "--expected-reviewed-files-digest",
+        reviewed_files_digest_value,
+        "--expected-generation-digest",
+        generation_digest,
+        "--startup-probe",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            cwd=repository / "backend",
+            capture_output=True,
+            text=True,
+            timeout=_G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS,
+            check=False,
+        )
+        report = json.loads(result.stdout)
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return False
+    return (
+        result.returncode == 0
+        and report.get("status") == "V4_MONITOR_STARTUP_PROBE_CLEAR_NO_POST"
+        and report.get("runtime_risk_ready") is True
+        and report.get("dead_man_alive") is True
+        and report.get("heartbeat_chain_beat") is True
+        and report.get("broker_write") is False
+        and report.get("broker_post_count") == 0
+        and report.get("credential_read") is False
+        and report.get("private_api_read") is False
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", type=Path, required=True)
@@ -257,13 +310,53 @@ def main() -> int:
                 "broker_write=false actual_post_count=0"
             )
             return 2
+    if getattr(generation, "generation_label", "") == _G040_GENERATION_LABEL:
+        process_lock = H11AutoProcessLock(state_root / "process.lock")
+        if not process_lock.acquire():
+            print(
+                "status=MONITOR_LAUNCHAGENT_PROCESS_LOCK_BLOCKED_"
+                "NO_MARKER_CLAIMED "
+                "failure_class=G040_RUNTIME_PROCESS_LOCK_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
+        process_lock.release()
+        if not _probe_g040_launchd_runtime_startup(
+            repository=repository,
+            user_id=os.getuid(),
+            python_executable=Path(sys.executable),
+            reviewed_files_digest_value=digest,
+            generation_digest=generation.digest,
+        ):
+            print(
+                "status=MONITOR_LAUNCHAGENT_RUNTIME_STARTUP_BLOCKED_"
+                "NO_MARKER_CLAIMED "
+                "failure_class=G040_RUNTIME_STARTUP_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
     begin_state = V4MonitorLaunchagentBeginState.PRE_BEGIN
     try:
         external_gate = load_external_preparation_gate(repository=repository)
         ledger = V4PreparationAttemptLedger(external_gate=external_gate)
         operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
+        runtime_carry_forward = None
+        if getattr(generation, "generation_label", "") == _G040_GENERATION_LABEL:
+            runtime_carry_forward = (
+                load_g040_runtime_only_carry_forward_evidence(
+                    repository=repository,
+                    external_gate=external_gate,
+                    generation_digest=generation.digest,
+                )
+            )
         begin_state = V4MonitorLaunchagentBeginState.BEGIN_INDETERMINATE
-        operation_permit = ledger.begin(operation)
+        if runtime_carry_forward is None:
+            operation_permit = ledger.begin(operation)
+        else:
+            operation_permit = ledger.begin_g040_runtime_only_monitor(
+                repository=repository,
+                generation_digest=generation.digest,
+            )
         begin_state = V4MonitorLaunchagentBeginState.MARKER_PERSISTED
         require_operation_permit(
             operation_permit,
@@ -279,6 +372,27 @@ def main() -> int:
             expected_generation_digest=generation.digest,
             wall_clock=lambda: datetime.now(UTC),
         )
+        if getattr(generation, "generation_label", "") == _G040_GENERATION_LABEL:
+            try:
+                heartbeat = json.loads(
+                    (state_root / "supervisor-heartbeat.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+            except (OSError, json.JSONDecodeError) as error:
+                raise V4GmoLaunchdError(
+                    "G040_RUNTIME_HEARTBEAT_NOT_CLEAR"
+                ) from error
+            if (
+                heartbeat.get("runtime_risk_ready") is not True
+                or heartbeat.get("dead_man_alive") is not True
+                or heartbeat.get("heartbeat_chain_beat") is not True
+                or heartbeat.get("broker_write") is not False
+                or heartbeat.get("actual_post_count") != 0
+            ):
+                raise V4GmoLaunchdError(
+                    "G040_RUNTIME_SAFETY_NOT_CLEAR"
+                )
         safe_report = result.to_safe_dict()
         _attest_monitor_launchagent_success_internal(
             operation_permit,

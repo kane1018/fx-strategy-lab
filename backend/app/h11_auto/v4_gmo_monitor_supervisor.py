@@ -15,14 +15,26 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.h11_auto.persistence import H11AutoProcessLock
+from app.h11_auto.runtime_safety import DeadManStore, PhaseBRiskStore
 from app.h11_auto.v4_gmo_actual_coordinator import V4GmoActualCoordinatorStore
 from app.h11_auto.v4_gmo_contracts import (
     v4_gmo_scheduled_time_exit_at,
     v4_gmo_trading_day_jst,
     v4_gmo_weekend_flat_target_at,
 )
-from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
+from app.h11_auto.v4_gmo_generation import (
+    V4GmoFrozenGeneration,
+    v4_gmo_dead_man_policy,
+    v4_gmo_risk_policy,
+)
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
+from app.services.h11_v4_g038_unattended_activation import (
+    verify_g038_generation_activation,
+)
+from app.services.h11_v4_unattended_live_heartbeat_chain import (
+    V4HeartbeatChainStore,
+    v4_unattended_runtime_heartbeat_policy,
+)
 
 
 class V4GmoMonitorSupervisorError(RuntimeError):
@@ -39,6 +51,9 @@ class V4GmoMonitorTick:
     exit_dispatch_required: bool
     flat_target_missed: bool
     persistent_halt: bool
+    runtime_risk_ready: bool = False
+    dead_man_alive: bool = False
+    heartbeat_chain_beat: bool = False
     broker_read: bool = False
     broker_write: bool = False
     actual_post_count: int = 0
@@ -70,6 +85,10 @@ class V4GmoMonitorSupervisor:
         if now_utc.tzinfo is None or not self.lock.held:
             raise V4GmoMonitorSupervisorError("V4_SUPERVISOR_TICK_INVALID")
         now_utc = now_utc.astimezone(UTC)
+        runtime_safety_ready = False
+        if self.generation.generation_label == "H11_AUTO_30M_20260729_G040":
+            self._maintain_g040_runtime_safety(now_utc=now_utc)
+            runtime_safety_ready = True
         database = self.state_root / "coordinator.sqlite3"
         if not database.is_file() or database.is_symlink():
             tick = V4GmoMonitorTick(
@@ -81,6 +100,9 @@ class V4GmoMonitorSupervisor:
                 exit_dispatch_required=False,
                 flat_target_missed=False,
                 persistent_halt=False,
+                runtime_risk_ready=runtime_safety_ready,
+                dead_man_alive=runtime_safety_ready,
+                heartbeat_chain_beat=runtime_safety_ready,
             )
             self._write_heartbeat(tick)
             return tick
@@ -144,9 +166,50 @@ class V4GmoMonitorSupervisor:
             exit_dispatch_required=dispatch_required,
             flat_target_missed=flat_target_missed,
             persistent_halt=persistent_halt,
+            runtime_risk_ready=runtime_safety_ready,
+            dead_man_alive=runtime_safety_ready,
+            heartbeat_chain_beat=runtime_safety_ready,
         )
         self._write_heartbeat(tick)
         return tick
+
+    def _maintain_g040_runtime_safety(self, *, now_utc: datetime) -> None:
+        risk_policy = v4_gmo_risk_policy()
+        target_risk_store = PhaseBRiskStore(
+            self.state_root / "risk.json",
+            policy=risk_policy,
+        )
+        if not target_risk_store.path.exists():
+            release = verify_g038_generation_activation(generation=self.generation)
+            source_risk_store = PhaseBRiskStore(
+                v4_gmo_runtime_state_root(
+                    repository=self.repository,
+                    generation_digest=(
+                        release.predecessor_halt_generation_digest
+                    ),
+                )
+                / "risk.json",
+                policy=risk_policy,
+            )
+            if (
+                source_risk_store.path.is_symlink()
+                or not source_risk_store.path.is_file()
+            ):
+                raise V4GmoMonitorSupervisorError(
+                    "V4_SUPERVISOR_SOURCE_RISK_STATE_MISSING"
+                )
+            target_risk_store.save(source_risk_store.load())
+        else:
+            target_risk_store.load()
+        dead_man_store = DeadManStore(
+            self.state_root / "dead-man.json",
+            policy=v4_gmo_dead_man_policy(),
+        )
+        dead_man_store.heartbeat(heartbeat_utc=now_utc)
+        V4HeartbeatChainStore(
+            self.state_root / "unattended-heartbeat-chain.json",
+            policy=v4_unattended_runtime_heartbeat_policy(),
+        ).beat(now_utc=now_utc)
 
     def run_forever(
         self,
@@ -164,6 +227,11 @@ class V4GmoMonitorSupervisor:
                     self.run_tick(now_utc=wall_clock())
                 except Exception:  # noqa: BLE001
                     self._latch_halt_on_internal_failure(wall_clock())
+                    if (
+                        self.generation.generation_label
+                        == "H11_AUTO_30M_20260729_G040"
+                    ):
+                        raise
                 wait(interval_seconds)
         finally:
             self.close()

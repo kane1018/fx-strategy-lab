@@ -23,6 +23,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 V4_UNATTENDED_HEARTBEAT_CHAIN_SCHEMA = "H11_V4_UNATTENDED_LIVE_HEARTBEAT_CHAIN_V1"
+V4_UNATTENDED_RUNTIME_HEARTBEAT_POLICY_LABEL = (
+    "H11_V4_UNATTENDED_SCHEDULER_CHAIN_V1"
+)
+V4_UNATTENDED_RUNTIME_HEARTBEAT_MAXIMUM_GAP_SECONDS = 60
+V4_UNATTENDED_RUNTIME_HEARTBEAT_MINIMUM_CONTINUOUS_SECONDS = 300
 
 
 class V4UnattendedLiveHeartbeatError(RuntimeError):
@@ -54,6 +59,18 @@ class V4HeartbeatChainPolicy:
     def digest(self) -> str:
         canonical = json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def v4_unattended_runtime_heartbeat_policy() -> V4HeartbeatChainPolicy:
+    return V4HeartbeatChainPolicy(
+        policy_label=V4_UNATTENDED_RUNTIME_HEARTBEAT_POLICY_LABEL,
+        maximum_gap_seconds=(
+            V4_UNATTENDED_RUNTIME_HEARTBEAT_MAXIMUM_GAP_SECONDS
+        ),
+        minimum_continuous_seconds=(
+            V4_UNATTENDED_RUNTIME_HEARTBEAT_MINIMUM_CONTINUOUS_SECONDS
+        ),
+    )
 
 
 @dataclass(frozen=True)
