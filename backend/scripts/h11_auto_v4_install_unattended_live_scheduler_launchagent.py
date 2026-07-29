@@ -15,7 +15,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from app.h11_auto.v4_actual_preparation_guard import reviewed_files_digest
+from app.h11_auto.v4_actual_preparation_guard import (
+    V4ActualPreparationGuardError,
+    load_completed_preparation_evidence,
+    load_external_preparation_gate,
+    reviewed_files_digest,
+)
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from app.h11_auto.v4_gmo_launchd import (
     V4GmoLaunchdDomainNotReady,
@@ -33,6 +38,7 @@ _LAUNCHCTL_TIMEOUT_SECONDS = {
     "bootout": 30.0,
     "bootstrap": 30.0,
 }
+_G039_GENERATION_LABEL = "H11_AUTO_30M_20260729_G039"
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -62,6 +68,19 @@ def main() -> int:
         repository=repository,
         implementation_digest=digest,
     )
+    if getattr(generation, "generation_label", "") == _G039_GENERATION_LABEL:
+        try:
+            external_gate = load_external_preparation_gate(repository=repository)
+            load_completed_preparation_evidence(
+                external_gate=external_gate,
+                generation_digest=generation.digest,
+            )
+        except V4ActualPreparationGuardError:
+            print(
+                "status=UNATTENDED_SCHEDULER_PREPARATION_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
     content = render_v4_gmo_unattended_scheduler_launchagent(
         repository=repository,
         generation=generation,

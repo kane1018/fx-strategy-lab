@@ -19,7 +19,7 @@
   "friday_entry_start_hour_jst": 9,
   "generation_label": "H11_AUTO_30M_20260729_G039",
   "heartbeat_interval_seconds": 15,
-  "implementation_digest": "sha256:ac128a165fdb689da526db2d06f02754ce6255312f85e0b3ddc26f8f3078b611",
+  "implementation_digest": "sha256:16ecc53785ddc050952e1604b4c2ce1755b4bba7d74b8c46c579df16034c5007",
   "live_ready": false,
   "maximum_consecutive_losses": 5,
   "maximum_entries_per_day": 30,

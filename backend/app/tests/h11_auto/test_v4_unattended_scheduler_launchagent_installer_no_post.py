@@ -91,6 +91,53 @@ def test_gui_domain_refusal_is_retry_safe_before_install(
     assert list(repository.rglob("*.plist")) == []
 
 
+def test_g039_requires_completed_preparation_before_render_or_launchctl(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    repository = tmp_path / "repo"
+    (repository / "backend").mkdir(parents=True)
+    digest = "sha256:" + ("a" * 64)
+    generation = SimpleNamespace(
+        digest="sha256:" + ("b" * 64),
+        implementation_digest=digest,
+        generation_label="H11_AUTO_30M_20260729_G039",
+    )
+    reached = {"render": False, "launchctl": False}
+
+    monkeypatch.setattr(
+        sys, "argv", ["installer", "--repository", str(repository)]
+    )
+    monkeypatch.setattr(installer_script, "reviewed_files_digest", lambda **_kw: digest)
+    monkeypatch.setattr(
+        installer_script, "load_v4_gmo_frozen_generation", lambda **_kw: generation
+    )
+    monkeypatch.setattr(
+        installer_script,
+        "load_external_preparation_gate",
+        lambda **_kw: (_ for _ in ()).throw(
+            installer_script.V4ActualPreparationGuardError(
+                "PREPARATION_SEQUENCE_NOT_COMPLETE"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        installer_script,
+        "render_v4_gmo_unattended_scheduler_launchagent",
+        lambda **_kw: reached.__setitem__("render", True),
+    )
+    monkeypatch.setattr(
+        installer_script,
+        "require_stable_v4_gmo_aqua_domain",
+        lambda **_kw: reached.__setitem__("launchctl", True),
+    )
+
+    assert installer_script.main() == 2
+    output = capsys.readouterr().out
+    assert "UNATTENDED_SCHEDULER_PREPARATION_NOT_CLEAR" in output
+    assert "broker_write=false" in output
+    assert reached == {"render": False, "launchctl": False}
+
+
 def test_successful_install_prints_broker_write_false(
     monkeypatch, tmp_path: Path, capsys
 ) -> None:
