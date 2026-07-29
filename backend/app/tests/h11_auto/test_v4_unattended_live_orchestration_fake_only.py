@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import json
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -137,6 +138,20 @@ def _authorization_artifact(state_root: Path) -> None:
         generation_digest=_GENERATION,
         reviewed_files_digest="sha256:" + "e" * 64,
         changed_at_utc=_NOW,
+    )
+    (path.parent / "daily-authorization.json").write_text(
+        json.dumps(
+            {
+                "schema": "H11_V4_UNATTENDED_LIVE_DAILY_AUTHORIZATION_V1",
+                "generation_digest": _GENERATION,
+                "trading_day_jst": "2026-07-24",
+                "maximum_entries": 1,
+                "operator_authorized": True,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
     )
 
 
@@ -480,7 +495,7 @@ def test_notification_sent_inside_driver_at_final_market_boundary(
     assert order == ["driver", "notify"]
 
 
-def test_second_call_same_day_is_allowed_while_persistent_arm_remains_clear(
+def test_second_call_same_day_is_refused_after_daily_authorization_consumption(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     driver = MagicMock(return_value="CANARY_RESULT")
@@ -492,8 +507,12 @@ def test_second_call_same_day_is_allowed_while_persistent_arm_remains_clear(
     stores = _healthy_stores(tmp_path)
     _run(tmp_path, stores=stores)
     assert driver.call_count == 1
-    _run(tmp_path, stores=stores)
-    assert driver.call_count == 2
+    with pytest.raises(
+        activation_module.V4GmoCanaryActivationError,
+        match="V4_CANARY_UNATTENDED_GATE_NOT_CLEAR",
+    ):
+        _run(tmp_path, stores=stores)
+    assert driver.call_count == 1
 
 
 def test_driver_failure_propagates_without_consuming_persistent_arm(
@@ -523,9 +542,12 @@ def test_driver_failure_propagates_without_consuming_persistent_arm(
         / "arm-state.json"
     )
     assert arm_state.is_file()
-    with pytest.raises(_DriverBoundaryError, match="BROKER_REJECTED"):
+    with pytest.raises(
+        activation_module.V4GmoCanaryActivationError,
+        match="V4_CANARY_UNATTENDED_GATE_NOT_CLEAR",
+    ):
         _run(tmp_path, stores=stores)
-    assert driver.call_count == 2
+    assert driver.call_count == 1
 
 
 def test_module_source_contains_no_exception_handlers_at_all() -> None:

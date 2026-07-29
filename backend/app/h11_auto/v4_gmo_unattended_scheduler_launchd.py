@@ -161,6 +161,19 @@ def install_and_restart_v4_gmo_unattended_scheduler_launchagent(
             "V4_UNATTENDED_SCHEDULER_LAUNCHD_INSTALL_ARGUMENT_INVALID"
         )
     plist_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        parsed = plistlib.loads(plist_content)
+        stdout_path = Path(parsed["StandardOutPath"])
+        stderr_path = Path(parsed["StandardErrorPath"])
+    except (KeyError, TypeError, ValueError, plistlib.InvalidFileException) as error:
+        raise V4GmoUnattendedSchedulerLaunchdError(
+            "V4_UNATTENDED_SCHEDULER_LAUNCHD_INSTALL_ARGUMENT_INVALID"
+        ) from error
+    if stdout_path.parent != stderr_path.parent or stdout_path.parent.is_symlink():
+        raise V4GmoUnattendedSchedulerLaunchdError(
+            "V4_UNATTENDED_SCHEDULER_LAUNCHD_INSTALL_ARGUMENT_INVALID"
+        )
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = plist_path.with_suffix(".plist.tmp")
     if temporary.is_symlink():
         raise V4GmoUnattendedSchedulerLaunchdError(

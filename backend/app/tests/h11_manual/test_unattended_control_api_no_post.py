@@ -38,6 +38,30 @@ def _install_contract(monkeypatch, tmp_path: Path, *, supported: bool = True) ->
         lambda **_kw: tmp_path / "arm-state.json",
     )
     monkeypatch.setattr(subject, "require_clean_main", lambda **_kw: None)
+    monkeypatch.setattr(
+        subject,
+        "check_operator_daily_authorization",
+        lambda **_kw: SimpleNamespace(authorized=True, blocked_reasons=()),
+    )
+    if supported:
+        monkeypatch.setattr(
+            subject,
+            "verify_g038_generation_activation",
+            lambda **_kw: SimpleNamespace(successor_activation_released=True),
+        )
+        monkeypatch.setattr(
+            subject,
+            "verify_g038_scheduler_binding",
+            lambda **_kw: None,
+        )
+    else:
+        monkeypatch.setattr(
+            subject,
+            "verify_g038_generation_activation",
+            lambda **_kw: (_ for _ in ()).throw(
+                subject.V4G038ActivationError("G038_GENERATION_NOT_ACTIVATED")
+            ),
+        )
 
 
 def test_status_and_on_off_are_local_state_only(monkeypatch, tmp_path) -> None:

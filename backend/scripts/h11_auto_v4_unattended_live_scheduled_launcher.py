@@ -58,6 +58,11 @@ from app.h11_auto.v4_gmo_generation import (
 )
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from app.services import h11_v4_gmo_g013_canary as canary_module
+from app.services.h11_v4_g038_unattended_activation import (
+    V4G038ActivationError,
+    record_g038_scheduler_heartbeat,
+    verify_g038_generation_activation,
+)
 from app.services.h11_v4_gmo_g013_canary import prepare_g013_canary_session
 from app.services.h11_v4_notification_actual_preparation import (
     H11V4NotificationCredentialBundle,
@@ -145,6 +150,15 @@ def main(argv: list[str]) -> int:
     ):
         print(
             "status=UNATTENDED_SCHEDULER_GENERATION_NOT_COMMISSIONED "
+            "broker_write=false actual_post_count=0"
+        )
+        return 0
+    try:
+        verify_g038_generation_activation(generation=generation)
+        record_g038_scheduler_heartbeat(generation=generation)
+    except V4G038ActivationError:
+        print(
+            "status=UNATTENDED_SCHEDULER_ACTIVATION_EVIDENCE_NOT_CLEAR "
             "broker_write=false actual_post_count=0"
         )
         return 0

@@ -36,6 +36,7 @@ from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 
 V4_GMO_GENERATION_SCHEMA = "H11_AUTO_GENERATION_V4_GMO_FRIDAY_LIMITED_V2"
 V4_GMO_GENERATION_STATUS = "OPERATOR_FROZEN_NOT_ACTIVATED"
+V4_GMO_UNATTENDED_ACTIVATED_STATUS = "UNATTENDED_LIVE_COMMISSIONED"
 V4_GMO_GENERATION_ARTIFACT = Path(
     "docs/templates/h11_v4_gmo_frozen_generation.json"
 )
@@ -95,12 +96,16 @@ class V4GmoFrozenGeneration:
     actual_post_authorized: bool = False
     live_ready: bool = False
     unattended_live_supported: bool = False
+    activation_source_generation_digest: str | None = None
+    successful_canary_evidence_digest: str | None = None
+    successor_halt_release_digest: str | None = None
 
     def __post_init__(self) -> None:
         selections = V4ApprovedOperatorSelections()
         requirements = (
             self.schema == V4_GMO_GENERATION_SCHEMA,
-            self.status == V4_GMO_GENERATION_STATUS,
+            self.status
+            in {V4_GMO_GENERATION_STATUS, V4_GMO_UNATTENDED_ACTIVATED_STATUS},
             bool(_LABEL.fullmatch(self.generation_label)),
             bool(_SHA256.fullmatch(self.implementation_digest)),
             self.operator_selection_digest == selections.digest,
@@ -154,8 +159,25 @@ class V4GmoFrozenGeneration:
                 and bool(_SHA256.fullmatch(self.reconciliation_contract_digest))
             ),
             self.actual_post_authorized is False,
-            self.live_ready is False,
-            self.unattended_live_supported is False,
+            (
+                self.status == V4_GMO_GENERATION_STATUS
+                and self.live_ready is False
+                and self.unattended_live_supported is False
+                and self.activation_source_generation_digest is None
+                and self.successful_canary_evidence_digest is None
+                and self.successor_halt_release_digest is None
+            )
+            or (
+                self.status == V4_GMO_UNATTENDED_ACTIVATED_STATUS
+                and self.live_ready is True
+                and self.unattended_live_supported is True
+                and isinstance(self.activation_source_generation_digest, str)
+                and bool(_SHA256.fullmatch(self.activation_source_generation_digest))
+                and isinstance(self.successful_canary_evidence_digest, str)
+                and bool(_SHA256.fullmatch(self.successful_canary_evidence_digest))
+                and isinstance(self.successor_halt_release_digest, str)
+                and bool(_SHA256.fullmatch(self.successor_halt_release_digest))
+            ),
         )
         if not all(requirements):
             raise V4GmoGenerationError("v4 GMO frozen generation mismatch")

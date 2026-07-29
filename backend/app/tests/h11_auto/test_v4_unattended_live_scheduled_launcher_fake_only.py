@@ -129,6 +129,16 @@ def _valid_digests(monkeypatch, generation_digest: str) -> tuple[str, str]:
             check=lambda **_kw: SimpleNamespace(armed=True, blocked_reasons=())
         ),
     )
+    monkeypatch.setattr(
+        launcher,
+        "verify_g038_generation_activation",
+        lambda **_kw: SimpleNamespace(successor_activation_released=True),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "record_g038_scheduler_heartbeat",
+        lambda **_kw: None,
+    )
     return reviewed_digest, generation_digest
 
 

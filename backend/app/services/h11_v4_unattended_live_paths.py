@@ -30,6 +30,7 @@ V4_UNATTENDED_OPERATIONAL_READINESS_FILENAME = "operational-readiness-no-post.js
 V4_UNATTENDED_G037_CANARY_EVIDENCE_FILENAME = (
     "g037-successful-canary-evidence-no-post.json"
 )
+V4_UNATTENDED_G038_RELEASE_FILENAME = "g038-successor-halt-release-no-post.json"
 DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT = (
     Path.home() / "Library" / "Application Support" / "fx-strategy-lab-h11-v4-unattended-live"
 )
@@ -102,6 +103,21 @@ def v4_unattended_g037_canary_evidence_path(
             state_root=state_root, generation_digest=generation_digest
         )
         / V4_UNATTENDED_G037_CANARY_EVIDENCE_FILENAME
+    )
+
+
+def v4_unattended_g038_release_path(
+    *,
+    state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    target_reviewed_files_digest: str,
+) -> Path:
+    normalized = _require_generation_digest(target_reviewed_files_digest)
+    return (
+        state_root.resolve()
+        / V4_UNATTENDED_LIVE_STATE_RELATIVE
+        / "activation-releases"
+        / f"reviewed-{normalized}"
+        / V4_UNATTENDED_G038_RELEASE_FILENAME
     )
 
 

@@ -29,14 +29,23 @@ from app.h11_auto.v4_gmo_generation import (
     v4_gmo_risk_policy,
 )
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
+from app.services.h11_v4_g038_unattended_activation import (
+    V4G038ActivationError,
+    verify_g038_generation_activation,
+    verify_g038_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
     V4UnattendedLiveArmStore,
 )
+from app.services.h11_v4_unattended_live_authorization import (
+    check_operator_daily_authorization,
+)
 from app.services.h11_v4_unattended_live_paths import (
     DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
     v4_unattended_live_arm_state_path,
+    v4_unattended_live_daily_authorization_path,
 )
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
@@ -106,20 +115,41 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         expected_generation_digest=contract.generation.digest,
         expected_reviewed_files_digest=contract.reviewed_files_digest,
     )
-    supported = (
-        contract.generation.live_ready is True
-        and contract.generation.unattended_live_supported is True
-    )
+    try:
+        verify_g038_generation_activation(generation=contract.generation)
+        verify_g038_scheduler_binding(
+            generation=contract.generation,
+            plist_path=(
+                Path.home()
+                / "Library"
+                / "LaunchAgents"
+                / "com.fxstrategylab.h11v4.unattended.scheduler.plist"
+            ),
+            now_utc=datetime.now(UTC),
+        )
+        supported = True
+    except V4G038ActivationError:
+        supported = False
     runtime_state, entries_today = _runtime_projection(contract)
+    authorization = check_operator_daily_authorization(
+        artifact_path=v4_unattended_live_daily_authorization_path(
+            generation_digest=contract.generation.digest,
+        ),
+        expected_generation_digest=contract.generation.digest,
+        now_utc=datetime.now(UTC),
+    )
     if runtime_state == "HALTED":
         effective_state = "HALTED"
         reason = "RUNTIME_STATE_NOT_CLEAR"
     elif not check.armed and runtime_state == "POSITION_OPEN":
         effective_state = "EXIT_ONLY"
         reason = "OPERATOR_DISARMED_EXIT_MANAGEMENT_CONTINUES"
-    elif check.armed and supported:
+    elif check.armed and supported and authorization.authorized:
         effective_state = "ON_WAITING"
         reason = "RUNTIME_GATES_PENDING"
+    elif check.armed and supported:
+        effective_state = "ON_WAITING"
+        reason = authorization.blocked_reasons[0]
     elif check.armed:
         effective_state = "HALTED"
         reason = "GENERATION_NOT_COMMISSIONED_FOR_UNATTENDED_LIVE"
@@ -139,6 +169,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         "revision": check.revision,
         "reviewed_files_digest": contract.reviewed_files_digest,
         "unattended_live_supported": supported,
+        "daily_authorization_clear": authorization.authorized,
     }
     if csrf_token is not None:
         result["csrf_token"] = csrf_token
@@ -239,6 +270,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
             raise V4UnattendedLiveArmStateError(
                 "GENERATION_NOT_COMMISSIONED_FOR_UNATTENDED_LIVE"
             )
+        verify_g038_generation_activation(generation=contract.generation)
         _arm_store(contract).set_desired_state(
             desired_state=V4ArmDesiredState.ARMED,
             expected_revision=request_body.expected_revision,
@@ -251,6 +283,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         V4ActualPreparationGuardError,
         V4GmoGenerationError,
         V4UnattendedLiveArmStateError,
+        V4G038ActivationError,
         OSError,
         ValueError,
     ) as error:
