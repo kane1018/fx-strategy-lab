@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -10,6 +11,75 @@ import pytest
 
 from app.services import h11_v4_gmo_signal_preview as preview
 from app.shadow.gmo_public import Candle, GmoPublicError
+
+
+def test_preview_uses_canonical_generation_binding_without_legacy_label_gate() -> None:
+    source = inspect.getsource(preview._load_prerequisite)
+
+    assert "generation.generation_label" not in source
+    assert "implementation_digest=digest" in source
+    assert 'evidence.get("generation_manifest_digest") != generation.digest' in source
+    assert 'generation.strategy_version != "SHORT_V1"' in source
+    assert 'generation.selected_horizon != "30m"' in source
+    assert 'generation.symbol != "USD_JPY"' in source
+    assert "generation.quantity_units != 1_000" in source
+    assert "generation.actual_post_authorized is not False" in source
+
+
+@pytest.mark.parametrize(
+    ("stale_field", "expected_error"),
+    [
+        ("reviewed_files_digest", "G013_PREVIEW_REVIEW_BOUNDARY_INVALID"),
+        ("generation_manifest_digest", "G013_PREVIEW_GENERATION_INVALID"),
+    ],
+)
+def test_load_prerequisite_accepts_current_generation_and_rejects_stale_binding(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    stale_field: str,
+    expected_error: str,
+) -> None:
+    digest = "sha256:" + "1" * 64
+    generation = _generation()
+    generation.generation_label = "H11_AUTO_30M_20260729_G033"
+    evidence = {
+        "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
+        "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST",
+        "reviewed_files_digest": digest,
+        "generation_manifest_digest": generation.digest,
+        "broker_post_authorized": False,
+        "activation_permit_issued": False,
+        "focused_tests_passed": True,
+        "related_tests_passed": True,
+        "ruff_passed": True,
+        "diff_check_passed": True,
+        "danger_scan_passed": True,
+        "architecture_review_clear": True,
+        "safety_review_clear": True,
+        "operations_review_clear": True,
+    }
+    artifact_path = tmp_path / preview.PREPARATION_ARTIFACT
+    generation_path = tmp_path / preview.V4_GMO_GENERATION_ARTIFACT
+    artifact_path.parent.mkdir(parents=True)
+    generation_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(json.dumps(evidence), encoding="utf-8")
+    generation_path.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(preview, "require_clean_main", lambda **_kwargs: None)
+    monkeypatch.setattr(preview, "reviewed_files_digest", lambda **_kwargs: digest)
+    monkeypatch.setattr(
+        preview,
+        "load_v4_gmo_frozen_generation",
+        lambda *, repository, implementation_digest: generation,
+    )
+
+    prerequisite = preview._load_prerequisite(repository=tmp_path)
+    assert prerequisite.generation is generation
+    assert prerequisite.reviewed_files_digest == digest
+
+    evidence[stale_field] = "sha256:" + "0" * 64
+    artifact_path.write_text(json.dumps(evidence), encoding="utf-8")
+    with pytest.raises(preview.G013SignalPreviewError, match=expected_error):
+        preview._load_prerequisite(repository=tmp_path)
 
 
 def _generation() -> SimpleNamespace:
