@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 
 from app.h11_auto.persistence import H11AutoPersistenceError, H11AutoProcessLock
@@ -24,8 +24,28 @@ from h11_v4_reviewed_digest import (
 )
 
 
+class V4PreparationFailureCode(StrEnum):
+    OPERATION_PERMIT_INVALID = "PREPARATION_OPERATION_PERMIT_INVALID"
+    STATE_SYMLINK_FORBIDDEN = "PREPARATION_STATE_SYMLINK_FORBIDDEN"
+    ATTEMPT_LOCK_INVALID = "PREPARATION_ATTEMPT_LOCK_INVALID"
+    OPERATION_IN_PROGRESS = "PREPARATION_OPERATION_IN_PROGRESS"
+    SEQUENCE_PREVIOUS_NOT_CLEAR = "PREPARATION_SEQUENCE_PREVIOUS_NOT_CLEAR"
+    OPERATION_ALREADY_ATTEMPTED = "PREPARATION_OPERATION_ALREADY_ATTEMPTED"
+    GENERATION_TERMINAL_UNRESOLVED = (
+        "PREPARATION_GENERATION_TERMINAL_UNRESOLVED"
+    )
+    ATTEMPT_NOT_PERSISTED = "PREPARATION_ATTEMPT_NOT_PERSISTED"
+    ATTEMPT_STATE_INVALID = "PREPARATION_ATTEMPT_STATE_INVALID"
+    PASS_ALREADY_EXISTS = "PREPARATION_PASS_ALREADY_EXISTS"
+    PASS_NOT_PERSISTED = "PREPARATION_PASS_NOT_PERSISTED"
+
+
 class V4ActualPreparationGuardError(RuntimeError):
-    """Fixed safe preparation guard failure."""
+    """Fixed safe preparation guard failure with optional typed code."""
+
+    def __init__(self, code: V4PreparationFailureCode | str) -> None:
+        self.code = code if isinstance(code, V4PreparationFailureCode) else None
+        super().__init__(code.value if self.code is not None else code)
 
 
 CommandRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
@@ -320,7 +340,9 @@ class V4PreparationOperationPermit:
         attempt_token: str,
     ) -> None:
         if token is not _PERMIT_TOKEN:
-            raise V4ActualPreparationGuardError("PREPARATION_OPERATION_PERMIT_INVALID")
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.OPERATION_PERMIT_INVALID
+            )
         self._token = token
         self._operation = operation
         self._claimed = False
@@ -350,7 +372,9 @@ def require_operation_permit(
     """Accept only an opaque permit minted by the fixed preparation ledger."""
 
     if claim and require_completed:
-        raise V4ActualPreparationGuardError("PREPARATION_OPERATION_PERMIT_INVALID")
+        raise V4ActualPreparationGuardError(
+            V4PreparationFailureCode.OPERATION_PERMIT_INVALID
+        )
     if (
         type(permit) is not V4PreparationOperationPermit
         or getattr(permit, "_token", None) is not _PERMIT_TOKEN
@@ -359,11 +383,13 @@ def require_operation_permit(
         or (require_completed and not _valid_completion_digest(permit._completion_digest))
         or (not require_completed and permit._completion_digest is not None)
     ):
-        raise V4ActualPreparationGuardError("PREPARATION_OPERATION_PERMIT_INVALID")
+        raise V4ActualPreparationGuardError(
+            V4PreparationFailureCode.OPERATION_PERMIT_INVALID
+        )
     if claim:
         if permit._claimed:
             raise V4ActualPreparationGuardError(
-                "PREPARATION_OPERATION_PERMIT_INVALID"
+                V4PreparationFailureCode.OPERATION_PERMIT_INVALID
             )
         permit._claimed = True
     return permit
@@ -690,7 +716,9 @@ class V4PreparationAttemptLedger:
             unresolved.parent.parent.parent,
         )
         if any(candidate.is_symlink() for candidate in path_candidates):
-            raise V4ActualPreparationGuardError("PREPARATION_STATE_SYMLINK_FORBIDDEN")
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.STATE_SYMLINK_FORBIDDEN
+            )
         self.state_root = unresolved.resolve()
         self._reviewed_files_digest = (
             external_gate.reviewed_digest_for_internal_preparation_only()
@@ -717,10 +745,12 @@ class V4PreparationAttemptLedger:
             acquired = lock.acquire()
         except H11AutoPersistenceError as error:
             raise V4ActualPreparationGuardError(
-                "PREPARATION_ATTEMPT_LOCK_INVALID"
+                V4PreparationFailureCode.ATTEMPT_LOCK_INVALID
             ) from error
         if not acquired:
-            raise V4ActualPreparationGuardError("PREPARATION_OPERATION_IN_PROGRESS")
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.OPERATION_IN_PROGRESS
+            )
         previous = _PREVIOUS_OPERATION[operation]
         if previous is not None and not self._marker_matches_review(
             self._marker(previous, "passed"),
@@ -729,24 +759,24 @@ class V4PreparationAttemptLedger:
         ):
             lock.release()
             raise V4ActualPreparationGuardError(
-                "PREPARATION_SEQUENCE_PREVIOUS_NOT_CLEAR"
+                V4PreparationFailureCode.SEQUENCE_PREVIOUS_NOT_CLEAR
             )
         started = self._marker(operation, "started")
         passed = self._marker(operation, "passed")
         if passed.exists():
             lock.release()
             raise V4ActualPreparationGuardError(
-                "PREPARATION_OPERATION_ALREADY_ATTEMPTED"
+                V4PreparationFailureCode.OPERATION_ALREADY_ATTEMPTED
             )
         if started.is_symlink():
             lock.release()
             raise V4ActualPreparationGuardError(
-                "PREPARATION_STATE_SYMLINK_FORBIDDEN"
+                V4PreparationFailureCode.STATE_SYMLINK_FORBIDDEN
             )
         if self._has_unresolved_attempt():
             lock.release()
             raise V4ActualPreparationGuardError(
-                "PREPARATION_GENERATION_TERMINAL_UNRESOLVED"
+                V4PreparationFailureCode.GENERATION_TERMINAL_UNRESOLVED
             )
         attempt_token = uuid.uuid4().hex
         try:
@@ -760,11 +790,13 @@ class V4PreparationAttemptLedger:
         except FileExistsError as error:
             lock.release()
             raise V4ActualPreparationGuardError(
-                "PREPARATION_ATTEMPT_NOT_PERSISTED"
+                V4PreparationFailureCode.ATTEMPT_NOT_PERSISTED
             ) from error
         except OSError as error:
             lock.release()
-            raise V4ActualPreparationGuardError("PREPARATION_ATTEMPT_NOT_PERSISTED") from error
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.ATTEMPT_NOT_PERSISTED
+            ) from error
         return V4PreparationOperationPermit(
             token=_PERMIT_TOKEN,
             operation=operation,
@@ -792,7 +824,9 @@ class V4PreparationAttemptLedger:
             expected_status="ATTEMPT_STARTED",
             expected_attempt_token=operation_permit._attempt_token,
         ) or passed.exists():
-            raise V4ActualPreparationGuardError("PREPARATION_ATTEMPT_STATE_INVALID")
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.ATTEMPT_STATE_INVALID
+            )
         try:
             self._write_marker(
                 passed,
@@ -805,10 +839,12 @@ class V4PreparationAttemptLedger:
             )
         except FileExistsError as error:
             raise V4ActualPreparationGuardError(
-                "PREPARATION_PASS_ALREADY_EXISTS"
+                V4PreparationFailureCode.PASS_ALREADY_EXISTS
             ) from error
         except OSError as error:
-            raise V4ActualPreparationGuardError("PREPARATION_PASS_NOT_PERSISTED") from error
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.PASS_NOT_PERSISTED
+            ) from error
         finally:
             lock = self._locks.get(operation)
             if lock is not None and lock.held:

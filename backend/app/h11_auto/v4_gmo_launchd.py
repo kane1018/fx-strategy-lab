@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
@@ -17,12 +18,37 @@ from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 V4_GMO_MONITOR_LABEL = "com.fxstrategylab.h11v4.g013.monitor"
 
 
+class V4GmoLaunchdFailureCode(StrEnum):
+    GUI_DOMAIN_NOT_READY = "V4_LAUNCHD_GUI_DOMAIN_NOT_READY"
+    PATH_INVALID = "V4_LAUNCHD_PATH_INVALID"
+    INSTALL_ARGUMENT_INVALID = "V4_LAUNCHD_INSTALL_ARGUMENT_INVALID"
+    SERVICE_STATE_UNKNOWN = "V4_LAUNCHD_SERVICE_STATE_UNKNOWN"
+    BOOTOUT_FAILED = "V4_LAUNCHD_BOOTOUT_FAILED"
+    HEARTBEAT_STATE_UNKNOWN = "V4_LAUNCHD_HEARTBEAT_STATE_UNKNOWN"
+    BOOTSTRAP_FAILED = "V4_LAUNCHD_BOOTSTRAP_FAILED"
+    SERVICE_NOT_RUNNING = "V4_LAUNCHD_SERVICE_NOT_RUNNING"
+    HEARTBEAT_NOT_CLEAR = "V4_LAUNCHD_HEARTBEAT_NOT_CLEAR"
+    COMMAND_TIMEOUT = "V4_LAUNCHD_COMMAND_TIMEOUT"
+    PRINT_TIMEOUT = "V4_LAUNCHD_PRINT_TIMEOUT"
+    BOOTOUT_TIMEOUT = "V4_LAUNCHD_BOOTOUT_TIMEOUT"
+    BOOTSTRAP_TIMEOUT = "V4_LAUNCHD_BOOTSTRAP_TIMEOUT"
+
+
 class V4GmoLaunchdError(RuntimeError):
-    """Fixed safe LaunchAgent failure."""
+    """Typed fixed-safe LaunchAgent failure."""
+
+    def __init__(self, code: V4GmoLaunchdFailureCode | str) -> None:
+        self.code = code if isinstance(code, V4GmoLaunchdFailureCode) else None
+        super().__init__(code.value if self.code is not None else code)
 
 
 class V4GmoLaunchdDomainNotReady(V4GmoLaunchdError):
     """Retry-safe refusal before the operation 60 marker is claimed."""
+
+
+V4_GMO_LAUNCHD_SAFE_FAILURE_CODES = frozenset(
+    code.value for code in V4GmoLaunchdFailureCode
+)
 
 
 @dataclass(frozen=True)
@@ -58,7 +84,7 @@ def render_v4_gmo_monitor_launchagent(
     repository = repository.resolve()
     python_executable = python_executable.resolve()
     if not repository.is_dir() or not python_executable.is_file():
-        raise V4GmoLaunchdError("V4_LAUNCHD_PATH_INVALID")
+        raise V4GmoLaunchdError(V4GmoLaunchdFailureCode.PATH_INVALID)
     state_root = v4_gmo_runtime_state_root(
         repository=repository,
         generation_digest=generation.digest,
@@ -101,12 +127,14 @@ def require_stable_v4_gmo_aqua_domain(
     """Fail closed before op60 if the GUI login domain is still transitioning."""
 
     if user_id < 1:
-        raise V4GmoLaunchdDomainNotReady("V4_LAUNCHD_GUI_DOMAIN_NOT_READY")
+        raise V4GmoLaunchdDomainNotReady(
+            V4GmoLaunchdFailureCode.GUI_DOMAIN_NOT_READY
+        )
     try:
         state = runner(["launchctl", "print", f"gui/{user_id}"])
     except (OSError, subprocess.TimeoutExpired) as error:
         raise V4GmoLaunchdDomainNotReady(
-            "V4_LAUNCHD_GUI_DOMAIN_NOT_READY"
+            V4GmoLaunchdFailureCode.GUI_DOMAIN_NOT_READY
         ) from error
     required_markers = (
         "type = login",
@@ -119,7 +147,9 @@ def require_stable_v4_gmo_aqua_domain(
         or not state.stdout
         or any(marker not in state.stdout for marker in required_markers)
     ):
-        raise V4GmoLaunchdDomainNotReady("V4_LAUNCHD_GUI_DOMAIN_NOT_READY")
+        raise V4GmoLaunchdDomainNotReady(
+            V4GmoLaunchdFailureCode.GUI_DOMAIN_NOT_READY
+        )
 
 
 def install_and_restart_v4_gmo_monitor_launchagent(
@@ -150,23 +180,29 @@ def install_and_restart_v4_gmo_monitor_launchagent(
         or len(expected_generation_digest.removeprefix("sha256:")) != 64
         or not 0 < heartbeat_timeout_seconds <= 60.0
     ):
-        raise V4GmoLaunchdError("V4_LAUNCHD_INSTALL_ARGUMENT_INVALID")
+        raise V4GmoLaunchdError(
+            V4GmoLaunchdFailureCode.INSTALL_ARGUMENT_INVALID
+        )
     plist_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = plist_path.with_suffix(".plist.tmp")
     if temporary.is_symlink():
-        raise V4GmoLaunchdError("V4_LAUNCHD_INSTALL_ARGUMENT_INVALID")
+        raise V4GmoLaunchdError(
+            V4GmoLaunchdFailureCode.INSTALL_ARGUMENT_INVALID
+        )
     temporary.write_bytes(plist_content)
     domain = f"gui/{user_id}"
     service = f"{domain}/{V4_GMO_MONITOR_LABEL}"
     service_state = runner(["launchctl", "print", service])
     if service_state.returncode not in {0, 113}:
-        raise V4GmoLaunchdError("V4_LAUNCHD_SERVICE_STATE_UNKNOWN")
+        raise V4GmoLaunchdError(
+            V4GmoLaunchdFailureCode.SERVICE_STATE_UNKNOWN
+        )
     previous_service_present = service_state.returncode == 0
     previous_service_booted_out = False
     if previous_service_present:
         bootout = runner(["launchctl", "bootout", service])
         if bootout.returncode != 0:
-            raise V4GmoLaunchdError("V4_LAUNCHD_BOOTOUT_FAILED")
+            raise V4GmoLaunchdError(V4GmoLaunchdFailureCode.BOOTOUT_FAILED)
         previous_service_booted_out = True
     temporary.replace(plist_path)
     try:
@@ -174,14 +210,18 @@ def install_and_restart_v4_gmo_monitor_launchagent(
     except FileNotFoundError:
         previous_heartbeat_mtime_ns = None
     except OSError as error:
-        raise V4GmoLaunchdError("V4_LAUNCHD_HEARTBEAT_STATE_UNKNOWN") from error
+        raise V4GmoLaunchdError(
+            V4GmoLaunchdFailureCode.HEARTBEAT_STATE_UNKNOWN
+        ) from error
     bootstrap_started_at = wall_clock().astimezone(UTC)
     bootstrap = runner(["launchctl", "bootstrap", domain, str(plist_path)])
     if bootstrap.returncode != 0:
-        raise V4GmoLaunchdError("V4_LAUNCHD_BOOTSTRAP_FAILED")
+        raise V4GmoLaunchdError(V4GmoLaunchdFailureCode.BOOTSTRAP_FAILED)
     service_after_bootstrap = runner(["launchctl", "print", service])
     if service_after_bootstrap.returncode != 0:
-        raise V4GmoLaunchdError("V4_LAUNCHD_SERVICE_NOT_RUNNING")
+        raise V4GmoLaunchdError(
+            V4GmoLaunchdFailureCode.SERVICE_NOT_RUNNING
+        )
     deadline = monotonic_clock() + heartbeat_timeout_seconds
     heartbeat: dict[str, object] | None = None
     while monotonic_clock() < deadline:
@@ -214,7 +254,7 @@ def install_and_restart_v4_gmo_monitor_launchagent(
             break
         wait(0.25)
     if heartbeat is None:
-        raise V4GmoLaunchdError("V4_LAUNCHD_HEARTBEAT_NOT_CLEAR")
+        raise V4GmoLaunchdError(V4GmoLaunchdFailureCode.HEARTBEAT_NOT_CLEAR)
     return V4GmoLaunchdResult(
         installed=True,
         bootstrapped=True,
