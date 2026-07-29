@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from app.h11_auto import v4_actual_preparation_guard as guard_module
 from app.h11_auto import v4_gmo_monitor_supervisor as supervisor_module
 from app.h11_auto.runtime_safety import PhaseBRiskStore
 from app.h11_auto.v4_actual_preparation_guard import (
@@ -34,12 +36,22 @@ def test_runtime_only_carry_forward_cannot_be_publicly_minted() -> None:
         )
 
 
+def test_runtime_only_source_evidence_uses_recorded_source_day() -> None:
+    source = inspect.getsource(
+        guard_module.load_g040_runtime_only_carry_forward_evidence
+    )
+    assert "_G040_SOURCE_TRADING_DAY_JST}.started.json" in source
+    assert "_G040_SOURCE_TRADING_DAY_JST}.passed.json" in source
+    assert "target_ledger._trading_day_jst}.started.json" not in source
+    assert "target_ledger._trading_day_jst}.passed.json" not in source
+
+
 @pytest.mark.parametrize(
     "generation_label",
     (
         "H11_AUTO_30M_20260729_G040",
         "H11_AUTO_30M_20260729_G041",
-        "H11_AUTO_30M_20260730_G046",
+        "H11_AUTO_30M_20260730_G047",
     ),
 )
 def test_runtime_only_monitor_carries_risk_and_coordinator_baseline(

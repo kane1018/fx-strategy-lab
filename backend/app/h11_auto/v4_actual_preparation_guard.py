@@ -1205,11 +1205,12 @@ _G040_SOURCE_REVIEWED_FILES_DIGEST = (
 _G040_SOURCE_GENERATION_DIGEST = (
     "sha256:ff541122f94ba929edb5338918af2504f3edfe4401c8bde9bcf4cd56da1f5891"
 )
+_G040_SOURCE_TRADING_DAY_JST = "2026-07-29"
 _RUNTIME_CARRY_FORWARD_TOKEN = object()
 _RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
     "H11_AUTO_30M_20260729_G040",
     "H11_AUTO_30M_20260729_G041",
-    "H11_AUTO_30M_20260730_G046",
+    "H11_AUTO_30M_20260730_G047",
 }
 _G040_RUNTIME_CARRIED_OPERATIONS = tuple(
     operation
@@ -1269,7 +1270,7 @@ def load_g040_runtime_only_carry_forward_evidence(
     generation_digest: str,
     now_utc: datetime | None = None,
 ) -> V4RuntimeOnlyPreparationCarryForwardEvidence:
-    """Validate G039 00-50 without reusing its failed operation 60."""
+    """Validate G039 00-50 from its recorded day without reusing operation 60."""
 
     require_external_preparation_gate(external_gate)
     target_ledger = V4PreparationAttemptLedger(
@@ -1300,7 +1301,7 @@ def load_g040_runtime_only_carry_forward_evidence(
     for operation in _G040_RUNTIME_CARRIED_OPERATIONS:
         started = _source_marker_payload(
             path=source_root
-            / f"{operation.value}.{target_ledger._trading_day_jst}.started.json",
+            / f"{operation.value}.{_G040_SOURCE_TRADING_DAY_JST}.started.json",
             operation=operation,
             expected_status="ATTEMPT_STARTED",
         )
@@ -1318,7 +1319,7 @@ def load_g040_runtime_only_carry_forward_evidence(
             )
         passed = _source_marker_payload(
             path=source_root
-            / f"{operation.value}.{target_ledger._trading_day_jst}.passed.json",
+            / f"{operation.value}.{_G040_SOURCE_TRADING_DAY_JST}.passed.json",
             operation=operation,
             expected_status="PASSED",
             expected_attempt_token=attempt_token,
