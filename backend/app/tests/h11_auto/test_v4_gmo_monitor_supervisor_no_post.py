@@ -456,6 +456,53 @@ def _write_safe_monitor_heartbeat(path: Path, *, generation_digest: str) -> None
     )
 
 
+def test_launchagent_accepts_explicit_runtime_initialized_heartbeat(
+    tmp_path: Path,
+) -> None:
+    generation = _generation()
+    heartbeat_path = tmp_path / "state" / "supervisor-heartbeat.json"
+
+    def runner(command: list[str]) -> subprocess.CompletedProcess[str]:
+        if command[1] == "bootstrap":
+            heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
+            heartbeat_path.write_text(
+                json.dumps(
+                    {
+                        "actual_post_count": 0,
+                        "broker_read": False,
+                        "broker_write": False,
+                        "cycle_present": False,
+                        "dead_man_alive": True,
+                        "generation_bound": True,
+                        "generation_digest": generation.digest,
+                        "heartbeat_chain_beat": True,
+                        "observed_at_utc": datetime.now(UTC).isoformat(),
+                        "runtime_risk_ready": True,
+                        "status": "MONITORING",
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    result = install_and_restart_v4_gmo_monitor_launchagent(
+        plist_path=(
+            tmp_path / "LaunchAgents" / f"{V4_GMO_MONITOR_LABEL}.plist"
+        ),
+        plist_content=b"safe",
+        user_id=501,
+        runner=runner,
+        heartbeat_path=heartbeat_path,
+        expected_generation_digest=generation.digest,
+        expected_runtime_initialized=True,
+    )
+
+    assert result.heartbeat_waiting_for_canonical_runtime is False
+    assert result.heartbeat_runtime_initialized is True
+    assert result.broker_write is False
+    assert result.actual_post_count == 0
+
+
 def test_launchagent_rejects_unknown_service_state_before_mutation(
     tmp_path: Path,
 ) -> None:

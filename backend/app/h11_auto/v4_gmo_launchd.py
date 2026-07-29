@@ -62,6 +62,7 @@ class V4GmoLaunchdResult:
     heartbeat_fresh: bool
     heartbeat_generation_digest_match: bool
     heartbeat_waiting_for_canonical_runtime: bool
+    heartbeat_runtime_initialized: bool
     heartbeat_broker_read: bool
     heartbeat_broker_write: bool
     raw_output_retained: bool = False
@@ -164,6 +165,7 @@ def install_and_restart_v4_gmo_monitor_launchagent(
     monotonic_clock: MonotonicClock = time.monotonic,
     wait: Wait = time.sleep,
     heartbeat_timeout_seconds: float = 60.0,
+    expected_runtime_initialized: bool = False,
 ) -> V4GmoLaunchdResult:
     """Replace the exact monitor service once and prove a fresh safe heartbeat."""
 
@@ -179,6 +181,7 @@ def install_and_restart_v4_gmo_monitor_launchagent(
         or not expected_generation_digest.startswith("sha256:")
         or len(expected_generation_digest.removeprefix("sha256:")) != 64
         or not 0 < heartbeat_timeout_seconds <= 60.0
+        or not isinstance(expected_runtime_initialized, bool)
     ):
         raise V4GmoLaunchdError(
             V4GmoLaunchdFailureCode.INSTALL_ARGUMENT_INVALID
@@ -235,6 +238,17 @@ def install_and_restart_v4_gmo_monitor_launchagent(
         age_seconds = (
             wall_clock().astimezone(UTC) - observed.astimezone(UTC)
         ).total_seconds()
+        waiting_shape = (
+            candidate.get("status") == "WAITING_FOR_CANONICAL_RUNTIME"
+            and candidate.get("generation_bound") is False
+        )
+        runtime_initialized_shape = (
+            candidate.get("status") == "MONITORING"
+            and candidate.get("generation_bound") is True
+            and candidate.get("runtime_risk_ready") is True
+            and candidate.get("dead_man_alive") is True
+            and candidate.get("heartbeat_chain_beat") is True
+        )
         if (
             0 <= age_seconds <= 60
             and observed.astimezone(UTC) >= bootstrap_started_at
@@ -243,8 +257,11 @@ def install_and_restart_v4_gmo_monitor_launchagent(
                 or candidate_mtime_ns > previous_heartbeat_mtime_ns
             )
             and candidate.get("generation_digest") == expected_generation_digest
-            and candidate.get("status") == "WAITING_FOR_CANONICAL_RUNTIME"
-            and candidate.get("generation_bound") is False
+            and (
+                runtime_initialized_shape
+                if expected_runtime_initialized
+                else waiting_shape
+            )
             and candidate.get("cycle_present") is False
             and candidate.get("broker_read") is False
             and candidate.get("broker_write") is False
@@ -264,7 +281,8 @@ def install_and_restart_v4_gmo_monitor_launchagent(
         service_running=True,
         heartbeat_fresh=True,
         heartbeat_generation_digest_match=True,
-        heartbeat_waiting_for_canonical_runtime=True,
+        heartbeat_waiting_for_canonical_runtime=not expected_runtime_initialized,
+        heartbeat_runtime_initialized=expected_runtime_initialized,
         heartbeat_broker_read=False,
         heartbeat_broker_write=False,
     )

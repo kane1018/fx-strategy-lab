@@ -89,7 +89,7 @@ class V4GmoMonitorSupervisor:
         if self.generation.generation_label in {
             "H11_AUTO_30M_20260729_G040",
             "H11_AUTO_30M_20260729_G041",
-            "H11_AUTO_30M_20260729_G044",
+            "H11_AUTO_30M_20260729_G045",
         }:
             self._maintain_g040_runtime_safety(now_utc=now_utc)
             runtime_safety_ready = True
@@ -248,7 +248,7 @@ class V4GmoMonitorSupervisor:
                     if self.generation.generation_label in {
                         "H11_AUTO_30M_20260729_G040",
                         "H11_AUTO_30M_20260729_G041",
-                        "H11_AUTO_30M_20260729_G044",
+                        "H11_AUTO_30M_20260729_G045",
                     }:
                         raise
                 wait(interval_seconds)

@@ -597,8 +597,25 @@ def _attest_public_get_success_internal(
 
 
 def _attest_monitor_launchagent_success_internal(
-    permit: V4PreparationOperationPermit, safe_report: dict[str, object]
+    permit: V4PreparationOperationPermit,
+    safe_report: dict[str, object],
+    *,
+    expected_runtime_initialized: bool,
 ) -> None:
+    waiting = (
+        safe_report.get("heartbeat_waiting_for_canonical_runtime") is True
+    )
+    runtime_initialized = (
+        safe_report.get("heartbeat_runtime_initialized") is True
+    )
+    if (
+        not isinstance(expected_runtime_initialized, bool)
+        or waiting == runtime_initialized
+        or runtime_initialized is not expected_runtime_initialized
+    ):
+        raise V4ActualPreparationGuardError(
+            "PREPARATION_MONITOR_HEARTBEAT_SHAPE_MISMATCH"
+        )
     _attest_operation_success(
         permit,
         operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
@@ -720,7 +737,10 @@ def _operation_report_is_clear(
             and report.get("service_running") is True
             and report.get("heartbeat_fresh") is True
             and report.get("heartbeat_generation_digest_match") is True
-            and report.get("heartbeat_waiting_for_canonical_runtime") is True
+            and (
+                report.get("heartbeat_waiting_for_canonical_runtime") is True
+            )
+            != (report.get("heartbeat_runtime_initialized") is True)
             and report.get("heartbeat_broker_read") is False
             and report.get("heartbeat_broker_write") is False
             and report.get("actual_post_count") == 0
@@ -1189,7 +1209,7 @@ _RUNTIME_CARRY_FORWARD_TOKEN = object()
 _RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
     "H11_AUTO_30M_20260729_G040",
     "H11_AUTO_30M_20260729_G041",
-    "H11_AUTO_30M_20260729_G044",
+    "H11_AUTO_30M_20260729_G045",
 }
 _G040_RUNTIME_CARRIED_OPERATIONS = tuple(
     operation
