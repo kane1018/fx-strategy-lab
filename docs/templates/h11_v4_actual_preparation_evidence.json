@@ -2,7 +2,7 @@
   "activation_permit_issued": false,
   "actual_post_authorized": false,
   "architecture_review_clear": true,
-  "artifact_digest": "sha256:ee1d3304d942228a40c83bc7862985c49bd09d2b4f191688e3040384e0f8d8ad",
+  "artifact_digest": "sha256:1b4bc4aedc0a850a4a142768bb415d3303b87c38ffce794a19c21e2f85de1182",
   "broker_post_authorized": false,
   "danger_scan_clear": true,
   "danger_scan_passed": true,
@@ -23,6 +23,6 @@
   "ruff_passed": true,
   "safety_review_clear": true,
   "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
-  "status": "G028_REVIEWED_PREPARATION_ONLY_NO_BROKER_POST",
+  "status": "REVIEWED_PREPARATION_ONLY_NO_BROKER_POST",
   "unattended_live_supported": false
 }
