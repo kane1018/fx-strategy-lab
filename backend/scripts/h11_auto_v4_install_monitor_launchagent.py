@@ -45,6 +45,7 @@ _G039_GENERATION_LABEL = "H11_AUTO_30M_20260729_G039"
 _G039_DESKTOP_ACCESS_PROBE_TIMEOUT_SECONDS = 15.0
 _G040_GENERATION_LABEL = "H11_AUTO_30M_20260729_G040"
 _G041_GENERATION_LABEL = "H11_AUTO_30M_20260729_G041"
+_G043_GENERATION_LABEL = "H11_AUTO_30M_20260729_G043"
 _G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS = 20.0
 
 
@@ -315,6 +316,7 @@ def main() -> int:
     if getattr(generation, "generation_label", "") in {
         _G040_GENERATION_LABEL,
         _G041_GENERATION_LABEL,
+        _G043_GENERATION_LABEL,
     }:
         startup_process_lock = H11AutoProcessLock(state_root / "process.lock")
         if not startup_process_lock.acquire():
@@ -349,6 +351,7 @@ def main() -> int:
         if getattr(generation, "generation_label", "") in {
             _G040_GENERATION_LABEL,
             _G041_GENERATION_LABEL,
+            _G043_GENERATION_LABEL,
         }:
             runtime_carry_forward = (
                 load_g040_runtime_only_carry_forward_evidence(
@@ -383,6 +386,7 @@ def main() -> int:
         if getattr(generation, "generation_label", "") in {
             _G040_GENERATION_LABEL,
             _G041_GENERATION_LABEL,
+            _G043_GENERATION_LABEL,
         }:
             try:
                 heartbeat = json.loads(

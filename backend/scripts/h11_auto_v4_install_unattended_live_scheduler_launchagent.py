@@ -42,6 +42,7 @@ _LAUNCHCTL_TIMEOUT_SECONDS = {
 _G039_GENERATION_LABEL = "H11_AUTO_30M_20260729_G039"
 _G040_GENERATION_LABEL = "H11_AUTO_30M_20260729_G040"
 _G041_GENERATION_LABEL = "H11_AUTO_30M_20260729_G041"
+_G043_GENERATION_LABEL = "H11_AUTO_30M_20260729_G043"
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -87,6 +88,7 @@ def main() -> int:
     if getattr(generation, "generation_label", "") in {
         _G040_GENERATION_LABEL,
         _G041_GENERATION_LABEL,
+        _G043_GENERATION_LABEL,
     }:
         try:
             external_gate = load_external_preparation_gate(repository=repository)

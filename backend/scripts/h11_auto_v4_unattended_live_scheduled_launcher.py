@@ -191,6 +191,7 @@ def main(argv: list[str]) -> int:
     if getattr(generation, "generation_label", "") in {
         "H11_AUTO_30M_20260729_G040",
         "H11_AUTO_30M_20260729_G041",
+        "H11_AUTO_30M_20260729_G043",
     }:
         state_root = v4_gmo_runtime_state_root(
             repository=repository,
