@@ -24,6 +24,9 @@ from app.services.h11_v4_current_generation_shadow_observer_no_post import (
     load_current_review_evidence,
     load_sealed_current_shadow_artifacts,
 )
+from app.services.h11_v4_g028_unattended_runtime_no_post import (
+    validate_g028_entry_halt_no_post,
+)
 from app.services.h11_v4_unattended_account_snapshot_store_no_post import (
     V4AccountSnapshotStoreNoPost,
 )
@@ -69,6 +72,14 @@ def main() -> int:
             generation_digest=generation.digest,
         )
         phase = "LOCAL_EVIDENCE"
+        if not validate_g028_entry_halt_no_post(
+            path=runtime_root / "g028-entry-halt.json",
+            expected_reviewed_files_digest=reviewed,
+            expected_generation_digest=generation.digest,
+        ):
+            raise V4UnattendedControllerSnapshotNoPostError(
+                "G028_ENTRY_HALT_INVALID"
+            )
         shadow, commissioning = load_sealed_current_shadow_artifacts(
             directory=runtime_root / "shadow-commissioning"
         )
