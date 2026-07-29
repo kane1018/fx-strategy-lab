@@ -38,6 +38,8 @@ _LAUNCHCTL_TIMEOUT_SECONDS = {
     "bootout": 30.0,
     "bootstrap": 30.0,
 }
+_G039_GENERATION_LABEL = "H11_AUTO_30M_20260729_G039"
+_G039_DESKTOP_ACCESS_PROBE_TIMEOUT_SECONDS = 15.0
 
 
 class V4MonitorLaunchagentFailureCode(StrEnum):
@@ -52,6 +54,7 @@ class V4MonitorLaunchagentFailureCode(StrEnum):
     )
     PREPARATION_PERSISTENCE_FAILED = "PREPARATION_PERSISTENCE_FAILED"
     PREPARATION_PERMIT_INVALID = "PREPARATION_PERMIT_INVALID"
+    DESKTOP_ACCESS_NOT_CLEAR = "G039_LAUNCHD_DESKTOP_ACCESS_NOT_CLEAR"
     FAILURE_CLASS_UNKNOWN = "MONITOR_LAUNCHAGENT_FAILURE_CLASS_UNKNOWN"
 
 
@@ -138,6 +141,48 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _probe_g039_launchd_desktop_access(
+    *,
+    repository: Path,
+    user_id: int,
+    python_executable: Path,
+) -> bool:
+    """Prove launchd-user-context Desktop read access before op60 is claimed."""
+
+    target = repository / "backend" / "h11_v4_reviewed_digest.py"
+    if target.is_symlink() or not target.is_file():
+        return False
+    command = [
+        "launchctl",
+        "asuser",
+        str(user_id),
+        str(python_executable),
+        "-I",
+        "-c",
+        (
+            "from pathlib import Path; import sys; "
+            "data=Path(sys.argv[1]).read_bytes(); "
+            "raise SystemExit(0 if data else 2)"
+        ),
+        str(target),
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=_G039_DESKTOP_ACCESS_PROBE_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return (
+        result.returncode == 0
+        and result.stdout == ""
+        and result.stderr == ""
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", type=Path, required=True)
@@ -199,6 +244,19 @@ def main() -> int:
             "broker_write=false actual_post_count=0"
         )
         return 2
+    if getattr(generation, "generation_label", "") == _G039_GENERATION_LABEL:
+        if not _probe_g039_launchd_desktop_access(
+            repository=repository,
+            user_id=os.getuid(),
+            python_executable=Path(sys.executable),
+        ):
+            print(
+                "status=MONITOR_LAUNCHAGENT_DESKTOP_ACCESS_BLOCKED_"
+                "NO_MARKER_CLAIMED "
+                "failure_class=G039_LAUNCHD_DESKTOP_ACCESS_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
     begin_state = V4MonitorLaunchagentBeginState.PRE_BEGIN
     try:
         external_gate = load_external_preparation_gate(repository=repository)

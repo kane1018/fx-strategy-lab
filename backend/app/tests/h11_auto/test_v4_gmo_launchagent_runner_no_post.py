@@ -45,6 +45,91 @@ def test_launchctl_runner_rejects_unknown_action_without_subprocess(monkeypatch)
     assert result.stderr == ""
 
 
+def test_g039_desktop_access_probe_is_fixed_read_only(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    repository = tmp_path / "repo"
+    target = repository / "backend" / "h11_v4_reviewed_digest.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("REVIEWED_FILES = ()\n", encoding="utf-8")
+    observed = {}
+
+    def fake_run(command, **kwargs):
+        observed["command"] = command
+        observed["kwargs"] = kwargs
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(runner_script.subprocess, "run", fake_run)
+
+    assert runner_script._probe_g039_launchd_desktop_access(
+        repository=repository,
+        user_id=501,
+        python_executable=Path("/safe/python"),
+    )
+    assert observed["command"][:4] == [
+        "launchctl",
+        "asuser",
+        "501",
+        "/safe/python",
+    ]
+    assert observed["command"][-1] == str(target)
+    assert "read_bytes" in observed["command"][-2]
+    assert observed["kwargs"]["check"] is False
+    assert observed["kwargs"]["timeout"] == 15.0
+
+
+def test_g039_desktop_access_failure_stops_before_operation_marker(
+    monkeypatch,
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repository = tmp_path / "repo"
+    (repository / "backend").mkdir(parents=True)
+    digest = "sha256:" + ("a" * 64)
+    generation = SimpleNamespace(
+        digest="sha256:" + ("b" * 64),
+        implementation_digest=digest,
+        generation_label="H11_AUTO_30M_20260729_G039",
+    )
+    reached = {"gate": False}
+
+    monkeypatch.setattr(sys, "argv", ["runner", "--repository", str(repository)])
+    monkeypatch.setattr(runner_script, "reviewed_files_digest", lambda **_kw: digest)
+    monkeypatch.setattr(
+        runner_script,
+        "load_v4_gmo_frozen_generation",
+        lambda **_kw: generation,
+    )
+    monkeypatch.setattr(
+        runner_script,
+        "render_v4_gmo_monitor_launchagent",
+        lambda **_kw: b"safe-plist",
+    )
+    monkeypatch.setattr(
+        runner_script,
+        "require_stable_v4_gmo_aqua_domain",
+        lambda **_kw: None,
+    )
+    monkeypatch.setattr(
+        runner_script,
+        "_probe_g039_launchd_desktop_access",
+        lambda **_kw: False,
+    )
+
+    def gate(**_kwargs):
+        reached["gate"] = True
+        raise AssertionError("operation marker gate must remain unreachable")
+
+    monkeypatch.setattr(runner_script, "load_external_preparation_gate", gate)
+
+    assert runner_script.main() == 2
+    output = capsys.readouterr().out
+    assert "MONITOR_LAUNCHAGENT_DESKTOP_ACCESS_BLOCKED_NO_MARKER_CLAIMED" in output
+    assert "G039_LAUNCHD_DESKTOP_ACCESS_NOT_CLEAR" in output
+    assert reached == {"gate": False}
+
+
 def test_failure_class_allows_only_fixed_safe_labels() -> None:
     assert (
         runner_script._safe_failure_class(

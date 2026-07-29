@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+# G039 corrective generation: bind the operator-confirmed macOS Desktop Folder
+# TCC remediation to a fresh no-retry preparation ledger; runtime behavior is unchanged.
 REVIEWED_FILES = (
     "backend/app/services/h11_v4_gmo_signal_preview.py",
     "backend/app/services/h11_v4_gmo_formal_aware_preview.py",
