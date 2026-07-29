@@ -664,22 +664,14 @@ def _operation_report_is_clear(
 
 
 class V4PreparationAttemptLedger:
-    """Persistent sequence; a step is retryable same-day until it PASSES.
+    """Persistent sequence with generation-terminal unresolved attempts.
 
-    A failed or mismatched attempt (wrong confirmation phrase, transient send
-    error, etc.) does not lock the operator out for the rest of the trading
-    day: the stale ``started`` marker is replaced and the step may be
-    attempted again. Once an operation reaches ``PASSED`` for the day it is
-    final -- it cannot be re-attempted or reset without a new trading day.
-
-    Retry only replaces a marker; it never proves the previous attempt's
-    real external action (a Pushover/SMTP send, a private GET, a kill) did
-    not already happen before that attempt crashed. To at least prevent two
-    attempts of the same operation from actually running at once (which
-    would otherwise race to perform that external action twice), ``begin()``
-    holds an exclusive per-operation, per-trading-day process lock for the
-    life of this ledger; a concurrently running attempt is rejected outright
-    rather than allowed to retry.
+    Any ``started`` marker without its matching ``passed`` marker is terminal
+    for the generation, including across later trading days. A completed
+    operation remains daily-scoped, so a fresh daily sequence may run under
+    the same generation only when every prior attempt reached ``PASSED``.
+    ``begin()`` holds one exclusive generation-wide process lock across every
+    operation and trading day, serializing validation, scan, and marker creation.
     """
 
     def __init__(
@@ -715,26 +707,9 @@ class V4PreparationAttemptLedger:
         self,
         operation: V4PreparationOperation,
     ) -> V4PreparationOperationPermit:
-        previous = _PREVIOUS_OPERATION[operation]
-        if previous is not None and not self._marker_matches_review(
-            self._marker(previous, "passed"),
-            operation=previous,
-            expected_status="PASSED",
-        ):
-            raise V4ActualPreparationGuardError("PREPARATION_SEQUENCE_PREVIOUS_NOT_CLEAR")
-        started = self._marker(operation, "started")
-        passed = self._marker(operation, "passed")
-        if passed.exists():
-            raise V4ActualPreparationGuardError("PREPARATION_OPERATION_ALREADY_ATTEMPTED")
-        if started.is_symlink():
-            raise V4ActualPreparationGuardError("PREPARATION_STATE_SYMLINK_FORBIDDEN")
-        # Retrying only ever replaces this marker file; it cannot prove the
-        # previous attempt's real external action (send/GET/kill) did not
-        # already fire before that attempt crashed. The one thing we CAN
-        # rule out is two attempts of the same operation actually running at
-        # once, which would otherwise race to perform that action twice --
-        # so a genuinely still-running attempt is rejected outright, not
-        # allowed to "retry".
+        # One generation-level lock serializes predecessor validation, the
+        # generation-wide unresolved scan, and durable started-marker creation.
+        # Daily marker names remain useful evidence, but never form a lock scope.
         lock = self._locks.setdefault(
             operation, H11AutoProcessLock(self._lock_path(operation))
         )
@@ -746,14 +721,33 @@ class V4PreparationAttemptLedger:
             ) from error
         if not acquired:
             raise V4ActualPreparationGuardError("PREPARATION_OPERATION_IN_PROGRESS")
-        if started.exists():
-            try:
-                started.unlink()
-            except OSError as error:
-                lock.release()
-                raise V4ActualPreparationGuardError(
-                    "PREPARATION_ATTEMPT_NOT_PERSISTED"
-                ) from error
+        previous = _PREVIOUS_OPERATION[operation]
+        if previous is not None and not self._marker_matches_review(
+            self._marker(previous, "passed"),
+            operation=previous,
+            expected_status="PASSED",
+        ):
+            lock.release()
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_SEQUENCE_PREVIOUS_NOT_CLEAR"
+            )
+        started = self._marker(operation, "started")
+        passed = self._marker(operation, "passed")
+        if passed.exists():
+            lock.release()
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_OPERATION_ALREADY_ATTEMPTED"
+            )
+        if started.is_symlink():
+            lock.release()
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_STATE_SYMLINK_FORBIDDEN"
+            )
+        if self._has_unresolved_attempt():
+            lock.release()
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_GENERATION_TERMINAL_UNRESOLVED"
+            )
         attempt_token = uuid.uuid4().hex
         try:
             self._write_marker(
@@ -807,6 +801,7 @@ class V4PreparationAttemptLedger:
                 completion_digest=operation_permit._completion_digest,
                 completion_report=operation_permit._completion_report,
                 generation_digest=self._generation_digest,
+                attempt_token=operation_permit._attempt_token,
             )
         except FileExistsError as error:
             raise V4ActualPreparationGuardError(
@@ -820,13 +815,50 @@ class V4PreparationAttemptLedger:
                 lock.release()
 
     def _lock_path(self, operation: V4PreparationOperation) -> Path:
-        return self.state_root / f"{operation.value}.{self._trading_day_jst}.lock"
+        del operation
+        return self.state_root / "preparation-generation.lock"
 
     def _marker(self, operation: V4PreparationOperation, suffix: str) -> Path:
         return (
             self.state_root
             / f"{operation.value}.{self._trading_day_jst}.{suffix}.json"
         )
+
+    def _has_unresolved_attempt(self) -> bool:
+        for operation in V4PreparationOperation:
+            pattern = f"{operation.value}.*.started.json"
+            prefix = f"{operation.value}."
+            suffix = ".started.json"
+            for started in self.state_root.glob(pattern):
+                if started.is_symlink() or not started.is_file():
+                    return True
+                try:
+                    payload = json.loads(started.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    return True
+                attempt_token = payload.get("attempt_token")
+                if not isinstance(attempt_token, str) or not attempt_token:
+                    return True
+                if not self._marker_matches_review(
+                    started,
+                    operation=operation,
+                    expected_status="ATTEMPT_STARTED",
+                    expected_attempt_token=attempt_token,
+                ):
+                    return True
+                trading_day = started.name.removeprefix(prefix).removesuffix(suffix)
+                passed = (
+                    self.state_root
+                    / f"{operation.value}.{trading_day}.passed.json"
+                )
+                if not self._marker_matches_review(
+                    passed,
+                    operation=operation,
+                    expected_status="PASSED",
+                    expected_attempt_token=attempt_token,
+                ):
+                    return True
+        return False
 
     def _write_marker(
         self,

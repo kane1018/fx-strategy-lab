@@ -11,6 +11,9 @@ then type an exact confirmation phrase. No script can substitute for that.
   Stop after this and run 20_email_confirmation yourself once you have
   read the email.
 - ``--stage 2``: 25_network_time, 30_host_kill.
+  This stage must be launched exactly once by Codex from a confirmed
+  GUI-capable escalated execution context. A normal sandbox invocation is
+  forbidden and terminal once operation 25 writes its started marker.
   Stop after this and run 40_exclusivity_confirmation yourself once you
   have confirmed the account is not otherwise in use.
 - ``--stage 3``: 45_public_get, 50_private_get, 60_monitor_launchagent.
@@ -21,13 +24,13 @@ exactly as if you had typed it yourself (``python -m scripts.<name>``, in
 a fresh subprocess) -- this bundler adds no new preparation logic, no new
 safety checks, and never touches the ledger itself.
 
-Each of the 11 steps stays retryable for the rest of the trading day until
-it actually passes -- a failed or mismatched attempt does not lock you out.
-Once a step has passed today, it is final and cannot be re-attempted until
-the next trading day. This bundler still stops immediately at the first
-non-zero exit code in a stage rather than attempting the remaining steps
-in that stage: re-run the same ``--stage`` command after fixing the cause
-shown in that step's own output.
+Each of the 11 steps is one-use for the current generation and trading day
+from the instant its durable started marker is written. A failed, mismatched,
+crashed, or unknown attempt is terminal for that generation because the
+external action may already have fired. This bundler stops immediately at
+the first non-zero exit code and never attempts later steps. Preserve every
+marker, fix the cause, and create a reviewed corrective generation that
+restarts at operation 00.
 """
 
 from __future__ import annotations
@@ -96,12 +99,11 @@ def _run_stage(stage: tuple[tuple[str, tuple[str, ...]], ...]) -> int:
         if result.returncode != 0:
             print(
                 f"STOPPED at {label}: exit code {result.returncode}. "
-                "See its own output above for the safe failure label. If "
-                "it says ALREADY_ATTEMPTED, this step already passed today "
-                "-- move on to the next manual/automated step, do not "
-                "re-run this bundler stage. Otherwise, fix the cause and "
-                "re-run this bundler with the same --stage; this step is "
-                "still retryable today."
+                "See its own output above for the safe failure label. "
+                "Do not infer success from ALREADY_ATTEMPTED or any other "
+                "non-zero result. Preserve all markers, stop this generation, "
+                "fix the cause, and create a reviewed corrective generation "
+                "that restarts external preparation at operation 00."
             )
             return result.returncode
     return 0
@@ -112,6 +114,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stage", type=int, choices=(1, 2, 3), required=True)
     args = parser.parse_args(argv)
 
+    if args.stage == 2:
+        print(
+            "REQUIRED: stage 2 must run exactly once from a confirmed "
+            "GUI-capable escalated Codex execution context."
+        )
     exit_code = _run_stage(_STAGES[args.stage])
     if exit_code != 0:
         return exit_code

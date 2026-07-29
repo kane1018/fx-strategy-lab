@@ -73,6 +73,7 @@ def test_stage_3_passes_repository_to_monitor_launchagent(monkeypatch) -> None:
 
 def test_stage_stops_at_first_failure_and_does_not_run_remaining_steps(
     monkeypatch,
+    capsys,
 ) -> None:
     calls: list[list[str]] = []
 
@@ -93,6 +94,11 @@ def test_stage_stops_at_first_failure_and_does_not_run_remaining_steps(
         "scripts.h11_auto_v4_actual_preparation_presence",
         "scripts.h11_auto_v4_keychain_access_rehearsal",
     ]
+    output = capsys.readouterr().out
+    assert "reviewed corrective generation" in output
+    assert "restarts external preparation at operation 00" in output
+    assert "still retryable today" not in output
+    assert "Do not infer success from ALREADY_ATTEMPTED" in output
 
 
 def test_stage_1_success_prints_next_manual_step(monkeypatch, capsys) -> None:
@@ -110,6 +116,7 @@ def test_stage_2_success_prints_next_manual_step(monkeypatch, capsys) -> None:
     )
     bundle.main(["--stage", "2"])
     output = capsys.readouterr().out
+    assert "GUI-capable escalated Codex execution context" in output
     assert "h11_auto_v4_exclusivity_confirm" in output
 
 

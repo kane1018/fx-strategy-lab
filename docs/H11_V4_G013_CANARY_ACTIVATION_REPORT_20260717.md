@@ -292,6 +292,27 @@ unattended_live_supported=false
   Public/Private GET, LaunchAgent, signal, quote, or operator confirmation is reusable. Frozen order intent,
   risk limits, permit rules, and broker transport are unchanged.
 
+## 2026-07-29 G028 operation 25 non-escalated invocation corrective generation
+
+- G028 completed fresh preparation operations 00 through 20, then operation 25 returned
+  `BLOCKED_NETWORK_TIME_READ_ONLY_NOT_CLEAR` with `administrator_prompt_used=true`,
+  `network_time_enabled=null`, `settings_changed=false`, broker GET count 0, and broker POST count 0.
+  Operation 30 and all later Public/Private GET operations were not started.
+- A confirmed cause is the Codex invocation-context violation: the fixed network-time CLI was launched through
+  the normal sandbox instead of the reviewed GUI-capable escalated execution context required for the macOS
+  administrator dialog. The retained sanitized result cannot establish that this was the exclusive cause or
+  rule out a parser or host-setting defect, so the G028 operation-25 started marker remains terminal and is not
+  retried or modified.
+- The corrective generation also removes the preparation ledger's started-marker replacement path and updates
+  the bundler guidance: every started external-preparation operation is terminal for that generation, including
+  failure, mismatch, crash, or unknown output. The network-time command, parser, pass criteria, trade intent,
+  risk limits, permit rules, broker transport, ARM state, and LaunchAgent code are unchanged. The next
+  operation-25 invocation must use the fixed no-argument CLI exactly once from a GUI-capable escalated Codex
+  context; missing dialog, cancellation, unknown output, or timeout remains terminal for that generation.
+- External preparation restarts at operation 00. No G028 Keychain, Pushover, SMTP, email confirmation, host,
+  Public/Private GET, signal, quote, or authorization evidence is reused. `actual_post_authorized=false` and
+  broker POST count 0 remain unchanged.
+
 ## 2026-07-20 active-M1 cache corrective generation
 
 - The first preview generation stopped at `G013_PREVIEW_LOCAL_REMOTE_CONFLICT`; its slot marker is retained.
