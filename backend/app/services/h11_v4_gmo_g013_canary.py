@@ -23,8 +23,8 @@ import httpx
 from app.h11_auto.contracts import FormalHorizon, FormalSignal
 from app.h11_auto.v4_actual_preparation_guard import (
     V4CompletedPreparationEvidence,
-    load_completed_preparation_evidence,
     load_external_preparation_gate,
+    load_generation_completed_preparation_evidence,
     require_clean_main,
     reviewed_files_digest,
 )
@@ -216,11 +216,13 @@ def prepare_g013_canary_session(
         reconciliation_contract_digest=generation.reconciliation_contract_digest,
     )
     external_gate = load_external_preparation_gate(repository=repository)
-    # Same instant as `current` below: today's preparation (00-60) must have
-    # passed, not merely some earlier day's under this same reviewed generation.
-    preparation_evidence = load_completed_preparation_evidence(
+    # Standard generations require today's 00-60. Reviewed runtime-only
+    # successors require their bound source 00-50 plus today's operation 60.
+    preparation_evidence = load_generation_completed_preparation_evidence(
+        repository=repository,
         external_gate=external_gate,
         generation_digest=generation.digest,
+        generation_label=generation.generation_label,
         now_utc=current,
     )
     state_root = v4_gmo_runtime_state_root(
@@ -512,9 +514,13 @@ def _refresh_session_evidence_before_permit(
     if generation.digest != session.generation.digest:
         raise V4GmoG013CanaryError("G013_GENERATION_CHANGED_BEFORE_PERMIT")
     external_gate = load_external_preparation_gate(repository=session.repository)
-    evidence = load_completed_preparation_evidence(
+    current = datetime.now(UTC)
+    evidence = load_generation_completed_preparation_evidence(
+        repository=session.repository,
         external_gate=external_gate,
         generation_digest=generation.digest,
+        generation_label=generation.generation_label,
+        now_utc=current,
     )
     refreshed = replace(
         session,

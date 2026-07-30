@@ -18,6 +18,7 @@ from app.h11_auto.v4_gmo_actual_coordinator import (
     V4GmoActualCoordinatorError,
     V4GmoActualCoordinatorStore,
 )
+from app.services import h11_v4_gmo_g013_canary as canary_module
 
 
 def test_runtime_only_carry_forward_cannot_be_publicly_minted() -> None:
@@ -46,12 +47,64 @@ def test_runtime_only_source_evidence_uses_recorded_source_day() -> None:
     assert "target_ledger._trading_day_jst}.passed.json" not in source
 
 
+def test_canary_uses_generation_aware_preparation_evidence() -> None:
+    prepare_source = inspect.getsource(canary_module.prepare_g013_canary_session)
+    refresh_source = inspect.getsource(
+        canary_module._refresh_session_evidence_before_permit
+    )
+    for source in (prepare_source, refresh_source):
+        assert "load_generation_completed_preparation_evidence" in source
+        assert "generation_label=generation.generation_label" in source
+        assert "now_utc=current" in source
+        assert "load_completed_preparation_evidence" not in source
+    assert "current = datetime.now(UTC)" in refresh_source
+
+
+def test_runtime_only_completed_evidence_is_target_bound_and_one_use(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    generation_digest = "sha256:" + ("4" * 64)
+    reviewed_digest = "sha256:" + ("5" * 64)
+    state_root = tmp_path / f"generation-{reviewed_digest[7:]}-{generation_digest[7:]}"
+    state_root.mkdir()
+    external_gate = guard_module.V4ExternalPreparationGate(
+        token=guard_module._GATE_TOKEN,
+        reviewed_files_digest=reviewed_digest,
+        state_root=state_root,
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "require_g040_runtime_only_monitor_completion",
+        lambda **_kwargs: SimpleNamespace(),
+    )
+
+    evidence = guard_module.load_generation_completed_preparation_evidence(
+        repository=tmp_path,
+        external_gate=external_gate,
+        generation_digest=generation_digest,
+        generation_label="H11_AUTO_30M_20260730_G048",
+        now_utc=datetime(2026, 7, 30, 0, 0, tzinfo=UTC),
+    )
+
+    evidence.consume_for_generation(generation_digest)
+    assert (
+        state_root / "generation_consumed.2026-07-30.json"
+    ).is_file()
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="PREPARATION_COMPLETED_EVIDENCE_INVALID",
+    ):
+        evidence.consume_for_generation(generation_digest)
+
+
 @pytest.mark.parametrize(
     "generation_label",
     (
         "H11_AUTO_30M_20260729_G040",
         "H11_AUTO_30M_20260729_G041",
         "H11_AUTO_30M_20260730_G047",
+        "H11_AUTO_30M_20260730_G048",
     ),
 )
 def test_runtime_only_monitor_carries_risk_and_coordinator_baseline(

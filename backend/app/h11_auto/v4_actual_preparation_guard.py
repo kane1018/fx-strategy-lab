@@ -1211,6 +1211,7 @@ _RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
     "H11_AUTO_30M_20260729_G040",
     "H11_AUTO_30M_20260729_G041",
     "H11_AUTO_30M_20260730_G047",
+    "H11_AUTO_30M_20260730_G048",
 }
 _G040_RUNTIME_CARRIED_OPERATIONS = tuple(
     operation
@@ -1405,6 +1406,54 @@ def require_g040_runtime_only_monitor_completion(
             "G040_RUNTIME_MONITOR_NOT_COMPLETE"
         )
     return evidence
+
+
+def load_generation_completed_preparation_evidence(
+    *,
+    repository: Path,
+    external_gate: V4ExternalPreparationGate,
+    generation_digest: str,
+    generation_label: str,
+    now_utc: datetime | None = None,
+) -> V4CompletedPreparationEvidence:
+    """Mint exact one-use evidence from the generation's reviewed preparation lane."""
+
+    current = (now_utc or datetime.now(UTC)).astimezone(UTC)
+    if generation_label not in _RUNTIME_ONLY_TARGET_GENERATION_LABELS:
+        return load_completed_preparation_evidence(
+            external_gate=external_gate,
+            generation_digest=generation_digest,
+            now_utc=current,
+        )
+
+    require_g040_runtime_only_monitor_completion(
+        repository=repository,
+        external_gate=external_gate,
+        generation_digest=generation_digest,
+        now_utc=current,
+    )
+    ledger = V4PreparationAttemptLedger(
+        external_gate=external_gate,
+        now_utc=current,
+    )
+    normalized = generation_digest.removeprefix("sha256:")
+    if not ledger.state_root.name.endswith(f"-{normalized}"):
+        raise V4ActualPreparationGuardError(
+            "PREPARATION_COMPLETED_GENERATION_MISMATCH"
+        )
+    consumed_marker = (
+        ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
+    )
+    if consumed_marker.exists() or consumed_marker.is_symlink():
+        raise V4ActualPreparationGuardError(
+            "PREPARATION_COMPLETED_EVIDENCE_INVALID"
+        )
+    return V4CompletedPreparationEvidence(
+        token=_COMPLETED_EVIDENCE_TOKEN,
+        generation_digest=generation_digest,
+        state_root=ledger.state_root,
+        trading_day_jst=ledger._trading_day_jst,
+    )
 
 
 def confirm_email_delivery_exact(

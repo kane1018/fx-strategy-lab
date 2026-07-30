@@ -90,6 +90,7 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260729_G040",
             "H11_AUTO_30M_20260729_G041",
             "H11_AUTO_30M_20260730_G047",
+            "H11_AUTO_30M_20260730_G048",
         }:
             self._maintain_g040_runtime_safety(now_utc=now_utc)
             runtime_safety_ready = True
@@ -249,6 +250,7 @@ class V4GmoMonitorSupervisor:
                         "H11_AUTO_30M_20260729_G040",
                         "H11_AUTO_30M_20260729_G041",
                         "H11_AUTO_30M_20260730_G047",
+                        "H11_AUTO_30M_20260730_G048",
                     }:
                         raise
                 wait(interval_seconds)

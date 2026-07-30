@@ -192,6 +192,7 @@ def main(argv: list[str]) -> int:
         "H11_AUTO_30M_20260729_G040",
         "H11_AUTO_30M_20260729_G041",
         "H11_AUTO_30M_20260730_G047",
+        "H11_AUTO_30M_20260730_G048",
     }:
         state_root = v4_gmo_runtime_state_root(
             repository=repository,
