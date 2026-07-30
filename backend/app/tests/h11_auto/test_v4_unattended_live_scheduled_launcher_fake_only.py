@@ -23,6 +23,9 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.h11_v4_gmo_actual_transport import V4GmoKeychainCredentialPair
+from app.services.h11_v4_gmo_formal_canary_source import (
+    V4GmoFormalCanarySourceError,
+)
 from scripts import h11_auto_v4_unattended_live_scheduled_launcher as launcher
 
 
@@ -253,6 +256,67 @@ def test_session_not_yet_is_routine_and_returns_zero(
     output = capsys.readouterr().out
     assert "UNATTENDED_SCHEDULER_TICK_NOT_YET" in output
     assert "ENTRY_TIME_BLOCKED" in output
+
+
+def test_formal_signal_stay_is_routine_and_returns_zero(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    repository = _repository(tmp_path)
+    generation_digest = "sha256:" + "b" * 64
+    reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
+    monkeypatch.setattr(
+        launcher,
+        "prepare_g013_canary_session",
+        lambda **_kw: (_ for _ in ()).throw(
+            V4GmoFormalCanarySourceError("G013_FORMAL_SIGNAL_STAY")
+        ),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "bounded_run",
+        SimpleNamespace(
+            main=lambda *_a, **_kw: (_ for _ in ()).throw(
+                AssertionError("must not reach bounded_run.main")
+            )
+        ),
+    )
+
+    assert launcher.main(
+        _argv_matching(
+            repository,
+            reviewed_digest=reviewed_digest,
+            generation_digest=generation_digest,
+        )
+    ) == 0
+    output = capsys.readouterr().out
+    assert "UNATTENDED_SCHEDULER_TICK_NOT_YET" in output
+    assert "G013_FORMAL_SIGNAL_STAY" in output
+    assert "broker_write=false" in output
+    assert "actual_post_count=0" in output
+
+
+def test_unexpected_formal_signal_error_remains_fail_closed(
+    monkeypatch, tmp_path: Path
+) -> None:
+    repository = _repository(tmp_path)
+    generation_digest = "sha256:" + "b" * 64
+    reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
+    monkeypatch.setattr(
+        launcher,
+        "prepare_g013_canary_session",
+        lambda **_kw: (_ for _ in ()).throw(
+            V4GmoFormalCanarySourceError("G013_FORMAL_SIGNAL_INVALID")
+        ),
+    )
+
+    with pytest.raises(V4GmoFormalCanarySourceError, match="G013_FORMAL_SIGNAL_INVALID"):
+        launcher.main(
+            _argv_matching(
+                repository,
+                reviewed_digest=reviewed_digest,
+                generation_digest=generation_digest,
+            )
+        )
 
 
 def _patch_up_to_bounded_run(

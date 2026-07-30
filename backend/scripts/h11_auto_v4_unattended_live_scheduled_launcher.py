@@ -69,6 +69,9 @@ from app.services.h11_v4_g038_unattended_activation import (
     record_g038_scheduler_heartbeat,
     verify_g038_generation_activation,
 )
+from app.services.h11_v4_gmo_formal_canary_source import (
+    V4GmoFormalCanarySourceError,
+)
 from app.services.h11_v4_gmo_g013_canary import prepare_g013_canary_session
 from app.services.h11_v4_notification_actual_preparation import (
     H11V4NotificationCredentialBundle,
@@ -275,6 +278,15 @@ def main(argv: list[str]) -> int:
             )
         except canary_module.V4GmoG013CanaryError as error:
             print(f"status=UNATTENDED_SCHEDULER_TICK_NOT_YET reason_label={error}")
+            return 0
+        except V4GmoFormalCanarySourceError as error:
+            if str(error) != "G013_FORMAL_SIGNAL_STAY":
+                raise
+            print(
+                "status=UNATTENDED_SCHEDULER_TICK_NOT_YET "
+                "reason_label=G013_FORMAL_SIGNAL_STAY "
+                "broker_write=false actual_post_count=0"
+            )
             return 0
 
         state_root = v4_gmo_runtime_state_root(
