@@ -13,12 +13,14 @@ from app.services.h11_v4_g038_unattended_activation import (  # noqa: E402
     V4G038ActivationError,
     record_g038_successor_release_once,
     record_g053_flat_only_successor_release_once,
+    record_g054_manual_flat_successor_release_once,
 )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--g053-flat-only", action="store_true")
+    parser.add_argument("--g054-manual-flat", action="store_true")
     parser.add_argument("--source-generation-digest")
     parser.add_argument("--source-reviewed-files-digest")
     parser.add_argument("--target-reviewed-files-digest")
@@ -26,7 +28,11 @@ def main() -> int:
     args = parser.parse_args()
     try:
         repository = Path(__file__).resolve().parents[2]
-        if args.g053_flat_only:
+        if args.g054_manual_flat:
+            release = record_g054_manual_flat_successor_release_once(
+                repository=repository,
+            )
+        elif args.g053_flat_only:
             release = record_g053_flat_only_successor_release_once(
                 repository=repository,
             )

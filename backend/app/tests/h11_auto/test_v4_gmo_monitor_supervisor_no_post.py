@@ -909,6 +909,7 @@ def test_foreground_driver_consumes_monitor_marker_with_same_runtime_lock(
     assert result.broker_post_attempt_count == 2
     dispatcher.dispatch_once.assert_called_once()
     path.dead_man_store.heartbeat.assert_called_once()
+    assert (root / "unattended-heartbeat-chain.json").is_file()
 
 
 def test_foreground_driver_observes_local_flat_without_private_polling(
@@ -952,6 +953,7 @@ def test_foreground_driver_observes_local_flat_without_private_polling(
     assert result.exit_dispatch_claimed is False
     assert result.broker_post_attempt_count == 0
     assert waits == [5.0]
+    assert (root / "unattended-heartbeat-chain.json").is_file()
     path.reconcile_once_fixed.assert_not_called()
     path.record_flat_closed_result_once.assert_not_called()
     dispatcher.dispatch_once.assert_not_called()

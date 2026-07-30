@@ -205,3 +205,70 @@ def test_g053_release_requires_exact_falsey_flat_carry(
     assert recorded == release
     assert recorded.broker_post_count == 0
     assert bool(recorded) is False
+
+
+def test_g054_release_requires_fresh_flat_snapshot_and_g053_halt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Snapshot(SimpleNamespace):
+        def __bool__(self) -> bool:
+            return False
+
+    reviewed = "sha256:" + "a" * 64
+    release = V4G038SuccessorRelease(
+        schema=G038_RELEASE_SCHEMA,
+        source_generation_digest=subject._G053_GENERATION_DIGEST,
+        predecessor_halt_generation_digest=subject._G053_GENERATION_DIGEST,
+        source_reviewed_files_digest=subject._G053_REVIEWED_FILES_DIGEST,
+        target_reviewed_files_digest=reviewed,
+        target_generation_label=subject._G054_GENERATION_LABEL,
+        successful_canary_evidence_digest="sha256:" + "d" * 64,
+        source_halt_remains_latched=True,
+        successor_activation_released=True,
+    )
+    generation = SimpleNamespace(
+        generation_label=subject._G054_GENERATION_LABEL,
+        activation_source_generation_digest=subject._G053_GENERATION_DIGEST,
+        successful_canary_evidence_digest=release.successful_canary_evidence_digest,
+        successor_halt_release_digest=release.digest,
+        digest="sha256:" + "e" * 64,
+    )
+    snapshot = Snapshot(
+        account_flat=True,
+        active_orders_zero=True,
+        broker_get_count=3,
+        broker_write=False,
+        broker_post_count=0,
+        raw_response_retained=False,
+        identifier_exposed=False,
+    )
+    monkeypatch.setattr(subject, "require_clean_main", lambda **_kw: None)
+    monkeypatch.setattr(subject, "reviewed_files_digest", lambda **_kw: reviewed)
+    monkeypatch.setattr(
+        subject, "load_v4_gmo_frozen_generation", lambda **_kw: generation
+    )
+    monkeypatch.setattr(
+        subject.V4AccountSnapshotStoreNoPost,
+        "load_completed",
+        lambda self, **_kw: snapshot,
+    )
+    monkeypatch.setattr(
+        subject,
+        "validate_bound_account_snapshot_evidence_no_post",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(
+        subject,
+        "controller_cycle_binding_no_post",
+        lambda **_kw: "sha256:" + "f" * 64,
+    )
+    monkeypatch.setattr(
+        subject, "_require_g053_halted_protected_cycle", lambda **_kw: None
+    )
+    recorded = subject.record_g054_manual_flat_successor_release_once(
+        repository=tmp_path,
+        state_root=tmp_path,
+    )
+    assert recorded == release
+    assert recorded.broker_post_count == 0
+    assert bool(recorded) is False

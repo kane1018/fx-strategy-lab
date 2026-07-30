@@ -54,6 +54,7 @@ _G050_GENERATION_LABEL = "H11_AUTO_30M_20260730_G050"
 _G051_GENERATION_LABEL = "H11_AUTO_30M_20260730_G051"
 _G052_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
 _G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
+_G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
 _G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS = 20.0
 
 
@@ -252,6 +253,7 @@ def _startup_probe_requires_installer_process_lock(
     return generation_label not in {
         _G052_GENERATION_LABEL,
         _G053_GENERATION_LABEL,
+        _G054_GENERATION_LABEL,
     }
 
 
@@ -388,6 +390,47 @@ def main() -> int:
                 "broker_write=false actual_post_count=0"
             )
             return 2
+    if (
+        getattr(generation, "generation_label", "")
+        == _G054_GENERATION_LABEL
+        and operation_permit is None
+    ):
+        try:
+            external_gate = load_external_preparation_gate(
+                repository=repository
+            )
+            ledger = V4PreparationAttemptLedger(
+                external_gate=external_gate
+            )
+            runtime_carry_forward = load_g040_runtime_only_carry_forward_evidence(
+                repository=repository,
+                external_gate=external_gate,
+                generation_digest=generation.digest,
+            )
+            begin_state = V4MonitorLaunchagentBeginState.BEGIN_INDETERMINATE
+            operation_permit = ledger.begin_g040_runtime_only_monitor(
+                repository=repository,
+                generation_digest=generation.digest,
+            )
+            begin_state = V4MonitorLaunchagentBeginState.MARKER_PERSISTED
+            require_operation_permit(
+                operation_permit,
+                expected_operation=operation,
+                claim=True,
+            )
+        except Exception as error:
+            status = (
+                "MONITOR_LAUNCHAGENT_BLOCKED_NO_RETRY"
+                if begin_state
+                is V4MonitorLaunchagentBeginState.MARKER_PERSISTED
+                else "MONITOR_LAUNCHAGENT_PRECHECK_BLOCKED_NO_MARKER_CLAIMED"
+            )
+            print(
+                f"status={status} "
+                f"failure_class={_safe_failure_class(error)} "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
     startup_process_lock: H11AutoProcessLock | None = None
     if getattr(generation, "generation_label", "") in {
         _G040_GENERATION_LABEL,
@@ -399,6 +442,7 @@ def main() -> int:
         _G051_GENERATION_LABEL,
         _G052_GENERATION_LABEL,
         _G053_GENERATION_LABEL,
+        _G054_GENERATION_LABEL,
     }:
         if _startup_probe_requires_installer_process_lock(
             generation.generation_label
@@ -444,6 +488,7 @@ def main() -> int:
         _G051_GENERATION_LABEL,
         _G052_GENERATION_LABEL,
         _G053_GENERATION_LABEL,
+        _G054_GENERATION_LABEL,
     }
     try:
         if operation_permit is None:
@@ -461,6 +506,7 @@ def main() -> int:
                 _G049_GENERATION_LABEL,
                 _G050_GENERATION_LABEL,
                 _G051_GENERATION_LABEL,
+                _G054_GENERATION_LABEL,
             }:
                 runtime_carry_forward = (
                     load_g040_runtime_only_carry_forward_evidence(
@@ -503,6 +549,7 @@ def main() -> int:
             _G051_GENERATION_LABEL,
             _G052_GENERATION_LABEL,
             _G053_GENERATION_LABEL,
+            _G054_GENERATION_LABEL,
         }:
             try:
                 heartbeat = json.loads(

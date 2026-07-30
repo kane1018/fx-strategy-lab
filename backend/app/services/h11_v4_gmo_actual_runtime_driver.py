@@ -25,6 +25,10 @@ from app.services.h11_v4_gmo_exit_dispatcher import (
 from app.services.h11_v4_gmo_public_market_status import (
     V4GmoPublicMarketStatusReader,
 )
+from app.services.h11_v4_unattended_live_heartbeat_chain import (
+    V4HeartbeatChainStore,
+    v4_unattended_runtime_heartbeat_policy,
+)
 
 
 class V4GmoActualRuntimeDriverError(RuntimeError):
@@ -61,6 +65,10 @@ class V4GmoActualRuntimeDriver:
         self.path = coordinated_path
         self.dispatcher = dispatcher
         self.state_root = coordinated_path.store.path.parent.resolve()
+        self.heartbeat_chain_store = V4HeartbeatChainStore(
+            self.state_root / "unattended-heartbeat-chain.json",
+            policy=v4_unattended_runtime_heartbeat_policy(),
+        )
 
     def run_until_flat(
         self,
@@ -108,6 +116,7 @@ class V4GmoActualRuntimeDriver:
                         "V4_RUNTIME_DRIVER_CLOCK_INVALID"
                     )
                 self.path.dead_man_store.heartbeat(heartbeat_utc=now.astimezone(UTC))
+                self.heartbeat_chain_store.beat(now_utc=now.astimezone(UTC))
                 snapshot = self.path.store.monitor_snapshot_safe()
                 if snapshot.flat_reconciled:
                     return V4GmoActualRuntimeDriverResult(

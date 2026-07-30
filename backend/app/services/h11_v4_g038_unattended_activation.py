@@ -6,10 +6,13 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.h11_auto.persistence import H11AutoProcessLock
+from app.h11_auto.runtime_safety import PhaseBRiskStore
 from app.h11_auto.v4_actual_preparation_guard import (
     load_external_preparation_gate,
     load_g053_flat_only_carry_forward_evidence,
@@ -20,13 +23,25 @@ from app.h11_auto.v4_gmo_generation import (
     V4_GMO_UNATTENDED_ACTIVATED_STATUS,
     V4GmoFrozenGeneration,
     load_v4_gmo_frozen_generation,
+    v4_gmo_risk_policy,
 )
+from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from app.services.h11_v4_g037_unattended_commissioning_no_post import (
     G037_CANARY_EVIDENCE_SCHEMA,
     G037_TERMINAL_FLAT_HALT,
 )
+from app.services.h11_v4_unattended_account_snapshot_evidence_no_post import (
+    validate_bound_account_snapshot_evidence_no_post,
+)
+from app.services.h11_v4_unattended_account_snapshot_store_no_post import (
+    V4AccountSnapshotStoreNoPost,
+)
+from app.services.h11_v4_unattended_controller_snapshot_no_post import (
+    controller_cycle_binding_no_post,
+)
 from app.services.h11_v4_unattended_live_paths import (
     DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    v4_unattended_account_snapshot_state_directory,
     v4_unattended_g037_canary_evidence_path,
     v4_unattended_g038_release_path,
 )
@@ -39,6 +54,13 @@ _G052_REVIEWED_FILES_DIGEST = (
     "sha256:a0736d9f06cb912ef262c8321068de9564df8fb1b7f0dd6b0e01ef527ee9d4d3"
 )
 _G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
+_G053_GENERATION_DIGEST = (
+    "sha256:d7e25da3f35da7842b4549913cd1a78749fe64d870b3b9aa4f78e0ce931de665"
+)
+_G053_REVIEWED_FILES_DIGEST = (
+    "sha256:ea83124ef74d681dfcd6ac736fb1980dd55f1d94565f1c4910c0e7d03c49f327"
+)
+_G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -253,6 +275,195 @@ def record_g053_flat_only_successor_release_once(
     finally:
         os.close(directory_descriptor)
     return release
+
+
+def record_g054_manual_flat_successor_release_once(
+    *,
+    repository: Path,
+    state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    now_utc: datetime | None = None,
+) -> V4G038SuccessorRelease:
+    """Release G054 only from its fresh one-use flat snapshot and G053 HALT."""
+
+    require_clean_main(repository=repository)
+    target_reviewed = reviewed_files_digest(repository=repository)
+    generation = load_v4_gmo_frozen_generation(
+        repository=repository,
+        implementation_digest=target_reviewed,
+    )
+    if (
+        generation.generation_label != _G054_GENERATION_LABEL
+        or generation.activation_source_generation_digest
+        != _G053_GENERATION_DIGEST
+        or generation.successful_canary_evidence_digest is None
+    ):
+        raise V4G038ActivationError("G054_RELEASE_TARGET_INVALID")
+    snapshot = V4AccountSnapshotStoreNoPost(
+        v4_unattended_account_snapshot_state_directory(
+            generation_digest=generation.digest,
+        )
+    ).load_completed(
+        expected_reviewed_files_digest=target_reviewed,
+        expected_generation_digest=generation.digest,
+    )
+    evaluated_at = (now_utc or datetime.now(UTC)).astimezone(UTC)
+    if snapshot is not None:
+        validate_bound_account_snapshot_evidence_no_post(
+            snapshot,
+            expected_reviewed_files_digest=target_reviewed,
+            expected_generation_digest=generation.digest,
+            expected_cycle_binding_digest=controller_cycle_binding_no_post(
+                generation_digest=generation.digest,
+                observed_at_utc=evaluated_at,
+            ),
+            now_utc=evaluated_at,
+        )
+    if (
+        snapshot is None
+        or snapshot.account_flat is not True
+        or snapshot.active_orders_zero is not True
+        or snapshot.broker_get_count != 3
+        or snapshot.broker_write is not False
+        or snapshot.broker_post_count != 0
+        or snapshot.raw_response_retained is not False
+        or snapshot.identifier_exposed is not False
+        or bool(snapshot) is not False
+    ):
+        raise V4G038ActivationError("G054_FLAT_EVIDENCE_NOT_CLEAR")
+    source_root = v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=_G053_GENERATION_DIGEST,
+    )
+    source_lock = H11AutoProcessLock(source_root / "process.lock")
+    if not source_lock.acquire():
+        raise V4G038ActivationError("G054_G053_FOREGROUND_STILL_RUNNING")
+    try:
+        _require_g053_halted_protected_cycle(
+            repository=repository,
+            source_lock=source_lock,
+        )
+        return _record_g054_release_locked(
+            generation=generation,
+            target_reviewed=target_reviewed,
+            state_root=state_root,
+        )
+    finally:
+        source_lock.release()
+
+
+def _record_g054_release_locked(
+    *,
+    generation: V4GmoFrozenGeneration,
+    target_reviewed: str,
+    state_root: Path,
+) -> V4G038SuccessorRelease:
+    release = V4G038SuccessorRelease(
+        schema=G038_RELEASE_SCHEMA,
+        source_generation_digest=_G053_GENERATION_DIGEST,
+        predecessor_halt_generation_digest=_G053_GENERATION_DIGEST,
+        source_reviewed_files_digest=_G053_REVIEWED_FILES_DIGEST,
+        target_reviewed_files_digest=target_reviewed,
+        target_generation_label=_G054_GENERATION_LABEL,
+        successful_canary_evidence_digest=(
+            generation.successful_canary_evidence_digest
+        ),
+        source_halt_remains_latched=True,
+        successor_activation_released=True,
+    )
+    if release.digest != generation.successor_halt_release_digest:
+        raise V4G038ActivationError("G054_RELEASE_BINDING_MISMATCH")
+    path = v4_unattended_g038_release_path(
+        state_root=state_root,
+        target_reviewed_files_digest=target_reviewed,
+    )
+    _reject_symlink_ancestry(path, allow_missing=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = release.canonical_json + "\n"
+    if path.exists():
+        if path.is_symlink() or path.read_text(encoding="utf-8") != payload:
+            raise V4G038ActivationError("G054_EXISTING_RELEASE_MISMATCH")
+        return release
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as error:
+        raise V4G038ActivationError(
+            "G054_RELEASE_RACE_OR_UNKNOWN_RESULT"
+        ) from error
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    directory_descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_descriptor)
+    finally:
+        os.close(directory_descriptor)
+    return release
+
+
+def _require_g053_halted_protected_cycle(
+    *,
+    repository: Path,
+    source_lock: H11AutoProcessLock,
+) -> None:
+    root = v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=_G053_GENERATION_DIGEST,
+    )
+    if not source_lock.held or source_lock.path != root / "process.lock":
+        raise V4G038ActivationError("G054_G053_SOURCE_LOCK_NOT_HELD")
+    database = root / "coordinator.sqlite3"
+    if database.is_symlink() or not database.is_file():
+        raise V4G038ActivationError("G054_G053_STATE_NOT_CLEAR")
+    try:
+        connection = sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA query_only=ON")
+        halt = connection.execute(
+            "SELECT value FROM metadata WHERE key='unknown_halt_latched'"
+        ).fetchone()
+        pending = connection.execute(
+            "SELECT 1 FROM metadata WHERE key='pending_transport_attempt'"
+        ).fetchone()
+        cycle = connection.execute(
+            "SELECT COUNT(*) count,"
+            "SUM(CASE WHEN realized_pnl_jpy IS NULL THEN 1 ELSE 0 END) unresolved "
+            "FROM cycles"
+        ).fetchone()
+        attempts = connection.execute(
+            "SELECT action,COUNT(*) count FROM attempts GROUP BY action"
+        ).fetchall()
+        generation_row = connection.execute(
+            "SELECT value FROM metadata WHERE key='generation_digest'"
+        ).fetchone()
+    except sqlite3.Error as error:
+        raise V4G038ActivationError("G054_G053_STATE_NOT_CLEAR") from error
+    finally:
+        if "connection" in locals():
+            connection.close()
+    actual_attempts = {str(row["action"]): int(row["count"]) for row in attempts}
+    try:
+        source_risk_state = PhaseBRiskStore(
+            root / "risk.json",
+            policy=v4_gmo_risk_policy(),
+        ).load()
+    except Exception as error:
+        raise V4G038ActivationError("G054_G053_STATE_NOT_CLEAR") from error
+    if (
+        generation_row is None
+        or generation_row["value"] != _G053_GENERATION_DIGEST
+        or halt is None
+        or halt["value"] != "true"
+        or pending is not None
+        or cycle is None
+        or int(cycle["count"]) != 1
+        or int(cycle["unresolved"] or 0) != 1
+        or actual_attempts
+        != {"EXACT_SIZE_OCO_PROTECTION": 1, "MARKET_ENTRY": 1}
+        or source_risk_state.current_day_jst != "2026-07-30"
+        or source_risk_state.entries_today != 3
+    ):
+        raise V4G038ActivationError("G054_G053_STATE_NOT_CLEAR")
 
 
 def verify_g038_generation_activation(
