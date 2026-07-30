@@ -56,6 +56,7 @@ _G052_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
 _G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
 _G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
+_G056_GENERATION_LABEL = "H11_AUTO_30M_20260730_G056"
 _G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS = 20.0
 
 
@@ -256,6 +257,7 @@ def _startup_probe_requires_installer_process_lock(
         _G053_GENERATION_LABEL,
         _G054_GENERATION_LABEL,
         _G055_GENERATION_LABEL,
+        _G056_GENERATION_LABEL,
     }
 
 
@@ -394,7 +396,11 @@ def main() -> int:
             return 2
     if (
         getattr(generation, "generation_label", "")
-        in {_G054_GENERATION_LABEL, _G055_GENERATION_LABEL}
+        in {
+            _G054_GENERATION_LABEL,
+            _G055_GENERATION_LABEL,
+            _G056_GENERATION_LABEL,
+        }
         and operation_permit is None
     ):
         try:
@@ -446,6 +452,7 @@ def main() -> int:
         _G053_GENERATION_LABEL,
         _G054_GENERATION_LABEL,
         _G055_GENERATION_LABEL,
+        _G056_GENERATION_LABEL,
     }:
         if _startup_probe_requires_installer_process_lock(
             generation.generation_label
@@ -493,6 +500,7 @@ def main() -> int:
         _G053_GENERATION_LABEL,
         _G054_GENERATION_LABEL,
         _G055_GENERATION_LABEL,
+        _G056_GENERATION_LABEL,
     }
     try:
         if operation_permit is None:
@@ -512,6 +520,7 @@ def main() -> int:
                 _G051_GENERATION_LABEL,
                 _G054_GENERATION_LABEL,
                 _G055_GENERATION_LABEL,
+                _G056_GENERATION_LABEL,
             }:
                 runtime_carry_forward = (
                     load_g040_runtime_only_carry_forward_evidence(
@@ -556,6 +565,7 @@ def main() -> int:
             _G053_GENERATION_LABEL,
             _G054_GENERATION_LABEL,
             _G055_GENERATION_LABEL,
+            _G056_GENERATION_LABEL,
         }:
             try:
                 heartbeat = json.loads(

@@ -224,6 +224,50 @@ def test_g055_release_uses_distinct_target_generation(
     )
 
 
+def test_g056_release_uses_distinct_target_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        subject,
+        "_record_manual_flat_successor_release_once",
+        lambda **kwargs: kwargs["target_generation_label"],
+    )
+    assert (
+        subject.record_g056_manual_flat_successor_release_once(
+            repository=tmp_path,
+            state_root=tmp_path,
+        )
+        == subject._G056_GENERATION_LABEL
+    )
+
+
+def test_g056_release_started_marker_is_one_use(
+    tmp_path: Path,
+) -> None:
+    reviewed = "sha256:" + "a" * 64
+    generation = cast(
+        V4GmoFrozenGeneration,
+        SimpleNamespace(
+            digest="sha256:" + "b" * 64,
+            generation_label=subject._G056_GENERATION_LABEL,
+        ),
+    )
+    subject._claim_g056_release_operation_once(
+        state_root=tmp_path,
+        target_reviewed=reviewed,
+        generation=generation,
+    )
+    with pytest.raises(
+        V4G038ActivationError,
+        match="G056_RELEASE_ALREADY_STARTED_NO_RETRY",
+    ):
+        subject._claim_g056_release_operation_once(
+            state_root=tmp_path,
+            target_reviewed=reviewed,
+            generation=generation,
+        )
+
+
 def test_g054_release_requires_fresh_flat_snapshot_and_g053_halt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

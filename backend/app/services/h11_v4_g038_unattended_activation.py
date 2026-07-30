@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -62,6 +63,17 @@ _G053_REVIEWED_FILES_DIGEST = (
 )
 _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
 _G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
+_G055_IMPLEMENTATION_COMMIT = "ea92b92518bc86ff61d7be52d530ed12e0c37c08"
+_G055_GENERATION_DIGEST = (
+    "sha256:7cc8f68af59ecd786f7fee585635c9c58a17f8e3e03052104299b4209629b472"
+)
+_G055_REVIEWED_FILES_DIGEST = (
+    "sha256:2d78f10c5e23a2cd256568dbb39c55355f6c9954c83ba08143c87f28db64f224"
+)
+_G055_PREPARATION_EVIDENCE_DIGEST = (
+    "sha256:5e078f5edfbfb342bd8b63c8744e8e0d938f8d7eadd3ba7445cdf1dd860e1559"
+)
+_G056_GENERATION_LABEL = "H11_AUTO_30M_20260730_G056"
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -306,6 +318,20 @@ def record_g055_manual_flat_successor_release_once(
     )
 
 
+def record_g056_manual_flat_successor_release_once(
+    *,
+    repository: Path,
+    state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    now_utc: datetime | None = None,
+) -> V4G038SuccessorRelease:
+    return _record_manual_flat_successor_release_once(
+        repository=repository,
+        state_root=state_root,
+        now_utc=now_utc,
+        target_generation_label=_G056_GENERATION_LABEL,
+    )
+
+
 def _record_manual_flat_successor_release_once(
     *,
     repository: Path,
@@ -328,6 +354,13 @@ def _record_manual_flat_successor_release_once(
         or generation.successful_canary_evidence_digest is None
     ):
         raise V4G038ActivationError("G054_RELEASE_TARGET_INVALID")
+    if target_generation_label == _G056_GENERATION_LABEL:
+        _require_g055_implementation_evidence_in_history(repository=repository)
+        _claim_g056_release_operation_once(
+            state_root=state_root,
+            target_reviewed=target_reviewed,
+            generation=generation,
+        )
     snapshot = V4AccountSnapshotStoreNoPost(
         v4_unattended_account_snapshot_state_directory(
             generation_digest=generation.digest,
@@ -431,6 +464,111 @@ def _record_g054_release_locked(
     finally:
         os.close(directory_descriptor)
     return release
+
+
+def _require_g055_implementation_evidence_in_history(*, repository: Path) -> None:
+    try:
+        subprocess.run(
+            [
+                "git",
+                "merge-base",
+                "--is-ancestor",
+                _G055_IMPLEMENTATION_COMMIT,
+                "HEAD",
+            ],
+            cwd=repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        generation_payload = json.loads(
+            subprocess.run(
+                [
+                    "git",
+                    "show",
+                    f"{_G055_IMPLEMENTATION_COMMIT}:docs/templates/"
+                    "h11_v4_gmo_frozen_generation.json",
+                ],
+                cwd=repository,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        )
+        evidence_payload = json.loads(
+            subprocess.run(
+                [
+                    "git",
+                    "show",
+                    f"{_G055_IMPLEMENTATION_COMMIT}:docs/templates/"
+                    "h11_v4_actual_preparation_evidence.json",
+                ],
+                cwd=repository,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        )
+    except (OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+        raise V4G038ActivationError(
+            "G056_G055_IMPLEMENTATION_EVIDENCE_UNKNOWN"
+        ) from error
+    if (
+        generation_payload.get("generation_label") != _G055_GENERATION_LABEL
+        or generation_payload.get("implementation_digest")
+        != _G055_REVIEWED_FILES_DIGEST
+        or evidence_payload.get("generation_digest") != _G055_GENERATION_DIGEST
+        or evidence_payload.get("reviewed_files_digest")
+        != _G055_REVIEWED_FILES_DIGEST
+        or evidence_payload.get("artifact_digest")
+        != _G055_PREPARATION_EVIDENCE_DIGEST
+    ):
+        raise V4G038ActivationError("G056_G055_IMPLEMENTATION_EVIDENCE_MISMATCH")
+
+
+def _claim_g056_release_operation_once(
+    *,
+    state_root: Path,
+    target_reviewed: str,
+    generation: V4GmoFrozenGeneration,
+) -> None:
+    release_path = v4_unattended_g038_release_path(
+        state_root=state_root,
+        target_reviewed_files_digest=target_reviewed,
+    )
+    started_path = release_path.with_name(release_path.name + ".started")
+    _reject_symlink_ancestry(started_path, allow_missing=True)
+    started_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generation_digest": generation.digest,
+        "generation_label": generation.generation_label,
+        "g055_generation_digest": _G055_GENERATION_DIGEST,
+        "g055_preparation_evidence_digest": _G055_PREPARATION_EVIDENCE_DIGEST,
+        "g055_reviewed_files_digest": _G055_REVIEWED_FILES_DIGEST,
+        "operation": "G056_SUCCESSOR_RELEASE",
+        "target_reviewed_files_digest": target_reviewed,
+    }
+    payload["artifact_digest"] = "sha256:" + hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    try:
+        descriptor = os.open(
+            started_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+    except FileExistsError as error:
+        raise V4G038ActivationError("G056_RELEASE_ALREADY_STARTED_NO_RETRY") from error
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, sort_keys=True, separators=(",", ":"))
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    directory_descriptor = os.open(started_path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_descriptor)
+    finally:
+        os.close(directory_descriptor)
 
 
 def _require_g053_halted_protected_cycle(

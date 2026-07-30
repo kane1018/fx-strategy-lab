@@ -3,18 +3,25 @@
 from __future__ import annotations
 
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.h11_auto.v4_gmo_launchd import (  # noqa: E402
+    V4GmoLaunchdDomainNotReady,
+    require_stable_v4_gmo_aqua_domain,
+)
 from app.services.h11_v4_g038_unattended_activation import (  # noqa: E402
     V4G038ActivationError,
     record_g038_successor_release_once,
     record_g053_flat_only_successor_release_once,
     record_g054_manual_flat_successor_release_once,
     record_g055_manual_flat_successor_release_once,
+    record_g056_manual_flat_successor_release_once,
 )
 
 
@@ -23,6 +30,8 @@ def main() -> int:
     parser.add_argument("--g053-flat-only", action="store_true")
     parser.add_argument("--g054-manual-flat", action="store_true")
     parser.add_argument("--g055-manual-flat", action="store_true")
+    parser.add_argument("--g056-manual-flat", action="store_true")
+    parser.add_argument("--gui-capable-escalated-context", action="store_true")
     parser.add_argument("--source-generation-digest")
     parser.add_argument("--source-reviewed-files-digest")
     parser.add_argument("--target-reviewed-files-digest")
@@ -30,7 +39,30 @@ def main() -> int:
     args = parser.parse_args()
     try:
         repository = Path(__file__).resolve().parents[2]
-        if args.g055_manual_flat:
+        if args.g056_manual_flat:
+            if not args.gui_capable_escalated_context:
+                raise V4G038ActivationError(
+                    "G056_GUI_CAPABLE_ESCALATED_CONTEXT_REQUIRED"
+                )
+            try:
+                require_stable_v4_gmo_aqua_domain(
+                    user_id=os.getuid(),
+                    runner=lambda command: subprocess.run(
+                        command,
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        check=False,
+                    ),
+                )
+            except V4GmoLaunchdDomainNotReady as error:
+                raise V4G038ActivationError(
+                    "G056_GUI_CAPABLE_CONTEXT_NOT_READY"
+                ) from error
+            release = record_g056_manual_flat_successor_release_once(
+                repository=repository,
+            )
+        elif args.g055_manual_flat:
             release = record_g055_manual_flat_successor_release_once(
                 repository=repository,
             )

@@ -126,6 +126,7 @@ REVIEWED_FILES = (
     "backend/scripts/h11_auto_v4_g026_private_snapshot_producer.py",
     "backend/scripts/h11_auto_v4_g054_manual_flat_snapshot.py",
     "backend/scripts/h11_auto_v4_g055_manual_flat_snapshot.py",
+    "backend/scripts/h11_auto_v4_g056_manual_flat_snapshot.py",
     "backend/scripts/h11_auto_v4_g027_operational_readiness_probe_no_post.py",
     "backend/app/tests/h11_auto/test_v4_gmo_unattended_scheduler_launchd_no_post.py",
     "backend/app/tests/h11_auto/test_v4_unattended_live_entry_gate_provider_no_post.py",
