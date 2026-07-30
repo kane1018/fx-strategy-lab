@@ -47,6 +47,8 @@ _G040_GENERATION_LABEL = "H11_AUTO_30M_20260729_G040"
 _G041_GENERATION_LABEL = "H11_AUTO_30M_20260729_G041"
 _G047_GENERATION_LABEL = "H11_AUTO_30M_20260730_G047"
 _G048_GENERATION_LABEL = "H11_AUTO_30M_20260730_G048"
+_G049_GENERATION_LABEL = "H11_AUTO_30M_20260730_G049"
+_G050_GENERATION_LABEL = "H11_AUTO_30M_20260730_G050"
 _G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS = 20.0
 
 
@@ -319,6 +321,8 @@ def main() -> int:
         _G041_GENERATION_LABEL,
         _G047_GENERATION_LABEL,
         _G048_GENERATION_LABEL,
+        _G049_GENERATION_LABEL,
+        _G050_GENERATION_LABEL,
     }:
         startup_process_lock = H11AutoProcessLock(state_root / "process.lock")
         if not startup_process_lock.acquire():
@@ -348,6 +352,8 @@ def main() -> int:
     expected_runtime_initialized = getattr(generation, "generation_label", "") in {
         _G047_GENERATION_LABEL,
         _G048_GENERATION_LABEL,
+        _G049_GENERATION_LABEL,
+        _G050_GENERATION_LABEL,
     }
     try:
         external_gate = load_external_preparation_gate(repository=repository)
@@ -359,6 +365,8 @@ def main() -> int:
             _G041_GENERATION_LABEL,
             _G047_GENERATION_LABEL,
             _G048_GENERATION_LABEL,
+            _G049_GENERATION_LABEL,
+            _G050_GENERATION_LABEL,
         }:
             runtime_carry_forward = (
                 load_g040_runtime_only_carry_forward_evidence(
@@ -396,6 +404,8 @@ def main() -> int:
             _G041_GENERATION_LABEL,
             _G047_GENERATION_LABEL,
             _G048_GENERATION_LABEL,
+            _G049_GENERATION_LABEL,
+            _G050_GENERATION_LABEL,
         }:
             try:
                 heartbeat = json.loads(
