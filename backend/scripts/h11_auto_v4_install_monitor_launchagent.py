@@ -21,6 +21,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     load_external_preparation_gate,
     load_g040_runtime_only_carry_forward_evidence,
     load_g052_flat_only_carry_forward_evidence,
+    load_g053_flat_only_carry_forward_evidence,
     require_operation_permit,
     reviewed_files_digest,
 )
@@ -52,6 +53,7 @@ _G049_GENERATION_LABEL = "H11_AUTO_30M_20260730_G049"
 _G050_GENERATION_LABEL = "H11_AUTO_30M_20260730_G050"
 _G051_GENERATION_LABEL = "H11_AUTO_30M_20260730_G051"
 _G052_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
+_G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS = 20.0
 
 
@@ -247,7 +249,10 @@ def _probe_g040_launchd_runtime_startup(
 def _startup_probe_requires_installer_process_lock(
     generation_label: str,
 ) -> bool:
-    return generation_label != _G052_GENERATION_LABEL
+    return generation_label not in {
+        _G052_GENERATION_LABEL,
+        _G053_GENERATION_LABEL,
+    }
 
 
 def main() -> int:
@@ -330,7 +335,10 @@ def main() -> int:
     operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
     runtime_carry_forward = None
     operation_permit = None
-    if getattr(generation, "generation_label", "") == _G052_GENERATION_LABEL:
+    if getattr(generation, "generation_label", "") in {
+        _G052_GENERATION_LABEL,
+        _G053_GENERATION_LABEL,
+    }:
         try:
             external_gate = load_external_preparation_gate(
                 repository=repository
@@ -338,18 +346,29 @@ def main() -> int:
             ledger = V4PreparationAttemptLedger(
                 external_gate=external_gate
             )
-            runtime_carry_forward = (
-                load_g052_flat_only_carry_forward_evidence(
+            if generation.generation_label == _G052_GENERATION_LABEL:
+                runtime_carry_forward = load_g052_flat_only_carry_forward_evidence(
                     repository=repository,
                     external_gate=external_gate,
                     generation_digest=generation.digest,
                 )
-            )
+            else:
+                runtime_carry_forward = load_g053_flat_only_carry_forward_evidence(
+                    repository=repository,
+                    external_gate=external_gate,
+                    generation_digest=generation.digest,
+                )
             begin_state = V4MonitorLaunchagentBeginState.BEGIN_INDETERMINATE
-            operation_permit = ledger.begin_g052_flat_only_monitor(
-                repository=repository,
-                generation_digest=generation.digest,
-            )
+            if generation.generation_label == _G052_GENERATION_LABEL:
+                operation_permit = ledger.begin_g052_flat_only_monitor(
+                    repository=repository,
+                    generation_digest=generation.digest,
+                )
+            else:
+                operation_permit = ledger.begin_g053_flat_only_monitor(
+                    repository=repository,
+                    generation_digest=generation.digest,
+                )
             begin_state = V4MonitorLaunchagentBeginState.MARKER_PERSISTED
             require_operation_permit(
                 operation_permit,
@@ -379,6 +398,7 @@ def main() -> int:
         _G050_GENERATION_LABEL,
         _G051_GENERATION_LABEL,
         _G052_GENERATION_LABEL,
+        _G053_GENERATION_LABEL,
     }:
         if _startup_probe_requires_installer_process_lock(
             generation.generation_label
@@ -423,6 +443,7 @@ def main() -> int:
         _G050_GENERATION_LABEL,
         _G051_GENERATION_LABEL,
         _G052_GENERATION_LABEL,
+        _G053_GENERATION_LABEL,
     }
     try:
         if operation_permit is None:
@@ -481,6 +502,7 @@ def main() -> int:
             _G050_GENERATION_LABEL,
             _G051_GENERATION_LABEL,
             _G052_GENERATION_LABEL,
+            _G053_GENERATION_LABEL,
         }:
             try:
                 heartbeat = json.loads(

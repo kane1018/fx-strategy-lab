@@ -17,8 +17,12 @@ from enum import Enum, StrEnum
 from pathlib import Path
 
 from app.h11_auto.persistence import H11AutoPersistenceError, H11AutoProcessLock
+from app.h11_auto.runtime_safety import PhaseBRiskStore
 from app.h11_auto.v4_gmo_contracts import v4_gmo_trading_day_jst
-from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
+from app.h11_auto.v4_gmo_generation import (
+    load_v4_gmo_frozen_generation,
+    v4_gmo_risk_policy,
+)
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from h11_v4_reviewed_digest import (
     V4ReviewedDigestError,
@@ -378,6 +382,65 @@ class V4G052FlatOnlyCarryForwardEvidence:
         self.flat_cycle_count = flat_cycle_count
         self.unresolved_cycle_count = unresolved_cycle_count
         self.transport_action_pending = transport_action_pending
+        self.source_halt_remains_latched = source_halt_remains_latched
+        self.broker_post_authorized = False
+        self.activation_permit_issued = False
+
+    def __bool__(self) -> bool:
+        return False
+
+
+class V4G053FlatOnlyCarryForwardEvidence:
+    """Falsey G052 incident-flat proof usable only by G053 operation 60."""
+
+    __slots__ = (
+        "_token",
+        "source_reviewed_files_digest",
+        "source_generation_digest",
+        "target_reviewed_files_digest",
+        "target_generation_digest",
+        "trading_day_jst",
+        "account_flat",
+        "active_orders_zero",
+        "source_unresolved_cycle_count",
+        "source_market_attempt_count",
+        "source_entries_today",
+        "source_halt_remains_latched",
+        "broker_post_authorized",
+        "activation_permit_issued",
+    )
+
+    def __init__(
+        self,
+        *,
+        token: object,
+        source_reviewed_files_digest: str,
+        source_generation_digest: str,
+        target_reviewed_files_digest: str,
+        target_generation_digest: str,
+        trading_day_jst: str,
+        account_flat: bool,
+        active_orders_zero: bool,
+        source_unresolved_cycle_count: int,
+        source_market_attempt_count: int,
+        source_entries_today: int,
+        source_halt_remains_latched: bool,
+    ) -> None:
+        if token is not _G053_FLAT_CARRY_FORWARD_TOKEN:
+            raise V4ActualPreparationGuardError(
+                "G053_FLAT_CARRY_FORWARD_INVALID"
+            )
+        self._token = token
+        self.source_reviewed_files_digest = source_reviewed_files_digest
+        self.source_generation_digest = source_generation_digest
+        self.target_reviewed_files_digest = target_reviewed_files_digest
+        self.target_generation_digest = target_generation_digest
+        self.trading_day_jst = trading_day_jst
+        self.account_flat = account_flat
+        self.active_orders_zero = active_orders_zero
+        self.source_unresolved_cycle_count = source_unresolved_cycle_count
+        self.source_market_attempt_count = source_market_attempt_count
+        self.source_entries_today = source_entries_today
         self.source_halt_remains_latched = source_halt_remains_latched
         self.broker_post_authorized = False
         self.activation_permit_issued = False
@@ -907,6 +970,31 @@ class V4PreparationAttemptLedger:
             runtime_predecessor_clear=True,
         )
 
+    def begin_g053_flat_only_monitor(
+        self,
+        *,
+        repository: Path,
+        generation_digest: str,
+    ) -> V4PreparationOperationPermit:
+        evidence = load_g053_flat_only_carry_forward_evidence(
+            repository=repository,
+            external_gate=self._external_gate,
+            generation_digest=generation_digest,
+        )
+        if not _g053_flat_carry_forward_matches_target(
+            evidence=evidence,
+            reviewed_files_digest=self._reviewed_files_digest,
+            generation_digest=self._generation_digest,
+            trading_day_jst=self._trading_day_jst,
+        ):
+            raise V4ActualPreparationGuardError(
+                "G053_FLAT_CARRY_FORWARD_INVALID"
+            )
+        return self._begin(
+            operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
+            runtime_predecessor_clear=True,
+        )
+
     def _begin(
         self,
         *,
@@ -1288,7 +1376,9 @@ _G040_SOURCE_GENERATION_DIGEST = (
 _G040_SOURCE_TRADING_DAY_JST = "2026-07-29"
 _RUNTIME_CARRY_FORWARD_TOKEN = object()
 _G052_FLAT_CARRY_FORWARD_TOKEN = object()
+_G053_FLAT_CARRY_FORWARD_TOKEN = object()
 _G052_TARGET_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
+_G053_TARGET_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _G051_FLAT_SOURCE_REVIEWED_FILES_DIGEST = (
     "sha256:53d0dd07c663bfd528d0fece449b274e1dca631e03b43c8ead9fafa2d0f239ae"
 )
@@ -1296,6 +1386,12 @@ _G051_FLAT_SOURCE_GENERATION_DIGEST = (
     "sha256:640556dd46a5066b8d7223f76d5196c22e4c65449c7d2371e526662049b9bf1c"
 )
 _G051_FLAT_SOURCE_TRADING_DAY_JST = "2026-07-30"
+_G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST = (
+    "sha256:a0736d9f06cb912ef262c8321068de9564df8fb1b7f0dd6b0e01ef527ee9d4d3"
+)
+_G052_FLAT_SOURCE_GENERATION_DIGEST = (
+    "sha256:4da28f2e6c49b7fd18fcdf466af9afbf4d875fc6273eaa22d7f2c0352bc8de13"
+)
 _RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
     "H11_AUTO_30M_20260729_G040",
     "H11_AUTO_30M_20260729_G041",
@@ -1660,6 +1756,247 @@ def _g052_flat_carry_forward_matches_target(
     )
 
 
+def _reject_g053_source_symlinks(path: Path) -> None:
+    current = path
+    while True:
+        if current.is_symlink():
+            raise V4ActualPreparationGuardError(
+                "G053_FLAT_SOURCE_EVIDENCE_INVALID"
+            )
+        if current.parent == current:
+            return
+        current = current.parent
+
+
+def load_g053_flat_only_carry_forward_evidence(
+    *,
+    repository: Path,
+    external_gate: V4ExternalPreparationGate,
+    generation_digest: str,
+    now_utc: datetime | None = None,
+) -> V4G053FlatOnlyCarryForwardEvidence:
+    """Validate G052's one-use account-flat result without clearing its HALT."""
+
+    require_external_preparation_gate(external_gate)
+    target_ledger = V4PreparationAttemptLedger(
+        external_gate=external_gate,
+        now_utc=now_utc,
+    )
+    target_generation = load_v4_gmo_frozen_generation(
+        repository=repository,
+        implementation_digest=(
+            external_gate.reviewed_digest_for_internal_preparation_only()
+        ),
+    )
+    if (
+        target_generation.generation_label != _G053_TARGET_GENERATION_LABEL
+        or target_generation.digest != generation_digest
+        or not target_ledger.state_root.name.endswith(
+            generation_digest.removeprefix("sha256:")
+        )
+    ):
+        raise V4ActualPreparationGuardError("G053_FLAT_TARGET_MISMATCH")
+
+    source_root = v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=_G052_FLAT_SOURCE_GENERATION_DIGEST,
+    )
+    started_path = (
+        source_root / "g052-emergency-readonly-reconciliation.started.json"
+    )
+    result_path = (
+        source_root / "g052-emergency-readonly-reconciliation.result.json"
+    )
+    database = source_root / "coordinator.sqlite3"
+    risk_path = source_root / "risk.json"
+    for path in (source_root, started_path, result_path, database, risk_path):
+        _reject_g053_source_symlinks(path)
+    if (
+        not started_path.is_file()
+        or not result_path.is_file()
+        or not database.is_file()
+        or not risk_path.is_file()
+    ):
+        raise V4ActualPreparationGuardError(
+            "G053_FLAT_SOURCE_EVIDENCE_MISSING"
+        )
+    try:
+        started = json.loads(started_path.read_text(encoding="utf-8"))
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        started_at = datetime.fromisoformat(str(started["started_at_utc"]))
+        started_stat = started_path.stat()
+        result_stat = result_path.stat()
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise V4ActualPreparationGuardError(
+            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
+        ) from error
+    if (
+        set(started)
+        != {
+            "generation_digest",
+            "reviewed_files_digest",
+            "started_at_utc",
+            "status",
+        }
+        or set(result)
+        != {
+            "account_flat",
+            "active_orders_count",
+            "active_orders_zero",
+            "broker_get_count",
+            "broker_post_count",
+            "broker_write",
+            "identifier_exposed",
+            "latest_executions_count",
+            "open_positions_count",
+            "raw_response_retained",
+            "status",
+        }
+        or started_at.tzinfo is None
+        or started_stat.st_uid != os.getuid()
+        or result_stat.st_uid != os.getuid()
+        or started_stat.st_nlink != 1
+        or result_stat.st_nlink != 1
+        or started_stat.st_mode & 0o777 != 0o600
+        or result_stat.st_mode & 0o777 != 0o600
+        or result_stat.st_mtime_ns < started_stat.st_mtime_ns
+        or result_stat.st_mtime_ns - started_stat.st_mtime_ns
+        > 300 * 1_000_000_000
+        or abs(
+            started_stat.st_mtime
+            - started_at.astimezone(UTC).timestamp()
+        )
+        > 10
+        or started.get("status") != "STARTED_NO_RETRY"
+        or started.get("generation_digest")
+        != _G052_FLAT_SOURCE_GENERATION_DIGEST
+        or started.get("reviewed_files_digest")
+        != _G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST
+        or result.get("status") != "G052_EMERGENCY_RECONCILIATION_KNOWN"
+        or result.get("broker_get_count") != 3
+        or result.get("open_positions_count") != 0
+        or result.get("active_orders_count") != 0
+        or result.get("account_flat") is not True
+        or result.get("active_orders_zero") is not True
+        or result.get("broker_write") is not False
+        or result.get("broker_post_count") != 0
+        or result.get("raw_response_retained") is not False
+        or result.get("identifier_exposed") is not False
+        or type(result.get("latest_executions_count")) is not int
+        or result["latest_executions_count"] < 0
+    ):
+        raise V4ActualPreparationGuardError(
+            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
+        )
+
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(
+            f"{database.resolve().as_uri()}?mode=ro",
+            uri=True,
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA query_only=ON")
+        generation_row = connection.execute(
+            "SELECT value FROM metadata WHERE key='generation_digest'"
+        ).fetchone()
+        halt_row = connection.execute(
+            "SELECT value FROM metadata WHERE key='unknown_halt_latched'"
+        ).fetchone()
+        pending_row = connection.execute(
+            "SELECT 1 FROM metadata WHERE key='pending_transport_attempt'"
+        ).fetchone()
+        cycle_row = connection.execute(
+            "SELECT COUNT(*) cycle_count,"
+            "SUM(CASE WHEN realized_pnl_jpy IS NULL THEN 1 ELSE 0 END) "
+            "unresolved_count FROM cycles"
+        ).fetchone()
+        attempt_rows = connection.execute(
+            "SELECT action,COUNT(*) count FROM attempts "
+            "GROUP BY action ORDER BY action"
+        ).fetchall()
+    except sqlite3.Error as error:
+        raise V4ActualPreparationGuardError(
+            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
+        ) from error
+    finally:
+        if connection is not None:
+            connection.close()
+    actual_attempts = {
+        str(row["action"]): int(row["count"]) for row in attempt_rows
+    }
+    try:
+        source_risk_state = PhaseBRiskStore(
+            risk_path,
+            policy=v4_gmo_risk_policy(),
+        ).load()
+    except Exception as error:
+        raise V4ActualPreparationGuardError(
+            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
+        ) from error
+    if (
+        generation_row is None
+        or generation_row["value"] != _G052_FLAT_SOURCE_GENERATION_DIGEST
+        or halt_row is None
+        or halt_row["value"] != "true"
+        or pending_row is not None
+        or cycle_row is None
+        or int(cycle_row["cycle_count"]) != 1
+        or int(cycle_row["unresolved_count"] or 0) != 1
+        or actual_attempts != {"MARKET_ENTRY": 1}
+        or source_risk_state.current_day_jst
+        != target_ledger._trading_day_jst
+        or source_risk_state.entries_today != 2
+    ):
+        raise V4ActualPreparationGuardError(
+            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
+        )
+    return V4G053FlatOnlyCarryForwardEvidence(
+        token=_G053_FLAT_CARRY_FORWARD_TOKEN,
+        source_reviewed_files_digest=_G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST,
+        source_generation_digest=_G052_FLAT_SOURCE_GENERATION_DIGEST,
+        target_reviewed_files_digest=(
+            external_gate.reviewed_digest_for_internal_preparation_only()
+        ),
+        target_generation_digest=generation_digest,
+        trading_day_jst=target_ledger._trading_day_jst,
+        account_flat=True,
+        active_orders_zero=True,
+        source_unresolved_cycle_count=1,
+        source_market_attempt_count=1,
+        source_entries_today=2,
+        source_halt_remains_latched=True,
+    )
+
+
+def _g053_flat_carry_forward_matches_target(
+    *,
+    evidence: V4G053FlatOnlyCarryForwardEvidence,
+    reviewed_files_digest: str,
+    generation_digest: str,
+    trading_day_jst: str,
+) -> bool:
+    return (
+        getattr(evidence, "_token", None) is _G053_FLAT_CARRY_FORWARD_TOKEN
+        and evidence.source_reviewed_files_digest
+        == _G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST
+        and evidence.source_generation_digest
+        == _G052_FLAT_SOURCE_GENERATION_DIGEST
+        and evidence.target_reviewed_files_digest == reviewed_files_digest
+        and evidence.target_generation_digest == generation_digest
+        and evidence.trading_day_jst == trading_day_jst
+        and evidence.account_flat is True
+        and evidence.active_orders_zero is True
+        and evidence.source_unresolved_cycle_count == 1
+        and evidence.source_market_attempt_count == 1
+        and evidence.source_entries_today == 2
+        and evidence.source_halt_remains_latched is True
+        and evidence.broker_post_authorized is False
+        and evidence.activation_permit_issued is False
+        and bool(evidence) is False
+    )
+
+
 def require_g040_runtime_only_monitor_completion(
     *,
     repository: Path,
@@ -1718,6 +2055,35 @@ def require_g052_flat_only_monitor_completion(
     return evidence
 
 
+def require_g053_flat_only_monitor_completion(
+    *,
+    repository: Path,
+    external_gate: V4ExternalPreparationGate,
+    generation_digest: str,
+    now_utc: datetime | None = None,
+) -> V4G053FlatOnlyCarryForwardEvidence:
+    evidence = load_g053_flat_only_carry_forward_evidence(
+        repository=repository,
+        external_gate=external_gate,
+        generation_digest=generation_digest,
+        now_utc=now_utc,
+    )
+    ledger = V4PreparationAttemptLedger(
+        external_gate=external_gate,
+        now_utc=now_utc,
+    )
+    operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
+    if not ledger._marker_matches_review(
+        ledger._marker(operation, "passed"),
+        operation=operation,
+        expected_status="PASSED",
+    ):
+        raise V4ActualPreparationGuardError(
+            "G053_FLAT_ONLY_MONITOR_NOT_COMPLETE"
+        )
+    return evidence
+
+
 def load_generation_completed_preparation_evidence(
     *,
     repository: Path,
@@ -1731,6 +2097,13 @@ def load_generation_completed_preparation_evidence(
     current = (now_utc or datetime.now(UTC)).astimezone(UTC)
     if generation_label == _G052_TARGET_GENERATION_LABEL:
         require_g052_flat_only_monitor_completion(
+            repository=repository,
+            external_gate=external_gate,
+            generation_digest=generation_digest,
+            now_utc=current,
+        )
+    elif generation_label == _G053_TARGET_GENERATION_LABEL:
+        require_g053_flat_only_monitor_completion(
             repository=repository,
             external_gate=external_gate,
             generation_digest=generation_digest,

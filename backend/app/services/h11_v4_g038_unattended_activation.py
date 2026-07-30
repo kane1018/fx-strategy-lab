@@ -11,12 +11,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.h11_auto.v4_actual_preparation_guard import (
+    load_external_preparation_gate,
+    load_g053_flat_only_carry_forward_evidence,
     require_clean_main,
     reviewed_files_digest,
 )
 from app.h11_auto.v4_gmo_generation import (
     V4_GMO_UNATTENDED_ACTIVATED_STATUS,
     V4GmoFrozenGeneration,
+    load_v4_gmo_frozen_generation,
 )
 from app.services.h11_v4_g037_unattended_commissioning_no_post import (
     G037_CANARY_EVIDENCE_SCHEMA,
@@ -29,6 +32,13 @@ from app.services.h11_v4_unattended_live_paths import (
 )
 
 G038_RELEASE_SCHEMA = "H11_V4_G038_SUCCESSOR_HALT_RELEASE_NO_POST_V1"
+_G052_GENERATION_DIGEST = (
+    "sha256:4da28f2e6c49b7fd18fcdf466af9afbf4d875fc6273eaa22d7f2c0352bc8de13"
+)
+_G052_REVIEWED_FILES_DIGEST = (
+    "sha256:a0736d9f06cb912ef262c8321068de9564df8fb1b7f0dd6b0e01ef527ee9d4d3"
+)
+_G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -151,6 +161,88 @@ def record_g038_successor_release_once(
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError as error:
         raise V4G038ActivationError("G038_RELEASE_RACE_OR_UNKNOWN_RESULT") from error
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(payload)
+        handle.flush()
+        os.fsync(handle.fileno())
+    directory_descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_descriptor)
+    finally:
+        os.close(directory_descriptor)
+    return release
+
+
+def record_g053_flat_only_successor_release_once(
+    *,
+    repository: Path,
+    state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+) -> V4G038SuccessorRelease:
+    """Bind G053 to G052's known-flat result while preserving G052's HALT."""
+
+    require_clean_main(repository=repository)
+    target_reviewed = reviewed_files_digest(repository=repository)
+    generation = load_v4_gmo_frozen_generation(
+        repository=repository,
+        implementation_digest=target_reviewed,
+    )
+    if (
+        generation.generation_label != _G053_GENERATION_LABEL
+        or generation.activation_source_generation_digest
+        != _G052_GENERATION_DIGEST
+        or generation.successful_canary_evidence_digest is None
+    ):
+        raise V4G038ActivationError("G053_RELEASE_TARGET_INVALID")
+    external_gate = load_external_preparation_gate(repository=repository)
+    flat_evidence = load_g053_flat_only_carry_forward_evidence(
+        repository=repository,
+        external_gate=external_gate,
+        generation_digest=generation.digest,
+    )
+    if (
+        flat_evidence.source_generation_digest != _G052_GENERATION_DIGEST
+        or flat_evidence.source_reviewed_files_digest
+        != _G052_REVIEWED_FILES_DIGEST
+        or flat_evidence.account_flat is not True
+        or flat_evidence.active_orders_zero is not True
+        or flat_evidence.source_halt_remains_latched is not True
+        or flat_evidence.broker_post_authorized is not False
+        or flat_evidence.activation_permit_issued is not False
+        or bool(flat_evidence) is not False
+    ):
+        raise V4G038ActivationError("G053_FLAT_EVIDENCE_NOT_CLEAR")
+    release = V4G038SuccessorRelease(
+        schema=G038_RELEASE_SCHEMA,
+        source_generation_digest=_G052_GENERATION_DIGEST,
+        predecessor_halt_generation_digest=_G052_GENERATION_DIGEST,
+        source_reviewed_files_digest=_G052_REVIEWED_FILES_DIGEST,
+        target_reviewed_files_digest=target_reviewed,
+        target_generation_label=_G053_GENERATION_LABEL,
+        successful_canary_evidence_digest=(
+            generation.successful_canary_evidence_digest
+        ),
+        source_halt_remains_latched=True,
+        successor_activation_released=True,
+    )
+    if release.digest != generation.successor_halt_release_digest:
+        raise V4G038ActivationError("G053_RELEASE_BINDING_MISMATCH")
+    path = v4_unattended_g038_release_path(
+        state_root=state_root,
+        target_reviewed_files_digest=target_reviewed,
+    )
+    _reject_symlink_ancestry(path, allow_missing=True)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = release.canonical_json + "\n"
+    if path.exists():
+        if path.is_symlink() or path.read_text(encoding="utf-8") != payload:
+            raise V4G038ActivationError("G053_EXISTING_RELEASE_MISMATCH")
+        return release
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as error:
+        raise V4G038ActivationError(
+            "G053_RELEASE_RACE_OR_UNKNOWN_RESULT"
+        ) from error
     with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
         handle.write(payload)
         handle.flush()

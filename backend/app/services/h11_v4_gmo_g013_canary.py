@@ -631,6 +631,12 @@ def _run_bound_g013_canary(
         requested_size=session.intent.size,
         protection_contract_hash=H11_V4_GMO_PROTECTION_CONTRACT_HASH,
     )
+    # Keychain subprocess latency is outside the broker HTTP timeout budget.
+    # Prime once before MARKET so entry reconciliation and exact OCO signing
+    # cannot consume the frozen 15-second protection window on repeated
+    # credential reads. The cache is cleared immediately after exact
+    # protection, and binding.close() clears every early-return/error path.
+    binding.prime_signing_credentials_for_protection_window()
     entry_outcome = path.perform_market_once(
         signal_fingerprint=signal.fingerprint,
         plan=market_plan,
@@ -760,6 +766,7 @@ def _run_bound_g013_canary(
         signal_fingerprint=signal.fingerprint,
         reconciliation_evidence=protection_confirmation_evidence,
     )
+    binding.clear_signing_credentials()
     if on_protected is not None:
         on_protected(
             V4GmoG013CanaryResult(

@@ -641,6 +641,8 @@ def test_g013_orchestrator_uses_one_entry_optional_cancel_and_one_oco(
     path = _FakePath(recoveries.copy())
     binding = SimpleNamespace(
         coordinated_path=path,
+        prime_signing_credentials_for_protection_window=lambda: None,
+        clear_signing_credentials=lambda: None,
         build_foreground_lifecycle_driver=lambda: SimpleNamespace(
             run_until_flat=lambda: SimpleNamespace(flat_reconciled=True)
         ),
@@ -680,7 +682,11 @@ def test_g013_orchestrator_rechecks_300_second_signal_age_before_any_post() -> N
     # 観測(00:00:00)から301秒後はMAXIMUM_FORMAL_SIGNAL_AGE_SECONDS(300s)を超え、
     # POST直前の再検査で期限切れ扱いになり一切のPOSTを行わない。
     path = _FakePath(["FILLED_UNPROTECTED", "FILLED_PROTECTED"])
-    binding = SimpleNamespace(coordinated_path=path)
+    binding = SimpleNamespace(
+        coordinated_path=path,
+        prime_signing_credentials_for_protection_window=lambda: None,
+        clear_signing_credentials=lambda: None,
+    )
     with pytest.raises(canary_module.V4GmoG013CanaryError, match="SIGNAL_EXPIRED"):
         canary_module._run_bound_g013_canary(
             session=_fake_session(),
@@ -701,6 +707,8 @@ def test_g013_orchestrator_admits_signal_within_widened_300_second_window(
     path = _FakePath(["FILLED_UNPROTECTED", "FILLED_PROTECTED"])
     binding = SimpleNamespace(
         coordinated_path=path,
+        prime_signing_credentials_for_protection_window=lambda: None,
+        clear_signing_credentials=lambda: None,
         build_foreground_lifecycle_driver=lambda: SimpleNamespace(
             run_until_flat=lambda: SimpleNamespace(flat_reconciled=True)
         ),
@@ -730,7 +738,11 @@ def test_g013_orchestrator_rechecks_entry_window_before_public_or_private_io(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     path = _FakePath(["FILLED_UNPROTECTED", "FILLED_PROTECTED"])
-    binding = SimpleNamespace(coordinated_path=path)
+    binding = SimpleNamespace(
+        coordinated_path=path,
+        prime_signing_credentials_for_protection_window=lambda: None,
+        clear_signing_credentials=lambda: None,
+    )
     quote_called = False
 
     def _quote(**kwargs: object) -> object:
@@ -786,7 +798,11 @@ def test_g013_unknown_write_outcome_never_reaches_a_later_write(
     path: _FakePath,
     expected_status: str,
 ) -> None:
-    binding = SimpleNamespace(coordinated_path=path)
+    binding = SimpleNamespace(
+        coordinated_path=path,
+        prime_signing_credentials_for_protection_window=lambda: None,
+        clear_signing_credentials=lambda: None,
+    )
     monkeypatch.setattr(canary_module, "_require_exact_session_binding", lambda _session: None)
     monkeypatch.setattr(
         canary_module,
@@ -838,7 +854,11 @@ def test_g013_entry_halt_surfaces_fixed_failure_class_only(
         path.adapter = SimpleNamespace(last_failure_class=adapter_label)
         return canary_module._run_bound_g013_canary(
             session=_fake_session(),
-            binding=SimpleNamespace(coordinated_path=path),
+            binding=SimpleNamespace(
+                coordinated_path=path,
+                prime_signing_credentials_for_protection_window=lambda: None,
+                clear_signing_credentials=lambda: None,
+            ),
             on_protected=None,
             wall_clock=lambda: datetime(2099, 1, 1, 0, 1, tzinfo=UTC),
         )

@@ -56,6 +56,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     load_external_preparation_gate,
     require_g040_runtime_only_monitor_completion,
     require_g052_flat_only_monitor_completion,
+    require_g053_flat_only_monitor_completion,
     reviewed_files_digest,
 )
 from app.h11_auto.v4_gmo_generation import (
@@ -201,6 +202,7 @@ def main(argv: list[str]) -> int:
         "H11_AUTO_30M_20260730_G050",
         "H11_AUTO_30M_20260730_G051",
         "H11_AUTO_30M_20260730_G052",
+        "H11_AUTO_30M_20260730_G053",
     }:
         state_root = v4_gmo_runtime_state_root(
             repository=repository,
@@ -215,6 +217,16 @@ def main(argv: list[str]) -> int:
                 == "H11_AUTO_30M_20260730_G052"
             ):
                 require_g052_flat_only_monitor_completion(
+                    repository=repository,
+                    external_gate=external_gate,
+                    generation_digest=generation.digest,
+                    now_utc=datetime.now(UTC),
+                )
+            elif (
+                generation.generation_label
+                == "H11_AUTO_30M_20260730_G053"
+            ):
+                require_g053_flat_only_monitor_completion(
                     repository=repository,
                     external_gate=external_gate,
                     generation_digest=generation.digest,

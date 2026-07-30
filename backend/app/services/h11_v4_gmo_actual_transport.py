@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import platform
 import re
 import subprocess
@@ -350,13 +351,64 @@ class V4GmoPrivateTransport(Protocol):
     ) -> V4GmoPrivateEnvelope: ...
 
 
-@dataclass(frozen=True, repr=False)
+@dataclass(repr=False)
 class V4GmoSignedRequestFactory:
     credential_pair: V4GmoSealedCredentialPair
     timestamp_factory: Callable[[], str] = lambda: str(int(time.time() * 1000))
+    monotonic_factory: Callable[[], float] = time.monotonic
+    _protection_window_credentials: (
+        tuple[V4GmoSealedSecret, V4GmoSealedSecret] | None
+    ) = field(default=None, init=False, repr=False)
+    _protection_window_deadline: float | None = field(
+        default=None, init=False, repr=False
+    )
+
+    def prime_for_protection_window(
+        self, *, maximum_age_seconds: float = 60.0
+    ) -> None:
+        """Read Keychain once before MARKET and retain only through OCO setup."""
+
+        now = float(self.monotonic_factory())
+        if (
+            not math.isfinite(now)
+            or now < 0
+            or not math.isfinite(maximum_age_seconds)
+            or maximum_age_seconds <= 0
+        ):
+            raise V4GmoActualTransportError(
+                "V4_GMO_PROTECTION_CREDENTIAL_WINDOW_INVALID"
+            )
+        credentials = self.credential_pair.unseal_for_internal_request_only()
+        if (
+            not isinstance(credentials, tuple)
+            or len(credentials) != 2
+            or not isinstance(credentials[0], V4GmoSealedSecret)
+            or not isinstance(credentials[1], V4GmoSealedSecret)
+        ):
+            raise V4GmoActualTransportError("V4_GMO_KEYCHAIN_READER_CONTRACT_INVALID")
+        self._protection_window_credentials = credentials
+        self._protection_window_deadline = now + maximum_age_seconds
+
+    def clear_protection_window_credentials(self) -> None:
+        self._protection_window_credentials = None
+        self._protection_window_deadline = None
 
     def build(self, request: V4GmoPrivateRequest) -> V4GmoSignedPrivateRequest:
-        api_key, api_secret = self.credential_pair.unseal_for_internal_request_only()
+        now = float(self.monotonic_factory())
+        cached = self._protection_window_credentials
+        deadline = self._protection_window_deadline
+        if (
+            cached is not None
+            and deadline is not None
+            and math.isfinite(now)
+            and 0 <= now <= deadline
+        ):
+            api_key, api_secret = cached
+        else:
+            self.clear_protection_window_credentials()
+            api_key, api_secret = (
+                self.credential_pair.unseal_for_internal_request_only()
+            )
         timestamp = self.timestamp_factory()
         if not timestamp or not timestamp.isdigit():
             raise V4GmoActualTransportError("V4_GMO_TIMESTAMP_INVALID")
@@ -415,6 +467,12 @@ class V4GmoHttpxPrivateTransport:
 
     def __repr__(self) -> str:
         return "V4GmoHttpxPrivateTransport(<activation-gated>)"
+
+    def prime_signing_credentials_for_protection_window(self) -> None:
+        self._signed_request_factory.prime_for_protection_window()
+
+    def clear_signing_credentials(self) -> None:
+        self._signed_request_factory.clear_protection_window_credentials()
 
     def request(
         self,
@@ -553,6 +611,7 @@ class V4GmoHttpxPrivateTransport:
         return action_key, allowed_actions
 
     def close(self) -> None:
+        self.clear_signing_credentials()
         if self._owns_client:
             self._client.close()
 

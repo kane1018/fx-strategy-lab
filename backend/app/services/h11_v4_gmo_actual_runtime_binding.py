@@ -62,6 +62,12 @@ class V4GmoActualRuntimeBinding:
             dispatcher=dispatcher,
         )
 
+    def prime_signing_credentials_for_protection_window(self) -> None:
+        self.transport.prime_signing_credentials_for_protection_window()
+
+    def clear_signing_credentials(self) -> None:
+        self.transport.clear_signing_credentials()
+
     def close(self) -> None:
         self.transport.close()
         self.process_lock.release()

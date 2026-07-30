@@ -255,6 +255,46 @@ def test_signing_uses_official_short_path_and_redacts_repr() -> None:
     assert "123456" not in repr(envelope)
 
 
+def test_protection_window_primes_keychain_once_and_clears_explicitly() -> None:
+    calls = 0
+
+    @dataclass(frozen=True)
+    class CountingCredentialPair:
+        def unseal_for_internal_request_only(
+            self,
+        ) -> tuple[V4GmoSealedSecret, V4GmoSealedSecret]:
+            nonlocal calls
+            calls += 1
+            return (
+                V4GmoSealedSecret("synthetic-key"),
+                V4GmoSealedSecret("synthetic-secret"),
+            )
+
+    now = [100.0]
+    factory = V4GmoSignedRequestFactory(
+        credential_pair=CountingCredentialPair(),
+        timestamp_factory=lambda: "1700000000000",
+        monotonic_factory=lambda: now[0],
+    )
+    request = V4GmoPrivateRequest(
+        method="GET",
+        transport_path="/private/v1/openPositions",
+        signing_path="/v1/openPositions",
+        params={"count": "100"},
+        body=None,
+    )
+
+    factory.prime_for_protection_window(maximum_age_seconds=60.0)
+    factory.build(request)
+    now[0] = 101.0
+    factory.build(request)
+    assert calls == 1
+
+    factory.clear_protection_window_credentials()
+    factory.build(request)
+    assert calls == 2
+
+
 def test_keychain_pair_accepts_injected_fake_reader_without_real_keychain() -> None:
     calls: list[tuple[str, str]] = []
 

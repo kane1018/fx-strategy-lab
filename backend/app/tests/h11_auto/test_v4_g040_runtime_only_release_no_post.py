@@ -12,10 +12,15 @@ import pytest
 from app.h11_auto import v4_actual_preparation_guard as guard_module
 from app.h11_auto import v4_gmo_monitor_supervisor as supervisor_module
 from app.h11_auto.persistence import H11AutoProcessLock
-from app.h11_auto.runtime_safety import DeadManStore, PhaseBRiskStore
+from app.h11_auto.runtime_safety import (
+    DeadManStore,
+    PhaseBRiskState,
+    PhaseBRiskStore,
+)
 from app.h11_auto.v4_actual_preparation_guard import (
     V4ActualPreparationGuardError,
     V4G052FlatOnlyCarryForwardEvidence,
+    V4G053FlatOnlyCarryForwardEvidence,
     V4RuntimeOnlyPreparationCarryForwardEvidence,
 )
 from app.h11_auto.v4_gmo_actual_coordinator import (
@@ -57,6 +62,169 @@ def test_g052_flat_only_carry_forward_cannot_be_publicly_minted() -> None:
             unresolved_cycle_count=0,
             transport_action_pending=False,
             source_halt_remains_latched=True,
+        )
+
+
+def test_g053_flat_only_carry_forward_cannot_be_publicly_minted() -> None:
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="G053_FLAT_CARRY_FORWARD_INVALID",
+    ):
+        V4G053FlatOnlyCarryForwardEvidence(
+            token=object(),
+            source_reviewed_files_digest="sha256:" + ("1" * 64),
+            source_generation_digest="sha256:" + ("2" * 64),
+            target_reviewed_files_digest="sha256:" + ("3" * 64),
+            target_generation_digest="sha256:" + ("4" * 64),
+            trading_day_jst="2026-07-30",
+            account_flat=True,
+            active_orders_zero=True,
+            source_unresolved_cycle_count=1,
+            source_market_attempt_count=1,
+            source_entries_today=2,
+            source_halt_remains_latched=True,
+        )
+
+
+def _write_g052_incident_flat_source(
+    repository: Path,
+    *,
+    account_flat: bool = True,
+) -> None:
+    source_root = guard_module.v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=guard_module._G052_FLAT_SOURCE_GENERATION_DIGEST,
+    )
+    source_root.mkdir(parents=True)
+    started_path = (
+        source_root / "g052-emergency-readonly-reconciliation.started.json"
+    )
+    started_path.write_text(
+        json.dumps(
+            {
+                "status": "STARTED_NO_RETRY",
+                "generation_digest": (
+                    guard_module._G052_FLAT_SOURCE_GENERATION_DIGEST
+                ),
+                "reviewed_files_digest": (
+                    guard_module._G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST
+                ),
+                "started_at_utc": datetime.now(UTC).isoformat(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    started_path.chmod(0o600)
+    result_path = (
+        source_root / "g052-emergency-readonly-reconciliation.result.json"
+    )
+    result_path.write_text(
+        json.dumps(
+            {
+                "status": "G052_EMERGENCY_RECONCILIATION_KNOWN",
+                "broker_get_count": 3,
+                "latest_executions_count": 1,
+                "open_positions_count": 0 if account_flat else 1,
+                "active_orders_count": 0,
+                "account_flat": account_flat,
+                "active_orders_zero": True,
+                "broker_write": False,
+                "broker_post_count": 0,
+                "raw_response_retained": False,
+                "identifier_exposed": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    result_path.chmod(0o600)
+    risk_policy = guard_module.v4_gmo_risk_policy()
+    PhaseBRiskStore(
+        source_root / "risk.json",
+        policy=risk_policy,
+    ).save(
+        PhaseBRiskState(
+            policy_digest=risk_policy.digest,
+            current_day_jst="2026-07-30",
+            current_month_jst="2026-07",
+            entries_today=2,
+        )
+    )
+    with sqlite3.connect(source_root / "coordinator.sqlite3") as connection:
+        connection.execute(
+            "CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)"
+        )
+        connection.execute(
+            "CREATE TABLE cycles(realized_pnl_jpy INTEGER)"
+        )
+        connection.execute("CREATE TABLE attempts(action TEXT NOT NULL)")
+        connection.executemany(
+            "INSERT INTO metadata(key,value) VALUES(?,?)",
+            (
+                (
+                    "generation_digest",
+                    guard_module._G052_FLAT_SOURCE_GENERATION_DIGEST,
+                ),
+                ("unknown_halt_latched", "true"),
+            ),
+        )
+        connection.execute("INSERT INTO cycles VALUES(NULL)")
+        connection.execute("INSERT INTO attempts VALUES('MARKET_ENTRY')")
+
+
+def test_g053_flat_only_carry_forward_requires_exact_g052_incident_flat(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    gate, target_digest = _g052_gate(tmp_path)
+    monkeypatch.setattr(
+        guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda **_kwargs: SimpleNamespace(
+            generation_label="H11_AUTO_30M_20260730_G053",
+            digest=target_digest,
+        ),
+    )
+    _write_g052_incident_flat_source(tmp_path)
+
+    evidence = guard_module.load_g053_flat_only_carry_forward_evidence(
+        repository=tmp_path,
+        external_gate=gate,
+        generation_digest=target_digest,
+        now_utc=datetime(2026, 7, 30, 11, 0, tzinfo=UTC),
+    )
+
+    assert evidence.account_flat is True
+    assert evidence.active_orders_zero is True
+    assert evidence.source_unresolved_cycle_count == 1
+    assert evidence.source_market_attempt_count == 1
+    assert evidence.source_halt_remains_latched is True
+    assert bool(evidence) is False
+
+
+def test_g053_flat_only_carry_forward_rejects_nonflat_account(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    gate, target_digest = _g052_gate(tmp_path)
+    monkeypatch.setattr(
+        guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda **_kwargs: SimpleNamespace(
+            generation_label="H11_AUTO_30M_20260730_G053",
+            digest=target_digest,
+        ),
+    )
+    _write_g052_incident_flat_source(tmp_path, account_flat=False)
+
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="G053_FLAT_SOURCE_EVIDENCE_INVALID",
+    ):
+        guard_module.load_g053_flat_only_carry_forward_evidence(
+            repository=tmp_path,
+            external_gate=gate,
+            generation_digest=target_digest,
+            now_utc=datetime(2026, 7, 30, 11, 0, tzinfo=UTC),
         )
 
 
