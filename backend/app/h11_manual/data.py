@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -61,9 +63,21 @@ def load_candle_csv(path: Path) -> pd.DataFrame:
 
 def save_candle_csv(path: Path, frame: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix(path.suffix + ".tmp")
-    _normalize(frame).to_csv(temp, index=False)
-    temp.replace(path)
+    descriptor, temp_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        text=True,
+    )
+    temp = Path(temp_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
+            _normalize(frame).to_csv(handle, index=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, path)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def candles_to_frame(candles: list[Candle]) -> pd.DataFrame:

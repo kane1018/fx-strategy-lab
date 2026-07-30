@@ -113,7 +113,9 @@ def test_generation_digest_mismatch_aborts_before_session_prep(
         launcher.main(_argv(repository))
 
 
-def _valid_digests(monkeypatch, generation_digest: str) -> tuple[str, str]:
+def _valid_digests(
+    monkeypatch, generation_digest: str, *, generation_label: str = ""
+) -> tuple[str, str]:
     reviewed_digest = "sha256:" + "a" * 64
     monkeypatch.setattr(launcher, "reviewed_files_digest", lambda **_kw: reviewed_digest)
     monkeypatch.setattr(
@@ -121,6 +123,7 @@ def _valid_digests(monkeypatch, generation_digest: str) -> tuple[str, str]:
         "load_v4_gmo_frozen_generation",
         lambda **_kw: SimpleNamespace(
             digest=generation_digest,
+            generation_label=generation_label,
             live_ready=True,
             unattended_live_supported=True,
         ),
@@ -143,6 +146,51 @@ def _valid_digests(monkeypatch, generation_digest: str) -> tuple[str, str]:
         lambda **_kw: None,
     )
     return reviewed_digest, generation_digest
+
+
+def test_g051_requires_runtime_clear_before_session(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    repository = _repository(tmp_path)
+    generation_digest = "sha256:" + "b" * 64
+    reviewed_digest, _ = _valid_digests(
+        monkeypatch,
+        generation_digest,
+        generation_label="H11_AUTO_30M_20260730_G051",
+    )
+    monkeypatch.setattr(
+        launcher,
+        "v4_gmo_runtime_state_root",
+        lambda **_kw: tmp_path / "state",
+    )
+    monkeypatch.setattr(
+        launcher,
+        "load_external_preparation_gate",
+        lambda **_kw: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "require_g040_runtime_only_monitor_completion",
+        lambda **_kw: SimpleNamespace(),
+    )
+    monkeypatch.setattr(
+        launcher,
+        "prepare_g013_canary_session",
+        lambda **_kw: (_ for _ in ()).throw(
+            AssertionError("must not prepare without a clear G051 runtime")
+        ),
+    )
+
+    exit_code = launcher.main(
+        _argv_matching(
+            repository,
+            reviewed_digest=reviewed_digest,
+            generation_digest=generation_digest,
+        )
+    )
+
+    assert exit_code == 0
+    assert "UNATTENDED_SCHEDULER_RUNTIME_NOT_CLEAR" in capsys.readouterr().out
 
 
 def _argv_matching(repository: Path, *, reviewed_digest: str, generation_digest: str) -> list[str]:
@@ -425,13 +473,10 @@ def test_heartbeat_chain_store_uses_the_confirmed_policy_values(
 
 
 def test_lock_is_released_after_bounded_run_raises(monkeypatch, tmp_path: Path) -> None:
-    # The finally: lock.release() must run even when the real cycle attempt
-    # itself fails downstream -- proven here by re-acquiring the SAME real
-    # lock file after main() propagates bounded_run.main's failure, rather
-    # than only trusting the finally clause exists. (Previously this test
-    # relied on a placeholder raising before bounded_run.main was ever
-    # reached; now that all four placeholders are live code, the failure is
-    # simulated at bounded_run.main itself instead.)
+    # The scheduler must release its preflight ownership before bounded_run
+    # enters the generation-bound runtime binding, which acquires this same
+    # process.lock. Prove the lock is already available inside the fake
+    # bounded runtime, then also prove it remains available after failure.
     repository = _repository(tmp_path)
     generation_digest = "sha256:" + "b" * 64
     reviewed_digest, _ = _valid_digests(monkeypatch, generation_digest)
@@ -439,6 +484,9 @@ def test_lock_is_released_after_bounded_run_raises(monkeypatch, tmp_path: Path) 
     monkeypatch.setattr(launcher, "v4_gmo_runtime_state_root", lambda **_kw: state_root)
 
     def failing_bounded_run_main(*_a, **_kw):
+        runtime_lock = launcher.H11AutoProcessLock(state_root / "process.lock")
+        assert runtime_lock.acquire() is True
+        runtime_lock.release()
         raise RuntimeError("simulated downstream cycle failure")
 
     _patch_up_to_bounded_run(

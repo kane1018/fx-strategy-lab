@@ -198,6 +198,7 @@ def main(argv: list[str]) -> int:
         "H11_AUTO_30M_20260730_G048",
         "H11_AUTO_30M_20260730_G049",
         "H11_AUTO_30M_20260730_G050",
+        "H11_AUTO_30M_20260730_G051",
     }:
         state_root = v4_gmo_runtime_state_root(
             repository=repository,
@@ -273,6 +274,7 @@ def main(argv: list[str]) -> int:
     if not lock.acquire():
         print("status=UNATTENDED_SCHEDULER_TICK_SKIPPED_LOCK_HELD")
         return 0
+    lock_held = True
     try:
         try:
             session = prepare_g013_canary_session(
@@ -325,6 +327,13 @@ def main(argv: list[str]) -> int:
             credentials=H11V4NotificationCredentialBundle(),
         )
 
+        # The generation-bound actual runtime binding is the authoritative
+        # owner of process.lock while risk state or broker actions are
+        # possible. Release this launcher's preflight ownership before
+        # entering bounded_run so the inner binding can acquire the same lock
+        # instead of rejecting this process as its own concurrent runtime.
+        lock.release()
+        lock_held = False
         return bounded_run.main(
             ["--max-cycles", "1", "--interval-seconds", "0"],
             session=session,
@@ -339,7 +348,8 @@ def main(argv: list[str]) -> int:
             client=client,
         )
     finally:
-        lock.release()
+        if lock_held:
+            lock.release()
 
 
 if __name__ == "__main__":

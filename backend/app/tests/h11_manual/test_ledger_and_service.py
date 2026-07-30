@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -40,6 +41,29 @@ def _synthetic_frame(rows: int, frequency: str, seed: int = 23) -> pd.DataFrame:
             "close": close,
         }
     )
+
+
+def test_save_candle_csv_uses_unique_atomic_temp_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "candles.csv"
+    observed_temporary_paths: list[Path] = []
+    real_mkstemp = data_module.tempfile.mkstemp
+
+    def capturing_mkstemp(*args, **kwargs):
+        descriptor, name = real_mkstemp(*args, **kwargs)
+        observed_temporary_paths.append(Path(name))
+        return descriptor, name
+
+    monkeypatch.setattr(data_module.tempfile, "mkstemp", capturing_mkstemp)
+    save_candle_csv(path, _synthetic_frame(20, "min"))
+    save_candle_csv(path, _synthetic_frame(20, "min", seed=24))
+
+    assert len(observed_temporary_paths) == 2
+    assert observed_temporary_paths[0] != observed_temporary_paths[1]
+    assert all(temporary.parent == path.parent for temporary in observed_temporary_paths)
+    assert all(not temporary.exists() for temporary in observed_temporary_paths)
+    assert len(data_module.load_candle_csv(path)) == 20
 
 
 def test_ledger_is_idempotent_and_scores_resolved_forecasts(tmp_path) -> None:

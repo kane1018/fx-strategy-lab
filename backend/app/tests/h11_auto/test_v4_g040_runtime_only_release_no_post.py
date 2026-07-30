@@ -83,7 +83,7 @@ def test_runtime_only_completed_evidence_is_target_bound_and_one_use(
         repository=tmp_path,
         external_gate=external_gate,
         generation_digest=generation_digest,
-        generation_label="H11_AUTO_30M_20260730_G050",
+        generation_label="H11_AUTO_30M_20260730_G051",
         now_utc=datetime(2026, 7, 30, 0, 0, tzinfo=UTC),
     )
 
@@ -107,6 +107,7 @@ def test_runtime_only_completed_evidence_is_target_bound_and_one_use(
         "H11_AUTO_30M_20260730_G048",
         "H11_AUTO_30M_20260730_G049",
         "H11_AUTO_30M_20260730_G050",
+        "H11_AUTO_30M_20260730_G051",
     ),
 )
 def test_runtime_only_monitor_carries_risk_and_coordinator_baseline(
