@@ -61,6 +61,7 @@ _G053_REVIEWED_FILES_DIGEST = (
     "sha256:ea83124ef74d681dfcd6ac736fb1980dd55f1d94565f1c4910c0e7d03c49f327"
 )
 _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
+_G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -283,7 +284,36 @@ def record_g054_manual_flat_successor_release_once(
     state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
     now_utc: datetime | None = None,
 ) -> V4G038SuccessorRelease:
-    """Release G054 only from its fresh one-use flat snapshot and G053 HALT."""
+    return _record_manual_flat_successor_release_once(
+        repository=repository,
+        state_root=state_root,
+        now_utc=now_utc,
+        target_generation_label=_G054_GENERATION_LABEL,
+    )
+
+
+def record_g055_manual_flat_successor_release_once(
+    *,
+    repository: Path,
+    state_root: Path = DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
+    now_utc: datetime | None = None,
+) -> V4G038SuccessorRelease:
+    return _record_manual_flat_successor_release_once(
+        repository=repository,
+        state_root=state_root,
+        now_utc=now_utc,
+        target_generation_label=_G055_GENERATION_LABEL,
+    )
+
+
+def _record_manual_flat_successor_release_once(
+    *,
+    repository: Path,
+    state_root: Path,
+    now_utc: datetime | None,
+    target_generation_label: str,
+) -> V4G038SuccessorRelease:
+    """Release a corrective generation from a fresh flat snapshot and G053 HALT."""
 
     require_clean_main(repository=repository)
     target_reviewed = reviewed_files_digest(repository=repository)
@@ -292,7 +322,7 @@ def record_g054_manual_flat_successor_release_once(
         implementation_digest=target_reviewed,
     )
     if (
-        generation.generation_label != _G054_GENERATION_LABEL
+        generation.generation_label != target_generation_label
         or generation.activation_source_generation_digest
         != _G053_GENERATION_DIGEST
         or generation.successful_canary_evidence_digest is None
@@ -346,6 +376,7 @@ def record_g054_manual_flat_successor_release_once(
             generation=generation,
             target_reviewed=target_reviewed,
             state_root=state_root,
+            target_generation_label=target_generation_label,
         )
     finally:
         source_lock.release()
@@ -356,6 +387,7 @@ def _record_g054_release_locked(
     generation: V4GmoFrozenGeneration,
     target_reviewed: str,
     state_root: Path,
+    target_generation_label: str,
 ) -> V4G038SuccessorRelease:
     release = V4G038SuccessorRelease(
         schema=G038_RELEASE_SCHEMA,
@@ -363,7 +395,7 @@ def _record_g054_release_locked(
         predecessor_halt_generation_digest=_G053_GENERATION_DIGEST,
         source_reviewed_files_digest=_G053_REVIEWED_FILES_DIGEST,
         target_reviewed_files_digest=target_reviewed,
-        target_generation_label=_G054_GENERATION_LABEL,
+        target_generation_label=target_generation_label,
         successful_canary_evidence_digest=(
             generation.successful_canary_evidence_digest
         ),

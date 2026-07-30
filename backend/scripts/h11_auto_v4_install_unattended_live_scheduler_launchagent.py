@@ -52,6 +52,7 @@ _G051_GENERATION_LABEL = "H11_AUTO_30M_20260730_G051"
 _G052_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
 _G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
+_G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -131,6 +132,7 @@ def main() -> int:
         _G050_GENERATION_LABEL,
         _G051_GENERATION_LABEL,
         _G054_GENERATION_LABEL,
+        _G055_GENERATION_LABEL,
     }:
         try:
             external_gate = load_external_preparation_gate(repository=repository)

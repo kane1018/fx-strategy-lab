@@ -207,6 +207,23 @@ def test_g053_release_requires_exact_falsey_flat_carry(
     assert bool(recorded) is False
 
 
+def test_g055_release_uses_distinct_target_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        subject,
+        "_record_manual_flat_successor_release_once",
+        lambda **kwargs: kwargs["target_generation_label"],
+    )
+    assert (
+        subject.record_g055_manual_flat_successor_release_once(
+            repository=tmp_path,
+            state_root=tmp_path,
+        )
+        == subject._G055_GENERATION_LABEL
+    )
+
+
 def test_g054_release_requires_fresh_flat_snapshot_and_g053_halt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -39,6 +39,7 @@ from app.services.h11_v4_unattended_live_heartbeat_chain import (
 _G052_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
 _G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
+_G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
 _G051_FLAT_SOURCE_GENERATION_DIGEST = (
     "sha256:640556dd46a5066b8d7223f76d5196c22e4c65449c7d2371e526662049b9bf1c"
 )
@@ -115,6 +116,7 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G052",
             "H11_AUTO_30M_20260730_G053",
             "H11_AUTO_30M_20260730_G054",
+            "H11_AUTO_30M_20260730_G055",
         }:
             runtime_lock = H11AutoProcessLock(
                 self.state_root / "process.lock"
@@ -147,6 +149,7 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G052",
             "H11_AUTO_30M_20260730_G053",
             "H11_AUTO_30M_20260730_G054",
+            "H11_AUTO_30M_20260730_G055",
         }:
             self._maintain_g040_runtime_safety(
                 monitor_owns_runtime=monitor_owns_runtime is True,
@@ -298,7 +301,8 @@ class V4GmoMonitorSupervisor:
                 "V4_SUPERVISOR_G053_SOURCE_RISK_BASELINE_MISMATCH"
             )
         if (
-            self.generation.generation_label == _G054_GENERATION_LABEL
+            self.generation.generation_label
+            in {_G054_GENERATION_LABEL, _G055_GENERATION_LABEL}
             and (
                 source_risk_state.current_day_jst != "2026-07-30"
                 or source_risk_state.entries_today != 3
@@ -402,6 +406,7 @@ class V4GmoMonitorSupervisor:
                         "H11_AUTO_30M_20260730_G052",
                         "H11_AUTO_30M_20260730_G053",
                         "H11_AUTO_30M_20260730_G054",
+                        "H11_AUTO_30M_20260730_G055",
                     }:
                         raise
                 wait(interval_seconds)
@@ -422,6 +427,7 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G052",
             "H11_AUTO_30M_20260730_G053",
             "H11_AUTO_30M_20260730_G054",
+            "H11_AUTO_30M_20260730_G055",
         }:
             runtime_lock = H11AutoProcessLock(
                 self.state_root / "process.lock"
