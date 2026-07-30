@@ -55,6 +55,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4ActualPreparationGuardError,
     load_external_preparation_gate,
     require_g040_runtime_only_monitor_completion,
+    require_g052_flat_only_monitor_completion,
     reviewed_files_digest,
 )
 from app.h11_auto.v4_gmo_generation import (
@@ -199,20 +200,33 @@ def main(argv: list[str]) -> int:
         "H11_AUTO_30M_20260730_G049",
         "H11_AUTO_30M_20260730_G050",
         "H11_AUTO_30M_20260730_G051",
+        "H11_AUTO_30M_20260730_G052",
     }:
         state_root = v4_gmo_runtime_state_root(
             repository=repository,
             generation_digest=generation.digest,
         )
         try:
-            require_g040_runtime_only_monitor_completion(
-                repository=repository,
-                external_gate=load_external_preparation_gate(
-                    repository=repository
-                ),
-                generation_digest=generation.digest,
-                now_utc=datetime.now(UTC),
+            external_gate = load_external_preparation_gate(
+                repository=repository
             )
+            if (
+                generation.generation_label
+                == "H11_AUTO_30M_20260730_G052"
+            ):
+                require_g052_flat_only_monitor_completion(
+                    repository=repository,
+                    external_gate=external_gate,
+                    generation_digest=generation.digest,
+                    now_utc=datetime.now(UTC),
+                )
+            else:
+                require_g040_runtime_only_monitor_completion(
+                    repository=repository,
+                    external_gate=external_gate,
+                    generation_digest=generation.digest,
+                    now_utc=datetime.now(UTC),
+                )
             heartbeat = json.loads(
                 (state_root / "supervisor-heartbeat.json").read_text(
                     encoding="utf-8"

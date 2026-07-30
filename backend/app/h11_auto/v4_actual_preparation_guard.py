@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import platform
+import sqlite3
 import subprocess
 import time
 import uuid
@@ -18,6 +19,7 @@ from pathlib import Path
 from app.h11_auto.persistence import H11AutoPersistenceError, H11AutoProcessLock
 from app.h11_auto.v4_gmo_contracts import v4_gmo_trading_day_jst
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
+from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from h11_v4_reviewed_digest import (
     V4ReviewedDigestError,
     compute_reviewed_files_digest,
@@ -324,6 +326,59 @@ class V4RuntimeOnlyPreparationCarryForwardEvidence:
         self.target_generation_digest = target_generation_digest
         self.trading_day_jst = trading_day_jst
         self.completed_operations = completed_operations
+        self.broker_post_authorized = False
+        self.activation_permit_issued = False
+
+    def __bool__(self) -> bool:
+        return False
+
+
+class V4G052FlatOnlyCarryForwardEvidence:
+    """Falsey G051 flat proof usable only as G052 operation-60 predecessor."""
+
+    __slots__ = (
+        "_token",
+        "source_reviewed_files_digest",
+        "source_generation_digest",
+        "target_reviewed_files_digest",
+        "target_generation_digest",
+        "trading_day_jst",
+        "flat_cycle_count",
+        "unresolved_cycle_count",
+        "transport_action_pending",
+        "source_halt_remains_latched",
+        "broker_post_authorized",
+        "activation_permit_issued",
+    )
+
+    def __init__(
+        self,
+        *,
+        token: object,
+        source_reviewed_files_digest: str,
+        source_generation_digest: str,
+        target_reviewed_files_digest: str,
+        target_generation_digest: str,
+        trading_day_jst: str,
+        flat_cycle_count: int,
+        unresolved_cycle_count: int,
+        transport_action_pending: bool,
+        source_halt_remains_latched: bool,
+    ) -> None:
+        if token is not _G052_FLAT_CARRY_FORWARD_TOKEN:
+            raise V4ActualPreparationGuardError(
+                "G052_FLAT_CARRY_FORWARD_INVALID"
+            )
+        self._token = token
+        self.source_reviewed_files_digest = source_reviewed_files_digest
+        self.source_generation_digest = source_generation_digest
+        self.target_reviewed_files_digest = target_reviewed_files_digest
+        self.target_generation_digest = target_generation_digest
+        self.trading_day_jst = trading_day_jst
+        self.flat_cycle_count = flat_cycle_count
+        self.unresolved_cycle_count = unresolved_cycle_count
+        self.transport_action_pending = transport_action_pending
+        self.source_halt_remains_latched = source_halt_remains_latched
         self.broker_post_authorized = False
         self.activation_permit_issued = False
 
@@ -827,6 +882,31 @@ class V4PreparationAttemptLedger:
             runtime_predecessor_clear=True,
         )
 
+    def begin_g052_flat_only_monitor(
+        self,
+        *,
+        repository: Path,
+        generation_digest: str,
+    ) -> V4PreparationOperationPermit:
+        evidence = load_g052_flat_only_carry_forward_evidence(
+            repository=repository,
+            external_gate=self._external_gate,
+            generation_digest=generation_digest,
+        )
+        if not _g052_flat_carry_forward_matches_target(
+            evidence=evidence,
+            reviewed_files_digest=self._reviewed_files_digest,
+            generation_digest=self._generation_digest,
+            trading_day_jst=self._trading_day_jst,
+        ):
+            raise V4ActualPreparationGuardError(
+                "G052_FLAT_CARRY_FORWARD_INVALID"
+            )
+        return self._begin(
+            operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
+            runtime_predecessor_clear=True,
+        )
+
     def _begin(
         self,
         *,
@@ -1207,6 +1287,15 @@ _G040_SOURCE_GENERATION_DIGEST = (
 )
 _G040_SOURCE_TRADING_DAY_JST = "2026-07-29"
 _RUNTIME_CARRY_FORWARD_TOKEN = object()
+_G052_FLAT_CARRY_FORWARD_TOKEN = object()
+_G052_TARGET_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
+_G051_FLAT_SOURCE_REVIEWED_FILES_DIGEST = (
+    "sha256:53d0dd07c663bfd528d0fece449b274e1dca631e03b43c8ead9fafa2d0f239ae"
+)
+_G051_FLAT_SOURCE_GENERATION_DIGEST = (
+    "sha256:640556dd46a5066b8d7223f76d5196c22e4c65449c7d2371e526662049b9bf1c"
+)
+_G051_FLAT_SOURCE_TRADING_DAY_JST = "2026-07-30"
 _RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
     "H11_AUTO_30M_20260729_G040",
     "H11_AUTO_30M_20260729_G041",
@@ -1382,6 +1471,195 @@ def _runtime_carry_forward_matches_target(
     )
 
 
+def _reject_g052_source_symlinks(path: Path) -> None:
+    current = path
+    while True:
+        if current.is_symlink():
+            raise V4ActualPreparationGuardError(
+                "G052_FLAT_SOURCE_EVIDENCE_INVALID"
+            )
+        if current.parent == current:
+            return
+        current = current.parent
+
+
+def load_g052_flat_only_carry_forward_evidence(
+    *,
+    repository: Path,
+    external_gate: V4ExternalPreparationGate,
+    generation_digest: str,
+    now_utc: datetime | None = None,
+) -> V4G052FlatOnlyCarryForwardEvidence:
+    """Validate only G051's completed flat lifecycle for G052 operation 60."""
+
+    require_external_preparation_gate(external_gate)
+    target_ledger = V4PreparationAttemptLedger(
+        external_gate=external_gate,
+        now_utc=now_utc,
+    )
+    target_generation = load_v4_gmo_frozen_generation(
+        repository=repository,
+        implementation_digest=(
+            external_gate.reviewed_digest_for_internal_preparation_only()
+        ),
+    )
+    if (
+        target_generation.generation_label != _G052_TARGET_GENERATION_LABEL
+        or target_generation.digest != generation_digest
+        or not target_ledger.state_root.name.endswith(
+            generation_digest.removeprefix("sha256:")
+        )
+    ):
+        raise V4ActualPreparationGuardError("G052_FLAT_TARGET_MISMATCH")
+
+    source_root = v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=_G051_FLAT_SOURCE_GENERATION_DIGEST,
+    )
+    completed_path = (
+        source_root
+        / "exit-sequence-dispatch-completed."
+        f"{_G051_FLAT_SOURCE_TRADING_DAY_JST}.json"
+    )
+    database = source_root / "coordinator.sqlite3"
+    for path in (source_root, completed_path, database):
+        _reject_g052_source_symlinks(path)
+    if not completed_path.is_file() or not database.is_file():
+        raise V4ActualPreparationGuardError(
+            "G052_FLAT_SOURCE_EVIDENCE_MISSING"
+        )
+    try:
+        completed = json.loads(completed_path.read_text(encoding="utf-8"))
+        observed = datetime.fromisoformat(str(completed["observed_at_utc"]))
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        raise V4ActualPreparationGuardError(
+            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
+        ) from error
+    if (
+        set(completed)
+        != {"generation_digest", "observed_at_utc", "status"}
+        or completed.get("generation_digest")
+        != _G051_FLAT_SOURCE_GENERATION_DIGEST
+        or completed.get("status") != "EXIT_DISPATCH_COMPLETED_FLAT_RECONCILED"
+        or observed.tzinfo is None
+    ):
+        raise V4ActualPreparationGuardError(
+            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
+        )
+
+    connection: sqlite3.Connection | None = None
+    try:
+        connection = sqlite3.connect(
+            f"{database.resolve().as_uri()}?mode=ro",
+            uri=True,
+        )
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA query_only=ON")
+        generation_row = connection.execute(
+            "SELECT value FROM metadata WHERE key='generation_digest'"
+        ).fetchone()
+        halt_row = connection.execute(
+            "SELECT value FROM metadata WHERE key='unknown_halt_latched'"
+        ).fetchone()
+        pending_row = connection.execute(
+            "SELECT value FROM metadata WHERE key='pending_transport_resolution'"
+        ).fetchone()
+        cycle_row = connection.execute(
+            "SELECT COUNT(*) cycle_count,"
+            "SUM(CASE WHEN realized_pnl_jpy IS NOT NULL THEN 1 ELSE 0 END) "
+            "flat_count,"
+            "SUM(CASE WHEN realized_pnl_jpy IS NULL THEN 1 ELSE 0 END) "
+            "unresolved_count FROM cycles"
+        ).fetchone()
+        attempt_rows = connection.execute(
+            "SELECT action,COUNT(*) count FROM attempts "
+            "GROUP BY action ORDER BY action"
+        ).fetchall()
+    except sqlite3.Error as error:
+        raise V4ActualPreparationGuardError(
+            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
+        ) from error
+    finally:
+        if connection is not None:
+            connection.close()
+    try:
+        pending = json.loads(pending_row["value"])
+    except (TypeError, KeyError, json.JSONDecodeError) as error:
+        raise V4ActualPreparationGuardError(
+            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
+        ) from error
+    expected_attempts = {
+        "CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT": 1,
+        "EXACT_SIZE_OCO_PROTECTION": 1,
+        "MARKET_ENTRY": 1,
+        "POSITION_SPECIFIC_TIME_EXIT": 1,
+    }
+    actual_attempts = {
+        str(row["action"]): int(row["count"]) for row in attempt_rows
+    }
+    if (
+        generation_row is None
+        or generation_row["value"] != _G051_FLAT_SOURCE_GENERATION_DIGEST
+        or halt_row is None
+        or halt_row["value"] != "true"
+        or pending_row is None
+        or pending.get("generation_digest")
+        != _G051_FLAT_SOURCE_GENERATION_DIGEST
+        or pending.get("classification") != "FLAT_OR_REJECTED"
+        or pending.get("previous_action") != "POSITION_SPECIFIC_TIME_EXIT"
+        or cycle_row is None
+        or int(cycle_row["cycle_count"]) != 1
+        or int(cycle_row["flat_count"] or 0) != 1
+        or int(cycle_row["unresolved_count"] or 0) != 0
+        or actual_attempts != expected_attempts
+    ):
+        raise V4ActualPreparationGuardError(
+            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
+        )
+    return V4G052FlatOnlyCarryForwardEvidence(
+        token=_G052_FLAT_CARRY_FORWARD_TOKEN,
+        source_reviewed_files_digest=(
+            _G051_FLAT_SOURCE_REVIEWED_FILES_DIGEST
+        ),
+        source_generation_digest=_G051_FLAT_SOURCE_GENERATION_DIGEST,
+        target_reviewed_files_digest=(
+            external_gate.reviewed_digest_for_internal_preparation_only()
+        ),
+        target_generation_digest=generation_digest,
+        trading_day_jst=target_ledger._trading_day_jst,
+        flat_cycle_count=1,
+        unresolved_cycle_count=0,
+        transport_action_pending=False,
+        source_halt_remains_latched=True,
+    )
+
+
+def _g052_flat_carry_forward_matches_target(
+    *,
+    evidence: V4G052FlatOnlyCarryForwardEvidence,
+    reviewed_files_digest: str,
+    generation_digest: str,
+    trading_day_jst: str,
+) -> bool:
+    return (
+        getattr(evidence, "_token", None) is _G052_FLAT_CARRY_FORWARD_TOKEN
+        and evidence.source_reviewed_files_digest
+        == _G051_FLAT_SOURCE_REVIEWED_FILES_DIGEST
+        and evidence.source_generation_digest
+        == _G051_FLAT_SOURCE_GENERATION_DIGEST
+        and evidence.target_reviewed_files_digest == reviewed_files_digest
+        and evidence.target_generation_digest == generation_digest
+        and evidence.trading_day_jst == trading_day_jst
+        and evidence.flat_cycle_count == 1
+        and evidence.unresolved_cycle_count == 0
+        and evidence.transport_action_pending is False
+        and evidence.source_halt_remains_latched is True
+        and evidence.broker_post_authorized is False
+        and evidence.activation_permit_issued is False
+        and bool(evidence) is False
+    )
+
+
 def require_g040_runtime_only_monitor_completion(
     *,
     repository: Path,
@@ -1411,6 +1689,35 @@ def require_g040_runtime_only_monitor_completion(
     return evidence
 
 
+def require_g052_flat_only_monitor_completion(
+    *,
+    repository: Path,
+    external_gate: V4ExternalPreparationGate,
+    generation_digest: str,
+    now_utc: datetime | None = None,
+) -> V4G052FlatOnlyCarryForwardEvidence:
+    evidence = load_g052_flat_only_carry_forward_evidence(
+        repository=repository,
+        external_gate=external_gate,
+        generation_digest=generation_digest,
+        now_utc=now_utc,
+    )
+    ledger = V4PreparationAttemptLedger(
+        external_gate=external_gate,
+        now_utc=now_utc,
+    )
+    operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
+    if not ledger._marker_matches_review(
+        ledger._marker(operation, "passed"),
+        operation=operation,
+        expected_status="PASSED",
+    ):
+        raise V4ActualPreparationGuardError(
+            "G052_FLAT_ONLY_MONITOR_NOT_COMPLETE"
+        )
+    return evidence
+
+
 def load_generation_completed_preparation_evidence(
     *,
     repository: Path,
@@ -1422,19 +1729,26 @@ def load_generation_completed_preparation_evidence(
     """Mint exact one-use evidence from the generation's reviewed preparation lane."""
 
     current = (now_utc or datetime.now(UTC)).astimezone(UTC)
-    if generation_label not in _RUNTIME_ONLY_TARGET_GENERATION_LABELS:
+    if generation_label == _G052_TARGET_GENERATION_LABEL:
+        require_g052_flat_only_monitor_completion(
+            repository=repository,
+            external_gate=external_gate,
+            generation_digest=generation_digest,
+            now_utc=current,
+        )
+    elif generation_label not in _RUNTIME_ONLY_TARGET_GENERATION_LABELS:
         return load_completed_preparation_evidence(
             external_gate=external_gate,
             generation_digest=generation_digest,
             now_utc=current,
         )
-
-    require_g040_runtime_only_monitor_completion(
-        repository=repository,
-        external_gate=external_gate,
-        generation_digest=generation_digest,
-        now_utc=current,
-    )
+    else:
+        require_g040_runtime_only_monitor_completion(
+            repository=repository,
+            external_gate=external_gate,
+            generation_digest=generation_digest,
+            now_utc=current,
+        )
     ledger = V4PreparationAttemptLedger(
         external_gate=external_gate,
         now_utc=current,

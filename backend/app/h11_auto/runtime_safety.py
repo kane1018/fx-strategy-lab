@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime
 from enum import Enum
@@ -319,6 +320,44 @@ class DeadManStore:
             heartbeat = self._load_heartbeat()
         except H11AutoRuntimeSafetyError:
             return _dead("DEAD_MAN_STATE_INVALID")
+        return self._evaluate_loaded_heartbeat(
+            heartbeat=heartbeat,
+            now_utc=now_utc,
+        )
+
+    def evaluate_current(
+        self,
+        *,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> DeadManResult:
+        """Evaluate a shared heartbeat using a clock sampled after its read.
+
+        A resident observer and the foreground runtime may inspect the same
+        dead-man file. Sampling ``now`` only after the atomic heartbeat read
+        prevents a freshly written foreground heartbeat from appearing to be
+        in the future merely because the observer captured its tick time first.
+        """
+
+        if self.path.is_symlink() or not self.path.is_file():
+            return _dead("DEAD_MAN_HEARTBEAT_MISSING")
+        try:
+            heartbeat = self._load_heartbeat()
+        except H11AutoRuntimeSafetyError:
+            return _dead("DEAD_MAN_STATE_INVALID")
+        now_utc = clock()
+        if now_utc.tzinfo is None:
+            return _dead("DEAD_MAN_INPUT_INVALID")
+        return self._evaluate_loaded_heartbeat(
+            heartbeat=heartbeat,
+            now_utc=now_utc,
+        )
+
+    def _evaluate_loaded_heartbeat(
+        self,
+        *,
+        heartbeat: datetime,
+        now_utc: datetime,
+    ) -> DeadManResult:
         age = (
             now_utc.astimezone(UTC) - heartbeat.astimezone(UTC)
         ).total_seconds()

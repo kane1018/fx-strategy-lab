@@ -36,6 +36,11 @@ from app.services.h11_v4_unattended_live_heartbeat_chain import (
     v4_unattended_runtime_heartbeat_policy,
 )
 
+_G052_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
+_G051_FLAT_SOURCE_GENERATION_DIGEST = (
+    "sha256:640556dd46a5066b8d7223f76d5196c22e4c65449c7d2371e526662049b9bf1c"
+)
+
 
 class V4GmoMonitorSupervisorError(RuntimeError):
     """Fixed safe supervisor failure."""
@@ -63,9 +68,16 @@ class V4GmoMonitorTick:
 
 
 class V4GmoMonitorSupervisor:
-    def __init__(self, *, repository: Path, generation: V4GmoFrozenGeneration) -> None:
+    def __init__(
+        self,
+        *,
+        repository: Path,
+        generation: V4GmoFrozenGeneration,
+        runtime_clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
         self.repository = repository.resolve()
         self.generation = generation
+        self.runtime_clock = runtime_clock
         self.state_root = v4_gmo_runtime_state_root(
             repository=self.repository,
             generation_digest=generation.digest,
@@ -85,6 +97,37 @@ class V4GmoMonitorSupervisor:
         if now_utc.tzinfo is None or not self.lock.held:
             raise V4GmoMonitorSupervisorError("V4_SUPERVISOR_TICK_INVALID")
         now_utc = now_utc.astimezone(UTC)
+        runtime_lock: H11AutoProcessLock | None = None
+        monitor_owns_runtime: bool | None = None
+        if self.generation.generation_label in {
+            "H11_AUTO_30M_20260729_G040",
+            "H11_AUTO_30M_20260729_G041",
+            "H11_AUTO_30M_20260730_G047",
+            "H11_AUTO_30M_20260730_G048",
+            "H11_AUTO_30M_20260730_G049",
+            "H11_AUTO_30M_20260730_G050",
+            "H11_AUTO_30M_20260730_G051",
+            "H11_AUTO_30M_20260730_G052",
+        }:
+            runtime_lock = H11AutoProcessLock(
+                self.state_root / "process.lock"
+            )
+            monitor_owns_runtime = runtime_lock.acquire()
+        try:
+            return self._run_tick_locked(
+                now_utc=now_utc,
+                monitor_owns_runtime=monitor_owns_runtime,
+            )
+        finally:
+            if runtime_lock is not None and monitor_owns_runtime:
+                runtime_lock.release()
+
+    def _run_tick_locked(
+        self,
+        *,
+        now_utc: datetime,
+        monitor_owns_runtime: bool | None,
+    ) -> V4GmoMonitorTick:
         runtime_safety_ready = False
         if self.generation.generation_label in {
             "H11_AUTO_30M_20260729_G040",
@@ -94,9 +137,13 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G049",
             "H11_AUTO_30M_20260730_G050",
             "H11_AUTO_30M_20260730_G051",
+            "H11_AUTO_30M_20260730_G052",
         }:
-            self._maintain_g040_runtime_safety(now_utc=now_utc)
+            self._maintain_g040_runtime_safety(
+                monitor_owns_runtime=monitor_owns_runtime is True,
+            )
             runtime_safety_ready = True
+        shared_write_allowed = monitor_owns_runtime is not False
         database = self.state_root / "coordinator.sqlite3"
         if not database.is_file() or database.is_symlink():
             tick = V4GmoMonitorTick(
@@ -118,7 +165,17 @@ class V4GmoMonitorSupervisor:
         # window must not convert it into a permanent halt — the restart latch
         # belongs to the owning trading process (2026-07-21 false-latch incident).
         store = V4GmoActualCoordinatorStore.open_monitor_observer(database)
-        store.bind_generation(self.generation)
+        with store._connect() as connection:
+            generation_row = connection.execute(
+                "SELECT value FROM metadata WHERE key='generation_digest'"
+            ).fetchone()
+        if (
+            generation_row is None
+            or generation_row["value"] != self.generation.digest
+        ):
+            raise V4GmoMonitorSupervisorError(
+                "V4_SUPERVISOR_COORDINATOR_GENERATION_MISMATCH"
+            )
         snapshot = store.monitor_snapshot_safe()
         dispatch_required = False
         flat_target_missed = False
@@ -130,33 +187,36 @@ class V4GmoMonitorSupervisor:
             cycle_day = v4_gmo_trading_day_jst(snapshot.entry_attempted_at_utc)
             protection_deadline = snapshot.entry_attempted_at_utc.timestamp() + 15.0
             if now_utc.timestamp() > protection_deadline and not snapshot.protection_confirmed:
-                store.engage_unknown_halt()
-                self._write_once_marker(
-                    f"protection-deadline-missed.{cycle_day}.json",
-                    status="PERSISTENT_HALT_PROTECTION_DEADLINE_MISSED",
-                    observed_at_utc=now_utc,
-                )
+                if shared_write_allowed:
+                    store.engage_unknown_halt()
+                    self._write_once_marker(
+                        f"protection-deadline-missed.{cycle_day}.json",
+                        status="PERSISTENT_HALT_PROTECTION_DEADLINE_MISSED",
+                        observed_at_utc=now_utc,
+                    )
             exit_at = v4_gmo_scheduled_time_exit_at(
                 entry_time_utc=snapshot.entry_attempted_at_utc
             )
             if exit_at is not None and now_utc >= exit_at:
                 dispatch_required = True
-                self._write_once_marker(
-                    f"exit-sequence-dispatch-required.{cycle_day}.json",
-                    status="GENERATION_BOUND_EXIT_DISPATCH_REQUIRED",
-                    observed_at_utc=now_utc,
-                )
+                if shared_write_allowed:
+                    self._write_once_marker(
+                        f"exit-sequence-dispatch-required.{cycle_day}.json",
+                        status="GENERATION_BOUND_EXIT_DISPATCH_REQUIRED",
+                        observed_at_utc=now_utc,
+                    )
             flat_target = v4_gmo_weekend_flat_target_at(
                 entry_time_utc=snapshot.entry_attempted_at_utc
             )
             if flat_target is not None and now_utc >= flat_target:
                 flat_target_missed = True
-                store.engage_unknown_halt()
-                self._write_once_marker(
-                    f"flat-target-missed.{cycle_day}.json",
-                    status="PERSISTENT_HALT_WEEKEND_FLAT_TARGET_MISSED",
-                    observed_at_utc=now_utc,
-                )
+                if shared_write_allowed:
+                    store.engage_unknown_halt()
+                    self._write_once_marker(
+                        f"flat-target-missed.{cycle_day}.json",
+                        status="PERSISTENT_HALT_WEEKEND_FLAT_TARGET_MISSED",
+                        observed_at_utc=now_utc,
+                    )
         persistent_halt = store.unknown_halt_latched()
         status = (
             "PERSISTENT_HALT"
@@ -181,7 +241,11 @@ class V4GmoMonitorSupervisor:
         self._write_heartbeat(tick)
         return tick
 
-    def _maintain_g040_runtime_safety(self, *, now_utc: datetime) -> None:
+    def _maintain_g040_runtime_safety(
+        self,
+        *,
+        monitor_owns_runtime: bool,
+    ) -> None:
         risk_policy = v4_gmo_risk_policy()
         release = verify_g038_generation_activation(generation=self.generation)
         target_risk_store = PhaseBRiskStore(
@@ -192,7 +256,10 @@ class V4GmoMonitorSupervisor:
             v4_gmo_runtime_state_root(
                 repository=self.repository,
                 generation_digest=(
-                    release.predecessor_halt_generation_digest
+                    _G051_FLAT_SOURCE_GENERATION_DIGEST
+                    if self.generation.generation_label
+                    == _G052_GENERATION_LABEL
+                    else release.predecessor_halt_generation_digest
                 ),
             )
             / "risk.json",
@@ -206,32 +273,68 @@ class V4GmoMonitorSupervisor:
                 "V4_SUPERVISOR_SOURCE_RISK_STATE_MISSING"
             )
         source_risk_state = source_risk_store.load()
-        if not target_risk_store.path.exists():
-            target_risk_store.save(source_risk_state)
-        target_risk_store.load()
-        coordinator = V4GmoActualCoordinatorStore(
-            self.state_root / "coordinator.sqlite3",
-            _latch_pending_restart_halt=False,
-        )
-        coordinator.bind_generation(self.generation)
-        if source_risk_state.current_day_jst is not None:
-            coordinator.initialize_inherited_market_attempt_baseline_once(
-                source_generation_digest=(
-                    release.predecessor_halt_generation_digest
-                ),
-                target_generation_digest=self.generation.digest,
-                trading_day_jst=source_risk_state.current_day_jst,
-                attempt_count=source_risk_state.entries_today,
-            )
         dead_man_store = DeadManStore(
             self.state_root / "dead-man.json",
             policy=v4_gmo_dead_man_policy(),
         )
-        dead_man_store.heartbeat(heartbeat_utc=now_utc)
-        V4HeartbeatChainStore(
-            self.state_root / "unattended-heartbeat-chain.json",
-            policy=v4_unattended_runtime_heartbeat_policy(),
-        ).beat(now_utc=now_utc)
+        if monitor_owns_runtime:
+            if not target_risk_store.path.exists():
+                target_risk_store.save(source_risk_state)
+            target_risk_store.load()
+            coordinator = V4GmoActualCoordinatorStore(
+                self.state_root / "coordinator.sqlite3",
+                _latch_pending_restart_halt=False,
+            )
+            coordinator.bind_generation(self.generation)
+            if source_risk_state.current_day_jst is not None:
+                coordinator.initialize_inherited_market_attempt_baseline_once(
+                    source_generation_digest=(
+                        _G051_FLAT_SOURCE_GENERATION_DIGEST
+                        if self.generation.generation_label
+                        == _G052_GENERATION_LABEL
+                        else release.predecessor_halt_generation_digest
+                    ),
+                    target_generation_digest=self.generation.digest,
+                    trading_day_jst=source_risk_state.current_day_jst,
+                    attempt_count=source_risk_state.entries_today,
+                )
+            dead_man_store.heartbeat(heartbeat_utc=self.runtime_clock())
+            V4HeartbeatChainStore(
+                self.state_root / "unattended-heartbeat-chain.json",
+                policy=v4_unattended_runtime_heartbeat_policy(),
+            ).beat(now_utc=self.runtime_clock())
+        else:
+            target_risk_store = PhaseBRiskStore(
+                self.state_root / "risk.json",
+                policy=risk_policy,
+            )
+            if (
+                not target_risk_store.path.is_file()
+                or target_risk_store.path.is_symlink()
+                or not (self.state_root / "coordinator.sqlite3").is_file()
+            ):
+                raise V4GmoMonitorSupervisorError(
+                    "V4_SUPERVISOR_FOREGROUND_RUNTIME_STATE_MISSING"
+                )
+            target_risk_store.load()
+            dead_man = dead_man_store.evaluate_current(clock=self.runtime_clock)
+            if not dead_man.alive:
+                raise V4GmoMonitorSupervisorError(
+                    "V4_SUPERVISOR_FOREGROUND_DEAD_MAN_NOT_ALIVE"
+                )
+            chain = V4HeartbeatChainStore(
+                self.state_root / "unattended-heartbeat-chain.json",
+                policy=v4_unattended_runtime_heartbeat_policy(),
+            ).assess(now_utc=self.runtime_clock())
+            if (
+                chain.heartbeat_age_seconds is None
+                or chain.heartbeat_age_seconds < 0
+                or chain.heartbeat_age_seconds
+                > v4_unattended_runtime_heartbeat_policy().maximum_gap_seconds
+            ):
+                raise V4GmoMonitorSupervisorError(
+                    "V4_SUPERVISOR_FOREGROUND_HEARTBEAT_CHAIN_NOT_ALIVE"
+                )
 
     def run_forever(
         self,
@@ -257,6 +360,7 @@ class V4GmoMonitorSupervisor:
                         "H11_AUTO_30M_20260730_G049",
                         "H11_AUTO_30M_20260730_G050",
                         "H11_AUTO_30M_20260730_G051",
+                        "H11_AUTO_30M_20260730_G052",
                     }:
                         raise
                 wait(interval_seconds)
@@ -264,19 +368,41 @@ class V4GmoMonitorSupervisor:
             self.close()
 
     def _latch_halt_on_internal_failure(self, now_utc: datetime) -> None:
-        database = self.state_root / "coordinator.sqlite3"
-        if database.is_file() and not database.is_symlink():
-            try:
-                V4GmoActualCoordinatorStore.open_monitor_observer(
-                    database
-                ).engage_unknown_halt()
-            except Exception:  # noqa: BLE001
-                pass
-        self._write_once_marker(
-            "supervisor-internal-failure.json",
-            status="PERSISTENT_HALT_SUPERVISOR_INTERNAL_FAILURE",
-            observed_at_utc=now_utc,
-        )
+        runtime_lock: H11AutoProcessLock | None = None
+        runtime_lock_held = False
+        if self.generation.generation_label in {
+            "H11_AUTO_30M_20260729_G040",
+            "H11_AUTO_30M_20260729_G041",
+            "H11_AUTO_30M_20260730_G047",
+            "H11_AUTO_30M_20260730_G048",
+            "H11_AUTO_30M_20260730_G049",
+            "H11_AUTO_30M_20260730_G050",
+            "H11_AUTO_30M_20260730_G051",
+            "H11_AUTO_30M_20260730_G052",
+        }:
+            runtime_lock = H11AutoProcessLock(
+                self.state_root / "process.lock"
+            )
+            runtime_lock_held = runtime_lock.acquire()
+            if not runtime_lock_held:
+                return
+        try:
+            database = self.state_root / "coordinator.sqlite3"
+            if database.is_file() and not database.is_symlink():
+                try:
+                    V4GmoActualCoordinatorStore.open_monitor_observer(
+                        database
+                    ).engage_unknown_halt()
+                except Exception:  # noqa: BLE001
+                    pass
+            self._write_once_marker(
+                "supervisor-internal-failure.json",
+                status="PERSISTENT_HALT_SUPERVISOR_INTERNAL_FAILURE",
+                observed_at_utc=now_utc,
+            )
+        finally:
+            if runtime_lock is not None and runtime_lock_held:
+                runtime_lock.release()
 
     def _write_heartbeat(self, tick: V4GmoMonitorTick) -> None:
         self._write_atomic(self.state_root / "supervisor-heartbeat.json", asdict(tick))

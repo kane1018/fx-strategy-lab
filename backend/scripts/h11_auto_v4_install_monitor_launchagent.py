@@ -20,6 +20,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     _attest_monitor_launchagent_success_internal,
     load_external_preparation_gate,
     load_g040_runtime_only_carry_forward_evidence,
+    load_g052_flat_only_carry_forward_evidence,
     require_operation_permit,
     reviewed_files_digest,
 )
@@ -50,6 +51,7 @@ _G048_GENERATION_LABEL = "H11_AUTO_30M_20260730_G048"
 _G049_GENERATION_LABEL = "H11_AUTO_30M_20260730_G049"
 _G050_GENERATION_LABEL = "H11_AUTO_30M_20260730_G050"
 _G051_GENERATION_LABEL = "H11_AUTO_30M_20260730_G051"
+_G052_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
 _G040_RUNTIME_STARTUP_PROBE_TIMEOUT_SECONDS = 20.0
 
 
@@ -242,6 +244,12 @@ def _probe_g040_launchd_runtime_startup(
     )
 
 
+def _startup_probe_requires_installer_process_lock(
+    generation_label: str,
+) -> bool:
+    return generation_label != _G052_GENERATION_LABEL
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", type=Path, required=True)
@@ -316,6 +324,51 @@ def main() -> int:
                 "broker_write=false actual_post_count=0"
             )
             return 2
+    begin_state = V4MonitorLaunchagentBeginState.PRE_BEGIN
+    external_gate = None
+    ledger = None
+    operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
+    runtime_carry_forward = None
+    operation_permit = None
+    if getattr(generation, "generation_label", "") == _G052_GENERATION_LABEL:
+        try:
+            external_gate = load_external_preparation_gate(
+                repository=repository
+            )
+            ledger = V4PreparationAttemptLedger(
+                external_gate=external_gate
+            )
+            runtime_carry_forward = (
+                load_g052_flat_only_carry_forward_evidence(
+                    repository=repository,
+                    external_gate=external_gate,
+                    generation_digest=generation.digest,
+                )
+            )
+            begin_state = V4MonitorLaunchagentBeginState.BEGIN_INDETERMINATE
+            operation_permit = ledger.begin_g052_flat_only_monitor(
+                repository=repository,
+                generation_digest=generation.digest,
+            )
+            begin_state = V4MonitorLaunchagentBeginState.MARKER_PERSISTED
+            require_operation_permit(
+                operation_permit,
+                expected_operation=operation,
+                claim=True,
+            )
+        except Exception as error:
+            status = (
+                "MONITOR_LAUNCHAGENT_BLOCKED_NO_RETRY"
+                if begin_state
+                is V4MonitorLaunchagentBeginState.MARKER_PERSISTED
+                else "MONITOR_LAUNCHAGENT_PRECHECK_BLOCKED_NO_MARKER_CLAIMED"
+            )
+            print(
+                f"status={status} "
+                f"failure_class={_safe_failure_class(error)} "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
     startup_process_lock: H11AutoProcessLock | None = None
     if getattr(generation, "generation_label", "") in {
         _G040_GENERATION_LABEL,
@@ -325,16 +378,22 @@ def main() -> int:
         _G049_GENERATION_LABEL,
         _G050_GENERATION_LABEL,
         _G051_GENERATION_LABEL,
+        _G052_GENERATION_LABEL,
     }:
-        startup_process_lock = H11AutoProcessLock(state_root / "process.lock")
-        if not startup_process_lock.acquire():
-            print(
-                "status=MONITOR_LAUNCHAGENT_PROCESS_LOCK_BLOCKED_"
-                "NO_MARKER_CLAIMED "
-                "failure_class=G040_RUNTIME_PROCESS_LOCK_NOT_CLEAR "
-                "broker_write=false actual_post_count=0"
+        if _startup_probe_requires_installer_process_lock(
+            generation.generation_label
+        ):
+            startup_process_lock = H11AutoProcessLock(
+                state_root / "process.lock"
             )
-            return 2
+            if not startup_process_lock.acquire():
+                print(
+                    "status=MONITOR_LAUNCHAGENT_PROCESS_LOCK_BLOCKED_"
+                    "NO_MARKER_CLAIMED "
+                    "failure_class=G040_RUNTIME_PROCESS_LOCK_NOT_CLEAR "
+                    "broker_write=false actual_post_count=0"
+                )
+                return 2
         if not _probe_g040_launchd_runtime_startup(
             repository=repository,
             user_id=os.getuid(),
@@ -342,57 +401,67 @@ def main() -> int:
             reviewed_files_digest_value=digest,
             generation_digest=generation.digest,
         ):
+            status = (
+                "MONITOR_LAUNCHAGENT_RUNTIME_STARTUP_BLOCKED_NO_RETRY"
+                if begin_state
+                is V4MonitorLaunchagentBeginState.MARKER_PERSISTED
+                else "MONITOR_LAUNCHAGENT_RUNTIME_STARTUP_BLOCKED_"
+                "NO_MARKER_CLAIMED"
+            )
             print(
-                "status=MONITOR_LAUNCHAGENT_RUNTIME_STARTUP_BLOCKED_"
-                "NO_MARKER_CLAIMED "
+                f"status={status} "
                 "failure_class=G040_RUNTIME_STARTUP_NOT_CLEAR "
                 "broker_write=false actual_post_count=0"
             )
-            startup_process_lock.release()
+            if startup_process_lock is not None:
+                startup_process_lock.release()
             return 2
-    begin_state = V4MonitorLaunchagentBeginState.PRE_BEGIN
     expected_runtime_initialized = getattr(generation, "generation_label", "") in {
         _G047_GENERATION_LABEL,
         _G048_GENERATION_LABEL,
         _G049_GENERATION_LABEL,
         _G050_GENERATION_LABEL,
         _G051_GENERATION_LABEL,
+        _G052_GENERATION_LABEL,
     }
     try:
-        external_gate = load_external_preparation_gate(repository=repository)
-        ledger = V4PreparationAttemptLedger(external_gate=external_gate)
-        operation = V4PreparationOperation.MONITOR_LAUNCHAGENT
-        runtime_carry_forward = None
-        if getattr(generation, "generation_label", "") in {
-            _G040_GENERATION_LABEL,
-            _G041_GENERATION_LABEL,
-            _G047_GENERATION_LABEL,
-            _G048_GENERATION_LABEL,
-            _G049_GENERATION_LABEL,
-            _G050_GENERATION_LABEL,
-            _G051_GENERATION_LABEL,
-        }:
-            runtime_carry_forward = (
-                load_g040_runtime_only_carry_forward_evidence(
+        if operation_permit is None:
+            external_gate = load_external_preparation_gate(
+                repository=repository
+            )
+            ledger = V4PreparationAttemptLedger(
+                external_gate=external_gate
+            )
+            if getattr(generation, "generation_label", "") in {
+                _G040_GENERATION_LABEL,
+                _G041_GENERATION_LABEL,
+                _G047_GENERATION_LABEL,
+                _G048_GENERATION_LABEL,
+                _G049_GENERATION_LABEL,
+                _G050_GENERATION_LABEL,
+                _G051_GENERATION_LABEL,
+            }:
+                runtime_carry_forward = (
+                    load_g040_runtime_only_carry_forward_evidence(
+                        repository=repository,
+                        external_gate=external_gate,
+                        generation_digest=generation.digest,
+                    )
+                )
+            begin_state = V4MonitorLaunchagentBeginState.BEGIN_INDETERMINATE
+            if runtime_carry_forward is None:
+                operation_permit = ledger.begin(operation)
+            else:
+                operation_permit = ledger.begin_g040_runtime_only_monitor(
                     repository=repository,
-                    external_gate=external_gate,
                     generation_digest=generation.digest,
                 )
+            begin_state = V4MonitorLaunchagentBeginState.MARKER_PERSISTED
+            require_operation_permit(
+                operation_permit,
+                expected_operation=operation,
+                claim=True,
             )
-        begin_state = V4MonitorLaunchagentBeginState.BEGIN_INDETERMINATE
-        if runtime_carry_forward is None:
-            operation_permit = ledger.begin(operation)
-        else:
-            operation_permit = ledger.begin_g040_runtime_only_monitor(
-                repository=repository,
-                generation_digest=generation.digest,
-            )
-        begin_state = V4MonitorLaunchagentBeginState.MARKER_PERSISTED
-        require_operation_permit(
-            operation_permit,
-            expected_operation=operation,
-            claim=True,
-        )
         result = install_and_restart_v4_gmo_monitor_launchagent(
             plist_path=plist_path,
             plist_content=content,
@@ -411,6 +480,7 @@ def main() -> int:
             _G049_GENERATION_LABEL,
             _G050_GENERATION_LABEL,
             _G051_GENERATION_LABEL,
+            _G052_GENERATION_LABEL,
         }:
             try:
                 heartbeat = json.loads(

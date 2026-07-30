@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.h11_auto.contracts import FormalHorizon, FormalSignal, SignalDecision
+from app.h11_auto.persistence import H11AutoProcessLock
 from app.h11_auto.v4_activation_preparation import V4ApprovedOperatorSelections
 from app.h11_auto.v4_gmo_actual_coordinator import V4GmoActualCoordinatorStore
 from app.h11_auto.v4_gmo_contracts import (
@@ -165,6 +166,128 @@ def test_monitor_tick_during_inflight_pending_does_not_latch_halt(
     supervisor.close()
     assert tick.persistent_halt is False
     assert store.unknown_halt_latched() is False
+
+
+def test_monitor_uses_read_only_dead_man_check_while_foreground_owns_runtime(
+    tmp_path: Path,
+) -> None:
+    import app.h11_auto.v4_gmo_monitor_supervisor as module
+
+    state_root = tmp_path / "runtime"
+    state_root.mkdir()
+    policy = module.v4_gmo_dead_man_policy()
+    dead_man = module.DeadManStore(state_root / "dead-man.json", policy=policy)
+    foreground_heartbeat = FRIDAY_ENTRY + timedelta(milliseconds=100)
+    dead_man.heartbeat(heartbeat_utc=foreground_heartbeat)
+    foreground_lock = module.H11AutoProcessLock(state_root / "process.lock")
+    assert foreground_lock.acquire() is True
+    try:
+        observed = dead_man.evaluate_current(
+            clock=lambda: foreground_heartbeat + timedelta(milliseconds=1)
+        )
+        assert observed.alive is True
+        competing_monitor_lock = module.H11AutoProcessLock(
+            state_root / "process.lock"
+        )
+        assert competing_monitor_lock.acquire() is False
+    finally:
+        foreground_lock.release()
+
+
+def test_g052_fresh_monitor_initializes_from_exact_g051_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import app.h11_auto.v4_gmo_monitor_supervisor as module
+
+    target_digest = "sha256:" + ("4" * 64)
+    source_digest = "sha256:" + ("3" * 64)
+    generation = SimpleNamespace(
+        digest=target_digest,
+        generation_label="H11_AUTO_30M_20260730_G052",
+        canonical_json="{}",
+        implementation_digest="sha256:" + ("5" * 64),
+        operator_selection_digest="sha256:" + ("6" * 64),
+        policy_config_hash="sha256:" + ("7" * 64),
+        risk_policy_digest="8" * 64,
+        dead_man_policy_digest="9" * 64,
+    )
+
+    def runtime_root(*, generation_digest: str, **_kwargs: object) -> Path:
+        return tmp_path / generation_digest.removeprefix("sha256:")
+
+    monkeypatch.setattr(module, "v4_gmo_runtime_state_root", runtime_root)
+    monkeypatch.setattr(
+        module, "_G051_FLAT_SOURCE_GENERATION_DIGEST", source_digest
+    )
+    monkeypatch.setattr(
+        module,
+        "verify_g038_generation_activation",
+        lambda **_kwargs: SimpleNamespace(
+            predecessor_halt_generation_digest="sha256:" + ("2" * 64)
+        ),
+    )
+    policy = module.v4_gmo_risk_policy()
+    source = module.PhaseBRiskStore(
+        runtime_root(generation_digest=source_digest) / "risk.json",
+        policy=policy,
+    )
+    state = source.load()
+    state.current_day_jst = "2026-07-30"
+    state.current_month_jst = "2026-07"
+    state.entries_today = 1
+    source.save(state)
+    times = iter(
+        (
+            datetime(2026, 7, 30, 9, 0, 1, tzinfo=UTC),
+            datetime(2026, 7, 30, 9, 0, 2, tzinfo=UTC),
+        )
+    )
+    supervisor = module.V4GmoMonitorSupervisor(
+        repository=tmp_path,
+        generation=generation,
+        runtime_clock=lambda: next(times),
+    )
+    supervisor.acquire_single_process()
+    try:
+        tick = supervisor.run_tick(
+            now_utc=datetime(2026, 7, 30, 9, 0, tzinfo=UTC)
+        )
+    finally:
+        supervisor.close()
+
+    target_root = runtime_root(generation_digest=target_digest)
+    assert tick.runtime_risk_ready is True
+    assert (target_root / "risk.json").is_file()
+    assert (target_root / "coordinator.sqlite3").is_file()
+    assert (target_root / "dead-man.json").is_file()
+    assert (target_root / "unattended-heartbeat-chain.json").is_file()
+
+
+def test_g052_internal_failure_does_not_write_while_foreground_owns_lock(
+    tmp_path: Path,
+) -> None:
+    generation = SimpleNamespace(
+        digest="sha256:" + ("4" * 64),
+        generation_label="H11_AUTO_30M_20260730_G052",
+    )
+    supervisor = V4GmoMonitorSupervisor(
+        repository=tmp_path,
+        generation=generation,
+    )
+    root = supervisor.state_root
+    store = V4GmoActualCoordinatorStore(root / "coordinator.sqlite3")
+    foreground_lock = H11AutoProcessLock(root / "process.lock")
+    assert foreground_lock.acquire() is True
+    try:
+        supervisor._latch_halt_on_internal_failure(
+            datetime(2026, 7, 30, 9, 0, tzinfo=UTC)
+        )
+    finally:
+        foreground_lock.release()
+
+    assert store.unknown_halt_latched() is False
+    assert not (root / "supervisor-internal-failure.json").exists()
 
 
 def test_monitor_marks_0345_dispatch_and_latches_0400_flat_miss(

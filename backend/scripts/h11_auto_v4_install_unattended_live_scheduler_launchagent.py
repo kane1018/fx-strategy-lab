@@ -20,6 +20,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     load_completed_preparation_evidence,
     load_external_preparation_gate,
     require_g040_runtime_only_monitor_completion,
+    require_g052_flat_only_monitor_completion,
     reviewed_files_digest,
 )
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
@@ -47,6 +48,7 @@ _G048_GENERATION_LABEL = "H11_AUTO_30M_20260730_G048"
 _G049_GENERATION_LABEL = "H11_AUTO_30M_20260730_G049"
 _G050_GENERATION_LABEL = "H11_AUTO_30M_20260730_G050"
 _G051_GENERATION_LABEL = "H11_AUTO_30M_20260730_G051"
+_G052_GENERATION_LABEL = "H11_AUTO_30M_20260730_G052"
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -89,7 +91,21 @@ def main() -> int:
                 "broker_write=false actual_post_count=0"
             )
             return 2
-    if getattr(generation, "generation_label", "") in {
+    if getattr(generation, "generation_label", "") == _G052_GENERATION_LABEL:
+        try:
+            external_gate = load_external_preparation_gate(repository=repository)
+            require_g052_flat_only_monitor_completion(
+                repository=repository,
+                external_gate=external_gate,
+                generation_digest=generation.digest,
+            )
+        except V4ActualPreparationGuardError:
+            print(
+                "status=UNATTENDED_SCHEDULER_G052_FLAT_ONLY_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
+    elif getattr(generation, "generation_label", "") in {
         _G040_GENERATION_LABEL,
         _G041_GENERATION_LABEL,
         _G047_GENERATION_LABEL,

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import json
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,9 +11,11 @@ import pytest
 
 from app.h11_auto import v4_actual_preparation_guard as guard_module
 from app.h11_auto import v4_gmo_monitor_supervisor as supervisor_module
-from app.h11_auto.runtime_safety import PhaseBRiskStore
+from app.h11_auto.persistence import H11AutoProcessLock
+from app.h11_auto.runtime_safety import DeadManStore, PhaseBRiskStore
 from app.h11_auto.v4_actual_preparation_guard import (
     V4ActualPreparationGuardError,
+    V4G052FlatOnlyCarryForwardEvidence,
     V4RuntimeOnlyPreparationCarryForwardEvidence,
 )
 from app.h11_auto.v4_gmo_actual_coordinator import (
@@ -34,6 +38,221 @@ def test_runtime_only_carry_forward_cannot_be_publicly_minted() -> None:
             target_generation_digest="sha256:" + ("4" * 64),
             trading_day_jst="2026-07-29",
             completed_operations=("00_presence",),
+        )
+
+
+def test_g052_flat_only_carry_forward_cannot_be_publicly_minted() -> None:
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="G052_FLAT_CARRY_FORWARD_INVALID",
+    ):
+        V4G052FlatOnlyCarryForwardEvidence(
+            token=object(),
+            source_reviewed_files_digest="sha256:" + ("1" * 64),
+            source_generation_digest="sha256:" + ("2" * 64),
+            target_reviewed_files_digest="sha256:" + ("3" * 64),
+            target_generation_digest="sha256:" + ("4" * 64),
+            trading_day_jst="2026-07-30",
+            flat_cycle_count=1,
+            unresolved_cycle_count=0,
+            transport_action_pending=False,
+            source_halt_remains_latched=True,
+        )
+
+
+def _write_g051_flat_source(
+    repository: Path,
+    *,
+    unresolved: bool = False,
+    halt_latched: bool = True,
+    pending_classification: str = "FLAT_OR_REJECTED",
+    omit_close_attempt: bool = False,
+) -> None:
+    source_root = guard_module.v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=(
+            guard_module._G051_FLAT_SOURCE_GENERATION_DIGEST
+        ),
+    )
+    source_root.mkdir(parents=True)
+    completed = {
+        "generation_digest": (
+            guard_module._G051_FLAT_SOURCE_GENERATION_DIGEST
+        ),
+        "observed_at_utc": "2026-07-30T09:00:00+00:00",
+        "status": "EXIT_DISPATCH_COMPLETED_FLAT_RECONCILED",
+    }
+    (
+        source_root
+        / "exit-sequence-dispatch-completed.2026-07-30.json"
+    ).write_text(json.dumps(completed), encoding="utf-8")
+    with sqlite3.connect(source_root / "coordinator.sqlite3") as connection:
+        connection.execute(
+            "CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)"
+        )
+        connection.execute(
+            "CREATE TABLE cycles("
+            "realized_pnl_jpy INTEGER,protection_confirmed_at_utc TEXT)"
+        )
+        connection.execute("CREATE TABLE attempts(action TEXT NOT NULL)")
+        connection.executemany(
+            "INSERT INTO metadata(key,value) VALUES(?,?)",
+            (
+                (
+                    "generation_digest",
+                    guard_module._G051_FLAT_SOURCE_GENERATION_DIGEST,
+                ),
+                (
+                    "unknown_halt_latched",
+                    "true" if halt_latched else "false",
+                ),
+                (
+                    "pending_transport_resolution",
+                    json.dumps(
+                        {
+                            "classification": pending_classification,
+                            "generation_digest": (
+                                guard_module
+                                ._G051_FLAT_SOURCE_GENERATION_DIGEST
+                            ),
+                            "previous_action": (
+                                "POSITION_SPECIFIC_TIME_EXIT"
+                            ),
+                        }
+                    ),
+                ),
+            ),
+        )
+        connection.execute(
+            "INSERT INTO cycles VALUES(?,?)",
+            (
+                None if unresolved else -1,
+                "2026-07-30T08:30:00+00:00",
+            ),
+        )
+        attempts = [
+            ("CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT",),
+            ("EXACT_SIZE_OCO_PROTECTION",),
+            ("MARKET_ENTRY",),
+            ("POSITION_SPECIFIC_TIME_EXIT",),
+        ]
+        if omit_close_attempt:
+            attempts.pop()
+        connection.executemany(
+            "INSERT INTO attempts(action) VALUES(?)",
+            attempts,
+        )
+
+
+def _g052_gate(tmp_path: Path) -> tuple[
+    guard_module.V4ExternalPreparationGate, str
+]:
+    target_digest = "sha256:" + ("4" * 64)
+    reviewed_digest = "sha256:" + ("5" * 64)
+    state_root = (
+        tmp_path / f"generation-{reviewed_digest[7:]}-{target_digest[7:]}"
+    )
+    state_root.mkdir()
+    return (
+        guard_module.V4ExternalPreparationGate(
+            token=guard_module._GATE_TOKEN,
+            reviewed_files_digest=reviewed_digest,
+            state_root=state_root,
+        ),
+        target_digest,
+    )
+
+
+def test_g052_flat_only_carry_forward_requires_exact_g051_flat(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    gate, target_digest = _g052_gate(tmp_path)
+    monkeypatch.setattr(
+        guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda **_kwargs: SimpleNamespace(
+            generation_label="H11_AUTO_30M_20260730_G052",
+            digest=target_digest,
+        ),
+    )
+    _write_g051_flat_source(tmp_path)
+
+    evidence = guard_module.load_g052_flat_only_carry_forward_evidence(
+        repository=tmp_path,
+        external_gate=gate,
+        generation_digest=target_digest,
+        now_utc=datetime(2026, 7, 30, 10, 0, tzinfo=UTC),
+    )
+
+    assert evidence.flat_cycle_count == 1
+    assert evidence.unresolved_cycle_count == 0
+    assert evidence.transport_action_pending is False
+    assert evidence.source_halt_remains_latched is True
+    assert evidence.broker_post_authorized is False
+    assert bool(evidence) is False
+
+
+def test_g052_flat_only_carry_forward_rejects_unresolved_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    gate, target_digest = _g052_gate(tmp_path)
+    monkeypatch.setattr(
+        guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda **_kwargs: SimpleNamespace(
+            generation_label="H11_AUTO_30M_20260730_G052",
+            digest=target_digest,
+        ),
+    )
+    _write_g051_flat_source(tmp_path, unresolved=True)
+
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="G052_FLAT_SOURCE_EVIDENCE_INVALID",
+    ):
+        guard_module.load_g052_flat_only_carry_forward_evidence(
+            repository=tmp_path,
+            external_gate=gate,
+            generation_digest=target_digest,
+            now_utc=datetime(2026, 7, 30, 10, 0, tzinfo=UTC),
+        )
+
+
+@pytest.mark.parametrize(
+    ("source_options",),
+    (
+        ({"halt_latched": False},),
+        ({"pending_classification": "FILLED_UNPROTECTED"},),
+        ({"omit_close_attempt": True},),
+    ),
+)
+def test_g052_flat_only_carry_forward_rejects_incomplete_source_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    source_options: dict[str, object],
+) -> None:
+    gate, target_digest = _g052_gate(tmp_path)
+    monkeypatch.setattr(
+        guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda **_kwargs: SimpleNamespace(
+            generation_label="H11_AUTO_30M_20260730_G052",
+            digest=target_digest,
+        ),
+    )
+    _write_g051_flat_source(tmp_path, **source_options)
+
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="G052_FLAT_SOURCE_EVIDENCE_INVALID",
+    ):
+        guard_module.load_g052_flat_only_carry_forward_evidence(
+            repository=tmp_path,
+            external_gate=gate,
+            generation_digest=target_digest,
+            now_utc=datetime(2026, 7, 30, 10, 0, tzinfo=UTC),
         )
 
 
@@ -154,22 +373,48 @@ def test_runtime_only_monitor_carries_risk_and_coordinator_baseline(
     source_state.entries_today = 1
     source_store.save(source_state)
 
+    runtime_times = iter(
+        (
+            datetime(2026, 7, 29, 0, 0, 1, tzinfo=UTC),
+            datetime(2026, 7, 29, 0, 0, 16, tzinfo=UTC),
+            datetime(2026, 7, 29, 0, 0, 17, tzinfo=UTC),
+            datetime(2026, 7, 29, 0, 0, 18, tzinfo=UTC),
+            datetime(2026, 7, 29, 0, 0, 31, tzinfo=UTC),
+            datetime(2026, 7, 29, 0, 0, 32, tzinfo=UTC),
+        )
+    )
     supervisor = supervisor_module.V4GmoMonitorSupervisor(
         repository=tmp_path,
         generation=generation,
+        runtime_clock=lambda: next(runtime_times),
     )
     supervisor.acquire_single_process()
     try:
         tick = supervisor.run_tick(
             now_utc=datetime(2026, 7, 29, 0, 0, tzinfo=UTC)
         )
+    finally:
+        supervisor.close()
+
+    target_root = runtime_root(generation_digest=target_digest)
+    foreground_lock = H11AutoProcessLock(target_root / "process.lock")
+    assert foreground_lock.acquire() is True
+    DeadManStore(
+        target_root / "dead-man.json",
+        policy=supervisor_module.v4_gmo_dead_man_policy(),
+    ).heartbeat(
+        heartbeat_utc=datetime(2026, 7, 29, 0, 0, 15, 100_000, tzinfo=UTC)
+    )
+    chain_path = target_root / "unattended-heartbeat-chain.json"
+    chain_before = chain_path.read_text(encoding="utf-8")
+    supervisor.acquire_single_process()
+    try:
         second_tick = supervisor.run_tick(
             now_utc=datetime(2026, 7, 29, 0, 0, 15, tzinfo=UTC)
         )
     finally:
         supervisor.close()
-
-    target_root = runtime_root(generation_digest=target_digest)
+        foreground_lock.release()
     target_state = PhaseBRiskStore(
         target_root / "risk.json",
         policy=policy,
@@ -194,6 +439,7 @@ def test_runtime_only_monitor_carries_risk_and_coordinator_baseline(
     assert second_tick.generation_bound is True
     assert tick.broker_write is False
     assert tick.actual_post_count == 0
+    assert chain_path.read_text(encoding="utf-8") == chain_before
     with coordinator._connect() as connection:
         connection.execute(
             "INSERT INTO cycles("

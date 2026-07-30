@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import inspect
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+from scripts import (
+    h11_auto_v4_install_monitor_launchagent as monitor_installer_script,
+)
 from scripts import (
     h11_auto_v4_install_unattended_live_scheduler_launchagent as installer_script,
 )
@@ -45,6 +49,31 @@ def test_launchctl_runner_rejects_unknown_action_without_subprocess(monkeypatch)
     assert result.returncode == 126
     assert result.stdout == ""
     assert result.stderr == ""
+
+
+def test_g052_startup_probe_does_not_hold_installer_process_lock() -> None:
+    assert (
+        monitor_installer_script._startup_probe_requires_installer_process_lock(
+            "H11_AUTO_30M_20260730_G052"
+        )
+        is False
+    )
+    assert (
+        monitor_installer_script._startup_probe_requires_installer_process_lock(
+            "H11_AUTO_30M_20260730_G051"
+        )
+        is True
+    )
+
+
+def test_g052_claims_operation_60_before_runtime_startup_probe() -> None:
+    source = inspect.getsource(monitor_installer_script.main)
+    assert source.index("begin_g052_flat_only_monitor") < source.index(
+        "_probe_g040_launchd_runtime_startup"
+    )
+    assert source.index("begin_g052_flat_only_monitor") < source.index(
+        "MONITOR_LAUNCHAGENT_RUNTIME_STARTUP_BLOCKED_NO_RETRY"
+    )
 
 
 def test_gui_domain_refusal_is_retry_safe_before_install(

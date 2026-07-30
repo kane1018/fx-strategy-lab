@@ -262,6 +262,24 @@ def test_dead_man_policy_mismatch_and_symlink_are_refused(tmp_path: Path) -> Non
     assert linked.evaluate(now_utc=NOW).reason_safe_label == "DEAD_MAN_HEARTBEAT_MISSING"
 
 
+def test_dead_man_current_evaluation_samples_clock_after_shared_heartbeat_read(
+    tmp_path: Path,
+) -> None:
+    store = DeadManStore(
+        tmp_path / "heartbeat.json",
+        policy=DeadManPolicy("SHARED_FOREGROUND_HEARTBEAT", 30),
+    )
+    foreground_heartbeat = NOW + timedelta(milliseconds=100)
+    store.heartbeat(heartbeat_utc=foreground_heartbeat)
+
+    result = store.evaluate_current(
+        clock=lambda: foreground_heartbeat + timedelta(milliseconds=1)
+    )
+
+    assert result.alive is True
+    assert result.reason_safe_label == "DEAD_MAN_ALIVE"
+
+
 def test_existing_terminal_risk_stop_is_never_replaced_by_later_result() -> None:
     policy = _policy()
     state = PhaseBRiskState(
