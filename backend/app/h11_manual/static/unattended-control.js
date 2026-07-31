@@ -70,14 +70,6 @@
       !state.generationDigest ||
       !state.reviewedFilesDigest
     ) return;
-    if (
-      target === "on" &&
-      !window.confirm(
-        "USD_JPY・1,000通貨・最大30 attempts/日の自動売買をONにします。"
-      )
-    ) {
-      return;
-    }
     state.busy = true;
     onButton.disabled = true;
     offButton.disabled = true;
