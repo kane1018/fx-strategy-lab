@@ -7,8 +7,11 @@ credential, calls a broker, sends a notification, or issues a permit.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import Enum
+from pathlib import Path
 
 
 class V4UnattendedRuntimeState(str, Enum):
@@ -21,6 +24,23 @@ class V4UnattendedRuntimeState(str, Enum):
 
 class V4UnattendedRuntimeProjectionError(RuntimeError):
     """Fail-closed state projection error containing safe labels only."""
+
+
+_SUPERVISOR_HEARTBEAT_FILENAME = "supervisor-heartbeat.json"
+_HEARTBEAT_BOOLEAN_FIELDS = (
+    "runtime_risk_ready",
+    "dead_man_alive",
+    "heartbeat_chain_beat",
+    "persistent_halt",
+    "generation_bound",
+    "cycle_present",
+    "protection_confirmed",
+    "ownership_exact",
+    "quantity_matches",
+    "pending_transport",
+    "unknown_halt",
+    "entry_gate_open",
+)
 
 
 @dataclass(frozen=True)
@@ -47,6 +67,83 @@ class V4UnattendedRuntimeEvidence:
 
     def __bool__(self) -> bool:
         return False
+
+
+def _halted_evidence(*, arm_armed: bool) -> V4UnattendedRuntimeEvidence:
+    return V4UnattendedRuntimeEvidence(
+        arm_armed=arm_armed,
+        position_open=False,
+        protection_confirmed=False,
+        ownership_exact=False,
+        quantity_matches=False,
+        runtime_clear=False,
+        generation_matches=False,
+        pending_transport=False,
+        unknown_halt=True,
+        heartbeat_alive=False,
+        process_lock_clear=False,
+        dead_man_alive=False,
+        entry_gate_open=False,
+    )
+
+
+def load_unattended_runtime_evidence_no_post(
+    *,
+    state_root: Path,
+    generation_digest: str,
+    arm_armed: bool,
+    now_utc: datetime | None = None,
+    maximum_age_seconds: int = 60,
+) -> V4UnattendedRuntimeEvidence:
+    """Read only the supervisor's safe heartbeat aggregate."""
+
+    if type(arm_armed) is not bool or type(maximum_age_seconds) is not int:
+        raise V4UnattendedRuntimeProjectionError("RUNTIME_EVIDENCE_INPUT_INVALID")
+    if maximum_age_seconds <= 0:
+        raise V4UnattendedRuntimeProjectionError("RUNTIME_EVIDENCE_AGE_INVALID")
+    path = state_root / _SUPERVISOR_HEARTBEAT_FILENAME
+    if path.is_symlink() or not path.is_file():
+        return _halted_evidence(arm_armed=arm_armed)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return _halted_evidence(arm_armed=arm_armed)
+    if not isinstance(payload, dict):
+        return _halted_evidence(arm_armed=arm_armed)
+    if payload.get("generation_digest") != generation_digest:
+        return _halted_evidence(arm_armed=arm_armed)
+    observed_raw = payload.get("observed_at_utc")
+    if not isinstance(observed_raw, str):
+        return _halted_evidence(arm_armed=arm_armed)
+    try:
+        observed_at = datetime.fromisoformat(observed_raw).astimezone(UTC)
+    except ValueError:
+        return _halted_evidence(arm_armed=arm_armed)
+    now = (now_utc or datetime.now(UTC)).astimezone(UTC)
+    age = (now - observed_at).total_seconds()
+    if age < 0 or age > maximum_age_seconds:
+        return _halted_evidence(arm_armed=arm_armed)
+    if any(type(payload.get(field)) is not bool for field in _HEARTBEAT_BOOLEAN_FIELDS):
+        return _halted_evidence(arm_armed=arm_armed)
+    position_open = payload["cycle_present"]
+    persistent_halt = payload["persistent_halt"]
+    return V4UnattendedRuntimeEvidence(
+        arm_armed=arm_armed,
+        position_open=position_open,
+        protection_confirmed=(
+            payload["protection_confirmed"] if position_open else True
+        ),
+        ownership_exact=(payload["ownership_exact"] if position_open else True),
+        quantity_matches=(payload["quantity_matches"] if position_open else True),
+        runtime_clear=payload["runtime_risk_ready"] and not persistent_halt,
+        generation_matches=payload["generation_bound"],
+        pending_transport=payload["pending_transport"],
+        unknown_halt=payload["unknown_halt"] or persistent_halt,
+        heartbeat_alive=payload["heartbeat_chain_beat"],
+        process_lock_clear=payload["generation_bound"],
+        dead_man_alive=payload["dead_man_alive"],
+        entry_gate_open=payload["entry_gate_open"],
+    )
 
 
 def project_unattended_runtime_state(

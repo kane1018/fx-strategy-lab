@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hmac
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -42,6 +42,12 @@ from app.services.h11_v4_unattended_live_arm_state import (
 from app.services.h11_v4_unattended_live_paths import (
     DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
     v4_unattended_live_arm_state_path,
+)
+from app.services.h11_v4_unattended_runtime_no_post import (
+    V4UnattendedRuntimeState,
+    entry_evaluation_allowed,
+    load_unattended_runtime_evidence_no_post,
+    project_unattended_runtime_state,
 )
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
@@ -126,29 +132,50 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         supported = True
     except V4G038ActivationError:
         supported = False
-    runtime_state, entries_today = _runtime_projection(contract)
-    entry_gate_open = False
-    if runtime_state == "HALTED":
+    local_runtime_state, entries_today = _runtime_projection(contract)
+    evidence = load_unattended_runtime_evidence_no_post(
+        state_root=v4_gmo_runtime_state_root(
+            repository=REPOSITORY,
+            generation_digest=contract.generation.digest,
+        ),
+        generation_digest=contract.generation.digest,
+        arm_armed=check.armed,
+    )
+    if not supported or local_runtime_state == "HALTED":
+        evidence = replace(
+            evidence,
+            generation_matches=(evidence.generation_matches if supported else False),
+            runtime_clear=False,
+            unknown_halt=True,
+        )
+    if local_runtime_state == "POSITION_OPEN" and not evidence.position_open:
+        evidence = replace(evidence, runtime_clear=False, unknown_halt=True)
+    if local_runtime_state == "FLAT" and evidence.position_open:
+        evidence = replace(evidence, runtime_clear=False, unknown_halt=True)
+    projected_state = project_unattended_runtime_state(evidence)
+    entry_gate_open = entry_evaluation_allowed(
+        evidence=evidence,
+        state=projected_state,
+    )
+    if projected_state is V4UnattendedRuntimeState.HALTED:
         effective_state = "HALTED"
         reason = "RUNTIME_STATE_NOT_CLEAR"
         entry_state = "HALTED"
-    elif runtime_state == "POSITION_OPEN":
-        effective_state = "ON_EXIT_ONLY" if check.armed else "EXIT_ONLY"
+    elif projected_state in {
+        V4UnattendedRuntimeState.ON_EXIT_ONLY,
+        V4UnattendedRuntimeState.EXIT_ONLY,
+    }:
+        effective_state = projected_state.value
         reason = (
             "ARMED_ENTRY_BLOCKED_POSITION_OPEN"
             if check.armed
             else "OPERATOR_DISARMED_EXIT_MANAGEMENT_CONTINUES"
         )
         entry_state = "POSITION_OPEN"
-    elif check.armed and supported:
+    elif projected_state is V4UnattendedRuntimeState.ON_WAITING:
         effective_state = "ON_WAITING"
         reason = "RUNTIME_GATES_PENDING"
         entry_state = "WAITING_FOR_SIGNAL"
-        entry_gate_open = True
-    elif check.armed:
-        effective_state = "HALTED"
-        reason = "GENERATION_NOT_COMMISSIONED_FOR_UNATTENDED_LIVE"
-        entry_state = "GENERATION_NOT_COMMISSIONED"
     else:
         effective_state = "OFF"
         reason = check.blocked_reasons[0] if check.blocked_reasons else "OPERATOR_DISARMED"
@@ -162,6 +189,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         "entry_gate_open": entry_gate_open,
         "entry_state": entry_state,
         "effective_state": effective_state,
+        "runtime_state": projected_state.value,
         "entries_today": entries_today,
         "generation_digest": contract.generation.digest,
         "generation_label": contract.generation.generation_label,

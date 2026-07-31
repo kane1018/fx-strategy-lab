@@ -9,9 +9,30 @@ from app.h11_manual import api as manual_api
 from app.h11_manual import unattended_control_api as subject
 from app.main_h11_manual import app
 from app.services.h11_v4_unattended_live_arm_state import V4UnattendedLiveArmStore
+from app.services.h11_v4_unattended_runtime_no_post import (
+    V4UnattendedRuntimeEvidence,
+)
 
 _GENERATION = "sha256:" + "a" * 64
 _REVIEWED = "sha256:" + "b" * 64
+
+
+def _runtime_evidence(*, arm_armed: bool, position_open: bool) -> V4UnattendedRuntimeEvidence:
+    return V4UnattendedRuntimeEvidence(
+        arm_armed=arm_armed,
+        position_open=position_open,
+        protection_confirmed=True,
+        ownership_exact=True,
+        quantity_matches=True,
+        runtime_clear=True,
+        generation_matches=True,
+        pending_transport=False,
+        unknown_halt=False,
+        heartbeat_alive=True,
+        process_lock_clear=True,
+        dead_man_alive=True,
+        entry_gate_open=False,
+    )
 
 
 def _install_contract(monkeypatch, tmp_path: Path, *, supported: bool = True) -> None:
@@ -38,6 +59,13 @@ def _install_contract(monkeypatch, tmp_path: Path, *, supported: bool = True) ->
         lambda **_kw: tmp_path / "arm-state.json",
     )
     monkeypatch.setattr(subject, "require_clean_main", lambda **_kw: None)
+    monkeypatch.setattr(
+        subject,
+        "load_unattended_runtime_evidence_no_post",
+        lambda **kw: _runtime_evidence(
+            arm_armed=kw["arm_armed"], position_open=False
+        ),
+    )
     if supported:
         monkeypatch.setattr(
             subject,
@@ -174,6 +202,13 @@ def test_armed_position_projects_exit_only_without_entry_gate(
         "_runtime_projection",
         lambda _contract: ("POSITION_OPEN", 3),
     )
+    monkeypatch.setattr(
+        subject,
+        "load_unattended_runtime_evidence_no_post",
+        lambda **kw: _runtime_evidence(
+            arm_armed=kw["arm_armed"], position_open=True
+        ),
+    )
     client = TestClient(app, base_url="http://127.0.0.1:8765")
     initial = client.get("/api/manual/unattended-control").json()
     headers = {
@@ -212,6 +247,13 @@ def test_disarmed_open_position_projects_exit_only(monkeypatch, tmp_path) -> Non
         subject,
         "_runtime_projection",
         lambda _contract: ("POSITION_OPEN", 3),
+    )
+    monkeypatch.setattr(
+        subject,
+        "load_unattended_runtime_evidence_no_post",
+        lambda **kw: _runtime_evidence(
+            arm_armed=kw["arm_armed"], position_open=True
+        ),
     )
     client = TestClient(app, base_url="http://127.0.0.1:8765")
     payload = client.get("/api/manual/unattended-control").json()

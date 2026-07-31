@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
 import pytest
 
 from app.services.h11_v4_unattended_runtime_no_post import (
@@ -8,6 +12,7 @@ from app.services.h11_v4_unattended_runtime_no_post import (
     V4UnattendedRuntimeState,
     entry_evaluation_allowed,
     exit_management_required,
+    load_unattended_runtime_evidence_no_post,
     project_unattended_runtime_state,
 )
 
@@ -92,3 +97,38 @@ def test_invalid_evidence_type_fails_closed() -> None:
         V4UnattendedRuntimeProjectionError, match="RUNTIME_EVIDENCE_TYPE_INVALID"
     ):
         project_unattended_runtime_state(object())  # type: ignore[arg-type]
+
+
+def test_missing_or_stale_supervisor_evidence_projects_halted(tmp_path: Path) -> None:
+    digest = "sha256:" + "a" * 64
+    missing = load_unattended_runtime_evidence_no_post(
+        state_root=tmp_path,
+        generation_digest=digest,
+        arm_armed=True,
+    )
+    assert project_unattended_runtime_state(missing) is V4UnattendedRuntimeState.HALTED
+    payload = {
+        "generation_digest": digest,
+        "observed_at_utc": (datetime.now(UTC) - timedelta(seconds=61)).isoformat(),
+        "runtime_risk_ready": True,
+        "dead_man_alive": True,
+        "heartbeat_chain_beat": True,
+        "persistent_halt": False,
+        "generation_bound": True,
+        "cycle_present": False,
+        "protection_confirmed": False,
+        "ownership_exact": False,
+        "quantity_matches": False,
+        "pending_transport": False,
+        "unknown_halt": False,
+        "entry_gate_open": True,
+    }
+    (tmp_path / "supervisor-heartbeat.json").write_text(
+        json.dumps(payload), encoding="utf-8"
+    )
+    stale = load_unattended_runtime_evidence_no_post(
+        state_root=tmp_path,
+        generation_digest=digest,
+        arm_armed=True,
+    )
+    assert project_unattended_runtime_state(stale) is V4UnattendedRuntimeState.HALTED

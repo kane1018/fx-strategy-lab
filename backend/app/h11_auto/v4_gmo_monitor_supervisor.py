@@ -69,6 +69,12 @@ class V4GmoMonitorTick:
     broker_read: bool = False
     broker_write: bool = False
     actual_post_count: int = 0
+    protection_confirmed: bool = False
+    ownership_exact: bool = False
+    quantity_matches: bool = False
+    pending_transport: bool = False
+    unknown_halt: bool = False
+    entry_gate_open: bool = False
 
     def __bool__(self) -> bool:
         return False
@@ -252,6 +258,12 @@ class V4GmoMonitorSupervisor:
             runtime_risk_ready=runtime_safety_ready,
             dead_man_alive=runtime_safety_ready,
             heartbeat_chain_beat=runtime_safety_ready,
+            protection_confirmed=(
+                snapshot.protection_confirmed if snapshot.cycle_present else True
+            ),
+            ownership_exact=not snapshot.cycle_present,
+            quantity_matches=not snapshot.cycle_present,
+            unknown_halt=persistent_halt,
         )
         self._write_heartbeat(tick)
         return tick
