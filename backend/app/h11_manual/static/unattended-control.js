@@ -22,14 +22,22 @@
     if (payload.csrf_token) state.csrfToken = payload.csrf_token;
     const effective = payload.effective_state || "HALTED";
     label.textContent = effective;
+    const entryState = payload.entry_state || effective;
     reason.textContent =
-      `${payload.reason_label} · ${payload.entries_today ?? "—"} / ` +
+      `ARM ${armedLabel(payload)} · ENTRY ${entryState} · ${payload.reason_label} · ` +
+      `${payload.entries_today ?? "—"} / ` +
       `${payload.maximum_entries_per_day} attempts`;
     const armed = payload.desired_state === "ARMED";
     onButton.disabled =
-      state.busy || armed || !payload.unattended_live_supported || !state.csrfToken;
+      state.busy || armed || payload.arm_control_available === false || !state.csrfToken;
     offButton.disabled = state.busy || !armed || !state.csrfToken;
     document.querySelector("#unattended-control").dataset.state = effective;
+    document.querySelector("#unattended-control").dataset.armState = armed ? "ON" : "OFF";
+    document.querySelector("#unattended-control").dataset.entryState = entryState;
+  }
+
+  function armedLabel(payload) {
+    return payload.desired_state === "ARMED" ? "ON" : "OFF";
   }
 
   async function load() {

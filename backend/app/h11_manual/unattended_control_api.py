@@ -127,25 +127,40 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
     except V4G038ActivationError:
         supported = False
     runtime_state, entries_today = _runtime_projection(contract)
+    entry_gate_open = False
     if runtime_state == "HALTED":
         effective_state = "HALTED"
         reason = "RUNTIME_STATE_NOT_CLEAR"
-    elif not check.armed and runtime_state == "POSITION_OPEN":
-        effective_state = "EXIT_ONLY"
-        reason = "OPERATOR_DISARMED_EXIT_MANAGEMENT_CONTINUES"
+        entry_state = "HALTED"
+    elif runtime_state == "POSITION_OPEN":
+        effective_state = "ON_EXIT_ONLY" if check.armed else "EXIT_ONLY"
+        reason = (
+            "ARMED_ENTRY_BLOCKED_POSITION_OPEN"
+            if check.armed
+            else "OPERATOR_DISARMED_EXIT_MANAGEMENT_CONTINUES"
+        )
+        entry_state = "POSITION_OPEN"
     elif check.armed and supported:
         effective_state = "ON_WAITING"
         reason = "RUNTIME_GATES_PENDING"
+        entry_state = "WAITING_FOR_SIGNAL"
+        entry_gate_open = True
     elif check.armed:
         effective_state = "HALTED"
         reason = "GENERATION_NOT_COMMISSIONED_FOR_UNATTENDED_LIVE"
+        entry_state = "GENERATION_NOT_COMMISSIONED"
     else:
         effective_state = "OFF"
         reason = check.blocked_reasons[0] if check.blocked_reasons else "OPERATOR_DISARMED"
+        entry_state = "DISARMED"
     result = {
         "actual_post_count": 0,
         "broker_write": False,
+        "arm_control_available": True,
+        "arm_state": check.desired_state.value,
         "desired_state": check.desired_state.value,
+        "entry_gate_open": entry_gate_open,
+        "entry_state": entry_state,
         "effective_state": effective_state,
         "entries_today": entries_today,
         "generation_digest": contract.generation.digest,
@@ -251,14 +266,6 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
             raise V4UnattendedLiveArmStateError("ARM_STATE_GENERATION_MISMATCH")
         if request_body.expected_reviewed_files_digest != contract.reviewed_files_digest:
             raise V4UnattendedLiveArmStateError("ARM_STATE_REVIEWED_FILES_MISMATCH")
-        if (
-            contract.generation.live_ready is not True
-            or contract.generation.unattended_live_supported is not True
-        ):
-            raise V4UnattendedLiveArmStateError(
-                "GENERATION_NOT_COMMISSIONED_FOR_UNATTENDED_LIVE"
-            )
-        verify_g038_generation_activation(generation=contract.generation)
         _arm_store(contract).set_desired_state(
             desired_state=V4ArmDesiredState.ARMED,
             expected_revision=request_body.expected_revision,

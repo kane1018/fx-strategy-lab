@@ -134,10 +134,11 @@ def test_manual_settlement_reader_is_restored_after_auto_mode_turns_off(
     assert manual_api._manual_settlement_reader_initialized is True
 
 
-def test_on_requires_csrf_origin_and_commissioned_generation(
+def test_arm_on_is_decoupled_from_runtime_entry_gate(
     monkeypatch, tmp_path
 ) -> None:
     _install_contract(monkeypatch, tmp_path, supported=False)
+    monkeypatch.setattr(subject, "_runtime_projection", lambda _contract: ("HALTED", 3))
     client = TestClient(app, base_url="http://127.0.0.1:8765")
     initial = client.get("/api/manual/unattended-control").json()
     body = {
@@ -146,7 +147,7 @@ def test_on_requires_csrf_origin_and_commissioned_generation(
         "expected_reviewed_files_digest": _REVIEWED,
     }
     assert client.post("/api/manual/unattended-control/on", json=body).status_code == 403
-    blocked = client.post(
+    armed = client.post(
         "/api/manual/unattended-control/on",
         headers={
             "Origin": "http://127.0.0.1:8765",
@@ -154,8 +155,46 @@ def test_on_requires_csrf_origin_and_commissioned_generation(
         },
         json=body,
     )
-    assert blocked.status_code == 409
-    assert "GENERATION_NOT_COMMISSIONED" in blocked.json()["detail"]
+    assert armed.status_code == 200
+    payload = armed.json()
+    assert payload["desired_state"] == "ARMED"
+    assert payload["arm_state"] == "ARMED"
+    assert payload["effective_state"] == "HALTED"
+    assert payload["entry_state"] == "HALTED"
+    assert payload["entry_gate_open"] is False
+    assert payload["broker_write"] is False
+
+
+def test_armed_position_projects_exit_only_without_entry_gate(
+    monkeypatch, tmp_path
+) -> None:
+    _install_contract(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        subject,
+        "_runtime_projection",
+        lambda _contract: ("POSITION_OPEN", 3),
+    )
+    client = TestClient(app, base_url="http://127.0.0.1:8765")
+    initial = client.get("/api/manual/unattended-control").json()
+    headers = {
+        "Origin": "http://127.0.0.1:8765",
+        "X-H11-V4-Control-CSRF": initial["csrf_token"],
+    }
+    armed = client.post(
+        "/api/manual/unattended-control/on",
+        headers=headers,
+        json={
+            "expected_revision": 0,
+            "expected_generation_digest": _GENERATION,
+            "expected_reviewed_files_digest": _REVIEWED,
+        },
+    )
+    assert armed.status_code == 200
+    payload = armed.json()
+    assert payload["arm_state"] == "ARMED"
+    assert payload["effective_state"] == "ON_EXIT_ONLY"
+    assert payload["entry_state"] == "POSITION_OPEN"
+    assert payload["entry_gate_open"] is False
 
 
 def test_public_application_does_not_expose_control_routes() -> None:
