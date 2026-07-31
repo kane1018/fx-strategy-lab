@@ -14,6 +14,7 @@ import hmac
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from typing import Any, Protocol
@@ -28,6 +29,18 @@ from app.private_api.schemas import (
 from app.services.h11_v3_keychain_credential_no_post import (
     H11V3KeychainError,
     read_h11_v3_keychain_secret,
+)
+from app.services.h11_v4_unattended_account_snapshot_evidence_no_post import (
+    V4BoundAccountSnapshotEvidenceNoPost,
+    V4BoundAccountSnapshotEvidenceNoPostError,
+    validate_bound_account_snapshot_evidence_no_post,
+)
+from app.services.h11_v4_unattended_account_snapshot_store_no_post import (
+    V4AccountSnapshotStoreNoPost,
+    V4AccountSnapshotStoreNoPostError,
+)
+from app.services.h11_v4_unattended_controller_snapshot_no_post import (
+    controller_cycle_binding_no_post,
 )
 
 GMO_PRIVATE_BASE_URL = "https://forex-api.coin.z.com"
@@ -113,6 +126,96 @@ class FakeManualSettlementReadClient:
         if any(row.symbol != symbol for row in self.snapshot.open_positions):
             raise ManualSettlementSyncError("FAKE_POSITION_SYMBOL_MISMATCH")
         return self.snapshot
+
+
+class BoundAccountSnapshotManualSettlementReadClient:
+    """Read fresh, local account evidence without opening a broker client.
+
+    This bridge is deliberately narrower than the manual private GET client. It
+    exposes an empty, flat snapshot only when the already-completed generation-
+    bound evidence is still valid. It never reads Keychain, network, or broker
+    state and never fabricates execution or position rows.
+    """
+
+    def __init__(
+        self,
+        *,
+        store: V4AccountSnapshotStoreNoPost,
+        expected_reviewed_files_digest: str,
+        expected_generation_digest: str,
+        now_factory: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._store = store
+        self._expected_reviewed_files_digest = expected_reviewed_files_digest
+        self._expected_generation_digest = expected_generation_digest
+        self._now_factory = now_factory or (lambda: datetime.now(UTC))
+
+    @property
+    def availability(self) -> SyncAvailability:
+        return (
+            SyncAvailability.CONFIGURED
+            if self._load_valid_flat_evidence() is not None
+            else SyncAvailability.NOT_CONFIGURED
+        )
+
+    def fetch_snapshot(self, *, symbol: str) -> ManualSettlementSnapshot:
+        if symbol != "USD_JPY":
+            raise ManualSettlementSyncError("BROKER_SYNC_SYMBOL_NOT_ALLOWED")
+        if self._load_valid_flat_evidence() is None:
+            raise ManualSettlementSyncError("BROKER_SYNC_BOUND_EVIDENCE_UNAVAILABLE")
+        return ManualSettlementSnapshot(
+            executions=(),
+            open_positions=(),
+            source="H11_V4_BOUND_ACCOUNT_SNAPSHOT_NO_POST",
+        )
+
+    def valid_evidence(self) -> V4BoundAccountSnapshotEvidenceNoPost | None:
+        """Return validated local evidence for an explicit runtime bridge."""
+
+        return self._load_valid_flat_evidence()
+
+    def _load_valid_flat_evidence(
+        self,
+    ) -> V4BoundAccountSnapshotEvidenceNoPost | None:
+        try:
+            evidence = self._store.load_completed(
+                expected_reviewed_files_digest=self._expected_reviewed_files_digest,
+                expected_generation_digest=self._expected_generation_digest,
+            )
+            if evidence is None:
+                return None
+            observed_at = datetime.fromisoformat(evidence.observed_at_utc).astimezone(UTC)
+            validate_bound_account_snapshot_evidence_no_post(
+                evidence,
+                expected_reviewed_files_digest=self._expected_reviewed_files_digest,
+                expected_generation_digest=self._expected_generation_digest,
+                expected_cycle_binding_digest=controller_cycle_binding_no_post(
+                    generation_digest=self._expected_generation_digest,
+                    observed_at_utc=observed_at,
+                ),
+                now_utc=self._now_factory().astimezone(UTC),
+            )
+        except (
+            OSError,
+            ValueError,
+            V4AccountSnapshotStoreNoPostError,
+            V4BoundAccountSnapshotEvidenceNoPostError,
+        ):
+            return None
+        if not (
+            evidence.broker_read_performed is True
+            and evidence.broker_get_count == 3
+            and evidence.open_positions_count == 0
+            and evidence.active_orders_count == 0
+            and evidence.account_flat is True
+            and evidence.active_orders_zero is True
+            and evidence.raw_response_retained is False
+            and evidence.identifier_exposed is False
+            and evidence.broker_write is False
+            and evidence.broker_post_count == 0
+        ):
+            return None
+        return evidence
 
 
 class GmoManualSettlementPrivateGetClient:

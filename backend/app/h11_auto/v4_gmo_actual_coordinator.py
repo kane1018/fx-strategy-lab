@@ -102,6 +102,7 @@ class V4CoordinatorMonitorSnapshot:
     time_exit_close_attempted: bool
     pending_transport: bool
     unknown_halt_latched: bool
+    external_flat_reconciled: bool = False
 
     def __repr__(self) -> str:
         return "V4CoordinatorMonitorSnapshot(<safe-aggregate>)"
@@ -532,11 +533,21 @@ class V4GmoActualCoordinatorStore:
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
+                external_marker = connection.execute(
+                    "SELECT value FROM metadata WHERE key='external_flat_reconciliation'"
+                ).fetchone()
                 if (
-                    connection.execute(
-                        "SELECT 1 FROM cycles WHERE realized_pnl_jpy IS NULL LIMIT 1"
-                    ).fetchone()
-                    is not None
+                    any(
+                        not _external_flat_reconciliation_matches(
+                            _decode_external_flat_marker(external_marker),
+                            cycle_ref=str(unresolved_row["cycle_ref"]),
+                            generation_digest=generation.digest,
+                            now_utc=now_utc,
+                        )
+                        for unresolved_row in connection.execute(
+                            "SELECT cycle_ref FROM cycles WHERE realized_pnl_jpy IS NULL"
+                        ).fetchall()
+                    )
                 ):
                     raise V4GmoActualCoordinatorError(
                         "v4 canary already has an unresolved cycle"
@@ -1692,6 +1703,96 @@ class V4GmoActualCoordinatorStore:
                 "ON CONFLICT(key) DO UPDATE SET value='true'"
             )
 
+    def reconcile_external_flat_no_post(
+        self,
+        *,
+        generation_digest: str,
+        reviewed_files_digest: str,
+        evidence_digest: str,
+        observed_at_utc: datetime,
+        valid_until_utc: datetime,
+        account_flat: bool,
+        active_orders_zero: bool,
+        broker_write: bool,
+        broker_post_count: int,
+    ) -> bool:
+        """Release a verified flat HALT without fabricating realized P&L."""
+
+        if (
+            not _valid_reconciliation_digest(generation_digest)
+            or not _valid_reconciliation_digest(reviewed_files_digest)
+            or not _valid_reconciliation_digest(evidence_digest)
+            or observed_at_utc.tzinfo is None
+            or valid_until_utc.tzinfo is None
+            or type(account_flat) is not bool
+            or type(active_orders_zero) is not bool
+            or type(broker_write) is not bool
+            or broker_write is not False
+            or type(broker_post_count) is not int
+            or broker_post_count != 0
+        ):
+            return False
+        now_utc = datetime.now(UTC)
+        observed = observed_at_utc.astimezone(UTC)
+        valid_until = valid_until_utc.astimezone(UTC)
+        if not (observed <= now_utc <= valid_until):
+            return False
+        if (valid_until - observed).total_seconds() > 60:
+            return False
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            generation = connection.execute(
+                "SELECT value FROM metadata WHERE key='generation_digest'"
+            ).fetchone()
+            pending = connection.execute(
+                "SELECT 1 FROM metadata WHERE key='pending_transport_attempt'"
+            ).fetchone()
+            row = connection.execute(
+                "SELECT cycle_ref, realized_pnl_jpy FROM cycles "
+                "ORDER BY created_at_utc DESC LIMIT 1"
+            ).fetchone()
+            unresolved = connection.execute(
+                "SELECT cycle_ref FROM cycles WHERE realized_pnl_jpy IS NULL"
+            ).fetchall()
+            if (
+                generation is None
+                or str(generation["value"]) != generation_digest
+                or pending is not None
+                or not account_flat
+                or not active_orders_zero
+                or row is None
+                or row["realized_pnl_jpy"] is not None
+                or len(unresolved) != 1
+            ):
+                return False
+            cycle_ref = str(row["cycle_ref"])
+            payload = {
+                "status": "EXTERNAL_FLAT_RECONCILIATION_NO_POST",
+                "generation_digest": generation_digest,
+                "reviewed_files_digest": reviewed_files_digest,
+                "evidence_digest": evidence_digest,
+                "cycle_ref": cycle_ref,
+                "observed_at_utc": observed.isoformat(),
+                "valid_until_utc": valid_until.isoformat(),
+                "account_flat": True,
+                "active_orders_zero": True,
+                "broker_write": False,
+                "broker_post_count": 0,
+            }
+            connection.execute(
+                "INSERT INTO metadata(key,value) VALUES(?,?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (
+                    "external_flat_reconciliation",
+                    json.dumps(payload, sort_keys=True, separators=(",", ":")),
+                ),
+            )
+            connection.execute(
+                "INSERT INTO metadata(key,value) VALUES('unknown_halt_latched','false') "
+                "ON CONFLICT(key) DO UPDATE SET value='false'"
+            )
+        return True
+
     def monitor_snapshot_safe(self) -> V4CoordinatorMonitorSnapshot:
         """Read only non-identifying state for the single most recent cycle.
 
@@ -1709,7 +1810,7 @@ class V4GmoActualCoordinatorStore:
 
         with self._connect() as connection:
             generation = connection.execute(
-                "SELECT 1 FROM metadata WHERE key='generation_digest'"
+                "SELECT value FROM metadata WHERE key='generation_digest'"
             ).fetchone()
             row = connection.execute(
                 "SELECT cycle_ref,market_attempted_at_utc,realized_pnl_jpy,"
@@ -1724,6 +1825,9 @@ class V4GmoActualCoordinatorStore:
             ).fetchone()
             halt = connection.execute(
                 "SELECT value FROM metadata WHERE key='unknown_halt_latched'"
+            ).fetchone()
+            external_marker = connection.execute(
+                "SELECT value FROM metadata WHERE key='external_flat_reconciliation'"
             ).fetchone()
             attempts = (
                 {
@@ -1742,6 +1846,7 @@ class V4GmoActualCoordinatorStore:
         flat_reconciled = False
         cycle_present = False
         protection_confirmed = False
+        external_flat_reconciled = False
         if row is not None:
             raw_attempted = row["market_attempted_at_utc"]
             if raw_attempted is not None:
@@ -1752,7 +1857,16 @@ class V4GmoActualCoordinatorStore:
                         "v4 monitor timestamp invalid"
                     ) from error
             flat_reconciled = row["realized_pnl_jpy"] is not None
-            cycle_present = not flat_reconciled
+            generation_digest = (
+                str(generation["value"]) if generation is not None else ""
+            )
+            external_flat_reconciled = _external_flat_reconciliation_matches(
+                _decode_external_flat_marker(external_marker),
+                cycle_ref=str(row["cycle_ref"]),
+                generation_digest=generation_digest,
+                now_utc=datetime.now(UTC),
+            )
+            cycle_present = not flat_reconciled and not external_flat_reconciled
             protection_confirmed = row["protection_confirmed_at_utc"] is not None
         return V4CoordinatorMonitorSnapshot(
             generation_bound=generation is not None,
@@ -1768,6 +1882,7 @@ class V4GmoActualCoordinatorStore:
             ),
             pending_transport=pending is not None,
             unknown_halt_latched=halt is not None and halt["value"] == "true",
+            external_flat_reconciled=external_flat_reconciled,
         )
 
     def unknown_halt_latched(self) -> bool:
@@ -1884,6 +1999,57 @@ def _atr_digest(*, signal_fingerprint: str, canonical_atr: str) -> str:
             separators=(",", ":"),
         ).encode()
     ).hexdigest()
+
+
+def _valid_reconciliation_digest(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and value.startswith("sha256:")
+        and len(value) == 71
+        and all(character in "0123456789abcdef" for character in value[7:])
+    )
+
+
+def _decode_external_flat_marker(row: sqlite3.Row | None) -> dict[str, object] | None:
+    if row is None:
+        return None
+    try:
+        payload = json.loads(str(row["value"]))
+    except (TypeError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _external_flat_reconciliation_matches(
+    payload: object,
+    *,
+    cycle_ref: str,
+    generation_digest: str,
+    now_utc: datetime,
+) -> bool:
+    if not isinstance(payload, dict) or now_utc.tzinfo is None:
+        return False
+    if (
+        payload.get("status") != "EXTERNAL_FLAT_RECONCILIATION_NO_POST"
+        or payload.get("cycle_ref") != cycle_ref
+        or payload.get("generation_digest") != generation_digest
+        or payload.get("account_flat") is not True
+        or payload.get("active_orders_zero") is not True
+        or payload.get("broker_write") is not False
+        or payload.get("broker_post_count") != 0
+        or not _valid_reconciliation_digest(payload.get("evidence_digest"))
+        or not _valid_reconciliation_digest(payload.get("reviewed_files_digest"))
+    ):
+        return False
+    try:
+        observed = datetime.fromisoformat(str(payload["observed_at_utc"])).astimezone(UTC)
+        valid_until = datetime.fromisoformat(str(payload["valid_until_utc"])).astimezone(UTC)
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        observed <= now_utc.astimezone(UTC) <= valid_until
+        and (valid_until - observed).total_seconds() <= 60
+    )
 
 
 def _snapshot_digest(

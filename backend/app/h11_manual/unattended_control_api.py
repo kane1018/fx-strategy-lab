@@ -208,6 +208,8 @@ def _runtime_projection(contract: _CurrentContract) -> tuple[str, int | None]:
         return "HALTED", None
     if snapshot.unknown_halt_latched or snapshot.pending_transport:
         return "HALTED", entries_today
+    if snapshot.external_flat_reconciled:
+        return "FLAT", entries_today
     if (
         snapshot.cycle_present
         and snapshot.entry_attempted_at_utc is not None
