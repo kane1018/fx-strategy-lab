@@ -31,6 +31,9 @@ from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from app.services.h11_v4_g038_unattended_activation import (
     verify_g038_generation_activation,
 )
+from app.services.h11_v4_g063_position_reconciliation_no_post import (
+    load_g063_position_reconciliation_no_post,
+)
 from app.services.h11_v4_unattended_live_heartbeat_chain import (
     V4HeartbeatChainStore,
     v4_unattended_runtime_heartbeat_policy,
@@ -41,6 +44,7 @@ _G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
 _G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
 _G056_GENERATION_LABEL = "H11_AUTO_30M_20260730_G056"
+_G063_GENERATION_LABEL = "H11_AUTO_30M_20260731_G063"
 _G051_FLAT_SOURCE_GENERATION_DIGEST = (
     "sha256:640556dd46a5066b8d7223f76d5196c22e4c65449c7d2371e526662049b9bf1c"
 )
@@ -125,6 +129,7 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G054",
             "H11_AUTO_30M_20260730_G055",
             "H11_AUTO_30M_20260730_G056",
+            _G063_GENERATION_LABEL,
         }:
             runtime_lock = H11AutoProcessLock(
                 self.state_root / "process.lock"
@@ -159,6 +164,7 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G054",
             "H11_AUTO_30M_20260730_G055",
             "H11_AUTO_30M_20260730_G056",
+            _G063_GENERATION_LABEL,
         }:
             self._maintain_g040_runtime_safety(
                 monitor_owns_runtime=monitor_owns_runtime is True,
@@ -198,6 +204,15 @@ class V4GmoMonitorSupervisor:
                 "V4_SUPERVISOR_COORDINATOR_GENERATION_MISMATCH"
             )
         snapshot = store.monitor_snapshot_safe()
+        position_evidence = (
+            load_g063_position_reconciliation_no_post(
+                state_root=self.state_root,
+                generation_digest=self.generation.digest,
+                now_utc=now_utc,
+            )
+            if self.generation.generation_label == _G063_GENERATION_LABEL
+            else None
+        )
         dispatch_required = False
         flat_target_missed = False
         if snapshot.entry_attempted_at_utc is not None and not snapshot.flat_reconciled:
@@ -239,6 +254,20 @@ class V4GmoMonitorSupervisor:
                         observed_at_utc=now_utc,
                     )
         persistent_halt = store.unknown_halt_latched()
+        position_evidence_halted = (
+            position_evidence is not None
+            and snapshot.cycle_present
+            and not (
+                position_evidence.position_open
+                and position_evidence.protection_confirmed
+                and position_evidence.ownership_exact
+                and position_evidence.quantity_matches
+                and position_evidence.generation_bound
+            )
+        )
+        if position_evidence_halted and shared_write_allowed:
+            store.engage_unknown_halt()
+        persistent_halt = store.unknown_halt_latched() or position_evidence_halted
         status = (
             "PERSISTENT_HALT"
             if persistent_halt
@@ -259,11 +288,29 @@ class V4GmoMonitorSupervisor:
             dead_man_alive=runtime_safety_ready,
             heartbeat_chain_beat=runtime_safety_ready,
             protection_confirmed=(
-                snapshot.protection_confirmed if snapshot.cycle_present else True
+                position_evidence.protection_confirmed
+                if position_evidence is not None and snapshot.cycle_present
+                else snapshot.protection_confirmed
+                if snapshot.cycle_present
+                else True
             ),
-            ownership_exact=not snapshot.cycle_present,
-            quantity_matches=not snapshot.cycle_present,
+            ownership_exact=(
+                position_evidence.ownership_exact
+                if position_evidence is not None and snapshot.cycle_present
+                else not snapshot.cycle_present
+            ),
+            quantity_matches=(
+                position_evidence.quantity_matches
+                if position_evidence is not None and snapshot.cycle_present
+                else not snapshot.cycle_present
+            ),
             unknown_halt=persistent_halt,
+            entry_gate_open=(
+                runtime_safety_ready
+                and snapshot.generation_bound
+                and not snapshot.cycle_present
+                and not persistent_halt
+            ),
         )
         self._write_heartbeat(tick)
         return tick
