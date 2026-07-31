@@ -1,8 +1,8 @@
 {
   "architecture_status": "CLEAR",
-  "artifact_digest": "sha256:8a63212fcae3e3e53b20d39eacc374ca616f06892c9e47390d62a7129ae1a673",
-  "generation_digest": "sha256:e954106c7ed9b4e53ae4547de84a3134fe93c090f4a50f5773b32c795abab815",
-  "generation_label": "H11_AUTO_30M_20260731_G057",
+  "artifact_digest": "sha256:3d8c904b661279e58efb3d86d8191473f31f98c0058ca1ffde12b9d06966b691",
+  "generation_digest": "sha256:9d2ca36b930bf828b3b8d35c60403c15dd0816108923b618f593c7fa3f3ee4c2",
+  "generation_label": "H11_AUTO_30M_20260731_G058",
   "operations_status": "CLEAR",
   "review_method": "INDEPENDENT_MULTI_AGENT_READ_ONLY",
   "review_scope": [
@@ -17,7 +17,7 @@
     "NO_NOTIFICATION_OR_BROKER_ACTION_DURING_RELEASE",
     "NO_BROKER_ACTION_RETRY"
   ],
-  "reviewed_files_digest": "sha256:52878aa100c316442d5ce68b12e9413637b225d18c02b20adbe108399b42c509",
+  "reviewed_files_digest": "sha256:9bfc0c5b94077df0d90f7104a8797ef18943eb7e8a3f33540ff2fd1418b55526",
   "safety_status": "CLEAR",
   "schema": "H11_V4_INDEPENDENT_REVIEW_ATTESTATION_V1"
 }

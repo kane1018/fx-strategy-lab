@@ -285,6 +285,13 @@ def test_cli_import_graph_excludes_permit_bearing_modules() -> None:
     assert completed.stdout.splitlines() == ["0", "0", "0"]
 
 
+def test_cli_does_not_reintroduce_legacy_generation_label_binding() -> None:
+    source = inspect.getsource(cli)
+    assert "H11_AUTO_30M_20260729_G026" not in source
+    assert "generation.generation_label" in source
+    assert "generation.digest" in source
+
+
 @pytest.mark.parametrize("failing_stage", ("evidence", "passed", "failure"))
 def test_artifact_write_failure_preserves_no_retry_before_next_external_access(
     monkeypatch, tmp_path: Path, failing_stage: str

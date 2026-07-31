@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the reviewed G026 one-use Private-GET snapshot producer."""
+"""Run the reviewed current-generation one-use Private-GET snapshot producer."""
 
 from __future__ import annotations
 
@@ -35,8 +35,6 @@ from app.services.h11_v4_unattended_shadow_private_preflight import (
 )
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
-_EXPECTED_GENERATION_LABEL = "H11_AUTO_30M_20260729_G026"
-
 
 def main() -> int:
     repository = Path(__file__).resolve().parents[2]
@@ -47,8 +45,6 @@ def main() -> int:
             repository=repository,
             implementation_digest=reviewed,
         )
-        if generation.generation_label != _EXPECTED_GENERATION_LABEL:
-            raise RuntimeError("ACCOUNT_SNAPSHOT_PRODUCER_GENERATION_INVALID")
         _shadow, commissioning = load_sealed_current_shadow_artifacts(
             directory=v4_gmo_runtime_state_root(
                 repository=repository,
