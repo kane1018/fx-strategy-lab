@@ -45,6 +45,7 @@ _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
 _G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
 _G056_GENERATION_LABEL = "H11_AUTO_30M_20260730_G056"
 _G063_GENERATION_LABEL = "H11_AUTO_30M_20260731_G063"
+_G063_NO_POST_RUNTIME_LABELS = {_G063_GENERATION_LABEL}
 _G051_FLAT_SOURCE_GENERATION_DIGEST = (
     "sha256:640556dd46a5066b8d7223f76d5196c22e4c65449c7d2371e526662049b9bf1c"
 )
@@ -116,7 +117,12 @@ class V4GmoMonitorSupervisor:
         now_utc = now_utc.astimezone(UTC)
         runtime_lock: H11AutoProcessLock | None = None
         monitor_owns_runtime: bool | None = None
-        if self.generation.generation_label in {
+        if self.generation.generation_label in _G063_NO_POST_RUNTIME_LABELS:
+            runtime_lock = H11AutoProcessLock(
+                self.state_root / "process.lock"
+            )
+            monitor_owns_runtime = runtime_lock.acquire()
+        elif self.generation.generation_label in {
             "H11_AUTO_30M_20260729_G040",
             "H11_AUTO_30M_20260729_G041",
             "H11_AUTO_30M_20260730_G047",
@@ -129,7 +135,6 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G054",
             "H11_AUTO_30M_20260730_G055",
             "H11_AUTO_30M_20260730_G056",
-            _G063_GENERATION_LABEL,
         }:
             runtime_lock = H11AutoProcessLock(
                 self.state_root / "process.lock"
@@ -151,7 +156,12 @@ class V4GmoMonitorSupervisor:
         monitor_owns_runtime: bool | None,
     ) -> V4GmoMonitorTick:
         runtime_safety_ready = False
-        if self.generation.generation_label in {
+        if self.generation.generation_label in _G063_NO_POST_RUNTIME_LABELS:
+            self._maintain_g063_runtime_safety_no_post(
+                monitor_owns_runtime=monitor_owns_runtime is True,
+            )
+            runtime_safety_ready = True
+        elif self.generation.generation_label in {
             "H11_AUTO_30M_20260729_G040",
             "H11_AUTO_30M_20260729_G041",
             "H11_AUTO_30M_20260730_G047",
@@ -164,7 +174,6 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G054",
             "H11_AUTO_30M_20260730_G055",
             "H11_AUTO_30M_20260730_G056",
-            _G063_GENERATION_LABEL,
         }:
             self._maintain_g040_runtime_safety(
                 monitor_owns_runtime=monitor_owns_runtime is True,
@@ -445,6 +454,81 @@ class V4GmoMonitorSupervisor:
                     "V4_SUPERVISOR_FOREGROUND_HEARTBEAT_CHAIN_NOT_ALIVE"
                 )
 
+    def _maintain_g063_runtime_safety_no_post(
+        self,
+        *,
+        monitor_owns_runtime: bool,
+    ) -> None:
+        """Create G063 safety evidence without commissioning live runtime.
+
+        G063 intentionally keeps ``live_ready`` and
+        ``unattended_live_supported`` false.  This branch only owns the
+        generation-bound local safety stores needed by the monitor; it never
+        imports or constructs an external transport or authorization path.
+        """
+
+        risk_store = PhaseBRiskStore(
+            self.state_root / "risk.json",
+            policy=v4_gmo_risk_policy(),
+        )
+        dead_man_store = DeadManStore(
+            self.state_root / "dead-man.json",
+            policy=v4_gmo_dead_man_policy(),
+        )
+        heartbeat_chain_store = V4HeartbeatChainStore(
+            self.state_root / "unattended-heartbeat-chain.json",
+            policy=v4_unattended_runtime_heartbeat_policy(),
+        )
+        now_utc = self.runtime_clock()
+        if now_utc.tzinfo is None:
+            raise V4GmoMonitorSupervisorError(
+                "V4_SUPERVISOR_G063_RUNTIME_CLOCK_INVALID"
+            )
+        if not monitor_owns_runtime:
+            if not risk_store.path.is_file() or risk_store.path.is_symlink():
+                raise V4GmoMonitorSupervisorError(
+                    "V4_SUPERVISOR_G063_RUNTIME_STATE_MISSING"
+                )
+            risk_store.load()
+            dead_man = dead_man_store.evaluate(now_utc=now_utc)
+            if not dead_man.alive:
+                raise V4GmoMonitorSupervisorError(
+                    "V4_SUPERVISOR_G063_DEAD_MAN_NOT_ALIVE"
+                )
+            if heartbeat_chain_store.path.is_file():
+                chain = heartbeat_chain_store.assess(now_utc=now_utc)
+                if chain.reason_safe_label in {
+                    "HEARTBEAT_CHAIN_FROM_FUTURE",
+                    "HEARTBEAT_CHAIN_STALE",
+                    "HEARTBEAT_CHAIN_STATE_INVALID",
+                }:
+                    raise V4GmoMonitorSupervisorError(
+                        "V4_SUPERVISOR_G063_HEARTBEAT_CHAIN_NOT_ALIVE"
+                    )
+            return
+        if risk_store.path.exists():
+            risk_store.load()
+        else:
+            risk_store.save(risk_store.load())
+        if dead_man_store.path.exists():
+            existing_dead_man = dead_man_store.evaluate(now_utc=now_utc)
+            if not existing_dead_man.alive:
+                raise V4GmoMonitorSupervisorError(
+                    "V4_SUPERVISOR_G063_DEAD_MAN_NOT_ALIVE"
+                )
+        if heartbeat_chain_store.path.exists():
+            existing_chain = heartbeat_chain_store.assess(now_utc=now_utc)
+            if existing_chain.reason_safe_label in {
+                "HEARTBEAT_CHAIN_FROM_FUTURE",
+                "HEARTBEAT_CHAIN_STALE",
+                "HEARTBEAT_CHAIN_STATE_INVALID",
+            }:
+                raise V4GmoMonitorSupervisorError(
+                    "V4_SUPERVISOR_G063_HEARTBEAT_CHAIN_NOT_ALIVE"
+                )
+        dead_man_store.heartbeat(heartbeat_utc=now_utc)
+        heartbeat_chain_store.beat(now_utc=now_utc)
+
     def run_forever(
         self,
         *,
@@ -474,6 +558,7 @@ class V4GmoMonitorSupervisor:
                         "H11_AUTO_30M_20260730_G054",
                         "H11_AUTO_30M_20260730_G055",
                         "H11_AUTO_30M_20260730_G056",
+                        _G063_GENERATION_LABEL,
                     }:
                         raise
                 wait(interval_seconds)
@@ -496,6 +581,7 @@ class V4GmoMonitorSupervisor:
             "H11_AUTO_30M_20260730_G054",
             "H11_AUTO_30M_20260730_G055",
             "H11_AUTO_30M_20260730_G056",
+            _G063_GENERATION_LABEL,
         }:
             runtime_lock = H11AutoProcessLock(
                 self.state_root / "process.lock"

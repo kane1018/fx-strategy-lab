@@ -166,6 +166,90 @@ def main(argv: list[str]) -> int:
         generation.live_ready is not True
         or generation.unattended_live_supported is not True
     ):
+        if getattr(generation, "generation_label", "") == (
+            "H11_AUTO_30M_20260731_G063"
+        ):
+            from app.h11_auto.v4_gmo_monitor_supervisor import (
+                V4GmoMonitorSupervisor,
+            )
+
+            state_root = v4_gmo_runtime_state_root(
+                repository=repository,
+                generation_digest=generation.digest,
+            )
+            supervisor = V4GmoMonitorSupervisor(
+                repository=repository,
+                generation=generation,
+            )
+            try:
+                supervisor.acquire_single_process()
+                try:
+                    completion_marker = (
+                        state_root / "g063-no-post-runtime-bootstrap-completed.json"
+                    )
+                    if completion_marker.is_symlink():
+                        print(
+                            "status=G063_NO_POST_RUNTIME_BOOTSTRAP_NOT_CLEAR "
+                            "broker_write=false actual_post_count=0"
+                        )
+                        return 0
+                    if completion_marker.is_file():
+                        marker = json.loads(
+                            completion_marker.read_text(encoding="utf-8")
+                        )
+                        required_files = (
+                            "risk.json",
+                            "dead-man.json",
+                            "unattended-heartbeat-chain.json",
+                            "supervisor-heartbeat.json",
+                        )
+                        if (
+                            marker.get("generation_digest") != generation.digest
+                            or marker.get("status")
+                            != "G063_NO_POST_RUNTIME_BOOTSTRAP_COMPLETED"
+                            or any(
+                                (state_root / name).is_symlink()
+                                or not (state_root / name).is_file()
+                                for name in required_files
+                            )
+                        ):
+                            print(
+                                "status=G063_NO_POST_RUNTIME_BOOTSTRAP_NOT_CLEAR "
+                                "broker_write=false actual_post_count=0"
+                            )
+                            return 0
+                        print(
+                            "status=G063_NO_POST_RUNTIME_BOOTSTRAP_ALREADY_COMPLETED "
+                            "live_ready=false unattended_live_supported=false "
+                            "broker_write=false actual_post_count=0"
+                        )
+                        return 0
+                    tick = supervisor.run_tick(now_utc=datetime.now(UTC))
+                    if tick.broker_write is False and tick.actual_post_count == 0:
+                        supervisor._write_once_marker(  # noqa: SLF001
+                            "g063-no-post-runtime-bootstrap-completed.json",
+                            status="G063_NO_POST_RUNTIME_BOOTSTRAP_COMPLETED",
+                            observed_at_utc=datetime.now(UTC),
+                        )
+                finally:
+                    supervisor.close()
+                if tick.broker_write is False and tick.actual_post_count == 0:
+                    print(
+                        "status=G063_NO_POST_RUNTIME_BOOTSTRAP_COMPLETED "
+                        "live_ready=false unattended_live_supported=false "
+                        "broker_write=false actual_post_count=0"
+                    )
+                else:
+                    print(
+                        "status=G063_NO_POST_RUNTIME_BOOTSTRAP_NOT_CLEAR "
+                        "broker_write=false actual_post_count=0"
+                    )
+            except Exception:  # noqa: BLE001
+                print(
+                    "status=G063_NO_POST_RUNTIME_BOOTSTRAP_NOT_CLEAR "
+                    "broker_write=false actual_post_count=0"
+                )
+            return 0
         print(
             "status=UNATTENDED_SCHEDULER_GENERATION_NOT_COMMISSIONED "
             "broker_write=false actual_post_count=0"
