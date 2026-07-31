@@ -1,8 +1,8 @@
 {
   "architecture_status": "CLEAR",
-  "artifact_digest": "sha256:16067a598ddd5064ec7a86167eb7d142c1419314716849b94bab765ed1542e43",
-  "generation_digest": "sha256:9169da8ab36e70cd13383e738de29d94bcdd72794137125aefabd3d7b1d66180",
-  "generation_label": "H11_AUTO_30M_20260730_G056",
+  "artifact_digest": "sha256:8a63212fcae3e3e53b20d39eacc374ca616f06892c9e47390d62a7129ae1a673",
+  "generation_digest": "sha256:e954106c7ed9b4e53ae4547de84a3134fe93c090f4a50f5773b32c795abab815",
+  "generation_label": "H11_AUTO_30M_20260731_G057",
   "operations_status": "CLEAR",
   "review_method": "INDEPENDENT_MULTI_AGENT_READ_ONLY",
   "review_scope": [
@@ -17,7 +17,7 @@
     "NO_NOTIFICATION_OR_BROKER_ACTION_DURING_RELEASE",
     "NO_BROKER_ACTION_RETRY"
   ],
-  "reviewed_files_digest": "sha256:895443baa4f3947cdee85d324bac0da1a1e255c3c874e6432ac32e43600b6dd4",
+  "reviewed_files_digest": "sha256:52878aa100c316442d5ce68b12e9413637b225d18c02b20adbe108399b42c509",
   "safety_status": "CLEAR",
   "schema": "H11_V4_INDEPENDENT_REVIEW_ATTESTATION_V1"
 }
