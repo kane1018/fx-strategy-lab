@@ -230,6 +230,8 @@ def _runtime_projection(contract: _CurrentContract) -> tuple[str, int | None]:
         and snapshot.entry_attempted_at_utc is not None
         and not snapshot.flat_reconciled
     ):
+        if not snapshot.protection_confirmed:
+            return "HALTED", entries_today
         return "POSITION_OPEN", entries_today
     return "FLAT", entries_today
 
