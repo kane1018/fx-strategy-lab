@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+from app.services.h11_v4_g066_runtime_projection_no_post import project_g066_runtime_state
+from app.services.h11_v4_g067_runtime_result_no_post import (
+    begin_g067_operation_60_no_post,
+    load_g067_operation_60_outcome_no_post,
+)
+
+
+def test_arm_on_flat_projects_waiting_entry_gate() -> None:
+    result = project_g066_runtime_state(
+        arm_state="ON",
+        position={"open_position_count": 0, "active_order_count": 0},
+    )
+    assert result["effective_state"] == "ON_WAITING"
+    assert result["entry_gate_open"] is True
+
+
+def test_protected_position_projects_exit_only_and_closes_entry_gate() -> None:
+    result = project_g066_runtime_state(
+        arm_state="ON",
+        position={
+            "open_position_count": 1,
+            "active_order_count": 1,
+            "ownership_exact": True,
+            "quantity_matches": True,
+            "protection_confirmed": True,
+        },
+    )
+    assert result["effective_state"] == "ON_EXIT_ONLY"
+    assert result["entry_gate_open"] is False
+
+
+def test_unconfirmed_position_halts_instead_of_exit_only() -> None:
+    result = project_g066_runtime_state(
+        arm_state="ON",
+        position={"open_position_count": 1, "active_order_count": 1},
+    )
+    assert result["effective_state"] == "HALTED"
+    assert result["entry_gate_open"] is False
+
+
+def test_arm_off_preserves_exit_management_for_protected_position() -> None:
+    result = project_g066_runtime_state(
+        arm_state="OFF",
+        position={
+            "open_position_count": 1,
+            "active_order_count": 1,
+            "ownership_exact": True,
+            "quantity_matches": True,
+            "protection_confirmed": True,
+        },
+    )
+    assert result["effective_state"] == "EXIT_ONLY"
+    assert result["entry_gate_open"] is False
+
+
+def test_g067_operation_60_marker_is_one_use(tmp_path) -> None:
+    begin_g067_operation_60_no_post(
+        state_root=tmp_path,
+        generation_digest="sha256:" + "a" * 64,
+        reviewed_files_digest="sha256:" + "b" * 64,
+    )
+    assert load_g067_operation_60_outcome_no_post(state_root=tmp_path) is None

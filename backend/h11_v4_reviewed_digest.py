@@ -224,6 +224,11 @@ REVIEWED_FILES = (
     "docs/templates/h11_v4_g020_shadow_evidence_no_post.json",
     "docs/templates/h11_v4_g020_commissioning_no_post.json",
     "docs/H11_V4_G018_EXIT_30M_COMPLETION_HANDOFF.md",
+    "backend/app/services/h11_v4_g067_unattended_activation.py",
+    "backend/app/services/h11_v4_g067_runtime_result_no_post.py",
+    "backend/scripts/h11_auto_v4_g067_runtime_bootstrap_no_post.py",
+    "backend/scripts/h11_auto_v4_g067_operation_60_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_g067_runtime_no_post.py",
 )
 
 

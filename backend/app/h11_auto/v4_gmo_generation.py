@@ -43,6 +43,7 @@ _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
         "H11_AUTO_30M_20260801_G064",
         "H11_AUTO_30M_20260801_G065",
         "H11_AUTO_30M_20260802_G066",
+        "H11_AUTO_30M_20260802_G067",
     }
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")

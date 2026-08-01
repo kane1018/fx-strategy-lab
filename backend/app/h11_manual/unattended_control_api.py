@@ -57,6 +57,12 @@ from app.services.h11_v4_g066_unattended_activation import (
     G066_PERSISTENT_HALT_FILE,
     V4G066ActivationError,
 )
+from app.services.h11_v4_g067_unattended_activation import (
+    G067_GENERATION_LABEL,
+    G067_PERSISTENT_HALT_FILE,
+    V4G067ActivationError,
+    verify_g067_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -121,13 +127,19 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         G064_GENERATION_LABEL,
         G065_GENERATION_LABEL,
         G066_GENERATION_LABEL,
+        G067_GENERATION_LABEL,
     }:
-        (
-            verify_g065_scheduler_binding
-            if contract.generation.generation_label
-            in {G065_GENERATION_LABEL, G066_GENERATION_LABEL}
-            else verify_g064_scheduler_binding
-        )(
+        verifier = (
+            verify_g067_scheduler_binding
+            if contract.generation.generation_label == G067_GENERATION_LABEL
+            else (
+                verify_g065_scheduler_binding
+                if contract.generation.generation_label
+                in {G065_GENERATION_LABEL, G066_GENERATION_LABEL}
+                else verify_g064_scheduler_binding
+            )
+        )
+        verifier(
             generation=contract.generation,
             plist_path=plist_path,
             state_root=state_root,
@@ -184,6 +196,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         G064_GENERATION_LABEL,
         G065_GENERATION_LABEL,
         G066_GENERATION_LABEL,
+        G067_GENERATION_LABEL,
     } and (
         (
             state_root
@@ -191,9 +204,13 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
                 G065_PERSISTENT_HALT_FILE
                 if contract.generation.generation_label == G065_GENERATION_LABEL
                 else (
-                    G066_PERSISTENT_HALT_FILE
-                    if contract.generation.generation_label == G066_GENERATION_LABEL
+                G066_PERSISTENT_HALT_FILE
+                if contract.generation.generation_label == G066_GENERATION_LABEL
+                else (
+                    G067_PERSISTENT_HALT_FILE
+                    if contract.generation.generation_label == G067_GENERATION_LABEL
                     else G064_PERSISTENT_HALT_FILE
+                )
                 )
             )
         ).is_file()
@@ -203,9 +220,13 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
                 G065_PERSISTENT_HALT_FILE
                 if contract.generation.generation_label == G065_GENERATION_LABEL
                 else (
-                    G066_PERSISTENT_HALT_FILE
-                    if contract.generation.generation_label == G066_GENERATION_LABEL
+                G066_PERSISTENT_HALT_FILE
+                if contract.generation.generation_label == G066_GENERATION_LABEL
+                else (
+                    G067_PERSISTENT_HALT_FILE
+                    if contract.generation.generation_label == G067_GENERATION_LABEL
                     else G064_PERSISTENT_HALT_FILE
+                )
                 )
             )
         ).is_symlink()
@@ -218,6 +239,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         V4G064ActivationError,
         V4G065ActivationError,
         V4G066ActivationError,
+        V4G067ActivationError,
     ):
         supported = False
     local_runtime_state, entries_today = _runtime_projection(contract)
@@ -231,14 +253,14 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         G064_GENERATION_LABEL,
         G065_GENERATION_LABEL,
         G066_GENERATION_LABEL,
+        G067_GENERATION_LABEL,
     }:
         position_evidence = (
             load_g065_position_reconciliation_no_post
-            if contract.generation.generation_label == G065_GENERATION_LABEL
+            if contract.generation.generation_label
+            in {G065_GENERATION_LABEL, G066_GENERATION_LABEL, G067_GENERATION_LABEL}
             else (
-                load_g065_position_reconciliation_no_post
-                if contract.generation.generation_label == G066_GENERATION_LABEL
-                else load_g064_position_reconciliation_no_post
+                load_g064_position_reconciliation_no_post
             )
         )(
             state_root=v4_gmo_runtime_state_root(
@@ -380,14 +402,14 @@ def _runtime_projection(contract: _CurrentContract) -> tuple[str, int | None]:
         G064_GENERATION_LABEL,
         G065_GENERATION_LABEL,
         G066_GENERATION_LABEL,
+        G067_GENERATION_LABEL,
     }:
         position_evidence = (
             load_g065_position_reconciliation_no_post
-            if contract.generation.generation_label == G065_GENERATION_LABEL
+            if contract.generation.generation_label
+            in {G065_GENERATION_LABEL, G066_GENERATION_LABEL, G067_GENERATION_LABEL}
             else (
-                load_g065_position_reconciliation_no_post
-                if contract.generation.generation_label == G066_GENERATION_LABEL
-                else load_g064_position_reconciliation_no_post
+                load_g064_position_reconciliation_no_post
             )
         )(
             state_root=root,
@@ -475,6 +497,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         V4G064ActivationError,
         V4G065ActivationError,
         V4G066ActivationError,
+        V4G067ActivationError,
         OSError,
         ValueError,
     ) as error:
