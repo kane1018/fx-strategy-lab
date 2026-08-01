@@ -45,7 +45,7 @@
   "strategy_version": "SHORT_V1",
   "runtime_commissioning_evidence_digest": "sha256:7e35440bb6c2887744424eba6d5178e313e456e4c8682f0ba2214008af71b06f",
   "successful_canary_evidence_digest": null,
-  "successor_halt_release_digest": "sha256:0e7959156c88e30eb4db93e6672e0c552f350351c03e88bc2234385764c1f62a",
+  "successor_halt_release_digest": "sha256:f871387f5996c58a90b09b22854c14614beb2f4543cf07d6d1fcd619c5469c13",
   "symbol": "USD_JPY",
   "temporary_unprotected_gap_accepted": true,
   "unattended_live_supported": true,

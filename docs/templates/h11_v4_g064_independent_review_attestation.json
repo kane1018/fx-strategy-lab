@@ -1,9 +1,9 @@
 {
   "architecture_status": "CLEAR",
-  "artifact_digest": "sha256:0e7959156c88e30eb4db93e6672e0c552f350351c03e88bc2234385764c1f62a",
-  "generation_digest": "sha256:258ab8c05c522c783bb4f93bcaaf0dae890405a307bfbc8bae0705e9fff0e211",
+  "artifact_digest": "sha256:f871387f5996c58a90b09b22854c14614beb2f4543cf07d6d1fcd619c5469c13",
+  "generation_digest": "sha256:f5b5d8767bea484234061da64cf70f2b111e3dc80274956351ce8b1f95a14ea5",
   "generation_label": "H11_AUTO_30M_20260801_G064",
-  "generation_manifest_digest": "sha256:258ab8c05c522c783bb4f93bcaaf0dae890405a307bfbc8bae0705e9fff0e211",
+  "generation_manifest_digest": "sha256:f5b5d8767bea484234061da64cf70f2b111e3dc80274956351ce8b1f95a14ea5",
   "operations_status": "CLEAR",
   "review_evidence": {
     "architecture": "CLEAR",
@@ -24,12 +24,12 @@
       "notification_attempt_count": 0,
       "private_api_read_count": 0,
       "review_scope": "READ_ONLY_NO_POST",
-      "reviewed_at_utc": "2026-08-01T08:10:54Z",
+      "reviewed_at_utc": "2026-08-01T08:32:03Z",
       "reviewed_branch": "main",
-      "reviewed_commit": "ce8ecb93a1e6dba2d35ae51aac7de5265d677748",
+      "reviewed_commit": "bcbcd11d4d00ea40a9a6718677ee6c9cf5d8a9d8",
       "reviewer_role": "independent_architecture",
       "status": "CLEAR",
-      "report_digest": "sha256:378d552a91424f333f24026402bee3fcda6c9db2483fde5c02c9f3e9d9cf3f10"
+      "report_digest": "sha256:0f0fff04ad032e6e0cf79671d33df294ccc9e45206740eaaf9ca085f423c6865"
     },
     "safety": {
       "broker_post_count": 0,
@@ -39,12 +39,12 @@
       "notification_attempt_count": 0,
       "private_api_read_count": 0,
       "review_scope": "READ_ONLY_NO_POST",
-      "reviewed_at_utc": "2026-08-01T08:10:54Z",
+      "reviewed_at_utc": "2026-08-01T08:32:03Z",
       "reviewed_branch": "main",
-      "reviewed_commit": "ce8ecb93a1e6dba2d35ae51aac7de5265d677748",
+      "reviewed_commit": "bcbcd11d4d00ea40a9a6718677ee6c9cf5d8a9d8",
       "reviewer_role": "independent_safety",
       "status": "CLEAR",
-      "report_digest": "sha256:ea28b4be339075a93c14ac8631f0bf41f9a036e296d1bd61bed8287e04bc6416"
+      "report_digest": "sha256:584c531711316a17b87d25f0a6f0ec37008b30f61db44030a32bc5a788979051"
     },
     "operations": {
       "broker_post_count": 0,
@@ -54,15 +54,15 @@
       "notification_attempt_count": 0,
       "private_api_read_count": 0,
       "review_scope": "READ_ONLY_NO_POST",
-      "reviewed_at_utc": "2026-08-01T08:10:54Z",
+      "reviewed_at_utc": "2026-08-01T08:32:03Z",
       "reviewed_branch": "main",
-      "reviewed_commit": "ce8ecb93a1e6dba2d35ae51aac7de5265d677748",
+      "reviewed_commit": "bcbcd11d4d00ea40a9a6718677ee6c9cf5d8a9d8",
       "reviewer_role": "independent_operations",
       "status": "CLEAR",
-      "report_digest": "sha256:d5ba0a1598ffdbca41b16d66f91fc572db910c9f0889796e1d4429587fcecbc4"
+      "report_digest": "sha256:e32066cf9527b3269399347f75d5909c601f8dba77143cbc395f6ce8edb2605f"
     }
   },
-  "reviewed_at_utc": "2026-08-01T08:10:54Z",
+  "reviewed_at_utc": "2026-08-01T08:32:03Z",
   "reviewed_branch": "main",
-  "reviewed_commit": "ce8ecb93a1e6dba2d35ae51aac7de5265d677748"
+  "reviewed_commit": "bcbcd11d4d00ea40a9a6718677ee6c9cf5d8a9d8"
 }
