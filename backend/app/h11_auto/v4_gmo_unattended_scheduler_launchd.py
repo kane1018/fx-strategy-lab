@@ -1,10 +1,9 @@
 """LaunchAgent rendering and install for the unattended live scheduler.
 
 Structural counterpart to ``v4_gmo_launchd.py`` (the G012 monitor
-LaunchAgent), but for a genuinely different shape: non-resident, periodic
-invocation (design doc §12, Option B -- operator decision 2026-07-24), never
-a long-lived daemon. ``KeepAlive`` is always ``False`` and ``StartInterval``
-is always set; nothing here ever configures residency.
+LaunchAgent). Legacy generations use non-resident periodic invocation;
+G064 is the explicit resident-runtime exception and uses ``KeepAlive`` with
+a bounded ``StartInterval``. No other generation is made resident here.
 
 This module renders the plist and installs/bootstraps it via ``launchctl``
 -- it never itself constructs a real credential, HTTP client, or
@@ -20,10 +19,14 @@ import plistlib
 import subprocess
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
+from app.services.h11_v4_g064_unattended_activation import (
+    write_g064_scheduler_service_evidence,
+)
 
 V4_GMO_UNATTENDED_SCHEDULER_LABEL = "com.fxstrategylab.h11v4.unattended.scheduler"
 
@@ -69,14 +72,11 @@ def render_v4_gmo_unattended_scheduler_launchagent(
     ),
     start_interval_seconds: int = 300,
 ) -> bytes:
-    """Render a non-resident, periodic LaunchAgent plist.
+    """Render a generation-bound scheduler plist.
 
-    ``KeepAlive`` is always ``False`` -- never the resident-daemon shape.
-    ``RunAtLoad: True`` means one tick fires immediately when this plist is
-    bootstrapped (not only after the first ``start_interval_seconds`` has
-    elapsed), then again every ``start_interval_seconds`` thereafter; each
-    invocation is expected to exit on its own, mirroring Phase 1's bounded
-    runner precedent applied to a scheduler trigger rather than a daemon.
+    Legacy generations remain non-resident periodic jobs. G064 is the single
+    reviewed resident exception: its worker owns the process lock, keeps a
+    15-second heartbeat, and fails closed on runtime exceptions.
 
     The baked ``--expected-reviewed-files-digest``/``--expected-generation-
     digest`` are captured from ``generation`` at render time. Editing the
@@ -107,6 +107,7 @@ def render_v4_gmo_unattended_scheduler_launchagent(
         repository=repository,
         generation_digest=generation.digest,
     )
+    resident = generation.generation_label == "H11_AUTO_30M_20260801_G064"
     payload = {
         "Label": V4_GMO_UNATTENDED_SCHEDULER_LABEL,
         "ProgramArguments": [
@@ -121,12 +122,14 @@ def render_v4_gmo_unattended_scheduler_launchagent(
         ],
         "WorkingDirectory": str(repository / "backend"),
         "RunAtLoad": True,
-        "KeepAlive": False,
-        "StartInterval": start_interval_seconds,
+        "KeepAlive": resident,
+        "StartInterval": 15 if resident else start_interval_seconds,
         "ProcessType": "Background",
         "StandardOutPath": str(state_root / "unattended-scheduler.stdout.log"),
         "StandardErrorPath": str(state_root / "unattended-scheduler.stderr.log"),
     }
+    if resident:
+        payload["ThrottleInterval"] = 15
     return plistlib.dumps(payload, fmt=plistlib.FMT_XML, sort_keys=True)
 
 
@@ -207,6 +210,26 @@ def install_and_restart_v4_gmo_unattended_scheduler_launchagent(
         raise V4GmoUnattendedSchedulerLaunchdError(
             "V4_UNATTENDED_SCHEDULER_LAUNCHD_SERVICE_NOT_RUNNING"
         )
+    arguments = parsed.get("ProgramArguments")
+    if parsed.get("KeepAlive") is True and isinstance(arguments, list):
+        try:
+            arguments.index("--repository")
+            reviewed_digest = arguments[
+                arguments.index("--expected-reviewed-files-digest") + 1
+            ]
+            generation_digest = arguments[
+                arguments.index("--expected-generation-digest") + 1
+            ]
+            write_g064_scheduler_service_evidence(
+                state_root=stdout_path.parent,
+                generation_digest=generation_digest,
+                reviewed_files_digest=reviewed_digest,
+                observed_at_utc=datetime.now(UTC),
+            )
+        except (IndexError, TypeError, ValueError):
+            raise V4GmoUnattendedSchedulerLaunchdError(
+                "V4_UNATTENDED_SCHEDULER_LAUNCHD_ARGUMENTS_INVALID"
+            ) from None
     return V4GmoUnattendedSchedulerLaunchdResult(
         installed=True,
         bootstrapped=True,

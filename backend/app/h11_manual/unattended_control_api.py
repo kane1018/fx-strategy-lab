@@ -34,6 +34,15 @@ from app.services.h11_v4_g038_unattended_activation import (
     verify_g038_generation_activation,
     verify_g038_scheduler_binding,
 )
+from app.services.h11_v4_g064_position_reconciliation_no_post import (
+    load_g064_position_reconciliation_no_post,
+)
+from app.services.h11_v4_g064_unattended_activation import (
+    G064_GENERATION_LABEL,
+    G064_PERSISTENT_HALT_FILE,
+    V4G064ActivationError,
+    verify_g064_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -83,6 +92,33 @@ def _load_current_contract() -> _CurrentContract:
     return _CurrentContract(reviewed_files_digest=reviewed, generation=generation)
 
 
+def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
+    plist_path = (
+        Path.home()
+        / "Library"
+        / "LaunchAgents"
+        / "com.fxstrategylab.h11v4.unattended.scheduler.plist"
+    )
+    state_root = v4_gmo_runtime_state_root(
+        repository=REPOSITORY,
+        generation_digest=contract.generation.digest,
+    )
+    if contract.generation.generation_label == G064_GENERATION_LABEL:
+        verify_g064_scheduler_binding(
+            generation=contract.generation,
+            plist_path=plist_path,
+            state_root=state_root,
+            now_utc=datetime.now(UTC),
+        )
+        return
+    verify_g038_generation_activation(generation=contract.generation)
+    verify_g038_scheduler_binding(
+        generation=contract.generation,
+        plist_path=plist_path,
+        now_utc=datetime.now(UTC),
+    )
+
+
 def _arm_store(contract: _CurrentContract) -> V4UnattendedLiveArmStore:
     return V4UnattendedLiveArmStore(
         v4_unattended_live_arm_state_path(
@@ -117,31 +153,66 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         expected_generation_digest=contract.generation.digest,
         expected_reviewed_files_digest=contract.reviewed_files_digest,
     )
-    try:
-        verify_g038_generation_activation(generation=contract.generation)
-        verify_g038_scheduler_binding(
-            generation=contract.generation,
-            plist_path=(
-                Path.home()
-                / "Library"
-                / "LaunchAgents"
-                / "com.fxstrategylab.h11v4.unattended.scheduler.plist"
-            ),
-            now_utc=datetime.now(UTC),
+    state_root = v4_gmo_runtime_state_root(
+        repository=REPOSITORY,
+        generation_digest=contract.generation.digest,
+    )
+    persistent_halt = (
+        contract.generation.generation_label == G064_GENERATION_LABEL
+        and (
+            (state_root / G064_PERSISTENT_HALT_FILE).is_file()
+            or (state_root / G064_PERSISTENT_HALT_FILE).is_symlink()
         )
-        supported = True
-    except V4G038ActivationError:
+    )
+    try:
+        _verify_current_generation_runtime(contract)
+        supported = not persistent_halt
+    except (V4G038ActivationError, V4G064ActivationError):
         supported = False
     local_runtime_state, entries_today = _runtime_projection(contract)
     evidence = load_unattended_runtime_evidence_no_post(
-        state_root=v4_gmo_runtime_state_root(
-            repository=REPOSITORY,
-            generation_digest=contract.generation.digest,
-        ),
+        state_root=state_root,
         generation_digest=contract.generation.digest,
         arm_armed=check.armed,
+        reviewed_files_digest=contract.reviewed_files_digest,
     )
-    if not supported or local_runtime_state == "HALTED":
+    if contract.generation.generation_label == G064_GENERATION_LABEL:
+        position_evidence = load_g064_position_reconciliation_no_post(
+            state_root=v4_gmo_runtime_state_root(
+                repository=REPOSITORY,
+                generation_digest=contract.generation.digest,
+            ),
+            generation_digest=contract.generation.digest,
+            now_utc=datetime.now(UTC),
+        )
+        if not position_evidence.evidence_available:
+            evidence = replace(
+                evidence,
+                position_open=True,
+                protection_confirmed=False,
+                ownership_exact=False,
+                quantity_matches=False,
+                runtime_clear=False,
+                unknown_halt=True,
+            )
+        elif position_evidence.position_open:
+            evidence = replace(
+                evidence,
+                position_open=True,
+                protection_confirmed=position_evidence.protection_confirmed,
+                ownership_exact=position_evidence.ownership_exact,
+                quantity_matches=position_evidence.quantity_matches,
+                runtime_clear=evidence.runtime_clear,
+            )
+        else:
+            evidence = replace(
+                evidence,
+                position_open=False,
+                protection_confirmed=True,
+                ownership_exact=True,
+                quantity_matches=True,
+            )
+    if persistent_halt or not supported or local_runtime_state == "HALTED":
         evidence = replace(
             evidence,
             generation_matches=(evidence.generation_matches if supported else False),
@@ -199,6 +270,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         "reviewed_files_digest": contract.reviewed_files_digest,
         "unattended_live_supported": supported,
         "daily_authorization_required": False,
+        "runtime_activation_available": supported,
     }
     if csrf_token is not None:
         result["csrf_token"] = csrf_token
@@ -251,6 +323,26 @@ def _runtime_projection(contract: _CurrentContract) -> tuple[str, int | None]:
         return "HALTED", None
     if snapshot.unknown_halt_latched or snapshot.pending_transport:
         return "HALTED", entries_today
+    if contract.generation.generation_label == G064_GENERATION_LABEL:
+        position_evidence = load_g064_position_reconciliation_no_post(
+            state_root=root,
+            generation_digest=contract.generation.digest,
+            now_utc=datetime.now(UTC),
+        )
+        if not position_evidence.evidence_available:
+            return "HALTED", entries_today
+        if snapshot.cycle_present != position_evidence.position_open:
+            return "HALTED", entries_today
+        if position_evidence.position_open:
+            if not (
+                position_evidence.protection_confirmed
+                and position_evidence.ownership_exact
+                and position_evidence.quantity_matches
+                and position_evidence.generation_bound
+            ):
+                return "HALTED", entries_today
+            return "POSITION_OPEN", entries_today
+        return "FLAT", entries_today
     if snapshot.external_flat_reconciled:
         return "FLAT", entries_today
     if (
@@ -296,6 +388,12 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
             raise V4UnattendedLiveArmStateError("ARM_STATE_GENERATION_MISMATCH")
         if request_body.expected_reviewed_files_digest != contract.reviewed_files_digest:
             raise V4UnattendedLiveArmStateError("ARM_STATE_REVIEWED_FILES_MISMATCH")
+        current = _safe_status(contract)
+        if (
+            current["runtime_activation_available"] is not True
+            or current["effective_state"] == "HALTED"
+        ):
+            raise V4G064ActivationError("ARM_ON_RUNTIME_NOT_READY")
         _arm_store(contract).set_desired_state(
             desired_state=V4ArmDesiredState.ARMED,
             expected_revision=request_body.expected_revision,
@@ -309,6 +407,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         V4GmoGenerationError,
         V4UnattendedLiveArmStateError,
         V4G038ActivationError,
+        V4G064ActivationError,
         OSError,
         ValueError,
     ) as error:
@@ -319,32 +418,20 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
 def turn_off(request_body: ArmChangeRequest, request: Request) -> dict:
     _require_local_csrf(request)
     try:
-        check = V4UnattendedLiveArmStore(
-            v4_unattended_live_arm_state_path(
-                state_root=DEFAULT_V4_UNATTENDED_LIVE_STATE_ROOT,
-                generation_digest=request_body.expected_generation_digest,
-            )
-        ).set_desired_state(
+        require_clean_main(repository=REPOSITORY)
+        contract = _load_current_contract()
+        if request_body.expected_generation_digest != contract.generation.digest:
+            raise V4UnattendedLiveArmStateError("ARM_STATE_GENERATION_MISMATCH")
+        if request_body.expected_reviewed_files_digest != contract.reviewed_files_digest:
+            raise V4UnattendedLiveArmStateError("ARM_STATE_REVIEWED_FILES_MISMATCH")
+        _arm_store(contract).set_desired_state(
             desired_state=V4ArmDesiredState.DISARMED,
             expected_revision=request_body.expected_revision,
-            generation_digest=request_body.expected_generation_digest,
-            reviewed_files_digest=request_body.expected_reviewed_files_digest,
+            generation_digest=contract.generation.digest,
+            reviewed_files_digest=contract.reviewed_files_digest,
             changed_at_utc=datetime.now(UTC),
         )
-        return {
-            "actual_post_count": 0,
-            "broker_write": False,
-            "desired_state": check.desired_state.value,
-            "effective_state": "OFF_REQUESTED",
-            "entries_today": None,
-            "generation_digest": check.generation_digest,
-            "generation_label": "GENERATION_BOUND",
-            "maximum_entries_per_day": 30,
-            "reason_label": "OPERATOR_DISARMED",
-            "revision": check.revision,
-            "reviewed_files_digest": check.reviewed_files_digest,
-            "unattended_live_supported": False,
-        }
+        return _safe_status(contract)
     except (
         V4UnattendedLiveArmStateError,
         OSError,

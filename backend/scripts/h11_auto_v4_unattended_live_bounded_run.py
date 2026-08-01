@@ -32,6 +32,7 @@ from app.h11_auto import v4_gmo_canary_activation as activation_module
 from app.h11_auto.runtime_safety import DeadManStore, PhaseBRiskPolicy, PhaseBRiskStore
 from app.services import h11_v4_gmo_g013_canary as canary_module
 from app.services import h11_v4_unattended_live_orchestration as orchestration_module
+from app.services.h11_v4_g064_unattended_activation import G064_GENERATION_LABEL
 from app.services.h11_v4_gmo_actual_transport import V4GmoSealedCredentialPair
 from app.services.h11_v4_gmo_g013_canary import V4GmoG013PreparedSession
 from app.services.h11_v4_notification_binding_no_post import (
@@ -98,6 +99,40 @@ class _CycleOutcome:
     entry_attempted: bool
 
 
+def _g064_switch_only_cycle(
+    *, entry_gate_blocked_reasons: tuple[str, ...], arm_intent: bool
+) -> _CycleOutcome:
+    """Evaluate the G064 switch-only runtime boundary without side effects.
+
+    G064 treats persisted ARM ON as runtime intent. The legacy per-trade
+    authorization, confirmation, notification, credential, and client path
+    is deliberately not entered here. Actual broker transport remains behind
+    the separate default-deny activation boundary.
+    """
+
+    entry_gate_open = arm_intent and not entry_gate_blocked_reasons
+    return _CycleOutcome(
+        safe_dict={
+            "status": (
+                "G064_UNATTENDED_SWITCH_ONLY_ENTRY_GATE_EVALUATED_NO_POST"
+                if entry_gate_open
+                else "G064_UNATTENDED_SWITCH_ONLY_ENTRY_GATE_BLOCKED_NO_POST"
+            ),
+            "runtime_mode": "SWITCH_ONLY",
+            "entry_gate_open": entry_gate_open,
+            "entry_state": "WAITING" if entry_gate_open else "BLOCKED",
+            "authorization_required": False,
+            "confirmation_required": False,
+            "notification_attempted": False,
+            "credential_read": False,
+            "private_api_read": False,
+            "broker_write": False,
+            "broker_post_count": 0,
+        },
+        entry_attempted=False,
+    )
+
+
 def _run_one_cycle(
     *,
     session: V4GmoG013PreparedSession,
@@ -111,7 +146,13 @@ def _run_one_cycle(
     credential_pair: V4GmoSealedCredentialPair,
     client: httpx.Client,
     now_utc: datetime,
+    arm_intent: bool = False,
 ) -> _CycleOutcome:
+    if session.generation.label == G064_GENERATION_LABEL:
+        return _g064_switch_only_cycle(
+            entry_gate_blocked_reasons=entry_gate_blocked_reasons,
+            arm_intent=arm_intent,
+        )
     try:
         result = orchestration_module.run_unattended_live_entry_cycle_once(
             session=session,
@@ -146,6 +187,7 @@ def main(
     entry_gate_reason_provider: Callable[[datetime], tuple[str, ...]],
     credential_pair: V4GmoSealedCredentialPair,
     client: httpx.Client,
+    arm_intent: bool = False,
 ) -> int:
     """Bounded runner loop; each cycle derives its gate reasons freshly.
 
@@ -211,6 +253,7 @@ def main(
             credential_pair=credential_pair,
             client=client,
             now_utc=now_utc,
+            arm_intent=arm_intent,
         )
         # No `default=` fallback: every safe_dict shape this can actually
         # produce today is JSON-native (str/int/bool/None); a future field

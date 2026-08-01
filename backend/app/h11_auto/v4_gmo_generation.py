@@ -99,6 +99,7 @@ class V4GmoFrozenGeneration:
     activation_source_generation_digest: str | None = None
     successful_canary_evidence_digest: str | None = None
     successor_halt_release_digest: str | None = None
+    runtime_commissioning_evidence_digest: str | None = None
 
     def __post_init__(self) -> None:
         selections = V4ApprovedOperatorSelections()
@@ -151,7 +152,14 @@ class V4GmoFrozenGeneration:
             type(self.entry_disabled) is bool,
             (
                 self.entry_disabled is False
-                and self.reconciliation_contract_digest is None
+                and (
+                    self.reconciliation_contract_digest is None
+                    or (
+                        self.generation_label == "H11_AUTO_30M_20260801_G064"
+                        and isinstance(self.reconciliation_contract_digest, str)
+                        and bool(_SHA256.fullmatch(self.reconciliation_contract_digest))
+                    )
+                )
             )
             or (
                 self.entry_disabled is True
@@ -173,8 +181,20 @@ class V4GmoFrozenGeneration:
                 and self.unattended_live_supported is True
                 and isinstance(self.activation_source_generation_digest, str)
                 and bool(_SHA256.fullmatch(self.activation_source_generation_digest))
-                and isinstance(self.successful_canary_evidence_digest, str)
-                and bool(_SHA256.fullmatch(self.successful_canary_evidence_digest))
+                and (
+                    (
+                        self.generation_label == "H11_AUTO_30M_20260801_G064"
+                        and self.successful_canary_evidence_digest is None
+                        and isinstance(self.runtime_commissioning_evidence_digest, str)
+                        and bool(_SHA256.fullmatch(self.runtime_commissioning_evidence_digest))
+                    )
+                    or (
+                        self.generation_label != "H11_AUTO_30M_20260801_G064"
+                        and isinstance(self.successful_canary_evidence_digest, str)
+                        and bool(_SHA256.fullmatch(self.successful_canary_evidence_digest))
+                        and self.runtime_commissioning_evidence_digest is None
+                    )
+                )
                 and isinstance(self.successor_halt_release_digest, str)
                 and bool(_SHA256.fullmatch(self.successor_halt_release_digest))
             ),
@@ -198,7 +218,10 @@ class V4GmoFrozenGeneration:
 
     @property
     def canonical_json(self) -> str:
-        return json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
+        payload = asdict(self)
+        if payload.get("runtime_commissioning_evidence_digest") is None:
+            payload.pop("runtime_commissioning_evidence_digest")
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
     @property
     def digest(self) -> str:

@@ -185,6 +185,8 @@ class V4GmoG013CanaryResult:
     # (timeout / connection / non-JSON / rejected-by-broker / pre-HTTP guard).
     # Never broker response content or identifiers.
     failure_class: str | None = None
+    ownership_exact: bool = False
+    quantity_matches: bool = False
 
     def to_safe_dict(self) -> dict[str, object]:
         return dict(self.__dict__)
@@ -777,6 +779,8 @@ def _run_bound_g013_canary(
                 exact_protection_confirmed=True,
                 flat_reconciled=False,
                 persistent_halt=path.store.unknown_halt_latched(),
+                ownership_exact=True,
+                quantity_matches=True,
             )
         )
     lifecycle = binding.build_foreground_lifecycle_driver().run_until_flat()
@@ -788,6 +792,8 @@ def _run_bound_g013_canary(
         exact_protection_confirmed=True,
         flat_reconciled=lifecycle.flat_reconciled,
         persistent_halt=path.store.unknown_halt_latched(),
+        ownership_exact=True,
+        quantity_matches=True,
     )
 
 

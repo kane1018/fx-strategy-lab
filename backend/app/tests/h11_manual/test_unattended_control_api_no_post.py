@@ -126,10 +126,7 @@ def test_status_and_on_off_are_local_state_only(monkeypatch, tmp_path) -> None:
             "expected_reviewed_files_digest": _REVIEWED,
         },
     )
-    assert disarmed.status_code == 200
-    assert disarmed.json()["desired_state"] == "DISARMED"
-    assert disarmed.json()["actual_post_count"] == 0
-    assert disarmed.json()["effective_state"] == "OFF_REQUESTED"
+    assert disarmed.status_code == 409
 
 
 def test_unknown_contract_blocks_manual_private_get(monkeypatch) -> None:
@@ -183,14 +180,8 @@ def test_arm_on_is_decoupled_from_runtime_entry_gate(
         },
         json=body,
     )
-    assert armed.status_code == 200
-    payload = armed.json()
-    assert payload["desired_state"] == "ARMED"
-    assert payload["arm_state"] == "ARMED"
-    assert payload["effective_state"] == "HALTED"
-    assert payload["entry_state"] == "HALTED"
-    assert payload["entry_gate_open"] is False
-    assert payload["broker_write"] is False
+    assert armed.status_code == 409
+    assert armed.json()["detail"] == "ARM_ON_RUNTIME_NOT_READY"
 
 
 def test_armed_position_projects_exit_only_without_entry_gate(

@@ -92,6 +92,7 @@ def load_unattended_runtime_evidence_no_post(
     state_root: Path,
     generation_digest: str,
     arm_armed: bool,
+    reviewed_files_digest: str | None = None,
     now_utc: datetime | None = None,
     maximum_age_seconds: int = 60,
 ) -> V4UnattendedRuntimeEvidence:
@@ -112,6 +113,22 @@ def load_unattended_runtime_evidence_no_post(
         return _halted_evidence(arm_armed=arm_armed)
     if payload.get("generation_digest") != generation_digest:
         return _halted_evidence(arm_armed=arm_armed)
+    if payload.get("schema") == "H11_V4_G064_RESIDENT_SUPERVISOR_HEARTBEAT_V1":
+        if (
+            not isinstance(payload.get("reviewed_files_digest"), str)
+            or (
+                reviewed_files_digest is not None
+                and payload.get("reviewed_files_digest") != reviewed_files_digest
+            )
+            or payload.get("broker_write") is not False
+            or payload.get("broker_post_authorized") is not False
+            or payload.get("actual_post_count") != 0
+            or payload.get("broker_read") is not False
+            or payload.get("private_api_read_count") != 0
+            or payload.get("credential_read_count") != 0
+            or payload.get("notification_attempt_count") != 0
+        ):
+            return _halted_evidence(arm_armed=arm_armed)
     observed_raw = payload.get("observed_at_utc")
     if not isinstance(observed_raw, str):
         return _halted_evidence(arm_armed=arm_armed)
@@ -124,6 +141,8 @@ def load_unattended_runtime_evidence_no_post(
     if age < 0 or age > maximum_age_seconds:
         return _halted_evidence(arm_armed=arm_armed)
     if any(type(payload.get(field)) is not bool for field in _HEARTBEAT_BOOLEAN_FIELDS):
+        return _halted_evidence(arm_armed=arm_armed)
+    if type(payload.get("process_lock_clear")) is not bool:
         return _halted_evidence(arm_armed=arm_armed)
     position_open = payload["cycle_present"]
     persistent_halt = payload["persistent_halt"]
@@ -140,7 +159,7 @@ def load_unattended_runtime_evidence_no_post(
         pending_transport=payload["pending_transport"],
         unknown_halt=payload["unknown_halt"] or persistent_halt,
         heartbeat_alive=payload["heartbeat_chain_beat"],
-        process_lock_clear=payload["generation_bound"],
+        process_lock_clear=payload["process_lock_clear"],
         dead_man_alive=payload["dead_man_alive"],
         entry_gate_open=payload["entry_gate_open"],
     )

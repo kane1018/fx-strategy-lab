@@ -29,7 +29,11 @@
       `${payload.maximum_entries_per_day} attempts`;
     const armed = payload.desired_state === "ARMED";
     onButton.disabled =
-      state.busy || armed || payload.arm_control_available === false || !state.csrfToken;
+      state.busy ||
+      armed ||
+      payload.arm_control_available === false ||
+      payload.runtime_activation_available === false ||
+      !state.csrfToken;
     offButton.disabled = state.busy || !armed || !state.csrfToken;
     document.querySelector("#unattended-control").dataset.state = effective;
     document.querySelector("#unattended-control").dataset.armState = armed ? "ON" : "OFF";
@@ -55,11 +59,7 @@
         error.message || "UNATTENDED_CONTROL_STATUS_UNAVAILABLE"
       );
       onButton.disabled = true;
-      offButton.disabled = !(
-        state.csrfToken &&
-        state.generationDigest &&
-        state.reviewedFilesDigest
-      );
+      offButton.disabled = true;
     }
   }
 

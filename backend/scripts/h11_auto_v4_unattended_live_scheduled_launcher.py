@@ -39,7 +39,9 @@ from __future__ import annotations
 # would fail to resolve without this.
 import argparse
 import json
+import os
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -70,6 +72,20 @@ from app.services.h11_v4_g038_unattended_activation import (
     V4G038ActivationError,
     record_g038_scheduler_heartbeat,
     verify_g038_generation_activation,
+)
+from app.services.h11_v4_g064_position_reconciliation_no_post import (
+    load_g064_position_reconciliation_no_post,
+    write_g064_position_reconciliation_no_post,
+)
+from app.services.h11_v4_g064_unattended_activation import (
+    G064_GENERATION_LABEL,
+    clear_g064_worker_lease,
+    run_g064_exit_only_dispatch_no_post,
+    verify_g064_generation_activation,
+    verify_g064_generation_contract,
+    write_g064_exit_only_dispatch_no_post,
+    write_g064_persistent_halt_no_post,
+    write_g064_worker_lease,
 )
 from app.services.h11_v4_gmo_formal_canary_source import (
     V4GmoFormalCanarySourceError,
@@ -143,7 +159,9 @@ def _verify_baked_digests(
     return digest, generation
 
 
-def main(argv: list[str]) -> int:
+def _run_one_tick(
+    argv: list[str], *, preheld_process_lock: H11AutoProcessLock | None = None
+) -> int:
     parser = argparse.ArgumentParser(
         description=(
             "Scheduler-invoked launcher for one bounded unattended live "
@@ -255,26 +273,85 @@ def main(argv: list[str]) -> int:
             "broker_write=false actual_post_count=0"
         )
         return 0
-    try:
-        verify_g038_generation_activation(generation=generation)
-        record_g038_scheduler_heartbeat(generation=generation)
-    except V4G038ActivationError:
-        print(
-            "status=UNATTENDED_SCHEDULER_ACTIVATION_EVIDENCE_NOT_CLEAR "
-            "broker_write=false actual_post_count=0"
-        )
-        return 0
+    g064_tick = None
+    if generation.generation_label == G064_GENERATION_LABEL:
+        try:
+            verify_g064_generation_contract(generation=generation)
+            monitor = V4GmoMonitorSupervisor(
+                repository=repository,
+                generation=generation,
+                runtime_lock=preheld_process_lock,
+            )
+            monitor.acquire_single_process()
+            try:
+                g064_tick = monitor.run_tick(now_utc=datetime.now(UTC))
+            finally:
+                monitor.close()
+            verify_g064_generation_activation(
+                generation=generation,
+                state_root=monitor.state_root,
+            )
+        except Exception:  # noqa: BLE001
+            write_g064_persistent_halt_no_post(
+                state_root=monitor.state_root,
+                generation_digest=generation.digest,
+                reviewed_files_digest=digest,
+            )
+            print(
+                "status=G064_RESIDENT_RUNTIME_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 0
+        if (
+            g064_tick.broker_write is not False
+            or g064_tick.actual_post_count != 0
+            or g064_tick.runtime_risk_ready is not True
+            or g064_tick.dead_man_alive is not True
+            or g064_tick.heartbeat_chain_beat is not True
+            or g064_tick.process_lock_clear is not True
+        ):
+            write_g064_persistent_halt_no_post(
+                state_root=monitor.state_root,
+                generation_digest=generation.digest,
+                reviewed_files_digest=digest,
+            )
+            print(
+                "status=G064_RESIDENT_RUNTIME_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 0
+    else:
+        try:
+            verify_g038_generation_activation(generation=generation)
+            record_g038_scheduler_heartbeat(generation=generation)
+        except V4G038ActivationError:
+            print(
+                "status=UNATTENDED_SCHEDULER_ACTIVATION_EVIDENCE_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 0
     arm_check = V4UnattendedLiveArmStore(
         v4_unattended_live_arm_state_path(generation_digest=generation.digest)
     ).check(
         expected_generation_digest=generation.digest,
         expected_reviewed_files_digest=digest,
     )
-    if not arm_check.armed:
+    if not arm_check.armed and generation.generation_label != G064_GENERATION_LABEL:
         reason = arm_check.blocked_reasons[0] if arm_check.blocked_reasons else "OPERATOR_DISARMED"
         print(
             "status=UNATTENDED_SCHEDULER_TICK_DISARMED "
             f"reason_label={reason} broker_write=false actual_post_count=0"
+        )
+        return 0
+    if generation.generation_label == G064_GENERATION_LABEL and (
+        g064_tick is None
+        or g064_tick.persistent_halt is True
+        or g064_tick.unknown_halt is True
+        or (arm_check.armed and g064_tick.entry_gate_open is not True)
+    ):
+        print(
+            "status=G064_ENTRY_GATE_CLOSED "
+            "broker_write=false actual_post_count=0"
         )
         return 0
     if getattr(generation, "generation_label", "") in {
@@ -380,15 +457,68 @@ def main(argv: list[str]) -> int:
     # here would let an interactive canary run and a scheduled tick corrupt
     # each other's risk/dead-man state concurrently instead of the second
     # one correctly skipping.
-    lock = H11AutoProcessLock(
-        v4_gmo_runtime_state_root(repository=repository, generation_digest=generation.digest)
-        / "process.lock"
-    )
-    if not lock.acquire():
-        print("status=UNATTENDED_SCHEDULER_TICK_SKIPPED_LOCK_HELD")
-        return 0
-    lock_held = True
+    if preheld_process_lock is None:
+        lock = H11AutoProcessLock(
+            v4_gmo_runtime_state_root(
+                repository=repository, generation_digest=generation.digest
+            )
+            / "process.lock"
+        )
+        if not lock.acquire():
+            print("status=UNATTENDED_SCHEDULER_TICK_SKIPPED_LOCK_HELD")
+            return 0
+        lock_held = True
+    else:
+        lock = preheld_process_lock
+        lock_held = False
     try:
+        state_root = v4_gmo_runtime_state_root(
+            repository=repository, generation_digest=generation.digest
+        )
+        if generation.generation_label == G064_GENERATION_LABEL and not arm_check.armed:
+            write_g064_worker_lease(
+                state_root=state_root,
+                generation_digest=generation.digest,
+                reviewed_files_digest=digest,
+                now_utc=datetime.now(UTC),
+            )
+            position = load_g064_position_reconciliation_no_post(
+                state_root=state_root,
+                generation_digest=generation.digest,
+                now_utc=datetime.now(UTC),
+            )
+            if not position.evidence_available or not position.generation_bound:
+                if preheld_process_lock is None:
+                    clear_g064_worker_lease(
+                        state_root=state_root, expected_pid=os.getpid()
+                    )
+                raise canary_module.V4GmoG013CanaryError(
+                    "G064_POSITION_EVIDENCE_NOT_CLEAR"
+                )
+            write_g064_exit_only_dispatch_no_post(
+                state_root=state_root,
+                generation_digest=generation.digest,
+                reviewed_files_digest=digest,
+                position_open=position.position_open,
+                protection_confirmed=position.protection_confirmed,
+                ownership_exact=position.ownership_exact,
+                quantity_matches=position.quantity_matches,
+            )
+            if position.position_open:
+                run_g064_exit_only_dispatch_no_post(
+                    state_root=state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                )
+            print(
+                "status=G064_ARM_OFF_EXIT_ONLY_MONITORING_NO_POST "
+                "entry_gate_open=false broker_write=false actual_post_count=0"
+            )
+            if preheld_process_lock is None:
+                clear_g064_worker_lease(
+                    state_root=state_root, expected_pid=os.getpid()
+                )
+            return 0
         try:
             session = prepare_g013_canary_session(
                 repository=repository, now_utc=datetime.now(UTC)
@@ -406,9 +536,6 @@ def main(argv: list[str]) -> int:
             )
             return 0
 
-        state_root = v4_gmo_runtime_state_root(
-            repository=repository, generation_digest=generation.digest
-        )
         risk_policy = v4_gmo_risk_policy()
         risk_store = PhaseBRiskStore(state_root / "risk.json", policy=risk_policy)
         dead_man_store = DeadManStore(
@@ -425,44 +552,136 @@ def main(argv: list[str]) -> int:
             policy=v4_unattended_runtime_heartbeat_policy(),
         )
 
-        # Real objects are constructed only after digest, commissioning, arm,
-        # and process-lock gates. Credential/network use remains inside runner.
-        from app.services.h11_v4_gmo_actual_transport import V4GmoKeychainCredentialPair
-        credential_pair = V4GmoKeychainCredentialPair()
+        # G064 switch-only runtime never constructs credentials, clients, or
+        # notification transports. Legacy generations retain their existing
+        # explicit caller-supplied boundary.
+        if generation.generation_label == G064_GENERATION_LABEL:
+            credential_pair = None
+            client = None
+            notification_primary = None
+            notification_secondary = None
+        else:
+            from app.services.h11_v4_gmo_actual_transport import (
+                V4GmoKeychainCredentialPair,
+            )
 
-        client = httpx.Client(timeout=5.0)
+            credential_pair = V4GmoKeychainCredentialPair()
+            client = httpx.Client(timeout=5.0)
+            notification_primary = H11V4ActualPushoverTransport(
+                credentials=H11V4NotificationCredentialBundle(),
+                client=httpx.Client(timeout=10.0),
+            )
+            notification_secondary = H11V4ActualEmailTransport(
+                credentials=H11V4NotificationCredentialBundle(),
+            )
 
-        notification_primary = H11V4ActualPushoverTransport(
-            credentials=H11V4NotificationCredentialBundle(),
-            client=httpx.Client(timeout=10.0),
-        )
-        notification_secondary = H11V4ActualEmailTransport(
-            credentials=H11V4NotificationCredentialBundle(),
-        )
-
-        # The generation-bound actual runtime binding is the authoritative
-        # owner of process.lock while risk state or broker actions are
-        # possible. Release this launcher's preflight ownership before
-        # entering bounded_run so the inner binding can acquire the same lock
-        # instead of rejecting this process as its own concurrent runtime.
-        lock.release()
-        lock_held = False
-        return bounded_run.main(
-            ["--max-cycles", "1", "--interval-seconds", "0"],
-            session=session,
-            risk_store=risk_store,
-            risk_policy=risk_policy,
-            dead_man_store=dead_man_store,
-            heartbeat_chain_store=heartbeat_chain_store,
-            notification_primary=notification_primary,
-            notification_secondary=notification_secondary,
-            entry_gate_reason_provider=unattended_live_entry_gate_provider,
-            credential_pair=credential_pair,
-            client=client,
-        )
+        # G064 retains process.lock for the resident worker and records the
+        # same owner PID. Legacy generations release the preflight lock before
+        # entering their existing inner binding.
+        if generation.generation_label == G064_GENERATION_LABEL:
+            write_g064_worker_lease(
+                state_root=state_root,
+                generation_digest=generation.digest,
+                reviewed_files_digest=digest,
+                now_utc=datetime.now(UTC),
+            )
+        else:
+            lock.release()
+            lock_held = False
+        try:
+            result = bounded_run.main(
+                ["--max-cycles", "1", "--interval-seconds", "0"],
+                session=session,
+                risk_store=risk_store,
+                risk_policy=risk_policy,
+                dead_man_store=dead_man_store,
+                heartbeat_chain_store=heartbeat_chain_store,
+                notification_primary=notification_primary,
+                notification_secondary=notification_secondary,
+                entry_gate_reason_provider=unattended_live_entry_gate_provider,
+                credential_pair=credential_pair,
+                client=client,
+                arm_intent=arm_check.armed,
+            )
+            if generation.generation_label == G064_GENERATION_LABEL and all(
+                hasattr(result, name)
+                for name in (
+                    "flat_reconciled",
+                    "exact_protection_confirmed",
+                    "ownership_exact",
+                    "quantity_matches",
+                )
+            ):
+                write_g064_position_reconciliation_no_post(
+                    state_root=state_root,
+                    generation_digest=generation.digest,
+                    position_open=not bool(getattr(result, "flat_reconciled", False)),
+                    protection_confirmed=bool(
+                        getattr(result, "exact_protection_confirmed", False)
+                    ),
+                    ownership_exact=bool(getattr(result, "ownership_exact", False)),
+                    quantity_matches=bool(getattr(result, "quantity_matches", False)),
+                    generation_bound=True,
+                    observed_at_utc=datetime.now(UTC),
+                )
+            return result
+        finally:
+            if (
+                generation.generation_label == G064_GENERATION_LABEL
+                and preheld_process_lock is None
+            ):
+                clear_g064_worker_lease(state_root=state_root, expected_pid=os.getpid())
     finally:
         if lock_held:
             lock.release()
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--repository", type=Path, required=True)
+    parser.add_argument("--expected-reviewed-files-digest", required=True)
+    parser.add_argument("--expected-generation-digest", required=True)
+    if "--help" in argv or "-h" in argv:
+        return _run_one_tick(argv)
+    args = parser.parse_args(argv)
+    _, generation = _verify_baked_digests(
+        repository=args.repository.resolve(),
+        expected_reviewed_files_digest=args.expected_reviewed_files_digest,
+        expected_generation_digest=args.expected_generation_digest,
+    )
+    if getattr(generation, "generation_label", "") != G064_GENERATION_LABEL:
+        return _run_one_tick(argv)
+    state_root = v4_gmo_runtime_state_root(
+        repository=args.repository.resolve(), generation_digest=generation.digest
+    )
+    resident_lock = H11AutoProcessLock(state_root / "process.lock")
+    if not resident_lock.acquire():
+        print(
+            "status=G064_RESIDENT_WORKER_LOCK_HELD "
+            "broker_write=false actual_post_count=0"
+        )
+        return 0
+    try:
+        while True:
+            try:
+                _run_one_tick(argv, preheld_process_lock=resident_lock)
+            except BaseException:  # noqa: BLE001
+                write_g064_persistent_halt_no_post(
+                    state_root=state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=generation.implementation_digest,
+                )
+                print(
+                    "status=G064_RESIDENT_RUNTIME_HALTED "
+                    "broker_write=false actual_post_count=0"
+                )
+                return 0
+            time.sleep(15)
+    finally:
+        clear_g064_worker_lease(
+            state_root=state_root, expected_pid=os.getpid()
+        )
+        resident_lock.release()
 
 
 if __name__ == "__main__":
