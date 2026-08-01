@@ -2,8 +2,10 @@
 
 Structural counterpart to ``v4_gmo_launchd.py`` (the G012 monitor
 LaunchAgent). Legacy generations use non-resident periodic invocation;
-G064 is the explicit resident-runtime exception and uses ``KeepAlive`` with
-a bounded ``StartInterval``. No other generation is made resident here.
+G064 is the explicit resident-runtime exception: it is started once with
+``RunAtLoad`` and remains resident under its own loop. ``KeepAlive=false`` and
+no ``StartInterval`` ensure a HALT exit cannot be relaunched.
+No other generation is made resident here.
 
 This module renders the plist and installs/bootstraps it via ``launchctl``
 -- it never itself constructs a real credential, HTTP client, or
@@ -19,14 +21,10 @@ import plistlib
 import subprocess
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 
 from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
-from app.services.h11_v4_g064_unattended_activation import (
-    write_g064_scheduler_service_evidence,
-)
 
 V4_GMO_UNATTENDED_SCHEDULER_LABEL = "com.fxstrategylab.h11v4.unattended.scheduler"
 
@@ -122,14 +120,13 @@ def render_v4_gmo_unattended_scheduler_launchagent(
         ],
         "WorkingDirectory": str(repository / "backend"),
         "RunAtLoad": True,
-        "KeepAlive": resident,
-        "StartInterval": 15 if resident else start_interval_seconds,
+        "KeepAlive": False,
         "ProcessType": "Background",
         "StandardOutPath": str(state_root / "unattended-scheduler.stdout.log"),
         "StandardErrorPath": str(state_root / "unattended-scheduler.stderr.log"),
     }
-    if resident:
-        payload["ThrottleInterval"] = 15
+    if not resident:
+        payload["StartInterval"] = start_interval_seconds
     return plistlib.dumps(payload, fmt=plistlib.FMT_XML, sort_keys=True)
 
 
@@ -214,22 +211,15 @@ def install_and_restart_v4_gmo_unattended_scheduler_launchagent(
     if parsed.get("KeepAlive") is True and isinstance(arguments, list):
         try:
             arguments.index("--repository")
-            reviewed_digest = arguments[
-                arguments.index("--expected-reviewed-files-digest") + 1
-            ]
-            generation_digest = arguments[
-                arguments.index("--expected-generation-digest") + 1
-            ]
-            write_g064_scheduler_service_evidence(
-                state_root=stdout_path.parent,
-                generation_digest=generation_digest,
-                reviewed_files_digest=reviewed_digest,
-                observed_at_utc=datetime.now(UTC),
-            )
+            arguments.index("--expected-reviewed-files-digest")
+            arguments.index("--expected-generation-digest")
         except (IndexError, TypeError, ValueError):
             raise V4GmoUnattendedSchedulerLaunchdError(
                 "V4_UNATTENDED_SCHEDULER_LAUNCHD_ARGUMENTS_INVALID"
             ) from None
+        # The resident worker writes scheduler-service-state.json with its own
+        # PID. The installer must never publish its installer PID as runtime
+        # evidence; readiness polling waits for the worker-owned evidence.
     return V4GmoUnattendedSchedulerLaunchdResult(
         installed=True,
         bootstrapped=True,

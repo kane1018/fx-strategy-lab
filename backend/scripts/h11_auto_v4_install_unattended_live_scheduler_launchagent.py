@@ -13,27 +13,39 @@ import argparse
 import os
 import subprocess
 import sys
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.h11_auto.v4_actual_preparation_guard import (
     V4ActualPreparationGuardError,
+    V4PreparationAttemptLedger,
+    V4PreparationOperation,
+    _attest_g064_scheduler_success_internal,
     load_completed_preparation_evidence,
     load_external_preparation_gate,
     require_g040_runtime_only_monitor_completion,
     require_g052_flat_only_monitor_completion,
     require_g053_flat_only_monitor_completion,
     reviewed_files_digest,
+    write_g064_persistent_halt_no_post,
 )
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from app.h11_auto.v4_gmo_launchd import (
     V4GmoLaunchdDomainNotReady,
     require_stable_v4_gmo_aqua_domain,
 )
+from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from app.h11_auto.v4_gmo_unattended_scheduler_launchd import (
     V4_GMO_UNATTENDED_SCHEDULER_LABEL,
     V4GmoUnattendedSchedulerLaunchdError,
     install_and_restart_v4_gmo_unattended_scheduler_launchagent,
     render_v4_gmo_unattended_scheduler_launchagent,
+)
+from app.services.h11_v4_g064_unattended_activation import (
+    G064_GENERATION_LABEL,
+    V4G064ActivationError,
+    verify_g064_scheduler_binding,
 )
 
 _LAUNCHCTL_TIMEOUT_SECONDS = {
@@ -54,6 +66,31 @@ _G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
 _G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
 _G056_GENERATION_LABEL = "H11_AUTO_30M_20260730_G056"
+
+
+def _wait_for_g064_scheduler_readiness(
+    *, generation: object, plist_path: Path, state_root: Path
+) -> None:
+    deadline = time.monotonic() + 60.0
+    while time.monotonic() < deadline:
+        try:
+            verify_g064_scheduler_binding(
+                generation=generation,
+                plist_path=plist_path,
+                state_root=state_root,
+                now_utc=datetime.now(UTC),
+                maximum_age_seconds=60,
+            )
+            return
+        except V4G064ActivationError:
+            time.sleep(1.0)
+    verify_g064_scheduler_binding(
+        generation=generation,
+        plist_path=plist_path,
+        state_root=state_root,
+        now_utc=datetime.now(UTC),
+        maximum_age_seconds=60,
+    )
 
 
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -83,6 +120,15 @@ def main() -> int:
         repository=repository,
         implementation_digest=digest,
     )
+    g064_gate = None
+    g064_ledger = None
+    g064_operation_permit = None
+    g064_runtime_state_root = None
+    if getattr(generation, "generation_label", "") == G064_GENERATION_LABEL:
+        g064_runtime_state_root = v4_gmo_runtime_state_root(
+            repository=repository,
+            generation_digest=generation.digest,
+        )
     if getattr(generation, "generation_label", "") == _G039_GENERATION_LABEL:
         try:
             external_gate = load_external_preparation_gate(repository=repository)
@@ -166,6 +212,19 @@ def main() -> int:
     except V4GmoLaunchdDomainNotReady:
         print("status=GUI_DOMAIN_NOT_READY_RETRY_SAFE broker_write=false actual_post_count=0")
         return 3
+    if getattr(generation, "generation_label", "") == G064_GENERATION_LABEL:
+        try:
+            g064_gate = load_external_preparation_gate(repository=repository)
+            g064_ledger = V4PreparationAttemptLedger(external_gate=g064_gate)
+            g064_operation_permit = g064_ledger.begin_g064_fresh(
+                V4PreparationOperation.MONITOR_LAUNCHAGENT
+            )
+        except V4ActualPreparationGuardError:
+            print(
+                "status=G064_SCHEDULER_PREPARATION_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
     try:
         result = install_and_restart_v4_gmo_unattended_scheduler_launchagent(
             plist_path=plist_path,
@@ -173,13 +232,99 @@ def main() -> int:
             user_id=os.getuid(),
             runner=_run,
         )
-    except (V4GmoUnattendedSchedulerLaunchdError, subprocess.TimeoutExpired):
+    except (
+        V4GmoUnattendedSchedulerLaunchdError,
+        subprocess.TimeoutExpired,
+        OSError,
+    ):
+        if (
+            g064_ledger is not None
+            and g064_runtime_state_root is not None
+            and g064_gate is not None
+        ):
+            try:
+                write_g064_persistent_halt_no_post(
+                    state_root=g064_runtime_state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                )
+            except V4G064ActivationError:
+                print(
+                    "status=G064_SCHEDULER_MUTATION_HALT_NOT_WRITTEN "
+                    "broker_write=false actual_post_count=0"
+                )
+                return 2
+            print(
+                "status=G064_SCHEDULER_MUTATION_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
         print(
             "status=UNATTENDED_SCHEDULER_LAUNCHAGENT_BLOCKED_NO_RETRY "
             "broker_write=false actual_post_count=0"
         )
         return 2
     safe_report = result.to_safe_dict()
+    if (
+        g064_gate is not None
+        and g064_ledger is not None
+        and g064_operation_permit is not None
+    ):
+        try:
+            _wait_for_g064_scheduler_readiness(
+                generation=generation,
+                plist_path=plist_path,
+                state_root=g064_runtime_state_root,
+            )
+            safe_report.update(
+                {
+                    "g064_resident_scheduler": True,
+                    "heartbeat_fresh": True,
+                    "heartbeat_generation_digest_match": True,
+                    "process_lock_clear": True,
+                    "dead_man_alive": True,
+                    "heartbeat_chain_beat": True,
+                    "broker_read": False,
+                    "broker_write": False,
+                    "actual_post_count": 0,
+                    "private_api_read_count": 0,
+                    "credential_read_count": 0,
+                    "notification_attempt_count": 0,
+                    "raw_output_retained": False,
+                    "scheduler_change_attempt_count": 1,
+                }
+            )
+            _attest_g064_scheduler_success_internal(
+                g064_operation_permit,
+                safe_report,
+            )
+            g064_ledger.complete(
+                V4PreparationOperation.MONITOR_LAUNCHAGENT,
+                operation_permit=g064_operation_permit,
+            )
+        except (V4ActualPreparationGuardError, V4G064ActivationError):
+            try:
+                write_g064_persistent_halt_no_post(
+                    state_root=g064_runtime_state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                )
+            except V4G064ActivationError:
+                print(
+                    "status=G064_SCHEDULER_READINESS_HALT_NOT_WRITTEN "
+                    "broker_write=false actual_post_count=0"
+                )
+                return 2
+            print(
+                "status=G064_SCHEDULER_READINESS_NOT_CLEAR "
+                "broker_write=false actual_post_count=0"
+            )
+            return 2
+        print(
+            "status=G064_SCHEDULER_COMMISSIONED_NO_POST "
+            "broker_write=false actual_post_count=0"
+        )
+        return 0
     print(
         "status=INSTALLED_RESTARTED_UNATTENDED_SCHEDULER "
         f"broker_write={str(safe_report['broker_write']).lower()} "

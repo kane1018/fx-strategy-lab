@@ -186,7 +186,7 @@ def test_worker_lease_is_fresh_only_for_live_generation(tmp_path: Path) -> None:
         lock.release()
 
 
-def test_g064_scheduler_is_resident_and_throttled() -> None:
+def test_g064_scheduler_is_single_run_resident_without_restart() -> None:
     repository = Path(__file__).resolve().parents[4]
     generation = SimpleNamespace(
         generation_label=G064_GENERATION_LABEL,
@@ -200,9 +200,10 @@ def test_g064_scheduler_is_resident_and_throttled() -> None:
             python_executable=Path("/usr/bin/python3"),
         )
     )
-    assert payload["KeepAlive"] is True
-    assert payload["StartInterval"] == 15
-    assert payload["ThrottleInterval"] == 15
+    assert payload["RunAtLoad"] is True
+    assert payload["KeepAlive"] is False
+    assert "StartInterval" not in payload
+    assert "ThrottleInterval" not in payload
 
 
 def test_g064_activation_requires_commissioning_evidence(tmp_path: Path) -> None:

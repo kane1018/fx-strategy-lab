@@ -25,7 +25,11 @@ def main() -> int:
         require_clean_main(repository=REPOSITORY)
         gate = load_external_preparation_gate(repository=REPOSITORY)
         ledger = V4PreparationAttemptLedger(external_gate=gate)
-        operation_permit = ledger.begin(V4PreparationOperation.PRIVATE_GET)
+        operation_permit = (
+            ledger.begin_g064_fresh(V4PreparationOperation.PRIVATE_GET)
+            if gate.is_g064_generation_bound_for_internal_preparation_only()
+            else ledger.begin(V4PreparationOperation.PRIVATE_GET)
+        )
         report = V4GmoFiniteReadOnlyPreflight(
             external_gate=gate,
             operation_permit=operation_permit,

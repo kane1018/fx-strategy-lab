@@ -162,22 +162,37 @@ class V4ExternalPreparationGate:
         token: object,
         reviewed_files_digest: str,
         state_root: Path,
+        generation_label: str | None = None,
     ) -> None:
         if (
             token is not _GATE_TOKEN
             or not reviewed_files_digest.startswith("sha256:")
             or not state_root.is_absolute()
+            or (
+                generation_label is not None
+                and (
+                    not isinstance(generation_label, str)
+                    or not generation_label.startswith("H11_AUTO_30M_")
+                )
+            )
         ):
             raise V4ActualPreparationGuardError("PREPARATION_EXTERNAL_GATE_INVALID")
         self._reviewed_files_digest = reviewed_files_digest
         self._token = token
         self._state_root = state_root
+        self._generation_label = generation_label
 
     def state_root_for_internal_preparation_only(self) -> Path:
         return self._state_root
 
     def reviewed_digest_for_internal_preparation_only(self) -> str:
         return self._reviewed_files_digest
+
+    def generation_label_for_internal_preparation_only(self) -> str | None:
+        return self._generation_label
+
+    def is_g064_generation_bound_for_internal_preparation_only(self) -> bool:
+        return self._generation_label == "H11_AUTO_30M_20260801_G064"
 
     def __repr__(self) -> str:
         return "V4ExternalPreparationGate(scope=external-preparation-only)"
@@ -477,6 +492,15 @@ _PREVIOUS_OPERATION = {
     V4PreparationOperation.MONITOR_LAUNCHAGENT: V4PreparationOperation.PRIVATE_GET,
 }
 
+_DEFAULT_PREVIOUS_OPERATION = object()
+_G064_FRESH_PREVIOUS_OPERATION = {
+    V4PreparationOperation.PRESENCE: None,
+    V4PreparationOperation.KEYCHAIN_ACCESS: V4PreparationOperation.PRESENCE,
+    V4PreparationOperation.PRIVATE_GET: V4PreparationOperation.KEYCHAIN_ACCESS,
+    V4PreparationOperation.MONITOR_LAUNCHAGENT: V4PreparationOperation.PRIVATE_GET,
+}
+_G064_FRESH_OPERATIONS = frozenset(_G064_FRESH_PREVIOUS_OPERATION)
+
 
 class V4PreparationOperationPermit:
     """Single-process companion to one persisted, externally performed step."""
@@ -741,6 +765,17 @@ def _attest_monitor_launchagent_success_internal(
     )
 
 
+def _attest_g064_scheduler_success_internal(
+    permit: V4PreparationOperationPermit,
+    safe_report: dict[str, object],
+) -> None:
+    _attest_operation_success(
+        permit,
+        operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
+        safe_report=safe_report,
+    )
+
+
 def _completion_digest(
     *,
     operation: V4PreparationOperation,
@@ -848,6 +883,29 @@ def _operation_report_is_clear(
             and report.get("broker_write_performed") is False
         )
     if operation is V4PreparationOperation.MONITOR_LAUNCHAGENT:
+        if report.get("g064_resident_scheduler") is True:
+            return (
+                report.get("installed") is True
+                and report.get("bootstrapped") is True
+                and report.get("service_running") is True
+                and report.get("heartbeat_fresh") is True
+                and report.get("heartbeat_generation_digest_match") is True
+                and report.get("process_lock_clear") is True
+                and report.get("dead_man_alive") is True
+                and report.get("heartbeat_chain_beat") is True
+                and report.get("broker_read") is False
+                and report.get("broker_write") is False
+                and report.get("actual_post_count") == 0
+                and report.get("private_api_read_count") == 0
+                and report.get("credential_read_count") == 0
+                and report.get("notification_attempt_count") == 0
+                and report.get("raw_output_retained") is False
+                and report.get("scheduler_change_attempt_count") == 1
+                and (
+                    report.get("previous_service_present") is False
+                    or report.get("previous_service_booted_out") is True
+                )
+            )
         return (
             report.get("installed") is True
             and report.get("bootstrapped") is True
@@ -918,7 +976,36 @@ class V4PreparationAttemptLedger:
         self,
         operation: V4PreparationOperation,
     ) -> V4PreparationOperationPermit:
+        if self._external_gate.is_g064_generation_bound_for_internal_preparation_only():
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_G064_FRESH_LEDGER_REQUIRED"
+            )
         return self._begin(operation=operation, runtime_predecessor_clear=False)
+
+    def begin_g064_fresh(
+        self,
+        operation: V4PreparationOperation,
+    ) -> V4PreparationOperationPermit:
+        if not self._external_gate.is_g064_generation_bound_for_internal_preparation_only():
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_G064_GENERATION_BINDING_REQUIRED"
+            )
+        if operation not in _G064_FRESH_OPERATIONS:
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_G064_OPERATION_NOT_ALLOWED"
+            )
+        if any(
+            marker.exists() or marker.is_symlink()
+            for marker in self.state_root.glob(f"{operation.value}.*.passed.json")
+        ):
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.OPERATION_ALREADY_ATTEMPTED
+            )
+        return self._begin(
+            operation=operation,
+            runtime_predecessor_clear=False,
+            previous_override=_G064_FRESH_PREVIOUS_OPERATION[operation],
+        )
 
     def begin_g040_runtime_only_monitor(
         self,
@@ -1000,6 +1087,7 @@ class V4PreparationAttemptLedger:
         *,
         operation: V4PreparationOperation,
         runtime_predecessor_clear: bool,
+        previous_override: object = _DEFAULT_PREVIOUS_OPERATION,
     ) -> V4PreparationOperationPermit:
         # One generation-level lock serializes predecessor validation, the
         # generation-wide unresolved scan, and durable started-marker creation.
@@ -1017,7 +1105,11 @@ class V4PreparationAttemptLedger:
             raise V4ActualPreparationGuardError(
                 V4PreparationFailureCode.OPERATION_IN_PROGRESS
             )
-        previous = _PREVIOUS_OPERATION[operation]
+        previous = (
+            _PREVIOUS_OPERATION[operation]
+            if previous_override is _DEFAULT_PREVIOUS_OPERATION
+            else previous_override
+        )
         previous_is_current = previous is None or self._marker_matches_review(
             self._marker(previous, "passed"),
             operation=previous,
@@ -2269,6 +2361,7 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
                 reviewed_files_digest=actual_digest,
                 generation_manifest_digest=generation.digest,
             ),
+            generation_label=generation_label,
         )
 
     artifact_path = repository / PREPARATION_ARTIFACT
@@ -2334,6 +2427,7 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
             reviewed_files_digest=actual_digest,
             generation_manifest_digest=generation.digest,
         ),
+        generation_label=generation_label,
     )
 
 

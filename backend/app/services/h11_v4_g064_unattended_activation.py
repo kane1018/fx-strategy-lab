@@ -267,16 +267,15 @@ def write_g064_runtime_evidence_no_post(
     payload["runtime_observed_at_utc"] = observed_at_utc.astimezone(UTC).isoformat()
     state_root.mkdir(parents=True, exist_ok=True)
     target = state_root / G064_RUNTIME_EVIDENCE_FILE
-    temporary = state_root / f"{G064_RUNTIME_EVIDENCE_FILE}.tmp"
+    temporary = state_root / f"{G064_RUNTIME_EVIDENCE_FILE}.{os.getpid()}.tmp"
     try:
-        with temporary.open("w", encoding="utf-8") as stream:
+        with temporary.open("x", encoding="utf-8") as stream:
             json.dump(payload, stream, sort_keys=True, separators=(",", ":"))
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, target)
     except OSError as error:
-        temporary.unlink(missing_ok=True)
         raise V4G064ActivationError("G064_RUNTIME_EVIDENCE_WRITE_FAILED") from error
 
 
@@ -313,16 +312,15 @@ def write_g064_scheduler_service_evidence(
         "schema": G064_SERVICE_STATE_SCHEMA,
     }
     target = state_root / "scheduler-service-state.json"
-    temporary = state_root / "scheduler-service-state.json.tmp"
+    temporary = state_root / f"scheduler-service-state.json.{os.getpid()}.tmp"
     try:
-        with temporary.open("w", encoding="utf-8") as stream:
+        with temporary.open("x", encoding="utf-8") as stream:
             json.dump(payload, stream, sort_keys=True, separators=(",", ":"))
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, target)
     except OSError as error:
-        temporary.unlink(missing_ok=True)
         raise V4G064ActivationError("G064_SERVICE_STATE_WRITE_FAILED") from error
 
 
@@ -479,7 +477,7 @@ def write_g064_worker_lease(
         raise V4G064ActivationError("G064_WORKER_LEASE_CLOCK_INVALID")
     state_root.mkdir(parents=True, exist_ok=True)
     path = state_root / "worker-heartbeat.json"
-    temporary = state_root / "worker-heartbeat.json.tmp"
+    temporary = state_root / f"worker-heartbeat.json.{os.getpid()}.tmp"
     payload: dict[str, Any] = {
         "actual_post_count": 0,
         "broker_read": False,
@@ -505,26 +503,21 @@ def write_g064_worker_lease(
         "schema": "H11_V4_G064_PROCESS_LOCK_OWNER_V1",
     }
     owner_path = state_root / G064_PROCESS_LOCK_OWNER_FILE
-    owner_temporary = state_root / f"{G064_PROCESS_LOCK_OWNER_FILE}.tmp"
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    owner_temporary = state_root / f"{G064_PROCESS_LOCK_OWNER_FILE}.{os.getpid()}.tmp"
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        with temporary.open("x", encoding="utf-8") as stream:
             json.dump(payload, stream, sort_keys=True, separators=(",", ":"))
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
-        with owner_temporary.open("w", encoding="utf-8") as stream:
+        with owner_temporary.open("x", encoding="utf-8") as stream:
             json.dump(owner_payload, stream, sort_keys=True, separators=(",", ":"))
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(owner_temporary, owner_path)
     except OSError as error:
-        try:
-            temporary.unlink(missing_ok=True)
-        except OSError:
-            pass
         raise V4G064ActivationError("G064_WORKER_LEASE_WRITE_FAILED") from error
 
 
@@ -594,27 +587,92 @@ def write_g064_persistent_halt_no_post(
 ) -> None:
     """Persist a safe HALTED marker for runtime exceptions or interruption."""
 
-    state_root.mkdir(parents=True, exist_ok=True)
+    def _valid_digest(value: object) -> bool:
+        return (
+            isinstance(value, str)
+            and len(value) == 71
+            and value.startswith("sha256:")
+            and all(character in "0123456789abcdef" for character in value[7:])
+        )
+
+    path_candidates = (
+        state_root,
+        state_root.parent,
+        state_root.parent.parent,
+        state_root.parent.parent.parent,
+    )
+    if (
+        not state_root.is_absolute()
+        or any(path.is_symlink() for path in path_candidates)
+        or not _valid_digest(generation_digest)
+        or not _valid_digest(reviewed_files_digest)
+    ):
+        raise V4G064ActivationError("G064_PERSISTENT_HALT_WRITE_INVALID")
     target = state_root / G064_PERSISTENT_HALT_FILE
-    temporary = state_root / f"{G064_PERSISTENT_HALT_FILE}.tmp"
+    temporary = state_root / f"{G064_PERSISTENT_HALT_FILE}.{os.getpid()}.tmp"
+    if target.is_symlink():
+        raise V4G064ActivationError("G064_PERSISTENT_HALT_WRITE_INVALID")
+    if target.exists():
+        if target.is_file():
+            try:
+                existing = json.loads(target.read_text(encoding="utf-8"))
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+                raise V4G064ActivationError(
+                    "G064_PERSISTENT_HALT_WRITE_INVALID"
+                ) from error
+            if (
+                isinstance(existing, dict)
+                and existing.get("schema") == G064_PERSISTENT_HALT_SCHEMA
+                and existing.get("status") == "HALTED"
+                and existing.get("generation_digest") == generation_digest
+                and existing.get("reviewed_files_digest") == reviewed_files_digest
+                and existing.get("broker_read") is False
+                and existing.get("broker_post_authorized") is False
+                and existing.get("broker_write") is False
+                and existing.get("actual_post_count") == 0
+                and existing.get("broker_post_count") == 0
+                and existing.get("private_api_read_count") == 0
+                and existing.get("credential_read_count") == 0
+                and existing.get("notification_attempt_count") == 0
+            ):
+                return
+        raise V4G064ActivationError("G064_PERSISTENT_HALT_WRITE_INVALID")
     payload = {
         "actual_post_count": 0,
+        "broker_post_count": 0,
+        "broker_post_authorized": False,
+        "broker_read": False,
         "broker_write": False,
+        "credential_read_count": 0,
         "generation_digest": generation_digest,
+        "notification_attempt_count": 0,
+        "private_api_read_count": 0,
         "reason_label": "G064_RUNTIME_UNEXPECTED_FAILURE",
         "reviewed_files_digest": reviewed_files_digest,
         "schema": G064_PERSISTENT_HALT_SCHEMA,
         "status": "HALTED",
     }
     try:
-        with temporary.open("w", encoding="utf-8") as stream:
+        state_root.mkdir(parents=True, exist_ok=True)
+        if target.exists():
+            if target.is_file() and not target.is_symlink():
+                return write_g064_persistent_halt_no_post(
+                    state_root=state_root,
+                    generation_digest=generation_digest,
+                    reviewed_files_digest=reviewed_files_digest,
+                )
+            raise V4G064ActivationError("G064_PERSISTENT_HALT_WRITE_INVALID")
+        if temporary.exists() or temporary.is_symlink():
+            raise V4G064ActivationError("G064_PERSISTENT_HALT_WRITE_INVALID")
+        with temporary.open("x", encoding="utf-8") as stream:
             json.dump(payload, stream, sort_keys=True, separators=(",", ":"))
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, target)
+    except V4G064ActivationError:
+        raise
     except OSError as error:
-        temporary.unlink(missing_ok=True)
         raise V4G064ActivationError("G064_PERSISTENT_HALT_WRITE_FAILED") from error
 
 

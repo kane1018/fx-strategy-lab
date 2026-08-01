@@ -79,6 +79,7 @@ from app.services.h11_v4_g064_position_reconciliation_no_post import (
 )
 from app.services.h11_v4_g064_unattended_activation import (
     G064_GENERATION_LABEL,
+    V4G064ActivationError,
     clear_g064_worker_lease,
     run_g064_exit_only_dispatch_no_post,
     verify_g064_generation_activation,
@@ -139,6 +140,62 @@ class V4UnattendedSchedulerLauncherError(RuntimeError):
     """Fixed safe launcher failure (digest mismatch, missing placeholder)."""
 
 
+def _g064_runtime_state_root_for_expected_digest(
+    *, repository: Path, expected_generation_digest: object
+) -> Path | None:
+    if (
+        not isinstance(expected_generation_digest, str)
+        or len(expected_generation_digest) != 71
+        or not expected_generation_digest.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in expected_generation_digest[7:])
+    ):
+        return None
+    manifest_path = repository / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        return None
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("generation_label") != G064_GENERATION_LABEL
+        or payload.get("digest") != expected_generation_digest
+    ):
+        return None
+    return v4_gmo_runtime_state_root(
+        repository=repository,
+        generation_digest=expected_generation_digest,
+    )
+
+
+def _latch_g064_halt_after_binding_failure(
+    *,
+    repository: Path,
+    expected_generation_digest: object,
+    expected_reviewed_files_digest: object,
+) -> bool:
+    state_root = _g064_runtime_state_root_for_expected_digest(
+        repository=repository,
+        expected_generation_digest=expected_generation_digest,
+    )
+    if (
+        state_root is None
+        or not isinstance(expected_generation_digest, str)
+        or not isinstance(expected_reviewed_files_digest, str)
+    ):
+        return False
+    try:
+        write_g064_persistent_halt_no_post(
+            state_root=state_root,
+            generation_digest=expected_generation_digest,
+            reviewed_files_digest=expected_reviewed_files_digest,
+        )
+    except V4G064ActivationError:
+        return False
+    return True
+
+
 def _verify_baked_digests(
     *, repository: Path, expected_reviewed_files_digest: str, expected_generation_digest: str
 ):
@@ -175,10 +232,31 @@ def _run_one_tick(
     args = parser.parse_args(argv)
     repository = args.repository.resolve()
 
-    digest, generation = _verify_baked_digests(
+    try:
+        digest, generation = _verify_baked_digests(
+            repository=repository,
+            expected_reviewed_files_digest=args.expected_reviewed_files_digest,
+            expected_generation_digest=args.expected_generation_digest,
+        )
+    except Exception:  # noqa: BLE001
+        if _latch_g064_halt_after_binding_failure(
+            repository=repository,
+            expected_generation_digest=args.expected_generation_digest,
+            expected_reviewed_files_digest=args.expected_reviewed_files_digest,
+        ):
+            print(
+                "status=G064_RESIDENT_RUNTIME_HALTED "
+                "broker_write=false actual_post_count=0"
+            )
+        else:
+            print(
+                "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
+                "broker_write=false actual_post_count=0"
+            )
+        return 2
+    state_root = v4_gmo_runtime_state_root(
         repository=repository,
-        expected_reviewed_files_digest=args.expected_reviewed_files_digest,
-        expected_generation_digest=args.expected_generation_digest,
+        generation_digest=generation.digest,
     )
     if (
         generation.live_ready is not True
@@ -289,19 +367,26 @@ def _run_one_tick(
                 monitor.close()
             verify_g064_generation_activation(
                 generation=generation,
-                state_root=monitor.state_root,
+                state_root=state_root,
             )
         except Exception:  # noqa: BLE001
-            write_g064_persistent_halt_no_post(
-                state_root=monitor.state_root,
-                generation_digest=generation.digest,
-                reviewed_files_digest=digest,
-            )
+            try:
+                write_g064_persistent_halt_no_post(
+                    state_root=state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                )
+            except V4G064ActivationError:
+                print(
+                    "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
+                    "broker_write=false actual_post_count=0"
+                )
+                return 2
             print(
                 "status=G064_RESIDENT_RUNTIME_NOT_CLEAR "
                 "broker_write=false actual_post_count=0"
             )
-            return 0
+            return 2
         if (
             g064_tick.broker_write is not False
             or g064_tick.actual_post_count != 0
@@ -310,16 +395,23 @@ def _run_one_tick(
             or g064_tick.heartbeat_chain_beat is not True
             or g064_tick.process_lock_clear is not True
         ):
-            write_g064_persistent_halt_no_post(
-                state_root=monitor.state_root,
-                generation_digest=generation.digest,
-                reviewed_files_digest=digest,
-            )
+            try:
+                write_g064_persistent_halt_no_post(
+                    state_root=state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                )
+            except V4G064ActivationError:
+                print(
+                    "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
+                    "broker_write=false actual_post_count=0"
+                )
+                return 2
             print(
                 "status=G064_RESIDENT_RUNTIME_NOT_CLEAR "
                 "broker_write=false actual_post_count=0"
             )
-            return 0
+            return 2
     else:
         try:
             verify_g038_generation_activation(generation=generation)
@@ -329,7 +421,7 @@ def _run_one_tick(
                 "status=UNATTENDED_SCHEDULER_ACTIVATION_EVIDENCE_NOT_CLEAR "
                 "broker_write=false actual_post_count=0"
             )
-            return 0
+            return 2
     arm_check = V4UnattendedLiveArmStore(
         v4_unattended_live_arm_state_path(generation_digest=generation.digest)
     ).check(
@@ -342,7 +434,7 @@ def _run_one_tick(
             "status=UNATTENDED_SCHEDULER_TICK_DISARMED "
             f"reason_label={reason} broker_write=false actual_post_count=0"
         )
-        return 0
+        return 2
     if generation.generation_label == G064_GENERATION_LABEL and (
         g064_tick is None
         or g064_tick.persistent_halt is True
@@ -644,11 +736,28 @@ def main(argv: list[str]) -> int:
     if "--help" in argv or "-h" in argv:
         return _run_one_tick(argv)
     args = parser.parse_args(argv)
-    _, generation = _verify_baked_digests(
-        repository=args.repository.resolve(),
-        expected_reviewed_files_digest=args.expected_reviewed_files_digest,
-        expected_generation_digest=args.expected_generation_digest,
-    )
+    try:
+        _, generation = _verify_baked_digests(
+            repository=args.repository.resolve(),
+            expected_reviewed_files_digest=args.expected_reviewed_files_digest,
+            expected_generation_digest=args.expected_generation_digest,
+        )
+    except Exception:  # noqa: BLE001
+        if _latch_g064_halt_after_binding_failure(
+            repository=args.repository.resolve(),
+            expected_generation_digest=args.expected_generation_digest,
+            expected_reviewed_files_digest=args.expected_reviewed_files_digest,
+        ):
+            print(
+                "status=G064_RESIDENT_RUNTIME_HALTED "
+                "broker_write=false actual_post_count=0"
+            )
+        else:
+            print(
+                "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
+                "broker_write=false actual_post_count=0"
+            )
+        return 2
     if getattr(generation, "generation_label", "") != G064_GENERATION_LABEL:
         return _run_one_tick(argv)
     state_root = v4_gmo_runtime_state_root(
@@ -664,18 +773,29 @@ def main(argv: list[str]) -> int:
     try:
         while True:
             try:
-                _run_one_tick(argv, preheld_process_lock=resident_lock)
-            except BaseException:  # noqa: BLE001
-                write_g064_persistent_halt_no_post(
-                    state_root=state_root,
-                    generation_digest=generation.digest,
-                    reviewed_files_digest=generation.implementation_digest,
+                tick_status = _run_one_tick(
+                    argv, preheld_process_lock=resident_lock
                 )
+                if tick_status != 0:
+                    return tick_status
+            except BaseException:  # noqa: BLE001
+                try:
+                    write_g064_persistent_halt_no_post(
+                        state_root=state_root,
+                        generation_digest=generation.digest,
+                        reviewed_files_digest=generation.implementation_digest,
+                    )
+                except V4G064ActivationError:
+                    print(
+                        "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
+                        "broker_write=false actual_post_count=0"
+                    )
+                    return 2
                 print(
                     "status=G064_RESIDENT_RUNTIME_HALTED "
                     "broker_write=false actual_post_count=0"
                 )
-                return 0
+                return 2
             time.sleep(15)
     finally:
         clear_g064_worker_lease(
