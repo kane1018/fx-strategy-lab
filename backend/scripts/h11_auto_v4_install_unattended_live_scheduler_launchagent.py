@@ -28,7 +28,6 @@ from app.h11_auto.v4_actual_preparation_guard import (
     require_g052_flat_only_monitor_completion,
     require_g053_flat_only_monitor_completion,
     reviewed_files_digest,
-    write_g064_persistent_halt_no_post,
 )
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from app.h11_auto.v4_gmo_launchd import (
@@ -46,6 +45,7 @@ from app.services.h11_v4_g064_unattended_activation import (
     G064_GENERATION_LABEL,
     V4G064ActivationError,
     verify_g064_scheduler_binding,
+    write_g064_persistent_halt_no_post,
 )
 
 _LAUNCHCTL_TIMEOUT_SECONDS = {
