@@ -1404,6 +1404,14 @@ _RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
     "H11_AUTO_30M_20260730_G055",
     "H11_AUTO_30M_20260730_G056",
 }
+_PREPARATION_KNOWN_GENERATION_LABELS = _RUNTIME_ONLY_TARGET_GENERATION_LABELS | {
+    "H11_AUTO_30M_20260728_G019",
+    "H11_AUTO_30M_20260728_G020",
+    "H11_AUTO_30M_20260729_G039",
+    "H11_AUTO_30M_20260731_G062",
+    "H11_AUTO_30M_20260731_G063",
+    "H11_AUTO_30M_20260801_G064",
+}
 _G040_RUNTIME_CARRIED_OPERATIONS = tuple(
     operation
     for operation in V4PreparationOperation
@@ -2204,13 +2212,95 @@ def reviewed_files_digest(*, repository: Path) -> str:
 
 def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparationGate:
     require_clean_main(repository=repository)
-    artifact_path = repository.resolve() / PREPARATION_ARTIFACT
+    repository = repository.resolve()
+    actual_digest = reviewed_files_digest(repository=repository)
+    generation_manifest_path = (
+        repository / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    )
+    if generation_manifest_path.is_symlink() or not generation_manifest_path.is_file():
+        raise V4ActualPreparationGuardError(
+            "PREPARATION_FROZEN_GENERATION_MISMATCH"
+        )
+    try:
+        generation_manifest = json.loads(
+            generation_manifest_path.read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as error:
+        raise V4ActualPreparationGuardError(
+            "PREPARATION_FROZEN_GENERATION_MISMATCH"
+        ) from error
+    generation_label = (
+        generation_manifest.get("generation_label")
+        if isinstance(generation_manifest, dict)
+        else None
+    )
+    if (
+        not isinstance(generation_label, str)
+        or not generation_label.startswith("H11_AUTO_30M_")
+        or generation_label not in _PREPARATION_KNOWN_GENERATION_LABELS
+    ):
+        raise V4ActualPreparationGuardError(
+            "PREPARATION_FROZEN_GENERATION_MISMATCH"
+        )
+
+    if generation_label == "H11_AUTO_30M_20260801_G064":
+        try:
+            generation = load_v4_gmo_frozen_generation(
+                repository=repository,
+                implementation_digest=actual_digest,
+            )
+            from app.services.h11_v4_g064_unattended_activation import (
+                verify_g064_generation_contract,
+            )
+
+            verify_g064_generation_contract(
+                generation=generation,
+                repository=repository,
+            )
+        except Exception as error:
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_G064_RUNTIME_CONTRACT_NOT_CLEAR"
+            ) from error
+        return V4ExternalPreparationGate(
+            token=_GATE_TOKEN,
+            reviewed_files_digest=actual_digest,
+            state_root=preparation_state_root(
+                repository=repository,
+                reviewed_files_digest=actual_digest,
+                generation_manifest_digest=generation.digest,
+            ),
+        )
+
+    artifact_path = repository / PREPARATION_ARTIFACT
+    legacy_artifact: dict[str, object] | None = None
+    if artifact_path.is_file() and not artifact_path.is_symlink():
+        try:
+            parsed_artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise V4ActualPreparationGuardError(
+                "PREPARATION_REVIEW_ARTIFACT_INVALID"
+            ) from error
+        if isinstance(parsed_artifact, dict):
+            if parsed_artifact.get("reviewed_files_digest") != actual_digest:
+                raise V4ActualPreparationGuardError(
+                    "PREPARATION_REVIEWED_FILES_DIGEST_MISMATCH"
+                )
+            legacy_artifact = parsed_artifact
+    try:
+        generation = load_v4_gmo_frozen_generation(
+            repository=repository,
+            implementation_digest=actual_digest,
+        )
+    except ValueError as error:
+        raise V4ActualPreparationGuardError(
+            "PREPARATION_FROZEN_GENERATION_MISMATCH"
+        ) from error
+
     if not artifact_path.is_file() or artifact_path.is_symlink():
         raise V4ActualPreparationGuardError("PREPARATION_REVIEW_ARTIFACT_MISSING")
-    try:
-        artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise V4ActualPreparationGuardError("PREPARATION_REVIEW_ARTIFACT_INVALID") from error
+    artifact = legacy_artifact
+    if artifact is None:
+        raise V4ActualPreparationGuardError("PREPARATION_REVIEW_ARTIFACT_INVALID")
     expected_true = (
         "focused_tests_passed",
         "related_tests_passed",
@@ -2230,18 +2320,8 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
         or any(artifact.get(field) is not True for field in expected_true)
     ):
         raise V4ActualPreparationGuardError("PREPARATION_REVIEW_ARTIFACT_NOT_CLEAR")
-    actual_digest = reviewed_files_digest(repository=repository)
     if artifact.get("reviewed_files_digest") != actual_digest:
         raise V4ActualPreparationGuardError("PREPARATION_REVIEWED_FILES_DIGEST_MISMATCH")
-    try:
-        generation = load_v4_gmo_frozen_generation(
-            repository=repository,
-            implementation_digest=actual_digest,
-        )
-    except ValueError as error:
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_FROZEN_GENERATION_MISMATCH"
-        ) from error
     if artifact.get("generation_manifest_digest") != generation.digest:
         raise V4ActualPreparationGuardError(
             "PREPARATION_FROZEN_GENERATION_MISMATCH"

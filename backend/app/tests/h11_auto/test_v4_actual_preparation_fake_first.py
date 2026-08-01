@@ -37,6 +37,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     load_external_preparation_gate,
     require_operation_permit,
 )
+from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.services import h11_v4_gmo_readonly_preflight as readonly_module
 from app.services import h11_v4_notification_actual_preparation as notification_actual_module
 from app.services.h11_v4_gmo_public_preflight import (
@@ -140,6 +141,14 @@ def external_gate(
     artifact_path = tmp_path / guard_module.PREPARATION_ARTIFACT
     artifact_path.parent.mkdir(parents=True)
     artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+    generation_manifest_path = (
+        tmp_path / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    )
+    generation_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    generation_manifest_path.write_text(
+        json.dumps({"generation_label": "H11_AUTO_30M_20260729_G039"}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         guard_module,
         "reviewed_files_digest",
@@ -761,6 +770,14 @@ def test_review_artifact_digest_mismatch_blocks_external_gate(
         ),
         encoding="utf-8",
     )
+    generation_manifest_path = (
+        tmp_path / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    )
+    generation_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    generation_manifest_path.write_text(
+        json.dumps({"generation_label": "H11_AUTO_30M_20260729_G039"}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(
         guard_module,
         "reviewed_files_digest",
@@ -772,6 +789,226 @@ def test_review_artifact_digest_mismatch_blocks_external_gate(
         lambda *, repository: object(),
     )
     with pytest.raises(V4ActualPreparationGuardError, match="DIGEST_MISMATCH"):
+        load_external_preparation_gate(repository=tmp_path)
+
+
+def test_g064_external_gate_uses_current_runtime_contract_without_legacy_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    digest = "sha256:" + "c" * 64
+    generation_digest = "sha256:" + "d" * 64
+    calls: list[tuple[str, Path]] = []
+
+    monkeypatch.setattr(
+        guard_module,
+        "reviewed_files_digest",
+        lambda *, repository: digest,
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "require_clean_main",
+        lambda *, repository: object(),
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda *, repository, implementation_digest: type(
+            "SyntheticG064Generation",
+            (),
+            {
+                "generation_label": "H11_AUTO_30M_20260801_G064",
+                "digest": generation_digest,
+            },
+        )(),
+    )
+    generation_manifest_path = (
+        tmp_path / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    )
+    generation_manifest_path.parent.mkdir(parents=True)
+    generation_manifest_path.write_text(
+        json.dumps({"generation_label": "H11_AUTO_30M_20260801_G064"}),
+        encoding="utf-8",
+    )
+    legacy_artifact_path = tmp_path / guard_module.PREPARATION_ARTIFACT
+    legacy_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_artifact_path.write_text(
+        json.dumps(
+            {
+                "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
+                "reviewed_files_digest": "sha256:" + "a" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    import app.services.h11_v4_g064_unattended_activation as g064_module
+
+    monkeypatch.setattr(
+        g064_module,
+        "verify_g064_generation_contract",
+        lambda *, generation, repository: calls.append(
+            (generation.generation_label, repository)
+        ),
+    )
+
+    gate = load_external_preparation_gate(repository=tmp_path)
+
+    assert calls == [("H11_AUTO_30M_20260801_G064", tmp_path.resolve())]
+    assert gate.reviewed_digest_for_internal_preparation_only() == digest
+    assert gate.state_root_for_internal_preparation_only().name.endswith(
+        generation_digest.removeprefix("sha256:")
+    )
+    assert legacy_artifact_path.exists()
+
+
+def test_g064_external_gate_runs_real_runtime_contract_verifier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_repository = Path(__file__).resolve().parents[4]
+    generation_payload = json.loads(
+        (
+            source_repository
+            / "docs/templates/h11_v4_gmo_frozen_generation.json"
+        ).read_text(encoding="utf-8")
+    )
+    generation_payload["blocked_hours_jst"] = tuple(
+        generation_payload["blocked_hours_jst"]
+    )
+    generation_payload["weekend_days_jst"] = tuple(
+        generation_payload["weekend_days_jst"]
+    )
+    generation = V4GmoFrozenGeneration(**generation_payload)
+    for relative_path in (
+        "docs/templates/h11_v4_g063_frozen_generation.json",
+        "docs/templates/h11_v4_g064_runtime_commissioning_evidence.json",
+        "docs/templates/h11_v4_g064_independent_review_attestation.json",
+    ):
+        target = tmp_path / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            (source_repository / relative_path).read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+    manifest_path = tmp_path / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(
+        json.dumps(generation_payload),
+        encoding="utf-8",
+    )
+    legacy_artifact_path = tmp_path / guard_module.PREPARATION_ARTIFACT
+    legacy_artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    legacy_artifact_path.write_text(
+        json.dumps(
+            {
+                "schema": "H11_V4_EXTERNAL_PREPARATION_EVIDENCE_V1",
+                "reviewed_files_digest": "sha256:" + "a" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "reviewed_files_digest",
+        lambda *, repository: generation.implementation_digest,
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "require_clean_main",
+        lambda *, repository: object(),
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda *, repository, implementation_digest: generation,
+    )
+
+    gate = load_external_preparation_gate(repository=tmp_path)
+
+    assert gate.reviewed_digest_for_internal_preparation_only() == (
+        generation.implementation_digest
+    )
+    assert legacy_artifact_path.exists()
+
+
+def test_g064_external_gate_blocks_when_runtime_contract_is_not_clear(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    generation_manifest_path = (
+        tmp_path / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    )
+    generation_manifest_path.parent.mkdir(parents=True)
+    generation_manifest_path.write_text(
+        json.dumps({"generation_label": "H11_AUTO_30M_20260801_G064"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "reviewed_files_digest",
+        lambda *, repository: "sha256:" + "e" * 64,
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "require_clean_main",
+        lambda *, repository: object(),
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "load_v4_gmo_frozen_generation",
+        lambda *, repository, implementation_digest: type(
+            "SyntheticG064Generation",
+            (),
+            {
+                "generation_label": "H11_AUTO_30M_20260801_G064",
+                "digest": "sha256:" + "f" * 64,
+            },
+        )(),
+    )
+
+    import app.services.h11_v4_g064_unattended_activation as g064_module
+
+    def reject_g064_contract(*, generation, repository) -> None:
+        del generation, repository
+        raise g064_module.V4G064ActivationError(
+            "G064_RUNTIME_EVIDENCE_BINDING_INVALID"
+        )
+
+    monkeypatch.setattr(
+        g064_module,
+        "verify_g064_generation_contract",
+        reject_g064_contract,
+    )
+
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="PREPARATION_G064_RUNTIME_CONTRACT_NOT_CLEAR",
+    ):
+        load_external_preparation_gate(repository=tmp_path)
+
+
+def test_external_gate_rejects_unknown_generation_label_before_legacy_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest_path = tmp_path / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        json.dumps({"generation_label": "H11_AUTO_30M_20260801_G999"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "reviewed_files_digest",
+        lambda *, repository: "sha256:" + "a" * 64,
+    )
+    monkeypatch.setattr(
+        guard_module,
+        "require_clean_main",
+        lambda *, repository: object(),
+    )
+
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="PREPARATION_FROZEN_GENERATION_MISMATCH",
+    ):
         load_external_preparation_gate(repository=tmp_path)
 
 
