@@ -52,6 +52,11 @@ from app.services.h11_v4_g065_unattended_activation import (
     V4G065ActivationError,
     verify_g065_scheduler_binding,
 )
+from app.services.h11_v4_g066_unattended_activation import (
+    G066_GENERATION_LABEL,
+    G066_PERSISTENT_HALT_FILE,
+    V4G066ActivationError,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -112,10 +117,15 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         repository=REPOSITORY,
         generation_digest=contract.generation.digest,
     )
-    if contract.generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}:
+    if contract.generation.generation_label in {
+        G064_GENERATION_LABEL,
+        G065_GENERATION_LABEL,
+        G066_GENERATION_LABEL,
+    }:
         (
             verify_g065_scheduler_binding
-            if contract.generation.generation_label == G065_GENERATION_LABEL
+            if contract.generation.generation_label
+            in {G065_GENERATION_LABEL, G066_GENERATION_LABEL}
             else verify_g064_scheduler_binding
         )(
             generation=contract.generation,
@@ -173,13 +183,18 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
     persistent_halt = contract.generation.generation_label in {
         G064_GENERATION_LABEL,
         G065_GENERATION_LABEL,
+        G066_GENERATION_LABEL,
     } and (
         (
             state_root
             / (
                 G065_PERSISTENT_HALT_FILE
                 if contract.generation.generation_label == G065_GENERATION_LABEL
-                else G064_PERSISTENT_HALT_FILE
+                else (
+                    G066_PERSISTENT_HALT_FILE
+                    if contract.generation.generation_label == G066_GENERATION_LABEL
+                    else G064_PERSISTENT_HALT_FILE
+                )
             )
         ).is_file()
         or (
@@ -187,14 +202,23 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
             / (
                 G065_PERSISTENT_HALT_FILE
                 if contract.generation.generation_label == G065_GENERATION_LABEL
-                else G064_PERSISTENT_HALT_FILE
+                else (
+                    G066_PERSISTENT_HALT_FILE
+                    if contract.generation.generation_label == G066_GENERATION_LABEL
+                    else G064_PERSISTENT_HALT_FILE
+                )
             )
         ).is_symlink()
     )
     try:
         _verify_current_generation_runtime(contract)
         supported = not persistent_halt
-    except (V4G038ActivationError, V4G064ActivationError, V4G065ActivationError):
+    except (
+        V4G038ActivationError,
+        V4G064ActivationError,
+        V4G065ActivationError,
+        V4G066ActivationError,
+    ):
         supported = False
     local_runtime_state, entries_today = _runtime_projection(contract)
     evidence = load_unattended_runtime_evidence_no_post(
@@ -203,11 +227,19 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         arm_armed=check.armed,
         reviewed_files_digest=contract.reviewed_files_digest,
     )
-    if contract.generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}:
+    if contract.generation.generation_label in {
+        G064_GENERATION_LABEL,
+        G065_GENERATION_LABEL,
+        G066_GENERATION_LABEL,
+    }:
         position_evidence = (
             load_g065_position_reconciliation_no_post
             if contract.generation.generation_label == G065_GENERATION_LABEL
-            else load_g064_position_reconciliation_no_post
+            else (
+                load_g065_position_reconciliation_no_post
+                if contract.generation.generation_label == G066_GENERATION_LABEL
+                else load_g064_position_reconciliation_no_post
+            )
         )(
             state_root=v4_gmo_runtime_state_root(
                 repository=REPOSITORY,
@@ -344,11 +376,19 @@ def _runtime_projection(contract: _CurrentContract) -> tuple[str, int | None]:
         return "HALTED", None
     if snapshot.unknown_halt_latched or snapshot.pending_transport:
         return "HALTED", entries_today
-    if contract.generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}:
+    if contract.generation.generation_label in {
+        G064_GENERATION_LABEL,
+        G065_GENERATION_LABEL,
+        G066_GENERATION_LABEL,
+    }:
         position_evidence = (
             load_g065_position_reconciliation_no_post
             if contract.generation.generation_label == G065_GENERATION_LABEL
-            else load_g064_position_reconciliation_no_post
+            else (
+                load_g065_position_reconciliation_no_post
+                if contract.generation.generation_label == G066_GENERATION_LABEL
+                else load_g064_position_reconciliation_no_post
+            )
         )(
             state_root=root,
             generation_digest=contract.generation.digest,
@@ -434,6 +474,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         V4G038ActivationError,
         V4G064ActivationError,
         V4G065ActivationError,
+        V4G066ActivationError,
         OSError,
         ValueError,
     ) as error:

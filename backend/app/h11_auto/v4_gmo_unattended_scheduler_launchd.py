@@ -88,6 +88,10 @@ def render_v4_gmo_unattended_scheduler_launchagent(
     repository = repository.resolve()
     python_executable = python_executable.resolve()
     launcher_path = (repository / launcher_relative_path).resolve()
+    if generation.generation_label == "H11_AUTO_30M_20260802_G066":
+        launcher_path = (
+            repository / "backend/scripts/h11_auto_v4_g066_runtime_bootstrap_no_post.py"
+        ).resolve()
     if (
         not repository.is_dir()
         or not python_executable.is_file()
@@ -108,6 +112,7 @@ def render_v4_gmo_unattended_scheduler_launchagent(
     resident = generation.generation_label in {
         "H11_AUTO_30M_20260801_G064",
         "H11_AUTO_30M_20260801_G065",
+        "H11_AUTO_30M_20260802_G066",
     }
     payload = {
         "Label": V4_GMO_UNATTENDED_SCHEDULER_LABEL,
