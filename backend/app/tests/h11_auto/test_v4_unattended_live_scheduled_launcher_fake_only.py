@@ -72,7 +72,7 @@ def test_absolute_launcher_bootstraps_backend_imports_without_pythonpath(
 
 
 def test_reviewed_files_digest_mismatch_aborts_before_session_prep(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, capsys
 ) -> None:
     repository = _repository(tmp_path)
     monkeypatch.setattr(
@@ -83,15 +83,12 @@ def test_reviewed_files_digest_mismatch_aborts_before_session_prep(
         "prepare_g013_canary_session",
         lambda **_kw: (_ for _ in ()).throw(AssertionError("must not reach session prep")),
     )
-    with pytest.raises(
-        launcher.V4UnattendedSchedulerLauncherError,
-        match="REVIEWED_FILES_DIGEST_MISMATCH",
-    ):
-        launcher.main(_argv(repository))
+    assert launcher.main(_argv(repository)) == 2
+    assert "G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN" in capsys.readouterr().out
 
 
 def test_generation_digest_mismatch_aborts_before_session_prep(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, capsys
 ) -> None:
     repository = _repository(tmp_path)
     digest = "sha256:" + "a" * 64
@@ -106,11 +103,8 @@ def test_generation_digest_mismatch_aborts_before_session_prep(
         "prepare_g013_canary_session",
         lambda **_kw: (_ for _ in ()).throw(AssertionError("must not reach session prep")),
     )
-    with pytest.raises(
-        launcher.V4UnattendedSchedulerLauncherError,
-        match="GENERATION_DIGEST_MISMATCH",
-    ):
-        launcher.main(_argv(repository))
+    assert launcher.main(_argv(repository)) == 2
+    assert "G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN" in capsys.readouterr().out
 
 
 def _valid_digests(

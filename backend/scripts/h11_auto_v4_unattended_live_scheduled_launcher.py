@@ -421,7 +421,7 @@ def _run_one_tick(
                 "status=UNATTENDED_SCHEDULER_ACTIVATION_EVIDENCE_NOT_CLEAR "
                 "broker_write=false actual_post_count=0"
             )
-            return 2
+            return 0
     arm_check = V4UnattendedLiveArmStore(
         v4_unattended_live_arm_state_path(generation_digest=generation.digest)
     ).check(
@@ -434,7 +434,7 @@ def _run_one_tick(
             "status=UNATTENDED_SCHEDULER_TICK_DISARMED "
             f"reason_label={reason} broker_write=false actual_post_count=0"
         )
-        return 2
+        return 0
     if generation.generation_label == G064_GENERATION_LABEL and (
         g064_tick is None
         or g064_tick.persistent_halt is True
