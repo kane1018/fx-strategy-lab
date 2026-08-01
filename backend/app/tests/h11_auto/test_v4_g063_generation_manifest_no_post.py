@@ -16,5 +16,6 @@ def test_g065_manifest_is_readable_by_canonical_loader() -> None:
     assert generation.generation_label == "H11_AUTO_30M_20260801_G065"
     assert generation.implementation_digest == reviewed_digest
     assert generation.actual_post_authorized is False
-    assert generation.live_ready is False
-    assert generation.unattended_live_supported is False
+    assert generation.status == "UNATTENDED_LIVE_COMMISSIONED"
+    assert generation.live_ready is True
+    assert generation.unattended_live_supported is True
