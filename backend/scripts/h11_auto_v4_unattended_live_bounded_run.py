@@ -99,12 +99,15 @@ class _CycleOutcome:
     entry_attempted: bool
 
 
-def _g064_switch_only_cycle(
-    *, entry_gate_blocked_reasons: tuple[str, ...], arm_intent: bool
+def _switch_only_cycle(
+    *,
+    generation_label: str,
+    entry_gate_blocked_reasons: tuple[str, ...],
+    arm_intent: bool,
 ) -> _CycleOutcome:
-    """Evaluate the G064 switch-only runtime boundary without side effects.
+    """Evaluate a resident switch-only runtime boundary without side effects.
 
-    G064 treats persisted ARM ON as runtime intent. The legacy per-trade
+    Resident generations treat persisted ARM ON as runtime intent. The legacy per-trade
     authorization, confirmation, notification, credential, and client path
     is deliberately not entered here. Actual broker transport remains behind
     the separate default-deny activation boundary.
@@ -114,9 +117,9 @@ def _g064_switch_only_cycle(
     return _CycleOutcome(
         safe_dict={
             "status": (
-                "G064_UNATTENDED_SWITCH_ONLY_ENTRY_GATE_EVALUATED_NO_POST"
+                f"{generation_label}_UNATTENDED_SWITCH_ONLY_ENTRY_GATE_EVALUATED_NO_POST"
                 if entry_gate_open
-                else "G064_UNATTENDED_SWITCH_ONLY_ENTRY_GATE_BLOCKED_NO_POST"
+                else f"{generation_label}_UNATTENDED_SWITCH_ONLY_ENTRY_GATE_BLOCKED_NO_POST"
             ),
             "runtime_mode": "SWITCH_ONLY",
             "entry_gate_open": entry_gate_open,
@@ -130,6 +133,16 @@ def _g064_switch_only_cycle(
             "broker_post_count": 0,
         },
         entry_attempted=False,
+    )
+
+
+def _g064_switch_only_cycle(
+    *, entry_gate_blocked_reasons: tuple[str, ...], arm_intent: bool
+) -> _CycleOutcome:
+    return _switch_only_cycle(
+        generation_label="G064",
+        entry_gate_blocked_reasons=entry_gate_blocked_reasons,
+        arm_intent=arm_intent,
     )
 
 
@@ -148,8 +161,14 @@ def _run_one_cycle(
     now_utc: datetime,
     arm_intent: bool = False,
 ) -> _CycleOutcome:
-    if session.generation.label == G064_GENERATION_LABEL:
-        return _g064_switch_only_cycle(
+    if session.generation.label in {
+        G064_GENERATION_LABEL,
+        "H11_AUTO_30M_20260801_G065",
+    }:
+        return _switch_only_cycle(
+            generation_label=(
+                "G064" if session.generation.label == G064_GENERATION_LABEL else "G065"
+            ),
             entry_gate_blocked_reasons=entry_gate_blocked_reasons,
             arm_intent=arm_intent,
         )
@@ -228,9 +247,7 @@ def main(
     if not 1 <= args.max_cycles <= _MAXIMUM_CYCLES:
         parser.error(f"--max-cycles must be between 1 and {_MAXIMUM_CYCLES}")
     if not 0.0 <= args.interval_seconds <= _MAXIMUM_INTERVAL_SECONDS:
-        parser.error(
-            f"--interval-seconds must be between 0 and {_MAXIMUM_INTERVAL_SECONDS}"
-        )
+        parser.error(f"--interval-seconds must be between 0 and {_MAXIMUM_INTERVAL_SECONDS}")
 
     for index in range(args.max_cycles):
         now_utc = datetime.now(UTC)
@@ -238,9 +255,7 @@ def main(
         if type(entry_gate_blocked_reasons) is not tuple or not all(
             type(reason) is str for reason in entry_gate_blocked_reasons
         ):
-            raise V4UnattendedLiveRunnerError(
-                "UNATTENDED_RUNNER_ENTRY_GATE_PROVIDER_INVALID"
-            )
+            raise V4UnattendedLiveRunnerError("UNATTENDED_RUNNER_ENTRY_GATE_PROVIDER_INVALID")
         outcome = _run_one_cycle(
             session=session,
             risk_store=risk_store,

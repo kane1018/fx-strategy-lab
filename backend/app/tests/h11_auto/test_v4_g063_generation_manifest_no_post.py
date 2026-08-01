@@ -4,7 +4,7 @@ from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
 
-def test_g064_manifest_is_readable_by_canonical_loader() -> None:
+def test_g065_manifest_is_readable_by_canonical_loader() -> None:
     backend = Path(__file__).resolve().parents[3]
     repository = backend.parent
     reviewed_digest = compute_reviewed_files_digest(repository=repository)
@@ -13,8 +13,8 @@ def test_g064_manifest_is_readable_by_canonical_loader() -> None:
         implementation_digest=reviewed_digest,
     )
 
-    assert generation.generation_label == "H11_AUTO_30M_20260801_G064"
+    assert generation.generation_label == "H11_AUTO_30M_20260801_G065"
     assert generation.implementation_digest == reviewed_digest
     assert generation.actual_post_authorized is False
-    assert generation.live_ready is True
-    assert generation.unattended_live_supported is True
+    assert generation.live_ready is False
+    assert generation.unattended_live_supported is False

@@ -26,7 +26,9 @@ def main() -> int:
         gate = load_external_preparation_gate(repository=REPOSITORY)
         ledger = V4PreparationAttemptLedger(external_gate=gate)
         operation_permit = (
-            ledger.begin_g064_fresh(V4PreparationOperation.PRIVATE_GET)
+            ledger.begin_g065_fresh(V4PreparationOperation.PRIVATE_GET)
+            if gate.is_g065_generation_bound_for_internal_preparation_only()
+            else ledger.begin_g064_fresh(V4PreparationOperation.PRIVATE_GET)
             if gate.is_g064_generation_bound_for_internal_preparation_only()
             else ledger.begin(V4PreparationOperation.PRIVATE_GET)
         )
@@ -36,9 +38,7 @@ def main() -> int:
         ).run_once()
         if not report.account_wide_snapshot_clear:
             print(json.dumps(report.to_safe_dict(), sort_keys=True, indent=2))
-            raise V4GmoReadOnlyPreflightError(
-                "PRIVATE_GET_ACCOUNT_WIDE_SNAPSHOT_NOT_CLEAR"
-            )
+            raise V4GmoReadOnlyPreflightError("PRIVATE_GET_ACCOUNT_WIDE_SNAPSHOT_NOT_CLEAR")
         ledger.complete(
             V4PreparationOperation.PRIVATE_GET,
             operation_permit=operation_permit,

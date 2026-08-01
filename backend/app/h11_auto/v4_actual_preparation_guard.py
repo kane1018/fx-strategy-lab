@@ -37,9 +37,7 @@ class V4PreparationFailureCode(StrEnum):
     OPERATION_IN_PROGRESS = "PREPARATION_OPERATION_IN_PROGRESS"
     SEQUENCE_PREVIOUS_NOT_CLEAR = "PREPARATION_SEQUENCE_PREVIOUS_NOT_CLEAR"
     OPERATION_ALREADY_ATTEMPTED = "PREPARATION_OPERATION_ALREADY_ATTEMPTED"
-    GENERATION_TERMINAL_UNRESOLVED = (
-        "PREPARATION_GENERATION_TERMINAL_UNRESOLVED"
-    )
+    GENERATION_TERMINAL_UNRESOLVED = "PREPARATION_GENERATION_TERMINAL_UNRESOLVED"
     ATTEMPT_NOT_PERSISTED = "PREPARATION_ATTEMPT_NOT_PERSISTED"
     ATTEMPT_STATE_INVALID = "PREPARATION_ATTEMPT_STATE_INVALID"
     PASS_ALREADY_EXISTS = "PREPARATION_PASS_ALREADY_EXISTS"
@@ -58,19 +56,13 @@ CommandRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 KeychainValueRunner = Callable[[list[str], float], subprocess.CompletedProcess[str]]
 MonotonicClock = Callable[[], float]
 
-PREPARATION_ARTIFACT = Path(
-    "docs/templates/h11_v4_actual_preparation_evidence.json"
-)
-PREPARATION_STATE_RELATIVE = Path(
-    "backend/market_data/h11_v4_actual_preparation"
-)
+PREPARATION_ARTIFACT = Path("docs/templates/h11_v4_actual_preparation_evidence.json")
+PREPARATION_STATE_RELATIVE = Path("backend/market_data/h11_v4_actual_preparation")
 _GATE_TOKEN = object()
 _PERMIT_TOKEN = object()
 _COMPLETED_EVIDENCE_TOKEN = object()
 EMAIL_DELIVERY_CONFIRMATION = "I CONFIRM THE H11 V4 TEST EMAIL WAS RECEIVED"
-EXCLUSIVITY_CONFIRMATION = (
-    "I CONFIRM H11 V4 MANUAL UI AND ALL OTHER PRIVATE CLIENTS ARE STOPPED"
-)
+EXCLUSIVITY_CONFIRMATION = "I CONFIRM H11 V4 MANUAL UI AND ALL OTHER PRIVATE CLIENTS ARE STOPPED"
 
 
 def _default_runner(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -194,6 +186,9 @@ class V4ExternalPreparationGate:
     def is_g064_generation_bound_for_internal_preparation_only(self) -> bool:
         return self._generation_label == "H11_AUTO_30M_20260801_G064"
 
+    def is_g065_generation_bound_for_internal_preparation_only(self) -> bool:
+        return self._generation_label == "H11_AUTO_30M_20260801_G065"
+
     def __repr__(self) -> str:
         return "V4ExternalPreparationGate(scope=external-preparation-only)"
 
@@ -241,14 +236,10 @@ class V4CompletedPreparationEvidence:
             or not state_root.is_absolute()
             or state_root.is_symlink()
             or not state_root.is_dir()
-            or not state_root.name.endswith(
-                generation_digest.removeprefix("sha256:")
-            )
+            or not state_root.name.endswith(generation_digest.removeprefix("sha256:"))
             or not _valid_trading_day_jst(trading_day_jst)
         ):
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_COMPLETED_EVIDENCE_INVALID"
-            )
+            raise V4ActualPreparationGuardError("PREPARATION_COMPLETED_EVIDENCE_INVALID")
         self._token = token
         self._generation_digest = generation_digest
         self._state_root = state_root
@@ -261,13 +252,8 @@ class V4CompletedPreparationEvidence:
             or self._consumed
             or self._generation_digest != generation_digest
         ):
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_COMPLETED_EVIDENCE_INVALID"
-            )
-        marker = (
-            self._state_root
-            / f"generation_consumed.{self._trading_day_jst}.json"
-        )
+            raise V4ActualPreparationGuardError("PREPARATION_COMPLETED_EVIDENCE_INVALID")
+        marker = self._state_root / f"generation_consumed.{self._trading_day_jst}.json"
         payload = json.dumps(
             {
                 "generation_digest": self._generation_digest,
@@ -292,9 +278,7 @@ class V4CompletedPreparationEvidence:
             finally:
                 os.close(directory_descriptor)
         except FileExistsError as error:
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_COMPLETED_EVIDENCE_INVALID"
-            ) from error
+            raise V4ActualPreparationGuardError("PREPARATION_COMPLETED_EVIDENCE_INVALID") from error
         except OSError as error:
             raise V4ActualPreparationGuardError(
                 "PREPARATION_COMPLETED_EVIDENCE_NOT_PERSISTED"
@@ -335,9 +319,7 @@ class V4RuntimeOnlyPreparationCarryForwardEvidence:
         completed_operations: tuple[str, ...],
     ) -> None:
         if token is not _RUNTIME_CARRY_FORWARD_TOKEN:
-            raise V4ActualPreparationGuardError(
-                "G040_RUNTIME_CARRY_FORWARD_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G040_RUNTIME_CARRY_FORWARD_INVALID")
         self._token = token
         self.source_reviewed_files_digest = source_reviewed_files_digest
         self.source_generation_digest = source_generation_digest
@@ -385,9 +367,7 @@ class V4G052FlatOnlyCarryForwardEvidence:
         source_halt_remains_latched: bool,
     ) -> None:
         if token is not _G052_FLAT_CARRY_FORWARD_TOKEN:
-            raise V4ActualPreparationGuardError(
-                "G052_FLAT_CARRY_FORWARD_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G052_FLAT_CARRY_FORWARD_INVALID")
         self._token = token
         self.source_reviewed_files_digest = source_reviewed_files_digest
         self.source_generation_digest = source_generation_digest
@@ -442,9 +422,7 @@ class V4G053FlatOnlyCarryForwardEvidence:
         source_halt_remains_latched: bool,
     ) -> None:
         if token is not _G053_FLAT_CARRY_FORWARD_TOKEN:
-            raise V4ActualPreparationGuardError(
-                "G053_FLAT_CARRY_FORWARD_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G053_FLAT_CARRY_FORWARD_INVALID")
         self._token = token
         self.source_reviewed_files_digest = source_reviewed_files_digest
         self.source_generation_digest = source_generation_digest
@@ -500,6 +478,8 @@ _G064_FRESH_PREVIOUS_OPERATION = {
     V4PreparationOperation.MONITOR_LAUNCHAGENT: V4PreparationOperation.PRIVATE_GET,
 }
 _G064_FRESH_OPERATIONS = frozenset(_G064_FRESH_PREVIOUS_OPERATION)
+_G065_FRESH_PREVIOUS_OPERATION = dict(_G064_FRESH_PREVIOUS_OPERATION)
+_G065_FRESH_OPERATIONS = frozenset(_G065_FRESH_PREVIOUS_OPERATION)
 
 
 class V4PreparationOperationPermit:
@@ -526,9 +506,7 @@ class V4PreparationOperationPermit:
         attempt_token: str,
     ) -> None:
         if token is not _PERMIT_TOKEN:
-            raise V4ActualPreparationGuardError(
-                V4PreparationFailureCode.OPERATION_PERMIT_INVALID
-            )
+            raise V4ActualPreparationGuardError(V4PreparationFailureCode.OPERATION_PERMIT_INVALID)
         self._token = token
         self._operation = operation
         self._claimed = False
@@ -558,9 +536,7 @@ def require_operation_permit(
     """Accept only an opaque permit minted by the fixed preparation ledger."""
 
     if claim and require_completed:
-        raise V4ActualPreparationGuardError(
-            V4PreparationFailureCode.OPERATION_PERMIT_INVALID
-        )
+        raise V4ActualPreparationGuardError(V4PreparationFailureCode.OPERATION_PERMIT_INVALID)
     if (
         type(permit) is not V4PreparationOperationPermit
         or getattr(permit, "_token", None) is not _PERMIT_TOKEN
@@ -569,14 +545,10 @@ def require_operation_permit(
         or (require_completed and not _valid_completion_digest(permit._completion_digest))
         or (not require_completed and permit._completion_digest is not None)
     ):
-        raise V4ActualPreparationGuardError(
-            V4PreparationFailureCode.OPERATION_PERMIT_INVALID
-        )
+        raise V4ActualPreparationGuardError(V4PreparationFailureCode.OPERATION_PERMIT_INVALID)
     if claim:
         if permit._claimed:
-            raise V4ActualPreparationGuardError(
-                V4PreparationFailureCode.OPERATION_PERMIT_INVALID
-            )
+            raise V4ActualPreparationGuardError(V4PreparationFailureCode.OPERATION_PERMIT_INVALID)
         permit._claimed = True
     return permit
 
@@ -617,12 +589,8 @@ def _bind_fixed_operation_attestation(
         or not operation_permit._claimed
         or not _operation_report_is_clear(operation, safe_report)
     ):
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_OPERATION_SUCCESS_PROOF_INVALID"
-        )
-    operation_permit._completion_report = json.loads(
-        json.dumps(safe_report, sort_keys=True)
-    )
+        raise V4ActualPreparationGuardError("PREPARATION_OPERATION_SUCCESS_PROOF_INVALID")
+    operation_permit._completion_report = json.loads(json.dumps(safe_report, sort_keys=True))
     operation_permit._completion_digest = _completion_digest(
         operation=operation,
         safe_report=operation_permit._completion_report,
@@ -631,9 +599,7 @@ def _bind_fixed_operation_attestation(
     )
 
 
-_OPERATION_ATTESTATION_ISSUERS = {
-    operation: object() for operation in V4PreparationOperation
-}
+_OPERATION_ATTESTATION_ISSUERS = {operation: object() for operation in V4PreparationOperation}
 
 
 def _attest_operation_success(
@@ -744,20 +710,14 @@ def _attest_monitor_launchagent_success_internal(
     *,
     expected_runtime_initialized: bool,
 ) -> None:
-    waiting = (
-        safe_report.get("heartbeat_waiting_for_canonical_runtime") is True
-    )
-    runtime_initialized = (
-        safe_report.get("heartbeat_runtime_initialized") is True
-    )
+    waiting = safe_report.get("heartbeat_waiting_for_canonical_runtime") is True
+    runtime_initialized = safe_report.get("heartbeat_runtime_initialized") is True
     if (
         not isinstance(expected_runtime_initialized, bool)
         or waiting == runtime_initialized
         or runtime_initialized is not expected_runtime_initialized
     ):
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_MONITOR_HEARTBEAT_SHAPE_MISMATCH"
-        )
+        raise V4ActualPreparationGuardError("PREPARATION_MONITOR_HEARTBEAT_SHAPE_MISMATCH")
     _attest_operation_success(
         permit,
         operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
@@ -766,6 +726,17 @@ def _attest_monitor_launchagent_success_internal(
 
 
 def _attest_g064_scheduler_success_internal(
+    permit: V4PreparationOperationPermit,
+    safe_report: dict[str, object],
+) -> None:
+    _attest_operation_success(
+        permit,
+        operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
+        safe_report=safe_report,
+    )
+
+
+def _attest_g065_scheduler_success_internal(
     permit: V4PreparationOperationPermit,
     safe_report: dict[str, object],
 ) -> None:
@@ -883,7 +854,10 @@ def _operation_report_is_clear(
             and report.get("broker_write_performed") is False
         )
     if operation is V4PreparationOperation.MONITOR_LAUNCHAGENT:
-        if report.get("g064_resident_scheduler") is True:
+        if (
+            report.get("g064_resident_scheduler") is True
+            or report.get("g065_resident_scheduler") is True
+        ):
             return (
                 report.get("installed") is True
                 and report.get("bootstrapped") is True
@@ -913,9 +887,7 @@ def _operation_report_is_clear(
             and report.get("service_running") is True
             and report.get("heartbeat_fresh") is True
             and report.get("heartbeat_generation_digest_match") is True
-            and (
-                report.get("heartbeat_waiting_for_canonical_runtime") is True
-            )
+            and (report.get("heartbeat_waiting_for_canonical_runtime") is True)
             != (report.get("heartbeat_runtime_initialized") is True)
             and report.get("heartbeat_broker_read") is False
             and report.get("heartbeat_broker_write") is False
@@ -957,13 +929,9 @@ class V4PreparationAttemptLedger:
             unresolved.parent.parent.parent,
         )
         if any(candidate.is_symlink() for candidate in path_candidates):
-            raise V4ActualPreparationGuardError(
-                V4PreparationFailureCode.STATE_SYMLINK_FORBIDDEN
-            )
+            raise V4ActualPreparationGuardError(V4PreparationFailureCode.STATE_SYMLINK_FORBIDDEN)
         self.state_root = unresolved.resolve()
-        self._reviewed_files_digest = (
-            external_gate.reviewed_digest_for_internal_preparation_only()
-        )
+        self._reviewed_files_digest = external_gate.reviewed_digest_for_internal_preparation_only()
         self._generation_digest = "sha256:" + self.state_root.name.rsplit("-", 1)[-1]
         self.state_root.mkdir(parents=True, exist_ok=True)
         # Trading-day scope: the same reviewed generation can be prepared fresh on
@@ -976,9 +944,12 @@ class V4PreparationAttemptLedger:
         self,
         operation: V4PreparationOperation,
     ) -> V4PreparationOperationPermit:
-        if self._external_gate.is_g064_generation_bound_for_internal_preparation_only():
+        if (
+            self._external_gate.is_g064_generation_bound_for_internal_preparation_only()
+            or self._external_gate.is_g065_generation_bound_for_internal_preparation_only()
+        ):
             raise V4ActualPreparationGuardError(
-                "PREPARATION_G064_FRESH_LEDGER_REQUIRED"
+                "PREPARATION_RESIDENT_GENERATION_FRESH_LEDGER_REQUIRED"
             )
         return self._begin(operation=operation, runtime_predecessor_clear=False)
 
@@ -987,13 +958,9 @@ class V4PreparationAttemptLedger:
         operation: V4PreparationOperation,
     ) -> V4PreparationOperationPermit:
         if not self._external_gate.is_g064_generation_bound_for_internal_preparation_only():
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_G064_GENERATION_BINDING_REQUIRED"
-            )
+            raise V4ActualPreparationGuardError("PREPARATION_G064_GENERATION_BINDING_REQUIRED")
         if operation not in _G064_FRESH_OPERATIONS:
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_G064_OPERATION_NOT_ALLOWED"
-            )
+            raise V4ActualPreparationGuardError("PREPARATION_G064_OPERATION_NOT_ALLOWED")
         if any(
             marker.exists() or marker.is_symlink()
             for marker in self.state_root.glob(f"{operation.value}.*.passed.json")
@@ -1005,6 +972,27 @@ class V4PreparationAttemptLedger:
             operation=operation,
             runtime_predecessor_clear=False,
             previous_override=_G064_FRESH_PREVIOUS_OPERATION[operation],
+        )
+
+    def begin_g065_fresh(
+        self,
+        operation: V4PreparationOperation,
+    ) -> V4PreparationOperationPermit:
+        if not self._external_gate.is_g065_generation_bound_for_internal_preparation_only():
+            raise V4ActualPreparationGuardError("PREPARATION_G065_GENERATION_BINDING_REQUIRED")
+        if operation not in _G065_FRESH_OPERATIONS:
+            raise V4ActualPreparationGuardError("PREPARATION_G065_OPERATION_NOT_ALLOWED")
+        if any(
+            marker.exists() or marker.is_symlink()
+            for marker in self.state_root.glob(f"{operation.value}.*.passed.json")
+        ):
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.OPERATION_ALREADY_ATTEMPTED
+            )
+        return self._begin(
+            operation=operation,
+            runtime_predecessor_clear=False,
+            previous_override=_G065_FRESH_PREVIOUS_OPERATION[operation],
         )
 
     def begin_g040_runtime_only_monitor(
@@ -1024,9 +1012,7 @@ class V4PreparationAttemptLedger:
             generation_digest=self._generation_digest,
             trading_day_jst=self._trading_day_jst,
         ):
-            raise V4ActualPreparationGuardError(
-                "G040_RUNTIME_CARRY_FORWARD_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G040_RUNTIME_CARRY_FORWARD_INVALID")
         return self._begin(
             operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
             runtime_predecessor_clear=True,
@@ -1049,9 +1035,7 @@ class V4PreparationAttemptLedger:
             generation_digest=self._generation_digest,
             trading_day_jst=self._trading_day_jst,
         ):
-            raise V4ActualPreparationGuardError(
-                "G052_FLAT_CARRY_FORWARD_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G052_FLAT_CARRY_FORWARD_INVALID")
         return self._begin(
             operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
             runtime_predecessor_clear=True,
@@ -1074,9 +1058,7 @@ class V4PreparationAttemptLedger:
             generation_digest=self._generation_digest,
             trading_day_jst=self._trading_day_jst,
         ):
-            raise V4ActualPreparationGuardError(
-                "G053_FLAT_CARRY_FORWARD_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G053_FLAT_CARRY_FORWARD_INVALID")
         return self._begin(
             operation=V4PreparationOperation.MONITOR_LAUNCHAGENT,
             runtime_predecessor_clear=True,
@@ -1092,9 +1074,7 @@ class V4PreparationAttemptLedger:
         # One generation-level lock serializes predecessor validation, the
         # generation-wide unresolved scan, and durable started-marker creation.
         # Daily marker names remain useful evidence, but never form a lock scope.
-        lock = self._locks.setdefault(
-            operation, H11AutoProcessLock(self._lock_path(operation))
-        )
+        lock = self._locks.setdefault(operation, H11AutoProcessLock(self._lock_path(operation)))
         try:
             acquired = lock.acquire()
         except H11AutoPersistenceError as error:
@@ -1102,9 +1082,7 @@ class V4PreparationAttemptLedger:
                 V4PreparationFailureCode.ATTEMPT_LOCK_INVALID
             ) from error
         if not acquired:
-            raise V4ActualPreparationGuardError(
-                V4PreparationFailureCode.OPERATION_IN_PROGRESS
-            )
+            raise V4ActualPreparationGuardError(V4PreparationFailureCode.OPERATION_IN_PROGRESS)
         previous = (
             _PREVIOUS_OPERATION[operation]
             if previous_override is _DEFAULT_PREVIOUS_OPERATION
@@ -1134,9 +1112,7 @@ class V4PreparationAttemptLedger:
             )
         if started.is_symlink():
             lock.release()
-            raise V4ActualPreparationGuardError(
-                V4PreparationFailureCode.STATE_SYMLINK_FORBIDDEN
-            )
+            raise V4ActualPreparationGuardError(V4PreparationFailureCode.STATE_SYMLINK_FORBIDDEN)
         if self._has_unresolved_attempt():
             lock.release()
             raise V4ActualPreparationGuardError(
@@ -1182,15 +1158,16 @@ class V4PreparationAttemptLedger:
         )
         started = self._marker(operation, "started")
         passed = self._marker(operation, "passed")
-        if not self._marker_matches_review(
-            started,
-            operation=operation,
-            expected_status="ATTEMPT_STARTED",
-            expected_attempt_token=operation_permit._attempt_token,
-        ) or passed.exists():
-            raise V4ActualPreparationGuardError(
-                V4PreparationFailureCode.ATTEMPT_STATE_INVALID
+        if (
+            not self._marker_matches_review(
+                started,
+                operation=operation,
+                expected_status="ATTEMPT_STARTED",
+                expected_attempt_token=operation_permit._attempt_token,
             )
+            or passed.exists()
+        ):
+            raise V4ActualPreparationGuardError(V4PreparationFailureCode.ATTEMPT_STATE_INVALID)
         try:
             self._write_marker(
                 passed,
@@ -1219,10 +1196,7 @@ class V4PreparationAttemptLedger:
         return self.state_root / "preparation-generation.lock"
 
     def _marker(self, operation: V4PreparationOperation, suffix: str) -> Path:
-        return (
-            self.state_root
-            / f"{operation.value}.{self._trading_day_jst}.{suffix}.json"
-        )
+        return self.state_root / f"{operation.value}.{self._trading_day_jst}.{suffix}.json"
 
     def _has_unresolved_attempt(self) -> bool:
         for operation in V4PreparationOperation:
@@ -1247,10 +1221,7 @@ class V4PreparationAttemptLedger:
                 ):
                     return True
                 trading_day = started.name.removeprefix(prefix).removesuffix(suffix)
-                passed = (
-                    self.state_root
-                    / f"{operation.value}.{trading_day}.passed.json"
-                )
+                passed = self.state_root / f"{operation.value}.{trading_day}.passed.json"
                 if not self._marker_matches_review(
                     passed,
                     operation=operation,
@@ -1317,9 +1288,7 @@ class V4PreparationAttemptLedger:
         if not base_matches or expected_status != "PASSED":
             return base_matches
         report = payload.get("completion_report")
-        if not isinstance(report, dict) or not _operation_report_is_clear(
-            operation, report
-        ):
+        if not isinstance(report, dict) or not _operation_report_is_clear(operation, report):
             return False
         expected_digest = _completion_digest(
             operation=operation,
@@ -1345,30 +1314,20 @@ def load_completed_preparation_evidence(
         or len(normalized) != 64
         or any(character not in "0123456789abcdef" for character in normalized)
     ):
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_COMPLETED_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("PREPARATION_COMPLETED_EVIDENCE_INVALID")
     ledger = V4PreparationAttemptLedger(external_gate=external_gate, now_utc=now_utc)
     if not ledger.state_root.name.endswith(f"-{normalized}"):
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_COMPLETED_GENERATION_MISMATCH"
-        )
+        raise V4ActualPreparationGuardError("PREPARATION_COMPLETED_GENERATION_MISMATCH")
     for operation in V4PreparationOperation:
         if not ledger._marker_matches_review(
             ledger._marker(operation, "passed"),
             operation=operation,
             expected_status="PASSED",
         ):
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_SEQUENCE_NOT_COMPLETE"
-            )
-    consumed_marker = (
-        ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
-    )
+            raise V4ActualPreparationGuardError("PREPARATION_SEQUENCE_NOT_COMPLETE")
+    consumed_marker = ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
     if consumed_marker.exists() or consumed_marker.is_symlink():
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_COMPLETED_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("PREPARATION_COMPLETED_EVIDENCE_INVALID")
     return V4CompletedPreparationEvidence(
         token=_COMPLETED_EVIDENCE_TOKEN,
         generation_digest=generation_digest,
@@ -1392,14 +1351,10 @@ def load_completed_post_canary_preparation_evidence(
         or len(normalized) != 64
         or any(character not in "0123456789abcdef" for character in normalized)
     ):
-        raise V4ActualPreparationGuardError(
-            "POST_CANARY_PREPARATION_COMPLETED_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("POST_CANARY_PREPARATION_COMPLETED_EVIDENCE_INVALID")
     ledger = V4PreparationAttemptLedger(external_gate=external_gate, now_utc=now_utc)
     if not ledger.state_root.name.endswith(f"-{normalized}"):
-        raise V4ActualPreparationGuardError(
-            "POST_CANARY_PREPARATION_GENERATION_MISMATCH"
-        )
+        raise V4ActualPreparationGuardError("POST_CANARY_PREPARATION_GENERATION_MISMATCH")
     required_operations = tuple(
         operation
         for operation in V4PreparationOperation
@@ -1411,16 +1366,10 @@ def load_completed_post_canary_preparation_evidence(
             operation=operation,
             expected_status="PASSED",
         ):
-            raise V4ActualPreparationGuardError(
-                "POST_CANARY_PREPARATION_SEQUENCE_NOT_COMPLETE"
-            )
-    consumed_marker = (
-        ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
-    )
+            raise V4ActualPreparationGuardError("POST_CANARY_PREPARATION_SEQUENCE_NOT_COMPLETE")
+    consumed_marker = ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
     if consumed_marker.exists() or consumed_marker.is_symlink():
-        raise V4ActualPreparationGuardError(
-            "POST_CANARY_PREPARATION_COMPLETED_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("POST_CANARY_PREPARATION_COMPLETED_EVIDENCE_INVALID")
     return V4CompletedPreparationEvidence(
         token=_COMPLETED_EVIDENCE_TOKEN,
         generation_digest=generation_digest,
@@ -1503,6 +1452,7 @@ _PREPARATION_KNOWN_GENERATION_LABELS = _RUNTIME_ONLY_TARGET_GENERATION_LABELS | 
     "H11_AUTO_30M_20260731_G062",
     "H11_AUTO_30M_20260731_G063",
     "H11_AUTO_30M_20260801_G064",
+    "H11_AUTO_30M_20260801_G065",
 }
 _G040_RUNTIME_CARRIED_OPERATIONS = tuple(
     operation
@@ -1521,37 +1471,28 @@ def _source_marker_payload(
     current = path
     while True:
         if current.is_symlink():
-            raise V4ActualPreparationGuardError(
-                "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G040_RUNTIME_SOURCE_EVIDENCE_INVALID")
         if current.parent == current:
             break
         current = current.parent
     if not path.is_file():
-        raise V4ActualPreparationGuardError(
-            "G040_RUNTIME_SOURCE_EVIDENCE_MISSING"
-        )
+        raise V4ActualPreparationGuardError("G040_RUNTIME_SOURCE_EVIDENCE_MISSING")
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise V4ActualPreparationGuardError(
-            "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
-        ) from error
+        raise V4ActualPreparationGuardError("G040_RUNTIME_SOURCE_EVIDENCE_INVALID") from error
     if (
         not isinstance(payload, dict)
         or payload.get("operation") != operation.value
         or payload.get("status") != expected_status
-        or payload.get("reviewed_files_digest")
-        != _G040_SOURCE_REVIEWED_FILES_DIGEST
+        or payload.get("reviewed_files_digest") != _G040_SOURCE_REVIEWED_FILES_DIGEST
         or payload.get("generation_digest") != _G040_SOURCE_GENERATION_DIGEST
         or (
             expected_attempt_token is not None
             and payload.get("attempt_token") != expected_attempt_token
         )
     ):
-        raise V4ActualPreparationGuardError(
-            "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("G040_RUNTIME_SOURCE_EVIDENCE_INVALID")
     return payload
 
 
@@ -1571,17 +1512,12 @@ def load_g040_runtime_only_carry_forward_evidence(
     )
     target_generation = load_v4_gmo_frozen_generation(
         repository=repository,
-        implementation_digest=(
-            external_gate.reviewed_digest_for_internal_preparation_only()
-        ),
+        implementation_digest=(external_gate.reviewed_digest_for_internal_preparation_only()),
     )
     if (
-        target_generation.generation_label
-        not in _RUNTIME_ONLY_TARGET_GENERATION_LABELS
+        target_generation.generation_label not in _RUNTIME_ONLY_TARGET_GENERATION_LABELS
         or target_generation.digest != generation_digest
-        or not target_ledger.state_root.name.endswith(
-            generation_digest.removeprefix("sha256:")
-        )
+        or not target_ledger.state_root.name.endswith(generation_digest.removeprefix("sha256:"))
     ):
         raise V4ActualPreparationGuardError("G040_RUNTIME_TARGET_MISMATCH")
     source_root = preparation_state_root(
@@ -1592,8 +1528,7 @@ def load_g040_runtime_only_carry_forward_evidence(
     completed: list[str] = []
     for operation in _G040_RUNTIME_CARRIED_OPERATIONS:
         started = _source_marker_payload(
-            path=source_root
-            / f"{operation.value}.{_G040_SOURCE_TRADING_DAY_JST}.started.json",
+            path=source_root / f"{operation.value}.{_G040_SOURCE_TRADING_DAY_JST}.started.json",
             operation=operation,
             expected_status="ATTEMPT_STARTED",
         )
@@ -1601,17 +1536,11 @@ def load_g040_runtime_only_carry_forward_evidence(
         if (
             not isinstance(attempt_token, str)
             or len(attempt_token) != 32
-            or any(
-                character not in "0123456789abcdef"
-                for character in attempt_token
-            )
+            or any(character not in "0123456789abcdef" for character in attempt_token)
         ):
-            raise V4ActualPreparationGuardError(
-                "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G040_RUNTIME_SOURCE_EVIDENCE_INVALID")
         passed = _source_marker_payload(
-            path=source_root
-            / f"{operation.value}.{_G040_SOURCE_TRADING_DAY_JST}.passed.json",
+            path=source_root / f"{operation.value}.{_G040_SOURCE_TRADING_DAY_JST}.passed.json",
             operation=operation,
             expected_status="PASSED",
             expected_attempt_token=attempt_token,
@@ -1628,9 +1557,7 @@ def load_g040_runtime_only_carry_forward_evidence(
                 generation_digest=_G040_SOURCE_GENERATION_DIGEST,
             )
         ):
-            raise V4ActualPreparationGuardError(
-                "G040_RUNTIME_SOURCE_EVIDENCE_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G040_RUNTIME_SOURCE_EVIDENCE_INVALID")
         completed.append(operation.value)
     return V4RuntimeOnlyPreparationCarryForwardEvidence(
         token=_RUNTIME_CARRY_FORWARD_TOKEN,
@@ -1654,16 +1581,13 @@ def _runtime_carry_forward_matches_target(
 ) -> bool:
     return (
         getattr(evidence, "_token", None) is _RUNTIME_CARRY_FORWARD_TOKEN
-        and evidence.source_reviewed_files_digest
-        == _G040_SOURCE_REVIEWED_FILES_DIGEST
+        and evidence.source_reviewed_files_digest == _G040_SOURCE_REVIEWED_FILES_DIGEST
         and evidence.source_generation_digest == _G040_SOURCE_GENERATION_DIGEST
         and evidence.target_reviewed_files_digest == reviewed_files_digest
         and evidence.target_generation_digest == generation_digest
         and evidence.trading_day_jst == trading_day_jst
         and evidence.completed_operations
-        == tuple(
-            operation.value for operation in _G040_RUNTIME_CARRIED_OPERATIONS
-        )
+        == tuple(operation.value for operation in _G040_RUNTIME_CARRIED_OPERATIONS)
         and evidence.broker_post_authorized is False
         and evidence.activation_permit_issued is False
         and bool(evidence) is False
@@ -1674,9 +1598,7 @@ def _reject_g052_source_symlinks(path: Path) -> None:
     current = path
     while True:
         if current.is_symlink():
-            raise V4ActualPreparationGuardError(
-                "G052_FLAT_SOURCE_EVIDENCE_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G052_FLAT_SOURCE_EVIDENCE_INVALID")
         if current.parent == current:
             return
         current = current.parent
@@ -1698,16 +1620,12 @@ def load_g052_flat_only_carry_forward_evidence(
     )
     target_generation = load_v4_gmo_frozen_generation(
         repository=repository,
-        implementation_digest=(
-            external_gate.reviewed_digest_for_internal_preparation_only()
-        ),
+        implementation_digest=(external_gate.reviewed_digest_for_internal_preparation_only()),
     )
     if (
         target_generation.generation_label != _G052_TARGET_GENERATION_LABEL
         or target_generation.digest != generation_digest
-        or not target_ledger.state_root.name.endswith(
-            generation_digest.removeprefix("sha256:")
-        )
+        or not target_ledger.state_root.name.endswith(generation_digest.removeprefix("sha256:"))
     ):
         raise V4ActualPreparationGuardError("G052_FLAT_TARGET_MISMATCH")
 
@@ -1716,35 +1634,25 @@ def load_g052_flat_only_carry_forward_evidence(
         generation_digest=_G051_FLAT_SOURCE_GENERATION_DIGEST,
     )
     completed_path = (
-        source_root
-        / "exit-sequence-dispatch-completed."
-        f"{_G051_FLAT_SOURCE_TRADING_DAY_JST}.json"
+        source_root / f"exit-sequence-dispatch-completed.{_G051_FLAT_SOURCE_TRADING_DAY_JST}.json"
     )
     database = source_root / "coordinator.sqlite3"
     for path in (source_root, completed_path, database):
         _reject_g052_source_symlinks(path)
     if not completed_path.is_file() or not database.is_file():
-        raise V4ActualPreparationGuardError(
-            "G052_FLAT_SOURCE_EVIDENCE_MISSING"
-        )
+        raise V4ActualPreparationGuardError("G052_FLAT_SOURCE_EVIDENCE_MISSING")
     try:
         completed = json.loads(completed_path.read_text(encoding="utf-8"))
         observed = datetime.fromisoformat(str(completed["observed_at_utc"]))
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise V4ActualPreparationGuardError(
-            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
-        ) from error
+        raise V4ActualPreparationGuardError("G052_FLAT_SOURCE_EVIDENCE_INVALID") from error
     if (
-        set(completed)
-        != {"generation_digest", "observed_at_utc", "status"}
-        or completed.get("generation_digest")
-        != _G051_FLAT_SOURCE_GENERATION_DIGEST
+        set(completed) != {"generation_digest", "observed_at_utc", "status"}
+        or completed.get("generation_digest") != _G051_FLAT_SOURCE_GENERATION_DIGEST
         or completed.get("status") != "EXIT_DISPATCH_COMPLETED_FLAT_RECONCILED"
         or observed.tzinfo is None
     ):
-        raise V4ActualPreparationGuardError(
-            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("G052_FLAT_SOURCE_EVIDENCE_INVALID")
 
     connection: sqlite3.Connection | None = None
     try:
@@ -1771,39 +1679,31 @@ def load_g052_flat_only_carry_forward_evidence(
             "unresolved_count FROM cycles"
         ).fetchone()
         attempt_rows = connection.execute(
-            "SELECT action,COUNT(*) count FROM attempts "
-            "GROUP BY action ORDER BY action"
+            "SELECT action,COUNT(*) count FROM attempts GROUP BY action ORDER BY action"
         ).fetchall()
     except sqlite3.Error as error:
-        raise V4ActualPreparationGuardError(
-            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
-        ) from error
+        raise V4ActualPreparationGuardError("G052_FLAT_SOURCE_EVIDENCE_INVALID") from error
     finally:
         if connection is not None:
             connection.close()
     try:
         pending = json.loads(pending_row["value"])
     except (TypeError, KeyError, json.JSONDecodeError) as error:
-        raise V4ActualPreparationGuardError(
-            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
-        ) from error
+        raise V4ActualPreparationGuardError("G052_FLAT_SOURCE_EVIDENCE_INVALID") from error
     expected_attempts = {
         "CANCEL_EXACT_PROTECTION_FOR_TIME_EXIT": 1,
         "EXACT_SIZE_OCO_PROTECTION": 1,
         "MARKET_ENTRY": 1,
         "POSITION_SPECIFIC_TIME_EXIT": 1,
     }
-    actual_attempts = {
-        str(row["action"]): int(row["count"]) for row in attempt_rows
-    }
+    actual_attempts = {str(row["action"]): int(row["count"]) for row in attempt_rows}
     if (
         generation_row is None
         or generation_row["value"] != _G051_FLAT_SOURCE_GENERATION_DIGEST
         or halt_row is None
         or halt_row["value"] != "true"
         or pending_row is None
-        or pending.get("generation_digest")
-        != _G051_FLAT_SOURCE_GENERATION_DIGEST
+        or pending.get("generation_digest") != _G051_FLAT_SOURCE_GENERATION_DIGEST
         or pending.get("classification") != "FLAT_OR_REJECTED"
         or pending.get("previous_action") != "POSITION_SPECIFIC_TIME_EXIT"
         or cycle_row is None
@@ -1812,14 +1712,10 @@ def load_g052_flat_only_carry_forward_evidence(
         or int(cycle_row["unresolved_count"] or 0) != 0
         or actual_attempts != expected_attempts
     ):
-        raise V4ActualPreparationGuardError(
-            "G052_FLAT_SOURCE_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("G052_FLAT_SOURCE_EVIDENCE_INVALID")
     return V4G052FlatOnlyCarryForwardEvidence(
         token=_G052_FLAT_CARRY_FORWARD_TOKEN,
-        source_reviewed_files_digest=(
-            _G051_FLAT_SOURCE_REVIEWED_FILES_DIGEST
-        ),
+        source_reviewed_files_digest=(_G051_FLAT_SOURCE_REVIEWED_FILES_DIGEST),
         source_generation_digest=_G051_FLAT_SOURCE_GENERATION_DIGEST,
         target_reviewed_files_digest=(
             external_gate.reviewed_digest_for_internal_preparation_only()
@@ -1842,10 +1738,8 @@ def _g052_flat_carry_forward_matches_target(
 ) -> bool:
     return (
         getattr(evidence, "_token", None) is _G052_FLAT_CARRY_FORWARD_TOKEN
-        and evidence.source_reviewed_files_digest
-        == _G051_FLAT_SOURCE_REVIEWED_FILES_DIGEST
-        and evidence.source_generation_digest
-        == _G051_FLAT_SOURCE_GENERATION_DIGEST
+        and evidence.source_reviewed_files_digest == _G051_FLAT_SOURCE_REVIEWED_FILES_DIGEST
+        and evidence.source_generation_digest == _G051_FLAT_SOURCE_GENERATION_DIGEST
         and evidence.target_reviewed_files_digest == reviewed_files_digest
         and evidence.target_generation_digest == generation_digest
         and evidence.trading_day_jst == trading_day_jst
@@ -1863,9 +1757,7 @@ def _reject_g053_source_symlinks(path: Path) -> None:
     current = path
     while True:
         if current.is_symlink():
-            raise V4ActualPreparationGuardError(
-                "G053_FLAT_SOURCE_EVIDENCE_INVALID"
-            )
+            raise V4ActualPreparationGuardError("G053_FLAT_SOURCE_EVIDENCE_INVALID")
         if current.parent == current:
             return
         current = current.parent
@@ -1887,16 +1779,12 @@ def load_g053_flat_only_carry_forward_evidence(
     )
     target_generation = load_v4_gmo_frozen_generation(
         repository=repository,
-        implementation_digest=(
-            external_gate.reviewed_digest_for_internal_preparation_only()
-        ),
+        implementation_digest=(external_gate.reviewed_digest_for_internal_preparation_only()),
     )
     if (
         target_generation.generation_label != _G053_TARGET_GENERATION_LABEL
         or target_generation.digest != generation_digest
-        or not target_ledger.state_root.name.endswith(
-            generation_digest.removeprefix("sha256:")
-        )
+        or not target_ledger.state_root.name.endswith(generation_digest.removeprefix("sha256:"))
     ):
         raise V4ActualPreparationGuardError("G053_FLAT_TARGET_MISMATCH")
 
@@ -1904,12 +1792,8 @@ def load_g053_flat_only_carry_forward_evidence(
         repository=repository,
         generation_digest=_G052_FLAT_SOURCE_GENERATION_DIGEST,
     )
-    started_path = (
-        source_root / "g052-emergency-readonly-reconciliation.started.json"
-    )
-    result_path = (
-        source_root / "g052-emergency-readonly-reconciliation.result.json"
-    )
+    started_path = source_root / "g052-emergency-readonly-reconciliation.started.json"
+    result_path = source_root / "g052-emergency-readonly-reconciliation.result.json"
     database = source_root / "coordinator.sqlite3"
     risk_path = source_root / "risk.json"
     for path in (source_root, started_path, result_path, database, risk_path):
@@ -1920,9 +1804,7 @@ def load_g053_flat_only_carry_forward_evidence(
         or not database.is_file()
         or not risk_path.is_file()
     ):
-        raise V4ActualPreparationGuardError(
-            "G053_FLAT_SOURCE_EVIDENCE_MISSING"
-        )
+        raise V4ActualPreparationGuardError("G053_FLAT_SOURCE_EVIDENCE_MISSING")
     try:
         started = json.loads(started_path.read_text(encoding="utf-8"))
         result = json.loads(result_path.read_text(encoding="utf-8"))
@@ -1930,9 +1812,7 @@ def load_g053_flat_only_carry_forward_evidence(
         started_stat = started_path.stat()
         result_stat = result_path.stat()
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-        raise V4ActualPreparationGuardError(
-            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
-        ) from error
+        raise V4ActualPreparationGuardError("G053_FLAT_SOURCE_EVIDENCE_INVALID") from error
     if (
         set(started)
         != {
@@ -1963,18 +1843,11 @@ def load_g053_flat_only_carry_forward_evidence(
         or started_stat.st_mode & 0o777 != 0o600
         or result_stat.st_mode & 0o777 != 0o600
         or result_stat.st_mtime_ns < started_stat.st_mtime_ns
-        or result_stat.st_mtime_ns - started_stat.st_mtime_ns
-        > 300 * 1_000_000_000
-        or abs(
-            started_stat.st_mtime
-            - started_at.astimezone(UTC).timestamp()
-        )
-        > 10
+        or result_stat.st_mtime_ns - started_stat.st_mtime_ns > 300 * 1_000_000_000
+        or abs(started_stat.st_mtime - started_at.astimezone(UTC).timestamp()) > 10
         or started.get("status") != "STARTED_NO_RETRY"
-        or started.get("generation_digest")
-        != _G052_FLAT_SOURCE_GENERATION_DIGEST
-        or started.get("reviewed_files_digest")
-        != _G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST
+        or started.get("generation_digest") != _G052_FLAT_SOURCE_GENERATION_DIGEST
+        or started.get("reviewed_files_digest") != _G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST
         or result.get("status") != "G052_EMERGENCY_RECONCILIATION_KNOWN"
         or result.get("broker_get_count") != 3
         or result.get("open_positions_count") != 0
@@ -1988,9 +1861,7 @@ def load_g053_flat_only_carry_forward_evidence(
         or type(result.get("latest_executions_count")) is not int
         or result["latest_executions_count"] < 0
     ):
-        raise V4ActualPreparationGuardError(
-            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("G053_FLAT_SOURCE_EVIDENCE_INVALID")
 
     connection: sqlite3.Connection | None = None
     try:
@@ -2015,28 +1886,21 @@ def load_g053_flat_only_carry_forward_evidence(
             "unresolved_count FROM cycles"
         ).fetchone()
         attempt_rows = connection.execute(
-            "SELECT action,COUNT(*) count FROM attempts "
-            "GROUP BY action ORDER BY action"
+            "SELECT action,COUNT(*) count FROM attempts GROUP BY action ORDER BY action"
         ).fetchall()
     except sqlite3.Error as error:
-        raise V4ActualPreparationGuardError(
-            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
-        ) from error
+        raise V4ActualPreparationGuardError("G053_FLAT_SOURCE_EVIDENCE_INVALID") from error
     finally:
         if connection is not None:
             connection.close()
-    actual_attempts = {
-        str(row["action"]): int(row["count"]) for row in attempt_rows
-    }
+    actual_attempts = {str(row["action"]): int(row["count"]) for row in attempt_rows}
     try:
         source_risk_state = PhaseBRiskStore(
             risk_path,
             policy=v4_gmo_risk_policy(),
         ).load()
     except Exception as error:
-        raise V4ActualPreparationGuardError(
-            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
-        ) from error
+        raise V4ActualPreparationGuardError("G053_FLAT_SOURCE_EVIDENCE_INVALID") from error
     if (
         generation_row is None
         or generation_row["value"] != _G052_FLAT_SOURCE_GENERATION_DIGEST
@@ -2047,13 +1911,10 @@ def load_g053_flat_only_carry_forward_evidence(
         or int(cycle_row["cycle_count"]) != 1
         or int(cycle_row["unresolved_count"] or 0) != 1
         or actual_attempts != {"MARKET_ENTRY": 1}
-        or source_risk_state.current_day_jst
-        != target_ledger._trading_day_jst
+        or source_risk_state.current_day_jst != target_ledger._trading_day_jst
         or source_risk_state.entries_today != 2
     ):
-        raise V4ActualPreparationGuardError(
-            "G053_FLAT_SOURCE_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("G053_FLAT_SOURCE_EVIDENCE_INVALID")
     return V4G053FlatOnlyCarryForwardEvidence(
         token=_G053_FLAT_CARRY_FORWARD_TOKEN,
         source_reviewed_files_digest=_G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST,
@@ -2081,10 +1942,8 @@ def _g053_flat_carry_forward_matches_target(
 ) -> bool:
     return (
         getattr(evidence, "_token", None) is _G053_FLAT_CARRY_FORWARD_TOKEN
-        and evidence.source_reviewed_files_digest
-        == _G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST
-        and evidence.source_generation_digest
-        == _G052_FLAT_SOURCE_GENERATION_DIGEST
+        and evidence.source_reviewed_files_digest == _G052_FLAT_SOURCE_REVIEWED_FILES_DIGEST
+        and evidence.source_generation_digest == _G052_FLAT_SOURCE_GENERATION_DIGEST
         and evidence.target_reviewed_files_digest == reviewed_files_digest
         and evidence.target_generation_digest == generation_digest
         and evidence.trading_day_jst == trading_day_jst
@@ -2123,9 +1982,7 @@ def require_g040_runtime_only_monitor_completion(
         operation=operation,
         expected_status="PASSED",
     ):
-        raise V4ActualPreparationGuardError(
-            "G040_RUNTIME_MONITOR_NOT_COMPLETE"
-        )
+        raise V4ActualPreparationGuardError("G040_RUNTIME_MONITOR_NOT_COMPLETE")
     return evidence
 
 
@@ -2152,9 +2009,7 @@ def require_g052_flat_only_monitor_completion(
         operation=operation,
         expected_status="PASSED",
     ):
-        raise V4ActualPreparationGuardError(
-            "G052_FLAT_ONLY_MONITOR_NOT_COMPLETE"
-        )
+        raise V4ActualPreparationGuardError("G052_FLAT_ONLY_MONITOR_NOT_COMPLETE")
     return evidence
 
 
@@ -2181,9 +2036,7 @@ def require_g053_flat_only_monitor_completion(
         operation=operation,
         expected_status="PASSED",
     ):
-        raise V4ActualPreparationGuardError(
-            "G053_FLAT_ONLY_MONITOR_NOT_COMPLETE"
-        )
+        raise V4ActualPreparationGuardError("G053_FLAT_ONLY_MONITOR_NOT_COMPLETE")
     return evidence
 
 
@@ -2231,16 +2084,10 @@ def load_generation_completed_preparation_evidence(
     )
     normalized = generation_digest.removeprefix("sha256:")
     if not ledger.state_root.name.endswith(f"-{normalized}"):
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_COMPLETED_GENERATION_MISMATCH"
-        )
-    consumed_marker = (
-        ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
-    )
+        raise V4ActualPreparationGuardError("PREPARATION_COMPLETED_GENERATION_MISMATCH")
+    consumed_marker = ledger.state_root / f"generation_consumed.{ledger._trading_day_jst}.json"
     if consumed_marker.exists() or consumed_marker.is_symlink():
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_COMPLETED_EVIDENCE_INVALID"
-        )
+        raise V4ActualPreparationGuardError("PREPARATION_COMPLETED_EVIDENCE_INVALID")
     return V4CompletedPreparationEvidence(
         token=_COMPLETED_EVIDENCE_TOKEN,
         generation_digest=generation_digest,
@@ -2262,9 +2109,7 @@ def confirm_email_delivery_exact(
         confirmation_kind="EMAIL_DELIVERY_OPERATOR_CONFIRMATION",
         exact_match=True,
     )
-    _attest_email_confirmation_success_internal(
-        operation_permit, report.to_safe_dict()
-    )
+    _attest_email_confirmation_success_internal(operation_permit, report.to_safe_dict())
     return report
 
 
@@ -2297,30 +2142,20 @@ def reviewed_files_digest(*, repository: Path) -> str:
     try:
         return compute_reviewed_files_digest(repository=repository)
     except V4ReviewedDigestError as error:
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_REVIEWED_FILE_INVALID"
-        ) from error
+        raise V4ActualPreparationGuardError("PREPARATION_REVIEWED_FILE_INVALID") from error
 
 
 def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparationGate:
     require_clean_main(repository=repository)
     repository = repository.resolve()
     actual_digest = reviewed_files_digest(repository=repository)
-    generation_manifest_path = (
-        repository / "docs/templates/h11_v4_gmo_frozen_generation.json"
-    )
+    generation_manifest_path = repository / "docs/templates/h11_v4_gmo_frozen_generation.json"
     if generation_manifest_path.is_symlink() or not generation_manifest_path.is_file():
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_FROZEN_GENERATION_MISMATCH"
-        )
+        raise V4ActualPreparationGuardError("PREPARATION_FROZEN_GENERATION_MISMATCH")
     try:
-        generation_manifest = json.loads(
-            generation_manifest_path.read_text(encoding="utf-8")
-        )
+        generation_manifest = json.loads(generation_manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_FROZEN_GENERATION_MISMATCH"
-        ) from error
+        raise V4ActualPreparationGuardError("PREPARATION_FROZEN_GENERATION_MISMATCH") from error
     generation_label = (
         generation_manifest.get("generation_label")
         if isinstance(generation_manifest, dict)
@@ -2331,27 +2166,38 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
         or not generation_label.startswith("H11_AUTO_30M_")
         or generation_label not in _PREPARATION_KNOWN_GENERATION_LABELS
     ):
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_FROZEN_GENERATION_MISMATCH"
-        )
+        raise V4ActualPreparationGuardError("PREPARATION_FROZEN_GENERATION_MISMATCH")
 
-    if generation_label == "H11_AUTO_30M_20260801_G064":
+    if generation_label in {
+        "H11_AUTO_30M_20260801_G064",
+        "H11_AUTO_30M_20260801_G065",
+    }:
         try:
             generation = load_v4_gmo_frozen_generation(
                 repository=repository,
                 implementation_digest=actual_digest,
             )
-            from app.services.h11_v4_g064_unattended_activation import (
-                verify_g064_generation_contract,
-            )
+            if generation_label == "H11_AUTO_30M_20260801_G065":
+                from app.services.h11_v4_g065_unattended_activation import (
+                    verify_g065_generation_contract,
+                )
 
-            verify_g064_generation_contract(
-                generation=generation,
-                repository=repository,
-            )
+                verify_g065_generation_contract(
+                    generation=generation,
+                    repository=repository,
+                )
+            else:
+                from app.services.h11_v4_g064_unattended_activation import (
+                    verify_g064_generation_contract,
+                )
+
+                verify_g064_generation_contract(
+                    generation=generation,
+                    repository=repository,
+                )
         except Exception as error:
             raise V4ActualPreparationGuardError(
-                "PREPARATION_G064_RUNTIME_CONTRACT_NOT_CLEAR"
+                "PREPARATION_RESIDENT_RUNTIME_CONTRACT_NOT_CLEAR"
             ) from error
         return V4ExternalPreparationGate(
             token=_GATE_TOKEN,
@@ -2370,14 +2216,10 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
         try:
             parsed_artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_REVIEW_ARTIFACT_INVALID"
-            ) from error
+            raise V4ActualPreparationGuardError("PREPARATION_REVIEW_ARTIFACT_INVALID") from error
         if isinstance(parsed_artifact, dict):
             if parsed_artifact.get("reviewed_files_digest") != actual_digest:
-                raise V4ActualPreparationGuardError(
-                    "PREPARATION_REVIEWED_FILES_DIGEST_MISMATCH"
-                )
+                raise V4ActualPreparationGuardError("PREPARATION_REVIEWED_FILES_DIGEST_MISMATCH")
             legacy_artifact = parsed_artifact
     try:
         generation = load_v4_gmo_frozen_generation(
@@ -2385,9 +2227,7 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
             implementation_digest=actual_digest,
         )
     except ValueError as error:
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_FROZEN_GENERATION_MISMATCH"
-        ) from error
+        raise V4ActualPreparationGuardError("PREPARATION_FROZEN_GENERATION_MISMATCH") from error
 
     if not artifact_path.is_file() or artifact_path.is_symlink():
         raise V4ActualPreparationGuardError("PREPARATION_REVIEW_ARTIFACT_MISSING")
@@ -2416,9 +2256,7 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
     if artifact.get("reviewed_files_digest") != actual_digest:
         raise V4ActualPreparationGuardError("PREPARATION_REVIEWED_FILES_DIGEST_MISMATCH")
     if artifact.get("generation_manifest_digest") != generation.digest:
-        raise V4ActualPreparationGuardError(
-            "PREPARATION_FROZEN_GENERATION_MISMATCH"
-        )
+        raise V4ActualPreparationGuardError("PREPARATION_FROZEN_GENERATION_MISMATCH")
     return V4ExternalPreparationGate(
         token=_GATE_TOKEN,
         reviewed_files_digest=actual_digest,
@@ -2494,9 +2332,7 @@ def check_v4_keychain_presence_only(
     present = 0
     for service, account in items:
         try:
-            completed = runner(
-                ["security", "find-generic-password", "-s", service, "-a", account]
-            )
+            completed = runner(["security", "find-generic-password", "-s", service, "-a", account])
         except (OSError, subprocess.TimeoutExpired) as error:
             raise V4ActualPreparationGuardError("PREPARATION_KEYCHAIN_CHECK_FAILED") from error
         present += int(completed.returncode == 0)
@@ -2541,9 +2377,7 @@ def check_v4_keychain_access_internal_only(
     for service, account in items:
         remaining_seconds = deadline - clock()
         if remaining_seconds <= 0:
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_KEYCHAIN_ACCESS_FAILED"
-            ) from None
+            raise V4ActualPreparationGuardError("PREPARATION_KEYCHAIN_ACCESS_FAILED") from None
         try:
             completed = runner(
                 [
@@ -2562,15 +2396,11 @@ def check_v4_keychain_access_internal_only(
         if completed is None:
             # Raise outside the exception handler so a TimeoutExpired carrying
             # partial output is not retained as context or cause.
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_KEYCHAIN_ACCESS_FAILED"
-            ) from None
+            raise V4ActualPreparationGuardError("PREPARATION_KEYCHAIN_ACCESS_FAILED") from None
         # Never include stdout/stderr or the item name in a failure.  A
         # successful non-empty value is counted and immediately discarded.
         if completed.returncode != 0 or not completed.stdout.rstrip("\n"):
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_KEYCHAIN_ACCESS_FAILED"
-            )
+            raise V4ActualPreparationGuardError("PREPARATION_KEYCHAIN_ACCESS_FAILED")
         accessible += 1
         del completed
     report = V4KeychainAccessReport(
@@ -2579,7 +2409,5 @@ def check_v4_keychain_access_internal_only(
         all_accessible=accessible == len(items),
     )
     if report.all_accessible:
-        _attest_keychain_access_success_internal(
-            operation_permit, report.to_safe_dict()
-        )
+        _attest_keychain_access_success_internal(operation_permit, report.to_safe_dict())
     return report

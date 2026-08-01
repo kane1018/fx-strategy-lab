@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.h11_auto.persistence import H11AutoProcessLock
-from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
+from app.h11_auto.v4_gmo_generation import V4GmoFrozenGeneration
 from app.h11_auto.v4_gmo_unattended_scheduler_launchd import (
     render_v4_gmo_unattended_scheduler_launchagent,
 )
@@ -31,7 +31,6 @@ from app.services.h11_v4_unattended_runtime_no_post import (
     load_unattended_runtime_evidence_no_post,
     project_unattended_runtime_state,
 )
-from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
 NOW = datetime(2026, 8, 1, 1, 0, tzinfo=UTC)
 GENERATION = "sha256:" + "a" * 64
@@ -231,11 +230,14 @@ def test_g064_activation_requires_commissioning_evidence(tmp_path: Path) -> None
 
 def test_g064_runtime_evidence_is_fresh_and_generation_bound(tmp_path: Path) -> None:
     repository = Path(__file__).resolve().parents[4]
-    reviewed = compute_reviewed_files_digest(repository=repository)
-    generation = load_v4_gmo_frozen_generation(
-        repository=repository,
-        implementation_digest=reviewed,
+    payload = json.loads(
+        (repository / "docs/templates/h11_v4_g064_frozen_generation.json").read_text(
+            encoding="utf-8"
+        )
     )
+    payload["blocked_hours_jst"] = tuple(payload["blocked_hours_jst"])
+    payload["weekend_days_jst"] = tuple(payload["weekend_days_jst"])
+    generation = V4GmoFrozenGeneration(**payload)
     write_g064_runtime_evidence_no_post(
         state_root=tmp_path,
         generation=generation,

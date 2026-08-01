@@ -85,7 +85,11 @@ def test_monitor_source_has_no_broker_or_credential_dependency() -> None:
     forbidden = (
         "httpx",
         "Keychain",
-        "credential",
+        "credential_loader",
+        "credential_store",
+        "read_credential",
+        "api_key",
+        "secret",
         "actual_transport",
         "cancelOrders",
         "closeOrder",

@@ -105,7 +105,10 @@ def render_v4_gmo_unattended_scheduler_launchagent(
         repository=repository,
         generation_digest=generation.digest,
     )
-    resident = generation.generation_label == "H11_AUTO_30M_20260801_G064"
+    resident = generation.generation_label in {
+        "H11_AUTO_30M_20260801_G064",
+        "H11_AUTO_30M_20260801_G065",
+    }
     payload = {
         "Label": V4_GMO_UNATTENDED_SCHEDULER_LABEL,
         "ProgramArguments": [

@@ -23,13 +23,13 @@ def main() -> int:
         external_gate = load_external_preparation_gate(repository=REPOSITORY)
         ledger = V4PreparationAttemptLedger(external_gate=external_gate)
         operation_permit = (
-            ledger.begin_g064_fresh(V4PreparationOperation.PRESENCE)
+            ledger.begin_g065_fresh(V4PreparationOperation.PRESENCE)
+            if external_gate.is_g065_generation_bound_for_internal_preparation_only()
+            else ledger.begin_g064_fresh(V4PreparationOperation.PRESENCE)
             if external_gate.is_g064_generation_bound_for_internal_preparation_only()
             else ledger.begin(V4PreparationOperation.PRESENCE)
         )
-        report = check_v4_keychain_presence_only(
-            operation_permit=operation_permit
-        )
+        report = check_v4_keychain_presence_only(operation_permit=operation_permit)
         if not report.all_present:
             raise V4ActualPreparationGuardError("PREPARATION_KEYCHAIN_ITEMS_MISSING")
         ledger.complete(

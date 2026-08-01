@@ -61,9 +61,7 @@ class V4UnattendedRuntimeEvidence:
 
     def __post_init__(self) -> None:
         if any(type(value) is not bool for value in self.__dict__.values()):
-            raise V4UnattendedRuntimeProjectionError(
-                "RUNTIME_EVIDENCE_BOOLEAN_INVALID"
-            )
+            raise V4UnattendedRuntimeProjectionError("RUNTIME_EVIDENCE_BOOLEAN_INVALID")
 
     def __bool__(self) -> bool:
         return False
@@ -113,7 +111,10 @@ def load_unattended_runtime_evidence_no_post(
         return _halted_evidence(arm_armed=arm_armed)
     if payload.get("generation_digest") != generation_digest:
         return _halted_evidence(arm_armed=arm_armed)
-    if payload.get("schema") == "H11_V4_G064_RESIDENT_SUPERVISOR_HEARTBEAT_V1":
+    if payload.get("schema") in {
+        "H11_V4_G064_RESIDENT_SUPERVISOR_HEARTBEAT_V1",
+        "H11_V4_G065_RESIDENT_SUPERVISOR_HEARTBEAT_V1",
+    }:
         if (
             not isinstance(payload.get("reviewed_files_digest"), str)
             or (
@@ -149,9 +150,7 @@ def load_unattended_runtime_evidence_no_post(
     return V4UnattendedRuntimeEvidence(
         arm_armed=arm_armed,
         position_open=position_open,
-        protection_confirmed=(
-            payload["protection_confirmed"] if position_open else True
-        ),
+        protection_confirmed=(payload["protection_confirmed"] if position_open else True),
         ownership_exact=(payload["ownership_exact"] if position_open else True),
         quantity_matches=(payload["quantity_matches"] if position_open else True),
         runtime_clear=payload["runtime_risk_ready"] and not persistent_halt,
@@ -184,9 +183,7 @@ def project_unattended_runtime_state(
         return V4UnattendedRuntimeState.HALTED
     if evidence.position_open:
         if not (
-            evidence.protection_confirmed
-            and evidence.ownership_exact
-            and evidence.quantity_matches
+            evidence.protection_confirmed and evidence.ownership_exact and evidence.quantity_matches
         ):
             return V4UnattendedRuntimeState.HALTED
         return (

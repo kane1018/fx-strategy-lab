@@ -23,7 +23,9 @@ def main() -> int:
         gate = load_external_preparation_gate(repository=REPOSITORY)
         ledger = V4PreparationAttemptLedger(external_gate=gate)
         operation_permit = (
-            ledger.begin_g064_fresh(V4PreparationOperation.KEYCHAIN_ACCESS)
+            ledger.begin_g065_fresh(V4PreparationOperation.KEYCHAIN_ACCESS)
+            if gate.is_g065_generation_bound_for_internal_preparation_only()
+            else ledger.begin_g064_fresh(V4PreparationOperation.KEYCHAIN_ACCESS)
             if gate.is_g064_generation_bound_for_internal_preparation_only()
             else ledger.begin(V4PreparationOperation.KEYCHAIN_ACCESS)
         )
@@ -31,9 +33,7 @@ def main() -> int:
             operation_permit=operation_permit,
         )
         if not report.all_accessible:
-            raise V4ActualPreparationGuardError(
-                "PREPARATION_KEYCHAIN_ACCESS_NOT_CLEAR"
-            )
+            raise V4ActualPreparationGuardError("PREPARATION_KEYCHAIN_ACCESS_NOT_CLEAR")
         ledger.complete(
             V4PreparationOperation.KEYCHAIN_ACCESS,
             operation_permit=operation_permit,

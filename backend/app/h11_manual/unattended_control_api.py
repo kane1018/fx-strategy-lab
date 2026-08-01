@@ -43,6 +43,15 @@ from app.services.h11_v4_g064_unattended_activation import (
     V4G064ActivationError,
     verify_g064_scheduler_binding,
 )
+from app.services.h11_v4_g065_position_reconciliation_no_post import (
+    load_g065_position_reconciliation_no_post,
+)
+from app.services.h11_v4_g065_unattended_activation import (
+    G065_GENERATION_LABEL,
+    G065_PERSISTENT_HALT_FILE,
+    V4G065ActivationError,
+    verify_g065_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -103,8 +112,12 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         repository=REPOSITORY,
         generation_digest=contract.generation.digest,
     )
-    if contract.generation.generation_label == G064_GENERATION_LABEL:
-        verify_g064_scheduler_binding(
+    if contract.generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}:
+        (
+            verify_g065_scheduler_binding
+            if contract.generation.generation_label == G065_GENERATION_LABEL
+            else verify_g064_scheduler_binding
+        )(
             generation=contract.generation,
             plist_path=plist_path,
             state_root=state_root,
@@ -157,17 +170,31 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         repository=REPOSITORY,
         generation_digest=contract.generation.digest,
     )
-    persistent_halt = (
-        contract.generation.generation_label == G064_GENERATION_LABEL
-        and (
-            (state_root / G064_PERSISTENT_HALT_FILE).is_file()
-            or (state_root / G064_PERSISTENT_HALT_FILE).is_symlink()
-        )
+    persistent_halt = contract.generation.generation_label in {
+        G064_GENERATION_LABEL,
+        G065_GENERATION_LABEL,
+    } and (
+        (
+            state_root
+            / (
+                G065_PERSISTENT_HALT_FILE
+                if contract.generation.generation_label == G065_GENERATION_LABEL
+                else G064_PERSISTENT_HALT_FILE
+            )
+        ).is_file()
+        or (
+            state_root
+            / (
+                G065_PERSISTENT_HALT_FILE
+                if contract.generation.generation_label == G065_GENERATION_LABEL
+                else G064_PERSISTENT_HALT_FILE
+            )
+        ).is_symlink()
     )
     try:
         _verify_current_generation_runtime(contract)
         supported = not persistent_halt
-    except (V4G038ActivationError, V4G064ActivationError):
+    except (V4G038ActivationError, V4G064ActivationError, V4G065ActivationError):
         supported = False
     local_runtime_state, entries_today = _runtime_projection(contract)
     evidence = load_unattended_runtime_evidence_no_post(
@@ -176,8 +203,12 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         arm_armed=check.armed,
         reviewed_files_digest=contract.reviewed_files_digest,
     )
-    if contract.generation.generation_label == G064_GENERATION_LABEL:
-        position_evidence = load_g064_position_reconciliation_no_post(
+    if contract.generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}:
+        position_evidence = (
+            load_g065_position_reconciliation_no_post
+            if contract.generation.generation_label == G065_GENERATION_LABEL
+            else load_g064_position_reconciliation_no_post
+        )(
             state_root=v4_gmo_runtime_state_root(
                 repository=REPOSITORY,
                 generation_digest=contract.generation.digest,
@@ -204,13 +235,21 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
                 quantity_matches=position_evidence.quantity_matches,
                 runtime_clear=evidence.runtime_clear,
             )
-        else:
+        elif contract.generation.generation_label == G064_GENERATION_LABEL:
             evidence = replace(
                 evidence,
                 position_open=False,
                 protection_confirmed=True,
                 ownership_exact=True,
                 quantity_matches=True,
+            )
+        else:
+            evidence = replace(
+                evidence,
+                position_open=False,
+                protection_confirmed=False,
+                ownership_exact=False,
+                quantity_matches=False,
             )
     if persistent_halt or not supported or local_runtime_state == "HALTED":
         evidence = replace(
@@ -286,9 +325,7 @@ def _runtime_projection(contract: _CurrentContract) -> tuple[str, int | None]:
     risk_path = root / "risk.json"
     try:
         risk_exists = risk_path.is_file() and not risk_path.is_symlink()
-        coordinator_exists = (
-            coordinator_path.is_file() and not coordinator_path.is_symlink()
-        )
+        coordinator_exists = coordinator_path.is_file() and not coordinator_path.is_symlink()
         if not risk_exists and not coordinator_exists:
             return "FLAT", None
         if not risk_exists or not coordinator_exists:
@@ -297,34 +334,22 @@ def _runtime_projection(contract: _CurrentContract) -> tuple[str, int | None]:
             risk_path,
             policy=v4_gmo_risk_policy(),
         ).load()
-        today_jst = (
-            datetime.now(UTC)
-            .astimezone(ZoneInfo("Asia/Tokyo"))
-            .date()
-            .isoformat()
-        )
-        entries_today = (
-            risk_state.entries_today
-            if risk_state.current_day_jst == today_jst
-            else 0
-        )
-        coordinator = V4GmoActualCoordinatorStore.open_monitor_observer(
-            coordinator_path
-        )
-        if (
-            coordinator.market_attempt_count_for_day(
-                trading_day_jst=today_jst
-            )
-            != entries_today
-        ):
+        today_jst = datetime.now(UTC).astimezone(ZoneInfo("Asia/Tokyo")).date().isoformat()
+        entries_today = risk_state.entries_today if risk_state.current_day_jst == today_jst else 0
+        coordinator = V4GmoActualCoordinatorStore.open_monitor_observer(coordinator_path)
+        if coordinator.market_attempt_count_for_day(trading_day_jst=today_jst) != entries_today:
             return "HALTED", entries_today
         snapshot = coordinator.monitor_snapshot_safe()
     except (H11AutoRuntimeSafetyError, V4GmoActualCoordinatorError, OSError):
         return "HALTED", None
     if snapshot.unknown_halt_latched or snapshot.pending_transport:
         return "HALTED", entries_today
-    if contract.generation.generation_label == G064_GENERATION_LABEL:
-        position_evidence = load_g064_position_reconciliation_no_post(
+    if contract.generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}:
+        position_evidence = (
+            load_g065_position_reconciliation_no_post
+            if contract.generation.generation_label == G065_GENERATION_LABEL
+            else load_g064_position_reconciliation_no_post
+        )(
             state_root=root,
             generation_digest=contract.generation.digest,
             now_utc=datetime.now(UTC),
@@ -408,6 +433,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         V4UnattendedLiveArmStateError,
         V4G038ActivationError,
         V4G064ActivationError,
+        V4G065ActivationError,
         OSError,
         ValueError,
     ) as error:

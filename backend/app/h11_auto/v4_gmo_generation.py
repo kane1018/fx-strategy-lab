@@ -37,8 +37,12 @@ from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 V4_GMO_GENERATION_SCHEMA = "H11_AUTO_GENERATION_V4_GMO_FRIDAY_LIMITED_V2"
 V4_GMO_GENERATION_STATUS = "OPERATOR_FROZEN_NOT_ACTIVATED"
 V4_GMO_UNATTENDED_ACTIVATED_STATUS = "UNATTENDED_LIVE_COMMISSIONED"
-V4_GMO_GENERATION_ARTIFACT = Path(
-    "docs/templates/h11_v4_gmo_frozen_generation.json"
+V4_GMO_GENERATION_ARTIFACT = Path("docs/templates/h11_v4_gmo_frozen_generation.json")
+_RUNTIME_ONLY_GENERATION_LABELS = frozenset(
+    {
+        "H11_AUTO_30M_20260801_G064",
+        "H11_AUTO_30M_20260801_G065",
+    }
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
@@ -105,8 +109,7 @@ class V4GmoFrozenGeneration:
         selections = V4ApprovedOperatorSelections()
         requirements = (
             self.schema == V4_GMO_GENERATION_SCHEMA,
-            self.status
-            in {V4_GMO_GENERATION_STATUS, V4_GMO_UNATTENDED_ACTIVATED_STATUS},
+            self.status in {V4_GMO_GENERATION_STATUS, V4_GMO_UNATTENDED_ACTIVATED_STATUS},
             bool(_LABEL.fullmatch(self.generation_label)),
             bool(_SHA256.fullmatch(self.implementation_digest)),
             self.operator_selection_digest == selections.digest,
@@ -121,18 +124,15 @@ class V4GmoFrozenGeneration:
             self.temporary_unprotected_gap_accepted is True,
             self.maximum_unprotected_seconds == 15,
             self.protection_contract_hash == H11_V4_GMO_PROTECTION_CONTRACT_HASH,
-            self.broker_capability_evidence_hash
-            == H11_V4_GMO_CAPABILITY_EVIDENCE_HASH,
+            self.broker_capability_evidence_hash == H11_V4_GMO_CAPABILITY_EVIDENCE_HASH,
             self.risk_policy_label == selections.risk_policy_label,
             self.per_trade_loss_bound_jpy == 5_000,
             self.daily_loss_limit_jpy == 10_000,
             self.monthly_loss_limit_jpy == 50_000,
             self.maximum_consecutive_losses == 5,
             self.blocked_hours_jst == V4_GMO_BLOCKED_HOURS_JST,
-            self.friday_entry_start_hour_jst
-            == V4_GMO_FRIDAY_ENTRY_START_HOUR_JST,
-            self.friday_entry_cutoff_hour_jst
-            == V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST,
+            self.friday_entry_start_hour_jst == V4_GMO_FRIDAY_ENTRY_START_HOUR_JST,
+            self.friday_entry_cutoff_hour_jst == V4_GMO_FRIDAY_ENTRY_CUTOFF_HOUR_JST,
             self.weekend_days_jst == V4_GMO_WEEKEND_DAYS_JST,
             self.weekend_flat_weekday_jst == V4_GMO_WEEKEND_FLAT_WEEKDAY_JST,
             self.weekend_flat_hour_jst == V4_GMO_WEEKEND_FLAT_HOUR_JST,
@@ -155,7 +155,7 @@ class V4GmoFrozenGeneration:
                 and (
                     self.reconciliation_contract_digest is None
                     or (
-                        self.generation_label == "H11_AUTO_30M_20260801_G064"
+                        self.generation_label in _RUNTIME_ONLY_GENERATION_LABELS
                         and isinstance(self.reconciliation_contract_digest, str)
                         and bool(_SHA256.fullmatch(self.reconciliation_contract_digest))
                     )
@@ -183,13 +183,13 @@ class V4GmoFrozenGeneration:
                 and bool(_SHA256.fullmatch(self.activation_source_generation_digest))
                 and (
                     (
-                        self.generation_label == "H11_AUTO_30M_20260801_G064"
+                        self.generation_label in _RUNTIME_ONLY_GENERATION_LABELS
                         and self.successful_canary_evidence_digest is None
                         and isinstance(self.runtime_commissioning_evidence_digest, str)
                         and bool(_SHA256.fullmatch(self.runtime_commissioning_evidence_digest))
                     )
                     or (
-                        self.generation_label != "H11_AUTO_30M_20260801_G064"
+                        self.generation_label not in _RUNTIME_ONLY_GENERATION_LABELS
                         and isinstance(self.successful_canary_evidence_digest, str)
                         and bool(_SHA256.fullmatch(self.successful_canary_evidence_digest))
                         and self.runtime_commissioning_evidence_digest is None
@@ -278,12 +278,8 @@ def build_v4_gmo_frozen_generation(
         weekend_days_jst=policy.weekend_days_jst,
         weekend_flat_weekday_jst=policy.weekend_flat_weekday_jst,
         weekend_flat_hour_jst=policy.weekend_flat_hour_jst,
-        weekend_exit_sequence_start_hour_jst=(
-            policy.weekend_exit_sequence_start_hour_jst
-        ),
-        weekend_exit_sequence_start_minute_jst=(
-            policy.weekend_exit_sequence_start_minute_jst
-        ),
+        weekend_exit_sequence_start_hour_jst=(policy.weekend_exit_sequence_start_hour_jst),
+        weekend_exit_sequence_start_minute_jst=(policy.weekend_exit_sequence_start_minute_jst),
         maximum_hold_seconds=policy.maximum_hold_seconds,
         exit_profile_label=policy.exit_profile_label,
         dead_man_policy_label=dead_man_policy.policy_label,
@@ -333,9 +329,7 @@ def load_v4_gmo_frozen_generation(
         payload["weekend_days_jst"] = tuple(payload["weekend_days_jst"])
         generation = V4GmoFrozenGeneration(**payload)
     except (OSError, json.JSONDecodeError, TypeError) as error:
-        raise V4GmoGenerationError(
-            "v4 GMO frozen generation artifact invalid"
-        ) from error
+        raise V4GmoGenerationError("v4 GMO frozen generation artifact invalid") from error
     if generation.implementation_digest != implementation_digest:
         raise V4GmoGenerationError("v4 GMO implementation digest mismatch")
     return generation

@@ -88,6 +88,24 @@ from app.services.h11_v4_g064_unattended_activation import (
     write_g064_persistent_halt_no_post,
     write_g064_worker_lease,
 )
+from app.services.h11_v4_g065_position_evidence_bridge_no_post import (
+    materialize_g065_position_reconciliation_no_post,
+)
+from app.services.h11_v4_g065_position_reconciliation_no_post import (
+    load_g065_position_reconciliation_no_post,
+    write_g065_position_reconciliation_no_post,
+)
+from app.services.h11_v4_g065_unattended_activation import (
+    G065_GENERATION_LABEL,
+    V4G065ActivationError,
+    clear_g065_worker_lease,
+    run_g065_exit_only_dispatch_no_post,
+    verify_g065_generation_activation,
+    verify_g065_generation_contract,
+    write_g065_exit_only_dispatch_no_post,
+    write_g065_persistent_halt_no_post,
+    write_g065_worker_lease,
+)
 from app.services.h11_v4_gmo_formal_canary_source import (
     V4GmoFormalCanarySourceError,
 )
@@ -128,9 +146,7 @@ from scripts import h11_auto_v4_unattended_live_bounded_run as bounded_run
 # (60s); minimum_continuous matches a value already used in this track's own
 # orchestration TEST fixtures (300s, explicitly labeled test-only there).
 _HEARTBEAT_CHAIN_POLICY_LABEL = V4_UNATTENDED_RUNTIME_HEARTBEAT_POLICY_LABEL
-_HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS = (
-    V4_UNATTENDED_RUNTIME_HEARTBEAT_MAXIMUM_GAP_SECONDS
-)
+_HEARTBEAT_CHAIN_MAXIMUM_GAP_SECONDS = V4_UNATTENDED_RUNTIME_HEARTBEAT_MAXIMUM_GAP_SECONDS
 _HEARTBEAT_CHAIN_MINIMUM_CONTINUOUS_SECONDS = (
     V4_UNATTENDED_RUNTIME_HEARTBEAT_MINIMUM_CONTINUOUS_SECONDS
 )
@@ -140,7 +156,7 @@ class V4UnattendedSchedulerLauncherError(RuntimeError):
     """Fixed safe launcher failure (digest mismatch, missing placeholder)."""
 
 
-def _g064_runtime_state_root_for_expected_digest(
+def _resident_runtime_state_root_for_expected_digest(
     *, repository: Path, expected_generation_digest: object
 ) -> Path | None:
     if (
@@ -159,7 +175,7 @@ def _g064_runtime_state_root_for_expected_digest(
         return None
     if (
         not isinstance(payload, dict)
-        or payload.get("generation_label") != G064_GENERATION_LABEL
+        or payload.get("generation_label") not in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}
         or payload.get("digest") != expected_generation_digest
     ):
         return None
@@ -169,13 +185,13 @@ def _g064_runtime_state_root_for_expected_digest(
     )
 
 
-def _latch_g064_halt_after_binding_failure(
+def _latch_resident_halt_after_binding_failure(
     *,
     repository: Path,
     expected_generation_digest: object,
     expected_reviewed_files_digest: object,
 ) -> bool:
-    state_root = _g064_runtime_state_root_for_expected_digest(
+    state_root = _resident_runtime_state_root_for_expected_digest(
         repository=repository,
         expected_generation_digest=expected_generation_digest,
     )
@@ -186,12 +202,30 @@ def _latch_g064_halt_after_binding_failure(
     ):
         return False
     try:
-        write_g064_persistent_halt_no_post(
-            state_root=state_root,
-            generation_digest=expected_generation_digest,
-            reviewed_files_digest=expected_reviewed_files_digest,
+        manifest = json.loads(
+            (repository / "docs/templates/h11_v4_gmo_frozen_generation.json").read_text(
+                encoding="utf-8"
+            )
         )
-    except V4G064ActivationError:
+        if manifest.get("generation_label") == G065_GENERATION_LABEL:
+            write_g065_persistent_halt_no_post(
+                state_root=state_root,
+                generation_digest=expected_generation_digest,
+                reviewed_files_digest=expected_reviewed_files_digest,
+            )
+        else:
+            write_g064_persistent_halt_no_post(
+                state_root=state_root,
+                generation_digest=expected_generation_digest,
+                reviewed_files_digest=expected_reviewed_files_digest,
+            )
+    except (
+        V4G064ActivationError,
+        V4G065ActivationError,
+        OSError,
+        ValueError,
+        json.JSONDecodeError,
+    ):
         return False
     return True
 
@@ -203,16 +237,10 @@ def _verify_baked_digests(
 
     digest = reviewed_files_digest(repository=repository)
     if digest != expected_reviewed_files_digest:
-        raise V4UnattendedSchedulerLauncherError(
-            "SCHEDULER_REVIEWED_FILES_DIGEST_MISMATCH"
-        )
-    generation = load_v4_gmo_frozen_generation(
-        repository=repository, implementation_digest=digest
-    )
+        raise V4UnattendedSchedulerLauncherError("SCHEDULER_REVIEWED_FILES_DIGEST_MISMATCH")
+    generation = load_v4_gmo_frozen_generation(repository=repository, implementation_digest=digest)
     if generation.digest != expected_generation_digest:
-        raise V4UnattendedSchedulerLauncherError(
-            "SCHEDULER_GENERATION_DIGEST_MISMATCH"
-        )
+        raise V4UnattendedSchedulerLauncherError("SCHEDULER_GENERATION_DIGEST_MISMATCH")
     return digest, generation
 
 
@@ -239,15 +267,12 @@ def _run_one_tick(
             expected_generation_digest=args.expected_generation_digest,
         )
     except Exception:  # noqa: BLE001
-        if _latch_g064_halt_after_binding_failure(
+        if _latch_resident_halt_after_binding_failure(
             repository=repository,
             expected_generation_digest=args.expected_generation_digest,
             expected_reviewed_files_digest=args.expected_reviewed_files_digest,
         ):
-            print(
-                "status=G064_RESIDENT_RUNTIME_HALTED "
-                "broker_write=false actual_post_count=0"
-            )
+            print("status=G064_RESIDENT_RUNTIME_HALTED broker_write=false actual_post_count=0")
         else:
             print(
                 "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
@@ -258,13 +283,8 @@ def _run_one_tick(
         repository=repository,
         generation_digest=generation.digest,
     )
-    if (
-        generation.live_ready is not True
-        or generation.unattended_live_supported is not True
-    ):
-        if getattr(generation, "generation_label", "") == (
-            "H11_AUTO_30M_20260731_G063"
-        ):
+    if generation.live_ready is not True or generation.unattended_live_supported is not True:
+        if getattr(generation, "generation_label", "") == ("H11_AUTO_30M_20260731_G063"):
             from app.h11_auto.v4_gmo_monitor_supervisor import (
                 V4GmoMonitorSupervisor,
             )
@@ -280,9 +300,7 @@ def _run_one_tick(
             try:
                 supervisor.acquire_single_process()
                 try:
-                    completion_marker = (
-                        state_root / "g063-no-post-runtime-bootstrap-completed.json"
-                    )
+                    completion_marker = state_root / "g063-no-post-runtime-bootstrap-completed.json"
                     if completion_marker.is_symlink():
                         print(
                             "status=G063_NO_POST_RUNTIME_BOOTSTRAP_NOT_CLEAR "
@@ -290,9 +308,7 @@ def _run_one_tick(
                         )
                         return 0
                     if completion_marker.is_file():
-                        marker = json.loads(
-                            completion_marker.read_text(encoding="utf-8")
-                        )
+                        marker = json.loads(completion_marker.read_text(encoding="utf-8"))
                         required_files = (
                             "risk.json",
                             "dead-man.json",
@@ -301,8 +317,7 @@ def _run_one_tick(
                         )
                         if (
                             marker.get("generation_digest") != generation.digest
-                            or marker.get("status")
-                            != "G063_NO_POST_RUNTIME_BOOTSTRAP_COMPLETED"
+                            or marker.get("status") != "G063_NO_POST_RUNTIME_BOOTSTRAP_COMPLETED"
                             or any(
                                 (state_root / name).is_symlink()
                                 or not (state_root / name).is_file()
@@ -351,64 +366,84 @@ def _run_one_tick(
             "broker_write=false actual_post_count=0"
         )
         return 0
-    g064_tick = None
-    if generation.generation_label == G064_GENERATION_LABEL:
+    resident_tick = None
+    if generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}:
+        is_g065 = generation.generation_label == G065_GENERATION_LABEL
+        verify_contract = (
+            verify_g065_generation_contract if is_g065 else verify_g064_generation_contract
+        )
+        verify_activation = (
+            verify_g065_generation_activation if is_g065 else verify_g064_generation_activation
+        )
+        write_halt = (
+            write_g065_persistent_halt_no_post if is_g065 else write_g064_persistent_halt_no_post
+        )
+        activation_error = V4G065ActivationError if is_g065 else V4G064ActivationError
+        safe_label = "G065" if is_g065 else "G064"
         try:
-            verify_g064_generation_contract(generation=generation)
+            verify_contract(generation=generation, repository=repository)
             monitor = V4GmoMonitorSupervisor(
                 repository=repository,
                 generation=generation,
                 runtime_lock=preheld_process_lock,
             )
+            if is_g065:
+                materialize_g065_position_reconciliation_no_post(
+                    state_root=state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                    now_utc=datetime.now(UTC),
+                )
             monitor.acquire_single_process()
             try:
-                g064_tick = monitor.run_tick(now_utc=datetime.now(UTC))
+                resident_tick = monitor.run_tick(now_utc=datetime.now(UTC))
             finally:
                 monitor.close()
-            verify_g064_generation_activation(
+            verify_activation(
                 generation=generation,
                 state_root=state_root,
+                repository=repository,
             )
         except Exception:  # noqa: BLE001
             try:
-                write_g064_persistent_halt_no_post(
+                write_halt(
                     state_root=state_root,
                     generation_digest=generation.digest,
                     reviewed_files_digest=digest,
                 )
-            except V4G064ActivationError:
+            except activation_error:
                 print(
-                    "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
+                    f"status={safe_label}_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
                     "broker_write=false actual_post_count=0"
                 )
                 return 2
             print(
-                "status=G064_RESIDENT_RUNTIME_NOT_CLEAR "
+                f"status={safe_label}_RESIDENT_RUNTIME_NOT_CLEAR "
                 "broker_write=false actual_post_count=0"
             )
             return 2
         if (
-            g064_tick.broker_write is not False
-            or g064_tick.actual_post_count != 0
-            or g064_tick.runtime_risk_ready is not True
-            or g064_tick.dead_man_alive is not True
-            or g064_tick.heartbeat_chain_beat is not True
-            or g064_tick.process_lock_clear is not True
+            resident_tick.broker_write is not False
+            or resident_tick.actual_post_count != 0
+            or resident_tick.runtime_risk_ready is not True
+            or resident_tick.dead_man_alive is not True
+            or resident_tick.heartbeat_chain_beat is not True
+            or resident_tick.process_lock_clear is not True
         ):
             try:
-                write_g064_persistent_halt_no_post(
+                write_halt(
                     state_root=state_root,
                     generation_digest=generation.digest,
                     reviewed_files_digest=digest,
                 )
-            except V4G064ActivationError:
+            except activation_error:
                 print(
-                    "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
+                    f"status={safe_label}_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
                     "broker_write=false actual_post_count=0"
                 )
                 return 2
             print(
-                "status=G064_RESIDENT_RUNTIME_NOT_CLEAR "
+                f"status={safe_label}_RESIDENT_RUNTIME_NOT_CLEAR "
                 "broker_write=false actual_post_count=0"
             )
             return 2
@@ -428,23 +463,24 @@ def _run_one_tick(
         expected_generation_digest=generation.digest,
         expected_reviewed_files_digest=digest,
     )
-    if not arm_check.armed and generation.generation_label != G064_GENERATION_LABEL:
+    if not arm_check.armed and generation.generation_label not in {
+        G064_GENERATION_LABEL,
+        G065_GENERATION_LABEL,
+    }:
         reason = arm_check.blocked_reasons[0] if arm_check.blocked_reasons else "OPERATOR_DISARMED"
         print(
             "status=UNATTENDED_SCHEDULER_TICK_DISARMED "
             f"reason_label={reason} broker_write=false actual_post_count=0"
         )
         return 0
-    if generation.generation_label == G064_GENERATION_LABEL and (
-        g064_tick is None
-        or g064_tick.persistent_halt is True
-        or g064_tick.unknown_halt is True
-        or (arm_check.armed and g064_tick.entry_gate_open is not True)
+    if generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL} and (
+        resident_tick is None
+        or resident_tick.persistent_halt is True
+        or resident_tick.unknown_halt is True
+        or (arm_check.armed and resident_tick.entry_gate_open is not True)
     ):
-        print(
-            "status=G064_ENTRY_GATE_CLOSED "
-            "broker_write=false actual_post_count=0"
-        )
+        status_prefix = "G065" if generation.generation_label == G065_GENERATION_LABEL else "G064"
+        print(f"status={status_prefix}_ENTRY_GATE_CLOSED broker_write=false actual_post_count=0")
         return 0
     if getattr(generation, "generation_label", "") in {
         "H11_AUTO_30M_20260729_G040",
@@ -465,23 +501,15 @@ def _run_one_tick(
             generation_digest=generation.digest,
         )
         try:
-            external_gate = load_external_preparation_gate(
-                repository=repository
-            )
-            if (
-                generation.generation_label
-                == "H11_AUTO_30M_20260730_G052"
-            ):
+            external_gate = load_external_preparation_gate(repository=repository)
+            if generation.generation_label == "H11_AUTO_30M_20260730_G052":
                 require_g052_flat_only_monitor_completion(
                     repository=repository,
                     external_gate=external_gate,
                     generation_digest=generation.digest,
                     now_utc=datetime.now(UTC),
                 )
-            elif (
-                generation.generation_label
-                == "H11_AUTO_30M_20260730_G053"
-            ):
+            elif generation.generation_label == "H11_AUTO_30M_20260730_G053":
                 require_g053_flat_only_monitor_completion(
                     repository=repository,
                     external_gate=external_gate,
@@ -496,19 +524,11 @@ def _run_one_tick(
                     now_utc=datetime.now(UTC),
                 )
             heartbeat = json.loads(
-                (state_root / "supervisor-heartbeat.json").read_text(
-                    encoding="utf-8"
-                )
+                (state_root / "supervisor-heartbeat.json").read_text(encoding="utf-8")
             )
-            observed = datetime.fromisoformat(
-                str(heartbeat["observed_at_utc"])
-            )
-            heartbeat_age = (
-                datetime.now(UTC) - observed.astimezone(UTC)
-            ).total_seconds()
-            supervisor_lock = H11AutoProcessLock(
-                state_root / "supervisor.lock"
-            )
+            observed = datetime.fromisoformat(str(heartbeat["observed_at_utc"]))
+            heartbeat_age = (datetime.now(UTC) - observed.astimezone(UTC)).total_seconds()
+            supervisor_lock = H11AutoProcessLock(state_root / "supervisor.lock")
             supervisor_is_running = not supervisor_lock.acquire()
             if not supervisor_is_running:
                 supervisor_lock.release()
@@ -551,9 +571,7 @@ def _run_one_tick(
     # one correctly skipping.
     if preheld_process_lock is None:
         lock = H11AutoProcessLock(
-            v4_gmo_runtime_state_root(
-                repository=repository, generation_digest=generation.digest
-            )
+            v4_gmo_runtime_state_root(repository=repository, generation_digest=generation.digest)
             / "process.lock"
         )
         if not lock.acquire():
@@ -567,27 +585,54 @@ def _run_one_tick(
         state_root = v4_gmo_runtime_state_root(
             repository=repository, generation_digest=generation.digest
         )
-        if generation.generation_label == G064_GENERATION_LABEL and not arm_check.armed:
-            write_g064_worker_lease(
+        if (
+            generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}
+            and not arm_check.armed
+        ):
+            is_g065 = generation.generation_label == G065_GENERATION_LABEL
+            write_lease = write_g065_worker_lease if is_g065 else write_g064_worker_lease
+            clear_lease = clear_g065_worker_lease if is_g065 else clear_g064_worker_lease
+            load_position = (
+                load_g065_position_reconciliation_no_post
+                if is_g065
+                else load_g064_position_reconciliation_no_post
+            )
+            write_exit_only = (
+                write_g065_exit_only_dispatch_no_post
+                if is_g065
+                else write_g064_exit_only_dispatch_no_post
+            )
+            run_exit_only = (
+                run_g065_exit_only_dispatch_no_post
+                if is_g065
+                else run_g064_exit_only_dispatch_no_post
+            )
+            safe_label = "G065" if is_g065 else "G064"
+            if is_g065:
+                materialize_g065_position_reconciliation_no_post(
+                    state_root=state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                    now_utc=datetime.now(UTC),
+                )
+            write_lease(
                 state_root=state_root,
                 generation_digest=generation.digest,
                 reviewed_files_digest=digest,
                 now_utc=datetime.now(UTC),
             )
-            position = load_g064_position_reconciliation_no_post(
+            position = load_position(
                 state_root=state_root,
                 generation_digest=generation.digest,
                 now_utc=datetime.now(UTC),
             )
             if not position.evidence_available or not position.generation_bound:
                 if preheld_process_lock is None:
-                    clear_g064_worker_lease(
-                        state_root=state_root, expected_pid=os.getpid()
-                    )
+                    clear_lease(state_root=state_root, expected_pid=os.getpid())
                 raise canary_module.V4GmoG013CanaryError(
-                    "G064_POSITION_EVIDENCE_NOT_CLEAR"
+                    f"{safe_label}_POSITION_EVIDENCE_NOT_CLEAR"
                 )
-            write_g064_exit_only_dispatch_no_post(
+            write_exit_only(
                 state_root=state_root,
                 generation_digest=generation.digest,
                 reviewed_files_digest=digest,
@@ -597,24 +642,26 @@ def _run_one_tick(
                 quantity_matches=position.quantity_matches,
             )
             if position.position_open:
-                run_g064_exit_only_dispatch_no_post(
+                run_exit_only(
                     state_root=state_root,
                     generation_digest=generation.digest,
                     reviewed_files_digest=digest,
                 )
-            print(
-                "status=G064_ARM_OFF_EXIT_ONLY_MONITORING_NO_POST "
-                "entry_gate_open=false broker_write=false actual_post_count=0"
-            )
-            if preheld_process_lock is None:
-                clear_g064_worker_lease(
-                    state_root=state_root, expected_pid=os.getpid()
+            if generation.generation_label == G065_GENERATION_LABEL:
+                print(
+                    "status=G065_ARM_OFF_EXIT_ONLY_MONITORING_NO_POST "
+                    "entry_gate_open=false broker_write=false actual_post_count=0"
                 )
+            else:
+                print(
+                    "status=G064_ARM_OFF_EXIT_ONLY_MONITORING_NO_POST "
+                    "entry_gate_open=false broker_write=false actual_post_count=0"
+                )
+            if preheld_process_lock is None:
+                clear_lease(state_root=state_root, expected_pid=os.getpid())
             return 0
         try:
-            session = prepare_g013_canary_session(
-                repository=repository, now_utc=datetime.now(UTC)
-            )
+            session = prepare_g013_canary_session(repository=repository, now_utc=datetime.now(UTC))
         except canary_module.V4GmoG013CanaryError as error:
             print(f"status=UNATTENDED_SCHEDULER_TICK_NOT_YET reason_label={error}")
             return 0
@@ -630,9 +677,7 @@ def _run_one_tick(
 
         risk_policy = v4_gmo_risk_policy()
         risk_store = PhaseBRiskStore(state_root / "risk.json", policy=risk_policy)
-        dead_man_store = DeadManStore(
-            state_root / "dead-man.json", policy=v4_gmo_dead_man_policy()
-        )
+        dead_man_store = DeadManStore(state_root / "dead-man.json", policy=v4_gmo_dead_man_policy())
 
         # PLACEHOLDER 0 (heartbeat-chain policy confirmation) -- operator
         # reviewed and confirmed the suggested values (2026-07-25): 60s/300s,
@@ -647,7 +692,10 @@ def _run_one_tick(
         # G064 switch-only runtime never constructs credentials, clients, or
         # notification transports. Legacy generations retain their existing
         # explicit caller-supplied boundary.
-        if generation.generation_label == G064_GENERATION_LABEL:
+        if generation.generation_label in {
+            G064_GENERATION_LABEL,
+            G065_GENERATION_LABEL,
+        }:
             credential_pair = None
             client = None
             notification_primary = None
@@ -670,8 +718,12 @@ def _run_one_tick(
         # G064 retains process.lock for the resident worker and records the
         # same owner PID. Legacy generations release the preflight lock before
         # entering their existing inner binding.
-        if generation.generation_label == G064_GENERATION_LABEL:
-            write_g064_worker_lease(
+        if generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}:
+            (
+                write_g065_worker_lease
+                if generation.generation_label == G065_GENERATION_LABEL
+                else write_g064_worker_lease
+            )(
                 state_root=state_root,
                 generation_digest=generation.digest,
                 reviewed_files_digest=digest,
@@ -695,7 +747,10 @@ def _run_one_tick(
                 client=client,
                 arm_intent=arm_check.armed,
             )
-            if generation.generation_label == G064_GENERATION_LABEL and all(
+            if generation.generation_label in {
+                G064_GENERATION_LABEL,
+                G065_GENERATION_LABEL,
+            } and all(
                 hasattr(result, name)
                 for name in (
                     "flat_reconciled",
@@ -704,13 +759,15 @@ def _run_one_tick(
                     "quantity_matches",
                 )
             ):
-                write_g064_position_reconciliation_no_post(
+                (
+                    write_g065_position_reconciliation_no_post
+                    if generation.generation_label == G065_GENERATION_LABEL
+                    else write_g064_position_reconciliation_no_post
+                )(
                     state_root=state_root,
                     generation_digest=generation.digest,
                     position_open=not bool(getattr(result, "flat_reconciled", False)),
-                    protection_confirmed=bool(
-                        getattr(result, "exact_protection_confirmed", False)
-                    ),
+                    protection_confirmed=bool(getattr(result, "exact_protection_confirmed", False)),
                     ownership_exact=bool(getattr(result, "ownership_exact", False)),
                     quantity_matches=bool(getattr(result, "quantity_matches", False)),
                     generation_bound=True,
@@ -719,10 +776,14 @@ def _run_one_tick(
             return result
         finally:
             if (
-                generation.generation_label == G064_GENERATION_LABEL
+                generation.generation_label in {G064_GENERATION_LABEL, G065_GENERATION_LABEL}
                 and preheld_process_lock is None
             ):
-                clear_g064_worker_lease(state_root=state_root, expected_pid=os.getpid())
+                (
+                    clear_g065_worker_lease
+                    if generation.generation_label == G065_GENERATION_LABEL
+                    else clear_g064_worker_lease
+                )(state_root=state_root, expected_pid=os.getpid())
     finally:
         if lock_held:
             lock.release()
@@ -743,64 +804,71 @@ def main(argv: list[str]) -> int:
             expected_generation_digest=args.expected_generation_digest,
         )
     except Exception:  # noqa: BLE001
-        if _latch_g064_halt_after_binding_failure(
+        if _latch_resident_halt_after_binding_failure(
             repository=args.repository.resolve(),
             expected_generation_digest=args.expected_generation_digest,
             expected_reviewed_files_digest=args.expected_reviewed_files_digest,
         ):
-            print(
-                "status=G064_RESIDENT_RUNTIME_HALTED "
-                "broker_write=false actual_post_count=0"
-            )
+            print("status=G064_RESIDENT_RUNTIME_HALTED broker_write=false actual_post_count=0")
         else:
             print(
                 "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
                 "broker_write=false actual_post_count=0"
             )
         return 2
-    if getattr(generation, "generation_label", "") != G064_GENERATION_LABEL:
+    if getattr(generation, "generation_label", "") not in {
+        G064_GENERATION_LABEL,
+        G065_GENERATION_LABEL,
+    }:
         return _run_one_tick(argv)
     state_root = v4_gmo_runtime_state_root(
         repository=args.repository.resolve(), generation_digest=generation.digest
     )
     resident_lock = H11AutoProcessLock(state_root / "process.lock")
     if not resident_lock.acquire():
-        print(
-            "status=G064_RESIDENT_WORKER_LOCK_HELD "
-            "broker_write=false actual_post_count=0"
-        )
+        print("status=G064_RESIDENT_WORKER_LOCK_HELD broker_write=false actual_post_count=0")
         return 0
     try:
         while True:
             try:
-                tick_status = _run_one_tick(
-                    argv, preheld_process_lock=resident_lock
-                )
+                tick_status = _run_one_tick(argv, preheld_process_lock=resident_lock)
                 if tick_status != 0:
                     return tick_status
             except BaseException:  # noqa: BLE001
                 try:
-                    write_g064_persistent_halt_no_post(
+                    (
+                        write_g065_persistent_halt_no_post
+                        if generation.generation_label == G065_GENERATION_LABEL
+                        else write_g064_persistent_halt_no_post
+                    )(
                         state_root=state_root,
                         generation_digest=generation.digest,
                         reviewed_files_digest=generation.implementation_digest,
                     )
-                except V4G064ActivationError:
+                except (V4G064ActivationError, V4G065ActivationError):
+                    status_prefix = (
+                        "G065" if generation.generation_label == G065_GENERATION_LABEL else "G064"
+                    )
                     print(
-                        "status=G064_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
+                        f"status={status_prefix}_RESIDENT_RUNTIME_HALT_NOT_WRITTEN "
                         "broker_write=false actual_post_count=0"
                     )
                     return 2
+                status_prefix = (
+                    "G065" if generation.generation_label == G065_GENERATION_LABEL else "G064"
+                )
                 print(
-                    "status=G064_RESIDENT_RUNTIME_HALTED "
+                    f"status={status_prefix}_RESIDENT_RUNTIME_HALTED "
                     "broker_write=false actual_post_count=0"
                 )
                 return 2
             time.sleep(15)
     finally:
-        clear_g064_worker_lease(
-            state_root=state_root, expected_pid=os.getpid()
-        )
+        (
+            clear_g065_worker_lease
+            if generation.generation_label == G065_GENERATION_LABEL
+            else clear_g064_worker_lease
+        )(state_root=state_root, expected_pid=os.getpid())
         resident_lock.release()
 
 

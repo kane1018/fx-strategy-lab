@@ -22,6 +22,7 @@ from app.h11_auto.v4_actual_preparation_guard import (
     V4PreparationAttemptLedger,
     V4PreparationOperation,
     _attest_g064_scheduler_success_internal,
+    _attest_g065_scheduler_success_internal,
     load_completed_preparation_evidence,
     load_external_preparation_gate,
     require_g040_runtime_only_monitor_completion,
@@ -46,6 +47,12 @@ from app.services.h11_v4_g064_unattended_activation import (
     V4G064ActivationError,
     verify_g064_scheduler_binding,
     write_g064_persistent_halt_no_post,
+)
+from app.services.h11_v4_g065_unattended_activation import (
+    G065_GENERATION_LABEL,
+    V4G065ActivationError,
+    verify_g065_scheduler_binding,
+    write_g065_persistent_halt_no_post,
 )
 
 _LAUNCHCTL_TIMEOUT_SECONDS = {
@@ -93,6 +100,31 @@ def _wait_for_g064_scheduler_readiness(
     )
 
 
+def _wait_for_g065_scheduler_readiness(
+    *, generation: object, plist_path: Path, state_root: Path
+) -> None:
+    deadline = time.monotonic() + 60.0
+    while time.monotonic() < deadline:
+        try:
+            verify_g065_scheduler_binding(
+                generation=generation,
+                plist_path=plist_path,
+                state_root=state_root,
+                now_utc=datetime.now(UTC),
+                maximum_age_seconds=60,
+            )
+            return
+        except V4G065ActivationError:
+            time.sleep(1.0)
+    verify_g065_scheduler_binding(
+        generation=generation,
+        plist_path=plist_path,
+        state_root=state_root,
+        now_utc=datetime.now(UTC),
+        maximum_age_seconds=60,
+    )
+
+
 def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     if (
         len(command) < 2
@@ -124,8 +156,17 @@ def main() -> int:
     g064_ledger = None
     g064_operation_permit = None
     g064_runtime_state_root = None
+    g065_gate = None
+    g065_ledger = None
+    g065_operation_permit = None
+    g065_runtime_state_root = None
     if getattr(generation, "generation_label", "") == G064_GENERATION_LABEL:
         g064_runtime_state_root = v4_gmo_runtime_state_root(
+            repository=repository,
+            generation_digest=generation.digest,
+        )
+    if getattr(generation, "generation_label", "") == G065_GENERATION_LABEL:
+        g065_runtime_state_root = v4_gmo_runtime_state_root(
             repository=repository,
             generation_digest=generation.digest,
         )
@@ -202,10 +243,7 @@ def main() -> int:
         start_interval_seconds=args.start_interval_seconds,
     )
     plist_path = (
-        Path.home()
-        / "Library"
-        / "LaunchAgents"
-        / f"{V4_GMO_UNATTENDED_SCHEDULER_LABEL}.plist"
+        Path.home() / "Library" / "LaunchAgents" / f"{V4_GMO_UNATTENDED_SCHEDULER_LABEL}.plist"
     )
     try:
         require_stable_v4_gmo_aqua_domain(user_id=os.getuid(), runner=_run)
@@ -221,8 +259,19 @@ def main() -> int:
             )
         except V4ActualPreparationGuardError:
             print(
-                "status=G064_SCHEDULER_PREPARATION_NOT_CLEAR "
-                "broker_write=false actual_post_count=0"
+                "status=G064_SCHEDULER_PREPARATION_NOT_CLEAR broker_write=false actual_post_count=0"
+            )
+            return 2
+    elif getattr(generation, "generation_label", "") == G065_GENERATION_LABEL:
+        try:
+            g065_gate = load_external_preparation_gate(repository=repository)
+            g065_ledger = V4PreparationAttemptLedger(external_gate=g065_gate)
+            g065_operation_permit = g065_ledger.begin_g065_fresh(
+                V4PreparationOperation.MONITOR_LAUNCHAGENT
+            )
+        except V4ActualPreparationGuardError:
+            print(
+                "status=G065_SCHEDULER_PREPARATION_NOT_CLEAR broker_write=false actual_post_count=0"
             )
             return 2
     try:
@@ -254,10 +303,26 @@ def main() -> int:
                     "broker_write=false actual_post_count=0"
                 )
                 return 2
-            print(
-                "status=G064_SCHEDULER_MUTATION_NOT_CLEAR "
-                "broker_write=false actual_post_count=0"
-            )
+            print("status=G064_SCHEDULER_MUTATION_NOT_CLEAR broker_write=false actual_post_count=0")
+            return 2
+        if (
+            g065_ledger is not None
+            and g065_runtime_state_root is not None
+            and g065_gate is not None
+        ):
+            try:
+                write_g065_persistent_halt_no_post(
+                    state_root=g065_runtime_state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                )
+            except V4G065ActivationError:
+                print(
+                    "status=G065_SCHEDULER_MUTATION_HALT_NOT_WRITTEN "
+                    "broker_write=false actual_post_count=0"
+                )
+                return 2
+            print("status=G065_SCHEDULER_MUTATION_NOT_CLEAR broker_write=false actual_post_count=0")
             return 2
         print(
             "status=UNATTENDED_SCHEDULER_LAUNCHAGENT_BLOCKED_NO_RETRY "
@@ -265,11 +330,7 @@ def main() -> int:
         )
         return 2
     safe_report = result.to_safe_dict()
-    if (
-        g064_gate is not None
-        and g064_ledger is not None
-        and g064_operation_permit is not None
-    ):
+    if g064_gate is not None and g064_ledger is not None and g064_operation_permit is not None:
         try:
             _wait_for_g064_scheduler_readiness(
                 generation=generation,
@@ -316,14 +377,62 @@ def main() -> int:
                 )
                 return 2
             print(
-                "status=G064_SCHEDULER_READINESS_NOT_CLEAR "
-                "broker_write=false actual_post_count=0"
+                "status=G064_SCHEDULER_READINESS_NOT_CLEAR broker_write=false actual_post_count=0"
             )
             return 2
-        print(
-            "status=G064_SCHEDULER_COMMISSIONED_NO_POST "
-            "broker_write=false actual_post_count=0"
-        )
+        print("status=G064_SCHEDULER_COMMISSIONED_NO_POST broker_write=false actual_post_count=0")
+        return 0
+    if g065_gate is not None and g065_ledger is not None and g065_operation_permit is not None:
+        try:
+            _wait_for_g065_scheduler_readiness(
+                generation=generation,
+                plist_path=plist_path,
+                state_root=g065_runtime_state_root,
+            )
+            safe_report.update(
+                {
+                    "g065_resident_scheduler": True,
+                    "heartbeat_fresh": True,
+                    "heartbeat_generation_digest_match": True,
+                    "process_lock_clear": True,
+                    "dead_man_alive": True,
+                    "heartbeat_chain_beat": True,
+                    "broker_read": False,
+                    "broker_write": False,
+                    "actual_post_count": 0,
+                    "private_api_read_count": 0,
+                    "credential_read_count": 0,
+                    "notification_attempt_count": 0,
+                    "raw_output_retained": False,
+                    "scheduler_change_attempt_count": 1,
+                }
+            )
+            _attest_g065_scheduler_success_internal(
+                g065_operation_permit,
+                safe_report,
+            )
+            g065_ledger.complete(
+                V4PreparationOperation.MONITOR_LAUNCHAGENT,
+                operation_permit=g065_operation_permit,
+            )
+        except (V4ActualPreparationGuardError, V4G065ActivationError):
+            try:
+                write_g065_persistent_halt_no_post(
+                    state_root=g065_runtime_state_root,
+                    generation_digest=generation.digest,
+                    reviewed_files_digest=digest,
+                )
+            except V4G065ActivationError:
+                print(
+                    "status=G065_SCHEDULER_READINESS_HALT_NOT_WRITTEN "
+                    "broker_write=false actual_post_count=0"
+                )
+                return 2
+            print(
+                "status=G065_SCHEDULER_READINESS_NOT_CLEAR broker_write=false actual_post_count=0"
+            )
+            return 2
+        print("status=G065_SCHEDULER_COMMISSIONED_NO_POST broker_write=false actual_post_count=0")
         return 0
     print(
         "status=INSTALLED_RESTARTED_UNATTENDED_SCHEDULER "
