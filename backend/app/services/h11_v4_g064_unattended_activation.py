@@ -47,8 +47,9 @@ def _stable_artifact_digest(payload: dict[str, Any]) -> str:
     return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def _load_g063_baseline() -> V4GmoFrozenGeneration:
-    path = _DEFAULT_REPOSITORY / "docs/templates/h11_v4_g063_frozen_generation.json"
+def _load_g063_baseline(*, repository: Path | None = None) -> V4GmoFrozenGeneration:
+    root = repository or _DEFAULT_REPOSITORY
+    path = root / "docs/templates/h11_v4_g063_frozen_generation.json"
     if path.is_symlink() or not path.is_file():
         raise V4G064ActivationError("G064_G063_BASELINE_MISSING")
     try:
@@ -172,7 +173,9 @@ def _verify_commissioning_artifacts(
         raise V4G064ActivationError("G064_RUNTIME_EVIDENCE_BINDING_INVALID")
 
 
-def verify_g064_generation_contract(*, generation: V4GmoFrozenGeneration) -> None:
+def verify_g064_generation_contract(
+    *, generation: V4GmoFrozenGeneration, repository: Path | None = None
+) -> None:
     if (
         generation.generation_label != G064_GENERATION_LABEL
         or generation.status != "UNATTENDED_LIVE_COMMISSIONED"
@@ -186,12 +189,12 @@ def verify_g064_generation_contract(*, generation: V4GmoFrozenGeneration) -> Non
         or not isinstance(generation.reconciliation_contract_digest, str)
     ):
         raise V4G064ActivationError("G064_GENERATION_NOT_COMMISSIONED")
-    baseline = _load_g063_baseline()
+    root = repository or _DEFAULT_REPOSITORY
+    baseline = _load_g063_baseline(repository=root)
     if generation.activation_source_generation_digest != baseline.digest:
         raise V4G064ActivationError("G064_G063_BASELINE_DIGEST_MISMATCH")
     evidence = (
-        _DEFAULT_REPOSITORY
-        / "docs/templates/h11_v4_g064_runtime_commissioning_evidence.json"
+        root / "docs/templates/h11_v4_g064_runtime_commissioning_evidence.json"
     )
     if evidence.is_symlink() or not evidence.is_file():
         raise V4G064ActivationError("G064_RUNTIME_EVIDENCE_MISSING")
@@ -200,8 +203,7 @@ def verify_g064_generation_contract(*, generation: V4GmoFrozenGeneration) -> Non
     except (OSError, json.JSONDecodeError) as error:
         raise V4G064ActivationError("G064_RUNTIME_EVIDENCE_INVALID") from error
     attestation_path = (
-        _DEFAULT_REPOSITORY
-        / "docs/templates/h11_v4_g064_independent_review_attestation.json"
+        root / "docs/templates/h11_v4_g064_independent_review_attestation.json"
     )
     try:
         attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
@@ -213,9 +215,12 @@ def verify_g064_generation_contract(*, generation: V4GmoFrozenGeneration) -> Non
 
 
 def verify_g064_generation_activation(
-    *, generation: V4GmoFrozenGeneration, state_root: Path | None = None
+    *,
+    generation: V4GmoFrozenGeneration,
+    state_root: Path | None = None,
+    repository: Path | None = None,
 ) -> None:
-    verify_g064_generation_contract(generation=generation)
+    verify_g064_generation_contract(generation=generation, repository=repository)
     if state_root is None:
         raise V4G064ActivationError("G064_RUNTIME_EVIDENCE_MISSING")
     evidence_path = state_root / G064_RUNTIME_EVIDENCE_FILE

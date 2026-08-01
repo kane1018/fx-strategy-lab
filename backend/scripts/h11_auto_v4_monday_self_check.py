@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Any
 
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
+from app.services.h11_v4_g064_unattended_activation import (
+    G064_GENERATION_LABEL,
+    V4G064ActivationError,
+    verify_g064_generation_contract,
+)
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
 EVIDENCE_PATH = Path("docs/templates/h11_v4_actual_preparation_evidence.json")
@@ -32,12 +37,17 @@ FOCUSED_TESTS = (
     "app/tests/h11_auto/test_v4_unattended_account_snapshot_producer_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_operational_readiness_no_post.py",
     "app/tests/h11_auto/test_v4_g028_unattended_runtime_integration_no_post.py",
+    "app/tests/h11_auto/test_v4_g063_generation_manifest_no_post.py",
+    "app/tests/h11_auto/test_v4_g064_switch_only_runtime_no_post.py",
+    "app/tests/h11_auto/test_v4_g064_switch_only_bounded_runner_no_post.py",
+    "app/tests/h11_auto/test_v4_g064_runtime_invariants_no_post.py",
     "app/tests/h11_auto/test_h11_manual_auto_import_boundary_no_post.py",
     "app/tests/h11_auto/test_isolation_no_post.py",
 )
 RELATED_TESTS = (
     "app/tests/h11_auto/test_v4_actual_preparation_fake_first.py",
     "app/tests/h11_auto/test_v4_gmo_launchagent_runner_no_post.py",
+    "app/tests/h11_auto/test_v4_g064_runtime_invariants_no_post.py",
 )
 RUFF_TARGETS = (
     "app/h11_auto/v4_gmo_g019_exit_policy.py",
@@ -55,6 +65,13 @@ RUFF_TARGETS = (
     "scripts/h11_auto_v4_g026_private_snapshot_producer.py",
     "scripts/h11_auto_v4_g027_operational_readiness_probe_no_post.py",
     "scripts/h11_auto_v4_g020_shadow_observer.py",
+    "app/services/h11_v4_g064_position_reconciliation_no_post.py",
+    "app/services/h11_v4_g064_unattended_activation.py",
+    "app/services/h11_v4_unattended_runtime_no_post.py",
+    "app/h11_auto/v4_gmo_monitor_supervisor.py",
+    "app/h11_auto/v4_gmo_unattended_scheduler_launchd.py",
+    "scripts/h11_auto_v4_unattended_live_bounded_run.py",
+    "scripts/h11_auto_v4_unattended_live_scheduled_launcher.py",
     "app/tests/h11_auto/test_v4_unattended_live_scheduled_launcher_fake_only.py",
     "app/tests/h11_auto/test_runtime_safety_no_post.py",
     "app/tests/h11_auto/test_v4_monday_self_check_no_post.py",
@@ -84,6 +101,13 @@ DANGER_SCAN_TARGETS = (
     "scripts/h11_auto_v4_current_generation_shadow_observer.py",
     "scripts/h11_auto_v4_current_generation_shadow_commission.py",
     "scripts/h11_auto_v4_unattended_controller_no_post_tick.py",
+    "app/services/h11_v4_g064_position_reconciliation_no_post.py",
+    "app/services/h11_v4_g064_unattended_activation.py",
+    "app/services/h11_v4_unattended_runtime_no_post.py",
+    "app/h11_auto/v4_gmo_monitor_supervisor.py",
+    "app/h11_auto/v4_gmo_unattended_scheduler_launchd.py",
+    "scripts/h11_auto_v4_unattended_live_bounded_run.py",
+    "scripts/h11_auto_v4_unattended_live_scheduled_launcher.py",
 )
 DANGER_SCAN_TOKENS = (
     "import httpx",
@@ -95,6 +119,14 @@ DANGER_SCAN_TOKENS = (
     "closeOrder",
     "cancelOrders",
 )
+DANGER_SCAN_EXEMPTIONS = {
+    "scripts/h11_auto_v4_unattended_live_bounded_run.py": frozenset(
+        {"import httpx"}
+    ),
+    "scripts/h11_auto_v4_unattended_live_scheduled_launcher.py": frozenset(
+        {"import httpx"}
+    ),
+}
 PRIVATE_GET_DANGER_SCAN_TARGETS = (
     "app/services/h11_v4_unattended_account_snapshot_producer_no_post.py",
     "scripts/h11_auto_v4_g026_private_snapshot_producer.py",
@@ -164,6 +196,41 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
         raise MondaySelfCheckError("SELF_CHECK_ENTRY_CAP_MISMATCH")
     if generation.same_action_retry_allowed or generation.same_action_repost_allowed:
         raise MondaySelfCheckError("SELF_CHECK_RETRY_POLICY_MISMATCH")
+    if generation.generation_label == G064_GENERATION_LABEL:
+        if (
+            generation.actual_post_authorized
+            or generation.live_ready is not True
+            or generation.unattended_live_supported is not True
+        ):
+            raise MondaySelfCheckError("SELF_CHECK_G064_RUNTIME_CONTRACT_MISMATCH")
+        try:
+            verify_g064_generation_contract(
+                generation=generation, repository=repository
+            )
+        except V4G064ActivationError as error:
+            raise MondaySelfCheckError(
+                "SELF_CHECK_G064_ARTIFACT_BINDING_INVALID"
+            ) from error
+        attestation_path = (
+            repository / "docs/templates/h11_v4_g064_independent_review_attestation.json"
+        )
+        try:
+            attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise MondaySelfCheckError(
+                "SELF_CHECK_G064_REVIEW_ATTESTATION_INVALID"
+            ) from error
+        reviewed_commit = attestation.get("reviewed_commit")
+        if not isinstance(reviewed_commit, str):
+            raise MondaySelfCheckError("SELF_CHECK_G064_REVIEW_COMMIT_INVALID")
+        _require_success(
+            _run(
+                ["git", "merge-base", "--is-ancestor", reviewed_commit, "HEAD"],
+                cwd=repository,
+            ),
+            "SELF_CHECK_G064_REVIEW_COMMIT_NOT_ANCESTOR",
+        )
+        return reviewed_digest, generation
     if (
         generation.actual_post_authorized
         or generation.live_ready
@@ -252,7 +319,12 @@ def _run_local_checks(repository: Path) -> None:
             source = (backend / relative_path).read_text(encoding="utf-8")
         except OSError as error:
             raise MondaySelfCheckError("SELF_CHECK_DANGER_SCAN_FAILED") from error
-        if any(token in source for token in DANGER_SCAN_TOKENS):
+        exempt = DANGER_SCAN_EXEMPTIONS.get(relative_path, frozenset())
+        if any(
+            token in source
+            for token in DANGER_SCAN_TOKENS
+            if token not in exempt
+        ):
             raise MondaySelfCheckError("SELF_CHECK_DANGER_SCAN_FAILED")
     for relative_path in PRIVATE_GET_DANGER_SCAN_TARGETS:
         try:
@@ -301,7 +373,9 @@ def main(argv: list[str] | None = None) -> int:
         f"reviewed_files_digest={reviewed_digest} "
         f"generation_digest={generation.digest} "
         "broker_post_count=0 actual_post_authorized=false "
-        "live_ready=false unattended_live_supported=false"
+        f"live_ready={str(generation.live_ready).lower()} "
+        "unattended_live_supported="
+        f"{str(generation.unattended_live_supported).lower()}"
     )
     return 0
 
