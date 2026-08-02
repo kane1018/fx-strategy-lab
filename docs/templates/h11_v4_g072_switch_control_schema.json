@@ -1,0 +1,18 @@
+{
+  "schema": "H11_V4_G072_SWITCH_CONTROL_CAPABILITY_V1",
+  "generation_label": "H11_AUTO_30M_20260802_G072",
+  "release_state": ["LOCKED", "ENABLED"],
+  "arm_state": ["OFF", "ON"],
+  "effective_state": ["OFF", "ON_WAITING", "ON_EXIT_ONLY", "EXIT_ONLY", "HALTED"],
+  "entry_state": ["DISABLED", "WAITING_FOR_RECONCILIATION", "WAITING_FOR_SIGNAL", "ENTRY_READY", "BLOCKED_POSITION_OPEN", "HALTED"],
+  "reconciliation_state": ["REQUIRED", "FRESH_FLAT", "FRESH_PROTECTED", "UNKNOWN"],
+  "arm_is_operating_intent": true,
+  "ui_on_calls_private_get": false,
+  "ui_on_calls_keychain": false,
+  "ui_on_calls_broker": false,
+  "arm_off_keeps_exit_management": true,
+  "daily_authorization_required": false,
+  "per_trade_confirmation_required": false,
+  "actual_post_authorized": false,
+  "broker_post_authorized": false
+}

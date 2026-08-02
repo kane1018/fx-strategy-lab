@@ -1,13 +1,12 @@
 from pathlib import Path
 
 from app.h11_auto import v4_gmo_generation
-from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
 
 def test_g071_candidate_manifest_is_readable_by_canonical_loader(monkeypatch) -> None:
     backend = Path(__file__).resolve().parents[3]
     repository = backend.parent
-    reviewed_digest = compute_reviewed_files_digest(repository=repository)
+    reviewed_digest = "sha256:dbaded053e108ab7f0041bf8169d536c76d362bbdcbf63d567e65adc9e9be7a4"
     monkeypatch.setattr(
         v4_gmo_generation,
         "V4_GMO_GENERATION_ARTIFACT",

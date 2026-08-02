@@ -258,6 +258,17 @@ REVIEWED_FILES = (
     "docs/templates/h11_v4_g071_runtime_commissioning_evidence.json",
     "docs/templates/h11_v4_g071_independent_review_attestation.json",
     "docs/templates/h11_v4_g071_atomic_activation_schema.json",
+    "backend/app/services/h11_v4_g072_switch_control.py",
+    "backend/scripts/h11_auto_v4_g072_runtime_bootstrap_no_post.py",
+    "backend/scripts/h11_auto_v4_g072_operation_60_no_post.py",
+    "backend/scripts/h11_auto_v4_g072_atomic_activation.py",
+    "backend/app/tests/h11_auto/test_v4_g072_switch_control_fake_only.py",
+    "docs/templates/h11_v4_g072_frozen_generation.json",
+    "docs/templates/h11_v4_g072_runtime_commissioning_evidence.json",
+    "docs/templates/h11_v4_g072_independent_review_attestation.json",
+    "docs/templates/h11_v4_g072_atomic_activation_schema.json",
+    "docs/templates/h11_v4_g072_switch_control_schema.json",
+    "docs/H11_V4_G072_SWITCH_CONTROL_DESIGN.md",
 )
 
 _G070_NORMALIZED_ARTIFACTS = frozenset(
@@ -270,6 +281,11 @@ _G070_NORMALIZED_ARTIFACTS = frozenset(
         "docs/templates/h11_v4_g071_runtime_commissioning_evidence.json",
         "docs/templates/h11_v4_g071_independent_review_attestation.json",
         "docs/templates/h11_v4_g071_atomic_activation_schema.json",
+        "docs/templates/h11_v4_g072_frozen_generation.json",
+        "docs/templates/h11_v4_g072_runtime_commissioning_evidence.json",
+        "docs/templates/h11_v4_g072_independent_review_attestation.json",
+        "docs/templates/h11_v4_g072_atomic_activation_schema.json",
+        "docs/templates/h11_v4_g072_switch_control_schema.json",
     }
 )
 _G070_BINDING_FIELDS = frozenset(
