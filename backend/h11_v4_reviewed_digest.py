@@ -229,6 +229,10 @@ REVIEWED_FILES = (
     "backend/scripts/h11_auto_v4_g067_runtime_bootstrap_no_post.py",
     "backend/scripts/h11_auto_v4_g067_operation_60_no_post.py",
     "backend/app/tests/h11_auto/test_v4_g067_runtime_no_post.py",
+    "backend/app/services/h11_v4_g068_unattended_activation_no_post.py",
+    "backend/scripts/h11_auto_v4_g068_runtime_bootstrap_no_post.py",
+    "backend/scripts/h11_auto_v4_g068_operation_60_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_g068_final_runtime_no_post.py",
 )
 
 
