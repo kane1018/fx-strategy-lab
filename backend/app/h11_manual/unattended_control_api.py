@@ -100,6 +100,12 @@ from app.services.h11_v4_g072_switch_control import (
     safe_g072_api_status,
     verify_g072_scheduler_binding,
 )
+from app.services.h11_v4_g073_runtime import (
+    G073_GENERATION_LABEL,
+    G073Error,
+    safe_g073_api_status,
+    verify_g073_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -170,9 +176,12 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         G070_GENERATION_LABEL,
         G071_GENERATION_LABEL,
         G072_GENERATION_LABEL,
+        G073_GENERATION_LABEL,
     }:
         verifier = (
-            verify_g072_scheduler_binding
+            verify_g073_scheduler_binding
+            if contract.generation.generation_label == G073_GENERATION_LABEL
+            else verify_g072_scheduler_binding
             if contract.generation.generation_label == G072_GENERATION_LABEL
             else verify_g071_scheduler_binding
             if contract.generation.generation_label == G071_GENERATION_LABEL
@@ -258,9 +267,12 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         G070_GENERATION_LABEL,
         G071_GENERATION_LABEL,
         G072_GENERATION_LABEL,
+        G073_GENERATION_LABEL,
     }:
         status_reader = (
-            safe_g072_api_status
+            safe_g073_api_status
+            if contract.generation.generation_label == G073_GENERATION_LABEL
+            else safe_g072_api_status
             if contract.generation.generation_label == G072_GENERATION_LABEL
             else safe_g071_api_status
             if contract.generation.generation_label == G071_GENERATION_LABEL
@@ -753,6 +765,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         G070Error,
         G071Error,
         G072Error,
+        G073Error,
         OSError,
         ValueError,
     ) as error:

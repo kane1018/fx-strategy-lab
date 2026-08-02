@@ -1,0 +1,13 @@
+{
+  "schema": "H11_V4_G073_SWITCH_CONTROL_SCHEMA_V1",
+  "arm_state": ["OFF", "ON"],
+  "release_state": ["LOCKED", "ENABLED"],
+  "effective_state": ["OFF", "ON_WAITING", "ON_EXIT_ONLY", "EXIT_ONLY", "HALTED"],
+  "entry_gate_open": "boolean",
+  "entry_state": ["DISABLED", "WAITING_FOR_RECONCILIATION", "WAITING_FOR_SIGNAL", "ENTRY_READY", "ACTION_IN_PROGRESS", "BLOCKED_POSITION_OPEN", "HALTED"],
+  "daily_authorization_required": false,
+  "per_trade_confirmation_required": false,
+  "ui_restart_stops_resident": false,
+  "actual_post_authorized": false,
+  "broker_post_authorized": false
+}

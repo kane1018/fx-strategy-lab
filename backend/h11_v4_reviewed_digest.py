@@ -269,6 +269,19 @@ REVIEWED_FILES = (
     "docs/templates/h11_v4_g072_atomic_activation_schema.json",
     "docs/templates/h11_v4_g072_switch_control_schema.json",
     "docs/H11_V4_G072_SWITCH_CONTROL_DESIGN.md",
+    "backend/app/services/h11_v4_g073_runtime.py",
+    "backend/scripts/h11_auto_v4_g073_runtime_bootstrap_no_post.py",
+    "backend/scripts/h11_auto_v4_g073_operation_60_no_post.py",
+    "backend/scripts/h11_auto_v4_g073_atomic_activation.py",
+    "backend/app/tests/h11_auto/test_v4_g073_final_runtime_fake_only.py",
+    "docs/H11_V4_G073_FINAL_SWITCH_RUNTIME_DESIGN.md",
+    "docs/templates/h11_v4_g073_frozen_generation.json",
+    "docs/templates/h11_v4_g073_runtime_commissioning_evidence.json",
+    "docs/templates/h11_v4_g073_independent_review_attestation.json",
+    "docs/templates/h11_v4_g073_switch_control_schema.json",
+    "docs/templates/h11_v4_g073_reconciliation_schema.json",
+    "docs/templates/h11_v4_g073_action_scope_schema.json",
+    "docs/templates/h11_v4_g073_entry_exit_schema.json",
 )
 
 _G070_NORMALIZED_ARTIFACTS = frozenset(
@@ -286,6 +299,13 @@ _G070_NORMALIZED_ARTIFACTS = frozenset(
         "docs/templates/h11_v4_g072_independent_review_attestation.json",
         "docs/templates/h11_v4_g072_atomic_activation_schema.json",
         "docs/templates/h11_v4_g072_switch_control_schema.json",
+        "docs/templates/h11_v4_g073_frozen_generation.json",
+        "docs/templates/h11_v4_g073_runtime_commissioning_evidence.json",
+        "docs/templates/h11_v4_g073_independent_review_attestation.json",
+        "docs/templates/h11_v4_g073_switch_control_schema.json",
+        "docs/templates/h11_v4_g073_reconciliation_schema.json",
+        "docs/templates/h11_v4_g073_action_scope_schema.json",
+        "docs/templates/h11_v4_g073_entry_exit_schema.json",
     }
 )
 _G070_BINDING_FIELDS = frozenset(
