@@ -1,0 +1,23 @@
+{
+  "architecture_status": "CLEAR",
+  "arm_mutation_count": 0,
+  "artifact_digest": "sha256:0591aadb401c5ad1835332fa6f46b9bb9711f48312cb997a0892cf7cde906667",
+  "blocking_findings": [],
+  "broker_get_count": 0,
+  "broker_post_count": 0,
+  "credential_read_count": 0,
+  "external_human_signoff_verified": false,
+  "frozen_design_digest": "sha256:9193b78f5c1c423689d6fc21d97793edf05ad1ff33408169d3574ba854bbf6de",
+  "generation_digest": "sha256:f0e74bf0f3ef114db3474df4aa7348edf112a5c8534d55121f730173ea868c0d",
+  "generation_label": "H11_AUTO_30M_20260802_G075",
+  "launchagent_mutation_count": 0,
+  "notification_attempt_count": 0,
+  "operations_status": "CLEAR",
+  "predecessor_authorization_reused": false,
+  "predecessor_generation_digest": "sha256:ce098ee83b0f6dec6929779fea01b61f92ebdb089f2de074df7131fbad183087",
+  "private_api_read_count": 0,
+  "review_scope": "G075_RUNTIME_ONLY_CORRECTIVE_FAKE_ONLY",
+  "reviewed_files_digest": "sha256:4c59da8e0c5330ee5400902941f2d72bb3627d28a144edc784d135e555c7b0d8",
+  "safety_status": "CLEAR",
+  "schema": "H11_V4_G075_INDEPENDENT_REVIEW_ATTESTATION_V1"
+}

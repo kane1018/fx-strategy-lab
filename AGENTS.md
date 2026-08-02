@@ -45,6 +45,21 @@ retry/repost、G073 state/marker/evidenceの変更またはauthorization再利�
 G074候補のblocking findingはoperation 60開始前に同一候補内でのみ修正し、自動で
 G075を作成しない。
 
+## H-11 v4 G075 runtime-only corrective candidate限定例外
+
+operatorがG074 initial activationのterminal UNKNOWNを保持したG075 corrective
+generationを明示承認した場合に限り、G074のmarker、HALT、state root、operation evidenceを
+変更・削除・resetせず、G075専用rootとdigestへbindしたruntime-only successorを実装してよい。
+実装・review・artifact確定まではfake/synthetic transportだけを使い、実Keychain、Private API、
+broker GET/POST、注文、取消、変更、決済、通知、ARM変更、LaunchAgent操作を行わない。
+
+G075はG074 UNKNOWNをincident provenanceとしてのみ記録し、authorization、reconciliation、
+operation 60成功証拠として再利用しない。default-deny hard guard、no retry/repost、
+`actual_post_authorized=false`、`broker_post_authorized=false`を維持する。外部A/S/Oが全CLEARに
+なった後のcommit/push、canonical昇格、G075 operation 60、generation-bound Private GET各1回、
+local ARM ONは、それぞれoperatorの明示承認範囲でのみ行う。失敗・UNKNOWN時は同generationで
+retryせず、G076を自動作成しない。
+
 このリポジトリでは、目的達成に必要な最小限の変更だけを行う。
 
 ## 作業手順

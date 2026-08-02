@@ -1,0 +1,11 @@
+{
+  "schema": "H11_V4_G075_RECONCILIATION_SCHEMA_V1",
+  "cycle_scope": "generation-bound-exclusive",
+  "endpoints": ["latestExecutions", "openPositions", "activeOrders"],
+  "maximum_attempts_per_cycle": 1,
+  "same_cycle_retry": false,
+  "unknown_policy": "HALTED",
+  "raw_response_persisted": false,
+  "credential_persisted": false,
+  "identifier_persisted": false
+}

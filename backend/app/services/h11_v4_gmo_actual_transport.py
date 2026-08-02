@@ -49,6 +49,7 @@ from app.h11_auto.v4_gmo_persisted_authorization import (
 from app.private_api.auth import build_auth_headers
 from app.security.real_broker_post_hard_guard import assert_real_broker_post_allowed
 from app.services.h11_v4_g074_runtime import G074RecoveryScope
+from app.services.h11_v4_g075_runtime import G075RecoveryScope
 
 GMO_V4_PRIVATE_BASE_URL = "https://forex-api.coin.z.com"
 # Per-call HTTP budget for private requests. The frozen protection contract gives
@@ -165,6 +166,64 @@ def _require_g074_recovered_exit_scope(
     ):
         raise V4GmoActualTransportError("V4_GMO_G074_RECOVERY_SCOPE_INVALID")
     return scope
+
+
+def _require_g075_recovered_exit_scope(
+    scope: object, *, now_utc: datetime
+) -> G075RecoveryScope:
+    """Accept only an exact, short-lived G075 exit-recovery scope."""
+
+    if not isinstance(scope, G075RecoveryScope) or now_utc.tzinfo is None:
+        raise V4GmoActualTransportError("V4_GMO_G075_RECOVERY_SCOPE_INVALID")
+    try:
+        expires = datetime.fromisoformat(scope.expires_at_utc).astimezone(UTC)
+    except (TypeError, ValueError) as error:
+        raise V4GmoActualTransportError("V4_GMO_G075_RECOVERY_SCOPE_INVALID") from error
+    base = {
+        "generation_digest": scope.generation_digest,
+        "reviewed_files_digest": scope.reviewed_files_digest,
+        "release_capability_digest": scope.release_capability_digest,
+        "reconciliation_artifact_digest": scope.reconciliation_artifact_digest,
+        "cycle_id": scope.cycle_id,
+        "symbol": scope.symbol,
+        "quantity": scope.quantity,
+        "side": scope.side,
+        "expires_at_utc": scope.expires_at_utc,
+        "ownership_exact": scope.ownership_exact,
+        "quantity_matches": scope.quantity_matches,
+        "protection_confirmed": scope.protection_confirmed,
+        "action_key": scope.action_key,
+    }
+    calculated = "sha256:" + hashlib.sha256(
+        json.dumps(base, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if (
+        scope.generation_digest == ""
+        or scope.reviewed_files_digest == ""
+        or scope.release_capability_digest == ""
+        or scope.reconciliation_artifact_digest == ""
+        or not scope.action_key.startswith("sha256:")
+        or len(scope.action_key) != 71
+        or scope.symbol != "USD_JPY"
+        or scope.quantity != 1_000
+        or scope.side not in {"BUY", "SELL"}
+        or scope.ownership_exact is not True
+        or scope.quantity_matches is not True
+        or scope.protection_confirmed is not True
+        or scope.scope_digest != calculated
+        or expires <= now_utc.astimezone(UTC)
+        or (expires - now_utc.astimezone(UTC)).total_seconds() > 60
+    ):
+        raise V4GmoActualTransportError("V4_GMO_G075_RECOVERY_SCOPE_INVALID")
+    return scope
+
+
+def _require_recovered_exit_scope(
+    scope: object, *, now_utc: datetime
+) -> G074RecoveryScope | G075RecoveryScope:
+    if isinstance(scope, G075RecoveryScope):
+        return _require_g075_recovered_exit_scope(scope, now_utc=now_utc)
+    return _require_g074_recovered_exit_scope(scope, now_utc=now_utc)
 
 
 def _classify_private_result_unknown(error: Exception) -> str:
@@ -488,7 +547,7 @@ class V4GmoHttpxPrivateTransport:
         self,
         *,
         activation_permit: V4GmoActualActivationPermit | None = None,
-        recovered_exit_scope: G074RecoveryScope | None = None,
+        recovered_exit_scope: G074RecoveryScope | G075RecoveryScope | None = None,
         signed_request_factory: V4GmoSignedRequestFactory,
         client: httpx.Client | None = None,
         cadence_gate: V4PrivateApiCadenceGate | None = None,
@@ -511,7 +570,7 @@ class V4GmoHttpxPrivateTransport:
             self._recovered_exit_only = False
             self._recovery_expires_at_utc = None
         else:
-            scope = _require_g074_recovered_exit_scope(
+            scope = _require_recovered_exit_scope(
                 recovered_exit_scope, now_utc=wall_clock_factory()
             )
             self._recovered_exit_only = True
@@ -520,7 +579,7 @@ class V4GmoHttpxPrivateTransport:
             ).astimezone(UTC)
         if not isinstance(signed_request_factory, V4GmoSignedRequestFactory):
             raise V4GmoActualTransportError("V4_GMO_SIGNER_INVALID")
-        self._scope: V4ActivatedRuntimeScope | G074RecoveryScope = scope
+        self._scope: V4ActivatedRuntimeScope | G074RecoveryScope | G075RecoveryScope = scope
         self._signed_request_factory = signed_request_factory
         self._client = client if client is not None else httpx.Client()
         self._owns_client = client is None
@@ -558,7 +617,7 @@ class V4GmoHttpxPrivateTransport:
         ) = None,
     ) -> V4GmoPrivateEnvelope:
         if self._recovered_exit_only:
-            scope = _require_g074_recovered_exit_scope(
+            scope = _require_recovered_exit_scope(
                 self._scope, now_utc=self._wall_clock_factory()
             )
         else:

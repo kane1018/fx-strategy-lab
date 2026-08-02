@@ -112,6 +112,12 @@ from app.services.h11_v4_g074_runtime import (
     safe_g074_api_status,
     verify_g074_scheduler_binding,
 )
+from app.services.h11_v4_g075_runtime import (
+    G075_GENERATION_LABEL,
+    G075Error,
+    safe_g075_api_status,
+    verify_g075_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -184,9 +190,12 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         G072_GENERATION_LABEL,
         G073_GENERATION_LABEL,
         G074_GENERATION_LABEL,
+        G075_GENERATION_LABEL,
     }:
         verifier = (
-            verify_g074_scheduler_binding
+            verify_g075_scheduler_binding
+            if contract.generation.generation_label == G075_GENERATION_LABEL
+            else verify_g074_scheduler_binding
             if contract.generation.generation_label == G074_GENERATION_LABEL
             else verify_g073_scheduler_binding
             if contract.generation.generation_label == G073_GENERATION_LABEL
@@ -222,6 +231,7 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
             G072_GENERATION_LABEL,
             G073_GENERATION_LABEL,
             G074_GENERATION_LABEL,
+            G075_GENERATION_LABEL,
         }:
             verifier_kwargs["repository"] = REPOSITORY
         verifier(
@@ -280,9 +290,12 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         G072_GENERATION_LABEL,
         G073_GENERATION_LABEL,
         G074_GENERATION_LABEL,
+        G075_GENERATION_LABEL,
     }:
         status_reader = (
-            safe_g074_api_status
+            safe_g075_api_status
+            if contract.generation.generation_label == G075_GENERATION_LABEL
+            else safe_g074_api_status
             if contract.generation.generation_label == G074_GENERATION_LABEL
             else safe_g073_api_status
             if contract.generation.generation_label == G073_GENERATION_LABEL
@@ -754,7 +767,10 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         if request_body.expected_reviewed_files_digest != contract.reviewed_files_digest:
             raise V4UnattendedLiveArmStateError("ARM_STATE_REVIEWED_FILES_MISMATCH")
         current = _safe_status(contract)
-        if contract.generation.generation_label == G074_GENERATION_LABEL:
+        if contract.generation.generation_label == G075_GENERATION_LABEL:
+            if current.get("release_state") != "ENABLED":
+                raise G075Error("G075_RELEASE_CAPABILITY_LOCKED")
+        elif contract.generation.generation_label == G074_GENERATION_LABEL:
             if current.get("release_state") != "ENABLED":
                 raise G074Error("G074_RELEASE_CAPABILITY_LOCKED")
         elif contract.generation.generation_label != G070_GENERATION_LABEL and (
@@ -786,6 +802,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         G072Error,
         G073Error,
         G074Error,
+        G075Error,
         OSError,
         ValueError,
     ) as error:
