@@ -35,10 +35,16 @@ def _runtime_evidence(*, arm_armed: bool, position_open: bool) -> V4UnattendedRu
     )
 
 
-def _install_contract(monkeypatch, tmp_path: Path, *, supported: bool = True) -> None:
+def _install_contract(
+    monkeypatch,
+    tmp_path: Path,
+    *,
+    supported: bool = True,
+    generation_label: str = "H11_AUTO_30M_TEST",
+) -> None:
     generation = SimpleNamespace(
         digest=_GENERATION,
-        generation_label="H11_AUTO_30M_TEST",
+        generation_label=generation_label,
         live_ready=supported,
         unattended_live_supported=supported,
         maximum_entries_per_day=30,
@@ -66,7 +72,9 @@ def _install_contract(monkeypatch, tmp_path: Path, *, supported: bool = True) ->
             arm_armed=kw["arm_armed"], position_open=False
         ),
     )
-    if supported:
+    if generation_label == subject.G069_GENERATION_LABEL:
+        monkeypatch.setattr(subject, "verify_g069_scheduler_binding", lambda **_kw: None)
+    elif supported:
         monkeypatch.setattr(
             subject,
             "verify_g038_generation_activation",
@@ -127,6 +135,59 @@ def test_status_and_on_off_are_local_state_only(monkeypatch, tmp_path) -> None:
         },
     )
     assert disarmed.status_code == 409
+
+
+def test_g069_effective_readiness_allows_arm_on_while_manifest_stays_not_ready(
+    monkeypatch, tmp_path
+) -> None:
+    _install_contract(
+        monkeypatch,
+        tmp_path,
+        supported=False,
+        generation_label=subject.G069_GENERATION_LABEL,
+    )
+    monkeypatch.setattr(subject, "_runtime_projection", lambda _contract: ("FLAT", 0))
+    monkeypatch.setattr(
+        subject,
+        "load_g069_position_reconciliation_no_post",
+        lambda **_kw: SimpleNamespace(
+            evidence_available=True,
+            position_open=False,
+            account_flat=True,
+            active_orders_zero=True,
+            open_positions_count=0,
+            active_orders_count=0,
+            protection_confirmed=False,
+            ownership_exact=False,
+            quantity_matches=False,
+            generation_bound=True,
+            evidence_fresh=True,
+        ),
+    )
+    client = TestClient(app, base_url="http://127.0.0.1:8765")
+    initial = client.get("/api/manual/unattended-control")
+    assert initial.status_code == 200
+    payload = initial.json()
+    assert payload["runtime_activation_available"] is True
+    assert payload["live_ready"] is False
+    assert payload["unattended_live_supported"] is False
+    assert payload["position_reconciliation_ready"] is True
+    assert payload["local_arm_on_available"] is True
+    response = client.post(
+        "/api/manual/unattended-control/on",
+        headers={
+            "Origin": "http://127.0.0.1:8765",
+            "X-H11-V4-Control-CSRF": payload["csrf_token"],
+        },
+        json={
+            "expected_revision": 0,
+            "expected_generation_digest": _GENERATION,
+            "expected_reviewed_files_digest": _REVIEWED,
+        },
+    )
+    assert response.status_code == 200, response.json()
+    assert response.json()["arm_state"] == "ARMED"
+    assert response.json()["broker_write"] is False
 
 
 def test_unknown_contract_blocks_manual_private_get(monkeypatch) -> None:

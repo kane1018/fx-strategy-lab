@@ -868,7 +868,7 @@ def test_g064_external_gate_runs_real_runtime_contract_verifier(
     generation_payload = json.loads(
         (
             source_repository
-            / "docs/templates/h11_v4_gmo_frozen_generation.json"
+            / "docs/templates/h11_v4_g064_frozen_generation.json"
         ).read_text(encoding="utf-8")
     )
     generation_payload["blocked_hours_jst"] = tuple(
@@ -980,7 +980,7 @@ def test_g064_external_gate_blocks_when_runtime_contract_is_not_clear(
 
     with pytest.raises(
         V4ActualPreparationGuardError,
-        match="PREPARATION_G064_RUNTIME_CONTRACT_NOT_CLEAR",
+        match="PREPARATION_RESIDENT_RUNTIME_CONTRACT_NOT_CLEAR",
     ):
         load_external_preparation_gate(repository=tmp_path)
 

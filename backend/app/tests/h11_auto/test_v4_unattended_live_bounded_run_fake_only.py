@@ -40,7 +40,7 @@ subject = _load_subject()
 
 
 def _fake_session() -> SimpleNamespace:
-    return SimpleNamespace(intent=object())
+    return SimpleNamespace(intent=object(), generation=SimpleNamespace(label="TEST"))
 
 
 def _kwargs(**overrides: object) -> dict[str, object]:

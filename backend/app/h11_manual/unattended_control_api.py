@@ -69,6 +69,16 @@ from app.services.h11_v4_g068_unattended_activation_no_post import (
     V4G068ActivationError,
     verify_g068_scheduler_binding,
 )
+from app.services.h11_v4_g069_position_reconciliation_no_post import (
+    load_g069_position_reconciliation_no_post,
+)
+from app.services.h11_v4_g069_unattended_activation_no_post import (
+    G069_GENERATION_LABEL,
+    G069_PERSISTENT_HALT_FILE,
+    V4G069ActivationError,
+    verify_g069_arm_readiness_no_post,
+    verify_g069_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -135,9 +145,12 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         G066_GENERATION_LABEL,
         G067_GENERATION_LABEL,
         G068_GENERATION_LABEL,
+        G069_GENERATION_LABEL,
     }:
         verifier = (
-            verify_g067_scheduler_binding
+            verify_g069_scheduler_binding
+            if contract.generation.generation_label == G069_GENERATION_LABEL
+            else verify_g067_scheduler_binding
             if contract.generation.generation_label == G067_GENERATION_LABEL
             else (
                 verify_g068_scheduler_binding
@@ -203,12 +216,14 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         repository=REPOSITORY,
         generation_digest=contract.generation.digest,
     )
+    position_evidence = None
     persistent_halt = contract.generation.generation_label in {
         G064_GENERATION_LABEL,
         G065_GENERATION_LABEL,
         G066_GENERATION_LABEL,
         G067_GENERATION_LABEL,
         G068_GENERATION_LABEL,
+        G069_GENERATION_LABEL,
     } and (
         (
             state_root
@@ -222,7 +237,9 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
                     G067_PERSISTENT_HALT_FILE
                     if contract.generation.generation_label == G067_GENERATION_LABEL
                     else (
-                        G068_PERSISTENT_HALT_FILE
+                        G069_PERSISTENT_HALT_FILE
+                        if contract.generation.generation_label == G069_GENERATION_LABEL
+                        else G068_PERSISTENT_HALT_FILE
                         if contract.generation.generation_label == G068_GENERATION_LABEL
                         else G064_PERSISTENT_HALT_FILE
                     )
@@ -242,7 +259,9 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
                     G067_PERSISTENT_HALT_FILE
                     if contract.generation.generation_label == G067_GENERATION_LABEL
                     else (
-                        G068_PERSISTENT_HALT_FILE
+                        G069_PERSISTENT_HALT_FILE
+                        if contract.generation.generation_label == G069_GENERATION_LABEL
+                        else G068_PERSISTENT_HALT_FILE
                         if contract.generation.generation_label == G068_GENERATION_LABEL
                         else G064_PERSISTENT_HALT_FILE
                     )
@@ -261,6 +280,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         V4G066ActivationError,
         V4G067ActivationError,
         V4G068ActivationError,
+        V4G069ActivationError,
     ):
         supported = False
     local_runtime_state, entries_today = _runtime_projection(contract)
@@ -276,27 +296,58 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         G066_GENERATION_LABEL,
         G067_GENERATION_LABEL,
         G068_GENERATION_LABEL,
+        G069_GENERATION_LABEL,
     }:
-        position_evidence = (
-            load_g065_position_reconciliation_no_post
-            if contract.generation.generation_label
-            in {
-                G065_GENERATION_LABEL,
-                G066_GENERATION_LABEL,
-                G067_GENERATION_LABEL,
-                G068_GENERATION_LABEL,
-            }
-            else (
-                load_g064_position_reconciliation_no_post
-            )
-        )(
-            state_root=v4_gmo_runtime_state_root(
-                repository=REPOSITORY,
+        if contract.generation.generation_label == G069_GENERATION_LABEL:
+            position_evidence = load_g069_position_reconciliation_no_post(
+                reviewed_files_digest=contract.reviewed_files_digest,
                 generation_digest=contract.generation.digest,
-            ),
-            generation_digest=contract.generation.digest,
-            now_utc=datetime.now(UTC),
-        )
+                now_utc=datetime.now(UTC),
+            )
+            position_shape_ready = bool(
+                position_evidence.evidence_available
+                and position_evidence.evidence_fresh
+                and position_evidence.generation_bound
+                and (
+                    (
+                        position_evidence.account_flat is True
+                        and position_evidence.active_orders_zero is True
+                    )
+                    or all(
+                        getattr(position_evidence, name, False) is True
+                        for name in (
+                            "ownership_exact",
+                            "quantity_matches",
+                            "protection_confirmed",
+                        )
+                    )
+                )
+            )
+        else:
+            position_evidence = (
+                load_g065_position_reconciliation_no_post
+                if contract.generation.generation_label
+                in {
+                    G065_GENERATION_LABEL,
+                    G066_GENERATION_LABEL,
+                    G067_GENERATION_LABEL,
+                    G068_GENERATION_LABEL,
+                }
+                else load_g064_position_reconciliation_no_post
+            )(
+                state_root=v4_gmo_runtime_state_root(
+                    repository=REPOSITORY,
+                    generation_digest=contract.generation.digest,
+                ),
+                generation_digest=contract.generation.digest,
+                now_utc=datetime.now(UTC),
+            )
+            position_shape_ready = bool(
+                position_evidence.evidence_available
+                and position_evidence.evidence_fresh
+                and position_evidence.generation_bound
+            )
+        position_reconciliation_ready = position_shape_ready
         if not position_evidence.evidence_available:
             evidence = replace(
                 evidence,
@@ -306,6 +357,20 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
                 quantity_matches=False,
                 runtime_clear=False,
                 unknown_halt=True,
+            )
+        elif contract.generation.generation_label == G069_GENERATION_LABEL:
+            non_flat = not (
+                position_evidence.account_flat is True
+                and position_evidence.active_orders_zero is True
+            )
+            evidence = replace(
+                evidence,
+                position_open=bool(position_evidence.position_open or non_flat),
+                protection_confirmed=position_evidence.protection_confirmed,
+                ownership_exact=position_evidence.ownership_exact,
+                quantity_matches=position_evidence.quantity_matches,
+                runtime_clear=evidence.runtime_clear and position_shape_ready,
+                unknown_halt=evidence.unknown_halt or not position_shape_ready,
             )
         elif position_evidence.position_open:
             evidence = replace(
@@ -344,6 +409,39 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
     if local_runtime_state == "FLAT" and evidence.position_open:
         evidence = replace(evidence, runtime_clear=False, unknown_halt=True)
     projected_state = project_unattended_runtime_state(evidence)
+    if contract.generation.generation_label == G069_GENERATION_LABEL:
+        try:
+            verify_g069_arm_readiness_no_post(
+                scheduler_ready=supported,
+                position_evidence_available=bool(
+                    position_evidence is not None and position_evidence.evidence_available
+                ),
+                position_evidence_fresh=bool(
+                    position_evidence is not None and position_evidence.evidence_fresh
+                ),
+                position_generation_bound=bool(
+                    position_evidence is not None and position_evidence.generation_bound
+                ),
+                position_open=evidence.position_open,
+                account_flat=bool(
+                    position_evidence is not None
+                    and getattr(position_evidence, "account_flat", False) is True
+                ),
+                active_orders_zero=bool(
+                    position_evidence is not None
+                    and getattr(position_evidence, "active_orders_zero", False) is True
+                ),
+                ownership_exact=evidence.ownership_exact,
+                quantity_matches=evidence.quantity_matches,
+                protection_confirmed=evidence.protection_confirmed,
+            )
+            arm_ready = True
+        except V4G069ActivationError:
+            arm_ready = False
+            projected_state = V4UnattendedRuntimeState.HALTED
+    else:
+        arm_ready = supported and projected_state is not V4UnattendedRuntimeState.HALTED
+        position_reconciliation_ready = arm_ready
     entry_gate_open = entry_evaluation_allowed(
         evidence=evidence,
         state=projected_state,
@@ -388,9 +486,16 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         "reason_label": reason,
         "revision": check.revision,
         "reviewed_files_digest": contract.reviewed_files_digest,
-        "unattended_live_supported": supported,
+        "live_ready": bool(contract.generation.live_ready and supported),
+        "unattended_live_supported": bool(
+            contract.generation.unattended_live_supported and supported
+        ),
         "daily_authorization_required": False,
-        "runtime_activation_available": supported,
+        "scheduler_ready": supported,
+        "position_reconciliation_ready": position_reconciliation_ready,
+        "local_arm_on_available": arm_ready,
+        "arm_ready": arm_ready,
+        "runtime_activation_available": arm_ready,
     }
     if csrf_token is not None:
         result["csrf_token"] = csrf_token
@@ -431,24 +536,30 @@ def _runtime_projection(contract: _CurrentContract) -> tuple[str, int | None]:
         G066_GENERATION_LABEL,
         G067_GENERATION_LABEL,
         G068_GENERATION_LABEL,
+        G069_GENERATION_LABEL,
     }:
-        position_evidence = (
-            load_g065_position_reconciliation_no_post
-            if contract.generation.generation_label
-            in {
-                G065_GENERATION_LABEL,
-                G066_GENERATION_LABEL,
-                G067_GENERATION_LABEL,
-                G068_GENERATION_LABEL,
-            }
-            else (
-                load_g064_position_reconciliation_no_post
+        if contract.generation.generation_label == G069_GENERATION_LABEL:
+            position_evidence = load_g069_position_reconciliation_no_post(
+                reviewed_files_digest=contract.reviewed_files_digest,
+                generation_digest=contract.generation.digest,
+                now_utc=datetime.now(UTC),
             )
-        )(
-            state_root=root,
-            generation_digest=contract.generation.digest,
-            now_utc=datetime.now(UTC),
-        )
+        else:
+            position_evidence = (
+                load_g065_position_reconciliation_no_post
+                if contract.generation.generation_label
+                in {
+                    G065_GENERATION_LABEL,
+                    G066_GENERATION_LABEL,
+                    G067_GENERATION_LABEL,
+                    G068_GENERATION_LABEL,
+                }
+                else load_g064_position_reconciliation_no_post
+            )(
+                state_root=root,
+                generation_digest=contract.generation.digest,
+                now_utc=datetime.now(UTC),
+            )
         if not position_evidence.evidence_available:
             return "HALTED", entries_today
         if snapshot.cycle_present != position_evidence.position_open:
@@ -532,6 +643,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         V4G066ActivationError,
         V4G067ActivationError,
         V4G068ActivationError,
+        V4G069ActivationError,
         OSError,
         ValueError,
     ) as error:

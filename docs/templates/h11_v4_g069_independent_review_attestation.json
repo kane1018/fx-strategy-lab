@@ -1,0 +1,65 @@
+{
+  "architecture_status": "PENDING",
+  "artifact_digest": "sha256:9e30906f1f74fc4b3370f9f2a3e799474c1fd071e307bdf22614c2200148e82f",
+  "external_human_signoff_verified": false,
+  "generation_digest": "sha256:9b0bcd34ac8d528ecad331afa9f8892adf2e9691f5ce02872239d2b3db18a0b4",
+  "generation_label": "H11_AUTO_30M_20260802_G069",
+  "operations_status": "PENDING",
+  "review_evidence": {
+    "architecture": "PENDING",
+    "operations": "PENDING",
+    "safety": "PENDING"
+  },
+  "review_method": "INDEPENDENT_A_S_O_REVIEW",
+  "review_provenance": {
+    "architecture": {
+      "broker_post_count": 0,
+      "broker_read_count": 0,
+      "credential_read_count": 0,
+      "generation_label": "H11_AUTO_30M_20260802_G069",
+      "launchagent_executed": false,
+      "notification_attempt_count": 0,
+      "private_api_read_count": 0,
+      "review_scope": "READ_ONLY_NO_POST",
+      "reviewed_commit": "46a442f40b00d34e40f0f57c5f0ccfe3a9874b16",
+      "reviewed_files_digest": "sha256:b6532c9b4db1fc9858d9c327526dcc2ca8e253d12e9149e7837cde03092e516a",
+      "reviewer_role": "independent_architecture",
+      "status": "PENDING"
+    },
+    "operations": {
+      "broker_post_count": 0,
+      "broker_read_count": 0,
+      "credential_read_count": 0,
+      "generation_label": "H11_AUTO_30M_20260802_G069",
+      "launchagent_executed": false,
+      "notification_attempt_count": 0,
+      "private_api_read_count": 0,
+      "review_scope": "READ_ONLY_NO_POST",
+      "reviewed_commit": "46a442f40b00d34e40f0f57c5f0ccfe3a9874b16",
+      "reviewed_files_digest": "sha256:b6532c9b4db1fc9858d9c327526dcc2ca8e253d12e9149e7837cde03092e516a",
+      "reviewer_role": "independent_operations",
+      "status": "PENDING"
+    },
+    "safety": {
+      "broker_post_count": 0,
+      "broker_read_count": 0,
+      "credential_read_count": 0,
+      "generation_label": "H11_AUTO_30M_20260802_G069",
+      "launchagent_executed": false,
+      "notification_attempt_count": 0,
+      "private_api_read_count": 0,
+      "review_scope": "READ_ONLY_NO_POST",
+      "reviewed_commit": "46a442f40b00d34e40f0f57c5f0ccfe3a9874b16",
+      "reviewed_files_digest": "sha256:b6532c9b4db1fc9858d9c327526dcc2ca8e253d12e9149e7837cde03092e516a",
+      "reviewer_role": "independent_safety",
+      "status": "PENDING"
+    }
+  },
+  "review_scope": "READ_ONLY_NO_POST",
+  "reviewed_at_utc": "2026-08-02T01:59:31Z",
+  "reviewed_branch": "main",
+  "reviewed_commit": "46a442f40b00d34e40f0f57c5f0ccfe3a9874b16",
+  "reviewed_files_digest": "sha256:b6532c9b4db1fc9858d9c327526dcc2ca8e253d12e9149e7837cde03092e516a",
+  "safety_status": "PENDING",
+  "schema": "H11_V4_G069_INDEPENDENT_REVIEW_ATTESTATION_V1"
+}

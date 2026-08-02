@@ -37,6 +37,7 @@ from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 V4_GMO_GENERATION_SCHEMA = "H11_AUTO_GENERATION_V4_GMO_FRIDAY_LIMITED_V2"
 V4_GMO_GENERATION_STATUS = "OPERATOR_FROZEN_NOT_ACTIVATED"
 V4_GMO_UNATTENDED_ACTIVATED_STATUS = "UNATTENDED_LIVE_COMMISSIONED"
+V4_GMO_RUNTIME_REVIEWED_STATUS = "UNATTENDED_RUNTIME_REVIEWED_AWAITING_COMMISSIONING"
 V4_GMO_GENERATION_ARTIFACT = Path("docs/templates/h11_v4_gmo_frozen_generation.json")
 _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
     {
@@ -45,6 +46,7 @@ _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
         "H11_AUTO_30M_20260802_G066",
         "H11_AUTO_30M_20260802_G067",
         "H11_AUTO_30M_20260802_G068",
+        "H11_AUTO_30M_20260802_G069",
     }
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -112,7 +114,12 @@ class V4GmoFrozenGeneration:
         selections = V4ApprovedOperatorSelections()
         requirements = (
             self.schema == V4_GMO_GENERATION_SCHEMA,
-            self.status in {V4_GMO_GENERATION_STATUS, V4_GMO_UNATTENDED_ACTIVATED_STATUS},
+            self.status
+            in {
+                V4_GMO_GENERATION_STATUS,
+                V4_GMO_UNATTENDED_ACTIVATED_STATUS,
+                V4_GMO_RUNTIME_REVIEWED_STATUS,
+            },
             bool(_LABEL.fullmatch(self.generation_label)),
             bool(_SHA256.fullmatch(self.implementation_digest)),
             self.operator_selection_digest == selections.digest,
@@ -177,6 +184,19 @@ class V4GmoFrozenGeneration:
                 and self.activation_source_generation_digest is None
                 and self.successful_canary_evidence_digest is None
                 and self.successor_halt_release_digest is None
+            )
+            or (
+                self.status == V4_GMO_RUNTIME_REVIEWED_STATUS
+                and self.generation_label == "H11_AUTO_30M_20260802_G069"
+                and self.live_ready is False
+                and self.unattended_live_supported is False
+                and isinstance(self.activation_source_generation_digest, str)
+                and bool(_SHA256.fullmatch(self.activation_source_generation_digest))
+                and self.successful_canary_evidence_digest is None
+                and isinstance(self.runtime_commissioning_evidence_digest, str)
+                and bool(_SHA256.fullmatch(self.runtime_commissioning_evidence_digest))
+                and isinstance(self.successor_halt_release_digest, str)
+                and bool(_SHA256.fullmatch(self.successor_halt_release_digest))
             )
             or (
                 self.status == V4_GMO_UNATTENDED_ACTIVATED_STATUS

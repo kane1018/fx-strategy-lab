@@ -28,13 +28,14 @@ class G065PositionReconciliationEvidence:
     quantity_matches: bool
     generation_bound: bool
     evidence_available: bool = False
+    evidence_fresh: bool = False
 
     def __bool__(self) -> bool:
         return False
 
 
 def _unknown() -> G065PositionReconciliationEvidence:
-    return G065PositionReconciliationEvidence(False, False, False, False, False, False)
+    return G065PositionReconciliationEvidence(False, False, False, False, False, False, False)
 
 
 def load_g065_position_reconciliation_no_post(
@@ -85,6 +86,7 @@ def load_g065_position_reconciliation_no_post(
         quantity_matches=payload["quantity_matches"],
         generation_bound=payload["generation_bound"],
         evidence_available=True,
+        evidence_fresh=True,
     )
 
 

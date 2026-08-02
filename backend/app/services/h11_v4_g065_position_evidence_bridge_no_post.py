@@ -80,4 +80,5 @@ def materialize_g065_position_reconciliation_no_post(
         quantity_matches=False,
         generation_bound=True,
         evidence_available=True,
+        evidence_fresh=True,
     )
