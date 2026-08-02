@@ -40,6 +40,7 @@ V4_GMO_UNATTENDED_ACTIVATED_STATUS = "UNATTENDED_LIVE_COMMISSIONED"
 V4_GMO_RUNTIME_REVIEWED_STATUS = "UNATTENDED_RUNTIME_REVIEWED_AWAITING_COMMISSIONING"
 V4_GMO_GENERATION_ARTIFACT = Path("docs/templates/h11_v4_gmo_frozen_generation.json")
 V4_GMO_G070_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g070_frozen_generation.json")
+V4_GMO_G071_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g071_frozen_generation.json")
 _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
     {
         "H11_AUTO_30M_20260801_G064",
@@ -49,6 +50,7 @@ _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
         "H11_AUTO_30M_20260802_G068",
         "H11_AUTO_30M_20260802_G069",
         "H11_AUTO_30M_20260802_G070",
+        "H11_AUTO_30M_20260802_G071",
     }
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -189,7 +191,11 @@ class V4GmoFrozenGeneration:
             ),
             self.actual_post_authorized is False,
             (
-                self.generation_label != "H11_AUTO_30M_20260802_G070"
+                self.generation_label
+                not in {
+                    "H11_AUTO_30M_20260802_G070",
+                    "H11_AUTO_30M_20260802_G071",
+                }
                 and all(
                     value is None
                     for value in (
@@ -206,7 +212,11 @@ class V4GmoFrozenGeneration:
                 )
             )
             or (
-                self.generation_label == "H11_AUTO_30M_20260802_G070"
+                self.generation_label
+                in {
+                    "H11_AUTO_30M_20260802_G070",
+                    "H11_AUTO_30M_20260802_G071",
+                }
                 and self.daily_authorization_required is False
                 and self.per_trade_confirmation_required is False
                 and self.arm_is_operating_intent is True
@@ -232,6 +242,7 @@ class V4GmoFrozenGeneration:
                 in {
                     "H11_AUTO_30M_20260802_G069",
                     "H11_AUTO_30M_20260802_G070",
+                    "H11_AUTO_30M_20260802_G071",
                 }
                 and self.live_ready is False
                 and self.unattended_live_supported is False
@@ -307,7 +318,10 @@ class V4GmoFrozenGeneration:
     @property
     def digest(self) -> str:
         canonical = self.canonical_json
-        if self.generation_label == "H11_AUTO_30M_20260802_G070":
+        if self.generation_label in {
+            "H11_AUTO_30M_20260802_G070",
+            "H11_AUTO_30M_20260802_G071",
+        }:
             payload = json.loads(canonical)
             payload.pop("runtime_commissioning_evidence_digest", None)
             payload.pop("successor_halt_release_digest", None)
@@ -418,6 +432,17 @@ def load_v4_gmo_g070_candidate_generation(
 
     return _load_v4_gmo_generation_artifact(
         path=repository.resolve() / V4_GMO_G070_CANDIDATE_ARTIFACT,
+        implementation_digest=implementation_digest,
+    )
+
+
+def load_v4_gmo_g071_candidate_generation(
+    *, repository: Path, implementation_digest: str
+) -> V4GmoFrozenGeneration:
+    """Load the G071 candidate without mutating the canonical artifact."""
+
+    return _load_v4_gmo_generation_artifact(
+        path=repository.resolve() / V4_GMO_G071_CANDIDATE_ARTIFACT,
         implementation_digest=implementation_digest,
     )
 

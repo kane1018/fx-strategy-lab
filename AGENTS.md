@@ -788,6 +788,25 @@ cycle/action scope、operation 60 candidateをfake/synthetic/local-onlyで実装
 - generic allow bridge、allow boolean、env/`.env`解除、UI/reconciliation/control-planeからbroker transport import。
 - 本candidateをlive-ready、actual POST authorization、実broker activation済みとして扱うこと。
 
+## H-11 v4 G071 atomic ARM activation corrective generation限定例外
+
+operatorがG070のfresh reconciliation期限切れ事象を保持したまま、最後のcorrective
+generationであるG071を明示依頼した場合に限り、Private GET、sanitized reconciliation、
+release capability、local ARM mutation、resident projection確認を同一processの一回限り
+transactionへ集約する実装を行ってよい。
+
+この実装・review・commissioning Stepでは実Keychain、Private API、ARM変更、broker GET/POST、
+注文、取消、変更、決済、通知を実行しない。G070のmarker、release、reconciliation、runtime
+state、HALTを変更・reset・authorizationとして再利用しない。G071のactual transaction実行は、
+canonical昇格とoperation 60完了後の別の明示承認を必須とする。
+
+G071 transactionはstarted markerをcredential/networkより前にO_EXCLで作成し、指定3 endpointを
+各最大1回だけ読み、fresh reconciliation、release capability、ARM mutation、resident projectionを
+中断なしで連続実行する。started後の失敗・UNKNOWN・timeoutは同generationでretryしない。
+broker-write transport、allow bridge、env解除、日次authorization、取引ごとのconfirmation、
+`main_readonly.py`変更、G072作成は禁止する。実装検証はfake/synthetic/local-onlyに限定し、
+`actual_post_authorized=false`、`broker_post_authorized=false`を維持する。
+
 ## H-11 v4 persistent ON/OFF controller corrective generation限定例外
 
 operatorが2026-07-26に採用した、localhost手動UIの永続`ON`/`OFF`だけで新規entryを管理する

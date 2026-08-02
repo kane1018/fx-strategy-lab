@@ -161,6 +161,7 @@ def read_v4_unattended_shadow_private_snapshot(
     client: httpx.Client,
     monotonic_factory: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
+    request_attempt_observer: Callable[[int], None] | None = None,
 ) -> V4UnattendedShadowPrivateSnapshot:
     """Perform the fixed 3-GET sequence once; never retries within a call.
 
@@ -201,9 +202,7 @@ def read_v4_unattended_shadow_private_snapshot(
             raise V4UnattendedShadowPrivateError("SHADOW_PRIVATE_GET_CADENCE_CLOCK_INVALID")
         minimum_start = started + target_offset
         if previous_request_started is not None:
-            minimum_start = max(
-                minimum_start, previous_request_started + _READ_CADENCE_SECONDS
-            )
+            minimum_start = max(minimum_start, previous_request_started + _READ_CADENCE_SECONDS)
         if now < minimum_start:
             sleep(minimum_start - now)
         request_started = float(monotonic_factory())
@@ -229,6 +228,8 @@ def read_v4_unattended_shadow_private_snapshot(
             path=signing_path,
             body="",
         )
+        if request_attempt_observer is not None:
+            request_attempt_observer(index + 1)
         try:
             response = client.request(
                 "GET",
@@ -335,9 +336,7 @@ def bind_private_snapshot_for_controller_no_post(
         or private.broker_write_performed is not False
         or private.broker_post_count != 0
     ):
-        raise V4UnattendedShadowPrivateError(
-            "SHADOW_PRIVATE_CONTROLLER_BINDING_INVALID"
-        )
+        raise V4UnattendedShadowPrivateError("SHADOW_PRIVATE_CONTROLLER_BINDING_INVALID")
     marker = build_account_snapshot_operation_marker_no_post(
         reviewed_files_digest=reviewed_files_digest,
         generation_digest=generation_digest,
