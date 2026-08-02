@@ -106,6 +106,12 @@ from app.services.h11_v4_g073_runtime import (
     safe_g073_api_status,
     verify_g073_scheduler_binding,
 )
+from app.services.h11_v4_g074_runtime import (
+    G074_GENERATION_LABEL,
+    G074Error,
+    safe_g074_api_status,
+    verify_g074_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -177,9 +183,12 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         G071_GENERATION_LABEL,
         G072_GENERATION_LABEL,
         G073_GENERATION_LABEL,
+        G074_GENERATION_LABEL,
     }:
         verifier = (
-            verify_g073_scheduler_binding
+            verify_g074_scheduler_binding
+            if contract.generation.generation_label == G074_GENERATION_LABEL
+            else verify_g073_scheduler_binding
             if contract.generation.generation_label == G073_GENERATION_LABEL
             else verify_g072_scheduler_binding
             if contract.generation.generation_label == G072_GENERATION_LABEL
@@ -211,6 +220,8 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         if contract.generation.generation_label in {
             G071_GENERATION_LABEL,
             G072_GENERATION_LABEL,
+            G073_GENERATION_LABEL,
+            G074_GENERATION_LABEL,
         }:
             verifier_kwargs["repository"] = REPOSITORY
         verifier(
@@ -268,9 +279,12 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         G071_GENERATION_LABEL,
         G072_GENERATION_LABEL,
         G073_GENERATION_LABEL,
+        G074_GENERATION_LABEL,
     }:
         status_reader = (
-            safe_g073_api_status
+            safe_g074_api_status
+            if contract.generation.generation_label == G074_GENERATION_LABEL
+            else safe_g073_api_status
             if contract.generation.generation_label == G073_GENERATION_LABEL
             else safe_g072_api_status
             if contract.generation.generation_label == G072_GENERATION_LABEL
@@ -312,8 +326,10 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
             "scheduler_ready": projected["control_plane_state"] == "READY",
             "position_reconciliation_ready": projected["reconciliation_state"]
             in {"FRESH_FLAT", "FRESH_PROTECTED"},
-            "local_arm_on_available": activation_available,
-            "arm_ready": activation_available,
+            "local_arm_on_available": bool(
+                projected.get("local_arm_on_available", activation_available)
+            ),
+            "arm_ready": bool(projected.get("arm_ready", activation_available)),
             "runtime_activation_available": activation_available,
         }
         if csrf_token is not None:
@@ -738,7 +754,10 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         if request_body.expected_reviewed_files_digest != contract.reviewed_files_digest:
             raise V4UnattendedLiveArmStateError("ARM_STATE_REVIEWED_FILES_MISMATCH")
         current = _safe_status(contract)
-        if contract.generation.generation_label != G070_GENERATION_LABEL and (
+        if contract.generation.generation_label == G074_GENERATION_LABEL:
+            if current.get("release_state") != "ENABLED":
+                raise G074Error("G074_RELEASE_CAPABILITY_LOCKED")
+        elif contract.generation.generation_label != G070_GENERATION_LABEL and (
             current["runtime_activation_available"] is not True
             or current["effective_state"] == "HALTED"
         ):
@@ -766,6 +785,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         G071Error,
         G072Error,
         G073Error,
+        G074Error,
         OSError,
         ValueError,
     ) as error:

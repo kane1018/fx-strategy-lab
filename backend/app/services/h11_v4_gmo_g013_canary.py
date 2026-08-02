@@ -515,15 +515,25 @@ def _refresh_session_evidence_before_permit(
     )
     if generation.digest != session.generation.digest:
         raise V4GmoG013CanaryError("G013_GENERATION_CHANGED_BEFORE_PERMIT")
-    external_gate = load_external_preparation_gate(repository=session.repository)
     current = datetime.now(UTC)
-    evidence = load_generation_completed_preparation_evidence(
-        repository=session.repository,
-        external_gate=external_gate,
-        generation_digest=generation.digest,
-        generation_label=generation.generation_label,
-        now_utc=current,
-    )
+    if generation.generation_label == "H11_AUTO_30M_20260802_G074":
+        refresh = getattr(session.preparation_evidence, "refresh_for_generation", None)
+        if not callable(refresh):
+            raise V4GmoG013CanaryError("G074_RELEASE_EVIDENCE_INVALID")
+        evidence = refresh(
+            generation_digest=generation.digest,
+            reviewed_files_digest=implementation_digest,
+            now_utc=current,
+        )
+    else:
+        external_gate = load_external_preparation_gate(repository=session.repository)
+        evidence = load_generation_completed_preparation_evidence(
+            repository=session.repository,
+            external_gate=external_gate,
+            generation_digest=generation.digest,
+            generation_label=generation.generation_label,
+            now_utc=current,
+        )
     refreshed = replace(
         session,
         generation=generation,

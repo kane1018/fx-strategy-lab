@@ -28,6 +28,23 @@ Support配下へO_EXCL started markerを作成し、失敗・結果不明・minu
 実Private GET実行は実装・独立review・corrective generation・commit/push・fresh
 shadow commissioning完了後の別generation-bound承認を必須とする。
 
+## H-11 v4 G074 final completion candidate限定例外
+
+operatorがG074最終完成契約の固定と一括実装を明示承認した場合に限り、
+`docs/H11_V4_G074_FINAL_COMPLETION_CONTRACT.md`の範囲で、G074専用の
+generation-bound reconciliation、durable switch capability、opaque one-use action
+scope、resident supervisor、restart時のprotected-position exit recovery、初回atomic
+activation境界を実装してよい。既存のactual coordinator/adapter/transportを利用する
+場合も、実装・testではfake client、fake credential、synthetic identifierだけを使う。
+
+この例外は実Keychain read、Private API、broker GET/POST、注文、取消、変更、決済、
+通知送信、ARM変更、LaunchAgent変更、operation 60実行、initial activation実行を許可
+しない。実operationは独立A/S/O CLEAR、artifact/digest確定、commit/push、canonical
+昇格後の別明示承認を必須とする。hard guardの弱化、allow bridge、env解除、同一action
+retry/repost、G073 state/marker/evidenceの変更またはauthorization再利用は禁止する。
+G074候補のblocking findingはoperation 60開始前に同一候補内でのみ修正し、自動で
+G075を作成しない。
+
 このリポジトリでは、目的達成に必要な最小限の変更だけを行う。
 
 ## 作業手順

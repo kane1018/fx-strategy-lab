@@ -22,6 +22,7 @@ import subprocess
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from types import MappingProxyType
 from typing import Any, Protocol
@@ -47,6 +48,7 @@ from app.h11_auto.v4_gmo_persisted_authorization import (
 )
 from app.private_api.auth import build_auth_headers
 from app.security.real_broker_post_hard_guard import assert_real_broker_post_allowed
+from app.services.h11_v4_g074_runtime import G074RecoveryScope
 
 GMO_V4_PRIVATE_BASE_URL = "https://forex-api.coin.z.com"
 # Per-call HTTP budget for private requests. The frozen protection contract gives
@@ -113,6 +115,56 @@ V4_GMO_SURFACEABLE_FAILURE_CLASSES = V4_GMO_PRIVATE_RESULT_UNKNOWN_CLASSES | fro
         "V4_GMO_KEYCHAIN_READER_CONTRACT_INVALID",
     }
 )
+
+
+def _require_g074_recovered_exit_scope(
+    scope: object, *, now_utc: datetime
+) -> G074RecoveryScope:
+    """Accept only an exact, short-lived G074 exit-recovery scope."""
+
+    if not isinstance(scope, G074RecoveryScope) or now_utc.tzinfo is None:
+        raise V4GmoActualTransportError("V4_GMO_G074_RECOVERY_SCOPE_INVALID")
+    try:
+        expires = datetime.fromisoformat(scope.expires_at_utc).astimezone(UTC)
+    except (TypeError, ValueError) as error:
+        raise V4GmoActualTransportError("V4_GMO_G074_RECOVERY_SCOPE_INVALID") from error
+    base = {
+        "generation_digest": scope.generation_digest,
+        "reviewed_files_digest": scope.reviewed_files_digest,
+        "release_capability_digest": scope.release_capability_digest,
+        "reconciliation_artifact_digest": scope.reconciliation_artifact_digest,
+        "cycle_id": scope.cycle_id,
+        "symbol": scope.symbol,
+        "quantity": scope.quantity,
+        "side": scope.side,
+        "expires_at_utc": scope.expires_at_utc,
+        "ownership_exact": scope.ownership_exact,
+        "quantity_matches": scope.quantity_matches,
+        "protection_confirmed": scope.protection_confirmed,
+        "action_key": scope.action_key,
+    }
+    calculated = "sha256:" + hashlib.sha256(
+        json.dumps(base, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if (
+        scope.generation_digest == ""
+        or scope.reviewed_files_digest == ""
+        or scope.release_capability_digest == ""
+        or scope.reconciliation_artifact_digest == ""
+        or not scope.action_key.startswith("sha256:")
+        or len(scope.action_key) != 71
+        or scope.symbol != "USD_JPY"
+        or scope.quantity != 1_000
+        or scope.side not in {"BUY", "SELL"}
+        or scope.ownership_exact is not True
+        or scope.quantity_matches is not True
+        or scope.protection_confirmed is not True
+        or scope.scope_digest != calculated
+        or expires <= now_utc.astimezone(UTC)
+        or (expires - now_utc.astimezone(UTC)).total_seconds() > 60
+    ):
+        raise V4GmoActualTransportError("V4_GMO_G074_RECOVERY_SCOPE_INVALID")
+    return scope
 
 
 def _classify_private_result_unknown(error: Exception) -> str:
@@ -435,31 +487,54 @@ class V4GmoHttpxPrivateTransport:
     def __init__(
         self,
         *,
-        activation_permit: V4GmoActualActivationPermit,
+        activation_permit: V4GmoActualActivationPermit | None = None,
+        recovered_exit_scope: G074RecoveryScope | None = None,
         signed_request_factory: V4GmoSignedRequestFactory,
         client: httpx.Client | None = None,
         cadence_gate: V4PrivateApiCadenceGate | None = None,
         monotonic_factory: Callable[[], float] = time.monotonic,
         unknown_post_callback: Callable[[], None] | None = None,
+        wall_clock_factory: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
-        try:
-            scope = consume_v4_gmo_actual_activation_permit(
-                activation_permit,
-                now_monotonic=monotonic_factory(),
+        if (activation_permit is None) is (recovered_exit_scope is None):
+            raise V4GmoActualTransportError("V4_GMO_EXACTLY_ONE_RUNTIME_SCOPE_REQUIRED")
+        if recovered_exit_scope is None:
+            try:
+                scope = consume_v4_gmo_actual_activation_permit(
+                    activation_permit,
+                    now_monotonic=monotonic_factory(),
+                )
+            except (V4GmoCanaryActivationError, TypeError, ValueError) as error:
+                raise V4GmoActualTransportError(
+                    "V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED"
+                ) from error
+            self._recovered_exit_only = False
+            self._recovery_expires_at_utc = None
+        else:
+            scope = _require_g074_recovered_exit_scope(
+                recovered_exit_scope, now_utc=wall_clock_factory()
             )
-        except (V4GmoCanaryActivationError, TypeError, ValueError) as error:
-            raise V4GmoActualTransportError(
-                "V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED"
-            ) from error
+            self._recovered_exit_only = True
+            self._recovery_expires_at_utc = datetime.fromisoformat(
+                recovered_exit_scope.expires_at_utc
+            ).astimezone(UTC)
         if not isinstance(signed_request_factory, V4GmoSignedRequestFactory):
             raise V4GmoActualTransportError("V4_GMO_SIGNER_INVALID")
-        self._scope: V4ActivatedRuntimeScope = scope
+        self._scope: V4ActivatedRuntimeScope | G074RecoveryScope = scope
         self._signed_request_factory = signed_request_factory
         self._client = client if client is not None else httpx.Client()
         self._owns_client = client is None
         self._cadence_gate = cadence_gate or V4PrivateApiCadenceGate()
         self._monotonic_factory = monotonic_factory
+        self._wall_clock_factory = wall_clock_factory
         self._post_keys: set[str] = set()
+        if self._recovered_exit_only:
+            self._post_keys.update(
+                {
+                    "/private/v1/order|E" + scope.cycle_ref[:30],
+                    "/private/v1/closeOrder|P" + scope.cycle_ref[:30],
+                }
+            )
         self._market_close_attempted = False
         if not callable(unknown_post_callback):
             raise V4GmoActualTransportError("V4_GMO_UNKNOWN_POST_CALLBACK_REQUIRED")
@@ -482,12 +557,17 @@ class V4GmoHttpxPrivateTransport:
             V4PersistedTransportAuthorization | None
         ) = None,
     ) -> V4GmoPrivateEnvelope:
-        try:
-            scope = require_v4_activated_runtime_scope_internal(self._scope)
-        except (AttributeError, V4GmoCanaryActivationError) as error:
-            raise V4GmoActualTransportError(
-                "V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED"
-            ) from error
+        if self._recovered_exit_only:
+            scope = _require_g074_recovered_exit_scope(
+                self._scope, now_utc=self._wall_clock_factory()
+            )
+        else:
+            try:
+                scope = require_v4_activated_runtime_scope_internal(self._scope)
+            except (AttributeError, V4GmoCanaryActivationError) as error:
+                raise V4GmoActualTransportError(
+                    "V4_GMO_ACTIVATION_PERMIT_NOT_ISSUED"
+                ) from error
         if not isinstance(request, V4GmoPrivateRequest):
             raise V4GmoActualTransportError("V4_GMO_REQUEST_INVALID")
         now = self._monotonic_factory()
