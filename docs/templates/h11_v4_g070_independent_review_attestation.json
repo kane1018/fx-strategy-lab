@@ -1,0 +1,21 @@
+{
+  "architecture_status": "CLEAR",
+  "arm_mutation_count": 0,
+  "artifact_digest": "sha256:dd8c9635c460c389ad59f0ece872cf9f4bd7e0f4bf17c1cfd4a718b6ee112422",
+  "blocking_findings": [],
+  "broker_get_count": 0,
+  "broker_post_count": 0,
+  "credential_read_count": 0,
+  "external_human_signoff_verified": false,
+  "frozen_design_digest": "sha256:d9f749310bc9a7ef0b1d9a4369f3317903065f3fe18b37116690942c59622b6e",
+  "generation_digest": "sha256:bb37ecc285cc0af29a48297336462847a0ff43ed7cbf1430531d3a9fea5a8a2e",
+  "generation_label": "H11_AUTO_30M_20260802_G070",
+  "launchagent_mutation_count": 0,
+  "notification_attempt_count": 0,
+  "operations_status": "CLEAR",
+  "private_api_read_count": 0,
+  "review_scope": "FAKE_ONLY_CANDIDATE",
+  "reviewed_files_digest": "sha256:9a01b14b81ce224253de4a6b55bed1142e2943e335fa64c1d114e8d1d5aee867",
+  "safety_status": "CLEAR",
+  "schema": "H11_V4_G070_INDEPENDENT_REVIEW_ATTESTATION_V1"
+}

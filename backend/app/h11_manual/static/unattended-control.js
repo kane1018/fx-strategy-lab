@@ -32,7 +32,6 @@
       state.busy ||
       armed ||
       payload.arm_control_available === false ||
-      payload.runtime_activation_available === false ||
       !state.csrfToken;
     offButton.disabled = state.busy || !armed || !state.csrfToken;
     document.querySelector("#unattended-control").dataset.state = effective;

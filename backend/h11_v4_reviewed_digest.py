@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 # G039 corrective generation: bind the operator-confirmed macOS Desktop Folder
@@ -238,6 +239,35 @@ REVIEWED_FILES = (
     "backend/scripts/h11_auto_v4_g069_runtime_bootstrap_no_post.py",
     "backend/scripts/h11_auto_v4_g069_operation_60_no_post.py",
     "backend/app/tests/h11_auto/test_v4_g069_final_runtime_no_post.py",
+    "docs/H11_V4_FINAL_SINGLE_GENERATION_COMPLETION_DESIGN.md",
+    "backend/app/services/h11_v4_g070_candidate.py",
+    "backend/app/services/h11_v4_g070_scoped_action_candidate.py",
+    "backend/scripts/h11_auto_v4_g070_runtime_bootstrap_no_post.py",
+    "backend/scripts/h11_auto_v4_g070_operation_60_no_post.py",
+    "backend/app/tests/h11_auto/test_v4_g070_candidate_fake_only.py",
+    "docs/templates/h11_v4_g070_frozen_generation.json",
+    "docs/templates/h11_v4_g070_runtime_commissioning_evidence.json",
+    "docs/templates/h11_v4_g070_independent_review_attestation.json",
+    "docs/templates/h11_v4_g070_release_activation_schema.json",
+)
+
+_G070_NORMALIZED_ARTIFACTS = frozenset(
+    {
+        "docs/templates/h11_v4_g070_frozen_generation.json",
+        "docs/templates/h11_v4_g070_runtime_commissioning_evidence.json",
+        "docs/templates/h11_v4_g070_independent_review_attestation.json",
+        "docs/templates/h11_v4_g070_release_activation_schema.json",
+    }
+)
+_G070_BINDING_FIELDS = frozenset(
+    {
+        "artifact_digest",
+        "generation_digest",
+        "implementation_digest",
+        "reviewed_files_digest",
+        "runtime_commissioning_evidence_digest",
+        "successor_halt_release_digest",
+    }
 )
 
 
@@ -254,6 +284,18 @@ def compute_reviewed_files_digest(*, repository: Path) -> str:
             raise V4ReviewedDigestError("REVIEWED_FILE_INVALID")
         digest.update(relative.encode())
         digest.update(b"\0")
-        digest.update(path.read_bytes())
+        content = path.read_bytes()
+        if relative in _G070_NORMALIZED_ARTIFACTS:
+            try:
+                payload = json.loads(content)
+                if not isinstance(payload, dict):
+                    raise TypeError
+                for field_name in _G070_BINDING_FIELDS:
+                    if field_name in payload:
+                        payload[field_name] = None
+                content = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+            except (json.JSONDecodeError, TypeError) as error:
+                raise V4ReviewedDigestError("REVIEWED_ARTIFACT_INVALID") from error
+        digest.update(content)
         digest.update(b"\0")
     return f"sha256:{digest.hexdigest()}"

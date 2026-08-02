@@ -39,6 +39,7 @@ V4_GMO_GENERATION_STATUS = "OPERATOR_FROZEN_NOT_ACTIVATED"
 V4_GMO_UNATTENDED_ACTIVATED_STATUS = "UNATTENDED_LIVE_COMMISSIONED"
 V4_GMO_RUNTIME_REVIEWED_STATUS = "UNATTENDED_RUNTIME_REVIEWED_AWAITING_COMMISSIONING"
 V4_GMO_GENERATION_ARTIFACT = Path("docs/templates/h11_v4_gmo_frozen_generation.json")
+V4_GMO_G070_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g070_frozen_generation.json")
 _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
     {
         "H11_AUTO_30M_20260801_G064",
@@ -47,6 +48,7 @@ _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
         "H11_AUTO_30M_20260802_G067",
         "H11_AUTO_30M_20260802_G068",
         "H11_AUTO_30M_20260802_G069",
+        "H11_AUTO_30M_20260802_G070",
     }
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -109,6 +111,15 @@ class V4GmoFrozenGeneration:
     successful_canary_evidence_digest: str | None = None
     successor_halt_release_digest: str | None = None
     runtime_commissioning_evidence_digest: str | None = None
+    daily_authorization_required: bool | None = None
+    per_trade_confirmation_required: bool | None = None
+    arm_is_operating_intent: bool | None = None
+    arm_directly_authorizes_post: bool | None = None
+    entry_gate_separate_from_arm: bool | None = None
+    reconciliation_required_before_entry: bool | None = None
+    predecessor_authorization_reused: bool | None = None
+    predecessor_state_root_reused: bool | None = None
+    frozen_design_digest: str | None = None
 
     def __post_init__(self) -> None:
         selections = V4ApprovedOperatorSelections()
@@ -178,6 +189,36 @@ class V4GmoFrozenGeneration:
             ),
             self.actual_post_authorized is False,
             (
+                self.generation_label != "H11_AUTO_30M_20260802_G070"
+                and all(
+                    value is None
+                    for value in (
+                        self.daily_authorization_required,
+                        self.per_trade_confirmation_required,
+                        self.arm_is_operating_intent,
+                        self.arm_directly_authorizes_post,
+                        self.entry_gate_separate_from_arm,
+                        self.reconciliation_required_before_entry,
+                        self.predecessor_authorization_reused,
+                        self.predecessor_state_root_reused,
+                        self.frozen_design_digest,
+                    )
+                )
+            )
+            or (
+                self.generation_label == "H11_AUTO_30M_20260802_G070"
+                and self.daily_authorization_required is False
+                and self.per_trade_confirmation_required is False
+                and self.arm_is_operating_intent is True
+                and self.arm_directly_authorizes_post is False
+                and self.entry_gate_separate_from_arm is True
+                and self.reconciliation_required_before_entry is True
+                and self.predecessor_authorization_reused is False
+                and self.predecessor_state_root_reused is False
+                and isinstance(self.frozen_design_digest, str)
+                and bool(_SHA256.fullmatch(self.frozen_design_digest))
+            ),
+            (
                 self.status == V4_GMO_GENERATION_STATUS
                 and self.live_ready is False
                 and self.unattended_live_supported is False
@@ -187,7 +228,11 @@ class V4GmoFrozenGeneration:
             )
             or (
                 self.status == V4_GMO_RUNTIME_REVIEWED_STATUS
-                and self.generation_label == "H11_AUTO_30M_20260802_G069"
+                and self.generation_label
+                in {
+                    "H11_AUTO_30M_20260802_G069",
+                    "H11_AUTO_30M_20260802_G070",
+                }
                 and self.live_ready is False
                 and self.unattended_live_supported is False
                 and isinstance(self.activation_source_generation_digest, str)
@@ -244,11 +289,30 @@ class V4GmoFrozenGeneration:
         payload = asdict(self)
         if payload.get("runtime_commissioning_evidence_digest") is None:
             payload.pop("runtime_commissioning_evidence_digest")
+        for field_name in (
+            "daily_authorization_required",
+            "per_trade_confirmation_required",
+            "arm_is_operating_intent",
+            "arm_directly_authorizes_post",
+            "entry_gate_separate_from_arm",
+            "reconciliation_required_before_entry",
+            "predecessor_authorization_reused",
+            "predecessor_state_root_reused",
+            "frozen_design_digest",
+        ):
+            if payload.get(field_name) is None:
+                payload.pop(field_name)
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
     @property
     def digest(self) -> str:
-        return "sha256:" + hashlib.sha256(self.canonical_json.encode()).hexdigest()
+        canonical = self.canonical_json
+        if self.generation_label == "H11_AUTO_30M_20260802_G070":
+            payload = json.loads(canonical)
+            payload.pop("runtime_commissioning_evidence_digest", None)
+            payload.pop("successor_halt_release_digest", None)
+            canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
 
     def __bool__(self) -> bool:
         return False
@@ -341,7 +405,26 @@ def load_v4_gmo_frozen_generation(
 ) -> V4GmoFrozenGeneration:
     """Load the committed artifact and bind it to the reviewed source digest."""
 
-    path = repository.resolve() / V4_GMO_GENERATION_ARTIFACT
+    return _load_v4_gmo_generation_artifact(
+        path=repository.resolve() / V4_GMO_GENERATION_ARTIFACT,
+        implementation_digest=implementation_digest,
+    )
+
+
+def load_v4_gmo_g070_candidate_generation(
+    *, repository: Path, implementation_digest: str
+) -> V4GmoFrozenGeneration:
+    """Load the candidate without promoting or mutating the canonical artifact."""
+
+    return _load_v4_gmo_generation_artifact(
+        path=repository.resolve() / V4_GMO_G070_CANDIDATE_ARTIFACT,
+        implementation_digest=implementation_digest,
+    )
+
+
+def _load_v4_gmo_generation_artifact(
+    *, path: Path, implementation_digest: str
+) -> V4GmoFrozenGeneration:
     if not path.is_file() or path.is_symlink():
         raise V4GmoGenerationError("v4 GMO frozen generation artifact missing")
     try:

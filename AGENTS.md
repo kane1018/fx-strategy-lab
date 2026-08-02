@@ -759,6 +759,35 @@ scheduler・resident processへは一切接続しない。
 - `broker_post_authorized`、`live_ready`、`unattended_live_supported`のtrue化。
 - 本例外下の実装完了をlive-ready、performance proof、activation承認として扱うこと。
 
+## H-11 v4 G070 final single-generation candidate実装限定例外（fake-only・未稼働）
+
+operatorが固定設計`docs/H11_V4_FINAL_SINGLE_GENERATION_COMPLETION_DESIGN.md`を明示承認し、
+G070 candidate実装を依頼した場合に限り、G069をimmutable predecessorとして保持したまま、G070専用の
+state model、30秒slot reconciliation、resident supervisor、release activation contract、opaque
+cycle/action scope、operation 60 candidateをfake/synthetic/local-onlyで実装してよい。
+
+### この例外で限定的に許可すること
+
+- G070専用module、script、test、candidate manifest/evidence/attestationを追加する。
+- UI/APIへ`control_plane_state`、`reconciliation_state`、`effective_state`、`entry_state`を独立投影し、
+  ARM意図とentry gateを分離する最小変更を行う。
+- G070 launcher pathとruntime-only generation認識を追加する。ただしinstall、bootstrap、operation 60は
+  実行しない。
+- fake credential loader、fake read-only client、fake transportだけでexactly-once、no-retry、
+  fail-closed契約を検証する。
+- 既存hard guardを変更せず、実transportへ未結線のopaque action scopeを実装する。scopeはboolを返さず、
+  generation/cycle/action/requestへexact bindする。
+- focused/related tests、Ruff、diff check、danger scan、reviewed-files digest再計算、独立A/S/O reviewを行う。
+
+### この例外でも禁止し続けること
+
+- 実Keychain、実Private/Public API、broker GET/POST、注文、取消、変更、決済、通知。
+- ARM state変更、LaunchAgent操作、operation 60実行、release activation実行、commit、push、canonical昇格。
+- G069 marker/HALT/state/evidenceの変更・reset・authorization再利用、G071作成。
+- 既存G012/G013 permit/confirmation/transport/hard guardの変更またはG070 call graphへの接続。
+- generic allow bridge、allow boolean、env/`.env`解除、UI/reconciliation/control-planeからbroker transport import。
+- 本candidateをlive-ready、actual POST authorization、実broker activation済みとして扱うこと。
+
 ## H-11 v4 persistent ON/OFF controller corrective generation限定例外
 
 operatorが2026-07-26に採用した、localhost手動UIの永続`ON`/`OFF`だけで新規entryを管理する
