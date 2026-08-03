@@ -45,6 +45,7 @@ V4_GMO_G072_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g072_frozen_generat
 V4_GMO_G073_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g073_frozen_generation.json")
 V4_GMO_G074_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g074_frozen_generation.json")
 V4_GMO_G075_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g075_frozen_generation.json")
+V4_GMO_G076_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g076_frozen_generation.json")
 _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
     {
         "H11_AUTO_30M_20260801_G064",
@@ -59,6 +60,7 @@ _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
         "H11_AUTO_30M_20260802_G073",
         "H11_AUTO_30M_20260802_G074",
         "H11_AUTO_30M_20260802_G075",
+        "H11_AUTO_30M_20260802_G076",
     }
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -207,6 +209,7 @@ class V4GmoFrozenGeneration:
                     "H11_AUTO_30M_20260802_G073",
                     "H11_AUTO_30M_20260802_G074",
                     "H11_AUTO_30M_20260802_G075",
+                    "H11_AUTO_30M_20260802_G076",
                 }
                 and all(
                     value is None
@@ -232,6 +235,7 @@ class V4GmoFrozenGeneration:
                     "H11_AUTO_30M_20260802_G073",
                     "H11_AUTO_30M_20260802_G074",
                     "H11_AUTO_30M_20260802_G075",
+                    "H11_AUTO_30M_20260802_G076",
                 }
                 and self.daily_authorization_required is False
                 and self.per_trade_confirmation_required is False
@@ -263,6 +267,7 @@ class V4GmoFrozenGeneration:
                     "H11_AUTO_30M_20260802_G073",
                     "H11_AUTO_30M_20260802_G074",
                     "H11_AUTO_30M_20260802_G075",
+                    "H11_AUTO_30M_20260802_G076",
                 }
                 and self.live_ready is False
                 and self.unattended_live_supported is False
@@ -345,6 +350,7 @@ class V4GmoFrozenGeneration:
             "H11_AUTO_30M_20260802_G073",
             "H11_AUTO_30M_20260802_G074",
             "H11_AUTO_30M_20260802_G075",
+            "H11_AUTO_30M_20260802_G076",
         }:
             payload = json.loads(canonical)
             payload.pop("runtime_commissioning_evidence_digest", None)
@@ -511,6 +517,17 @@ def load_v4_gmo_g075_candidate_generation(
 
     return _load_v4_gmo_generation_artifact(
         path=repository.resolve() / V4_GMO_G075_CANDIDATE_ARTIFACT,
+        implementation_digest=implementation_digest,
+    )
+
+
+def load_v4_gmo_g076_candidate_generation(
+    *, repository: Path, implementation_digest: str
+) -> V4GmoFrozenGeneration:
+    """Load the G076 final corrective candidate without promotion."""
+
+    return _load_v4_gmo_generation_artifact(
+        path=repository.resolve() / V4_GMO_G076_CANDIDATE_ARTIFACT,
         implementation_digest=implementation_digest,
     )
 

@@ -547,7 +547,9 @@ class V4GmoHttpxPrivateTransport:
         self,
         *,
         activation_permit: V4GmoActualActivationPermit | None = None,
-        recovered_exit_scope: G074RecoveryScope | G075RecoveryScope | None = None,
+        recovered_exit_scope: (
+            G074RecoveryScope | G075RecoveryScope | None
+        ) = None,
         signed_request_factory: V4GmoSignedRequestFactory,
         client: httpx.Client | None = None,
         cadence_gate: V4PrivateApiCadenceGate | None = None,

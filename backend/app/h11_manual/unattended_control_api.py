@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import json
 import secrets
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -118,6 +119,13 @@ from app.services.h11_v4_g075_runtime import (
     safe_g075_api_status,
     verify_g075_scheduler_binding,
 )
+from app.services.h11_v4_g076_runtime import (
+    G076_GENERATION_LABEL,
+    G076Error,
+    compute_g076_reviewed_files_digest,
+    safe_g076_api_status,
+    verify_g076_scheduler_binding,
+)
 from app.services.h11_v4_unattended_live_arm_state import (
     V4ArmDesiredState,
     V4UnattendedLiveArmStateError,
@@ -159,7 +167,20 @@ class _CurrentContract:
 
 
 def _load_current_contract() -> _CurrentContract:
-    reviewed = compute_reviewed_files_digest(repository=REPOSITORY)
+    canonical_path = REPOSITORY / "docs/templates/h11_v4_gmo_frozen_generation.json"
+    try:
+        canonical_payload = json.loads(canonical_path.read_text(encoding="utf-8"))
+        canonical_is_g076 = (
+            isinstance(canonical_payload, dict)
+            and canonical_payload.get("generation_label") == G076_GENERATION_LABEL
+        )
+    except (OSError, TypeError, ValueError):
+        canonical_is_g076 = False
+    reviewed = (
+        compute_g076_reviewed_files_digest(repository=REPOSITORY)
+        if canonical_is_g076
+        else compute_reviewed_files_digest(repository=REPOSITORY)
+    )
     generation = load_v4_gmo_frozen_generation(
         repository=REPOSITORY,
         implementation_digest=reviewed,
@@ -191,9 +212,12 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
         G073_GENERATION_LABEL,
         G074_GENERATION_LABEL,
         G075_GENERATION_LABEL,
+        G076_GENERATION_LABEL,
     }:
         verifier = (
-            verify_g075_scheduler_binding
+            verify_g076_scheduler_binding
+            if contract.generation.generation_label == G076_GENERATION_LABEL
+            else verify_g075_scheduler_binding
             if contract.generation.generation_label == G075_GENERATION_LABEL
             else verify_g074_scheduler_binding
             if contract.generation.generation_label == G074_GENERATION_LABEL
@@ -232,6 +256,7 @@ def _verify_current_generation_runtime(contract: _CurrentContract) -> None:
             G073_GENERATION_LABEL,
             G074_GENERATION_LABEL,
             G075_GENERATION_LABEL,
+            G076_GENERATION_LABEL,
         }:
             verifier_kwargs["repository"] = REPOSITORY
         verifier(
@@ -291,9 +316,12 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
         G073_GENERATION_LABEL,
         G074_GENERATION_LABEL,
         G075_GENERATION_LABEL,
+        G076_GENERATION_LABEL,
     }:
         status_reader = (
-            safe_g075_api_status
+            safe_g076_api_status
+            if contract.generation.generation_label == G076_GENERATION_LABEL
+            else safe_g075_api_status
             if contract.generation.generation_label == G075_GENERATION_LABEL
             else safe_g074_api_status
             if contract.generation.generation_label == G074_GENERATION_LABEL
@@ -336,7 +364,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
             "unattended_live_supported": False,
             "daily_authorization_required": False,
             "per_trade_confirmation_required": False,
-            "scheduler_ready": projected["control_plane_state"] == "READY",
+            "scheduler_ready": bool(projected.get("scheduler_ready", False)),
             "position_reconciliation_ready": projected["reconciliation_state"]
             in {"FRESH_FLAT", "FRESH_PROTECTED"},
             "local_arm_on_available": bool(
@@ -767,7 +795,9 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         if request_body.expected_reviewed_files_digest != contract.reviewed_files_digest:
             raise V4UnattendedLiveArmStateError("ARM_STATE_REVIEWED_FILES_MISMATCH")
         current = _safe_status(contract)
-        if contract.generation.generation_label == G075_GENERATION_LABEL:
+        if contract.generation.generation_label == G076_GENERATION_LABEL:
+            raise G076Error("G076_FAKE_ONLY_ARM_MUTATION_DISABLED")
+        elif contract.generation.generation_label == G075_GENERATION_LABEL:
             if current.get("release_state") != "ENABLED":
                 raise G075Error("G075_RELEASE_CAPABILITY_LOCKED")
         elif contract.generation.generation_label == G074_GENERATION_LABEL:
@@ -803,6 +833,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
         G073Error,
         G074Error,
         G075Error,
+        G076Error,
         OSError,
         ValueError,
     ) as error:
@@ -819,6 +850,8 @@ def turn_off(request_body: ArmChangeRequest, request: Request) -> dict:
             raise V4UnattendedLiveArmStateError("ARM_STATE_GENERATION_MISMATCH")
         if request_body.expected_reviewed_files_digest != contract.reviewed_files_digest:
             raise V4UnattendedLiveArmStateError("ARM_STATE_REVIEWED_FILES_MISMATCH")
+        if contract.generation.generation_label == G076_GENERATION_LABEL:
+            raise G076Error("G076_FAKE_ONLY_ARM_MUTATION_DISABLED")
         _arm_store(contract).set_desired_state(
             desired_state=V4ArmDesiredState.DISARMED,
             expected_revision=request_body.expected_revision,
@@ -828,6 +861,7 @@ def turn_off(request_body: ArmChangeRequest, request: Request) -> dict:
         )
         return _safe_status(contract)
     except (
+        G076Error,
         V4UnattendedLiveArmStateError,
         OSError,
         ValueError,

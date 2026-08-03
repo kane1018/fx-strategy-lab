@@ -516,7 +516,9 @@ def _refresh_session_evidence_before_permit(
     if generation.digest != session.generation.digest:
         raise V4GmoG013CanaryError("G013_GENERATION_CHANGED_BEFORE_PERMIT")
     current = datetime.now(UTC)
-    if generation.generation_label == "H11_AUTO_30M_20260802_G075":
+    if generation.generation_label == "H11_AUTO_30M_20260802_G076":
+        raise V4GmoG013CanaryError("G076_FAKE_ONLY_ACTUAL_PREPARATION_DISABLED")
+    elif generation.generation_label == "H11_AUTO_30M_20260802_G075":
         refresh = getattr(session.preparation_evidence, "refresh_for_generation", None)
         if not callable(refresh):
             raise V4GmoG013CanaryError("G075_RELEASE_EVIDENCE_INVALID")

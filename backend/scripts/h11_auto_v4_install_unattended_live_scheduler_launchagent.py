@@ -73,6 +73,7 @@ _G053_GENERATION_LABEL = "H11_AUTO_30M_20260730_G053"
 _G054_GENERATION_LABEL = "H11_AUTO_30M_20260730_G054"
 _G055_GENERATION_LABEL = "H11_AUTO_30M_20260730_G055"
 _G056_GENERATION_LABEL = "H11_AUTO_30M_20260730_G056"
+_G076_GENERATION_LABEL = "H11_AUTO_30M_20260802_G076"
 
 
 def _wait_for_g064_scheduler_readiness(
@@ -152,6 +153,12 @@ def main() -> int:
         repository=repository,
         implementation_digest=digest,
     )
+    if getattr(generation, "generation_label", "") == _G076_GENERATION_LABEL:
+        print(
+            "status=G076_FAKE_ONLY_LAUNCHAGENT_MUTATION_DISABLED "
+            "broker_write=false actual_post_count=0"
+        )
+        return 4
     g064_gate = None
     g064_ledger = None
     g064_operation_permit = None
