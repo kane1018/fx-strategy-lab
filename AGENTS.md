@@ -1483,3 +1483,54 @@ G077はimmutable predecessorとして保持し、runtime・test・digest module�
 - 本例外下の実装・test完了をlive-ready、performance proof、activation承認として扱うこと。
 - commit／push（別途明示授権がある場合を除く）。実Keychain・実Private GET・実POST・
   operation 60・initial activation・read-back実解決は、それぞれ別の明示承認を必須とする。
+
+## H-11 v4 G079 final commissioning generation限定例外
+
+operatorがG079 generation（`H11_AUTO_30M_20260805_G079`）の設計書
+（`docs/H11_V4_G079_FINAL_COMMISSIONING_DESIGN.md`）と一括実装を明示承認した場合に
+限り、実commissioning可能な次generationを実装してよい。G079はG076/G077/G078を
+immutable predecessorとして保持し、runtime・test・digest module・template・設計書は
+一切変更しない。実Keychain、Private API、broker GET/POST、注文、取消、変更、決済、
+通知、ARM変更、LaunchAgent installはエージェントは実行しない（すべてoperator実行・
+別明示承認）。
+
+### G079で限定的に許可すること
+
+- `backend/app/services/h11_v4_g079_runtime.py`（G076 runtimeのsuccessor）へ、
+  write action UNKNOWN処理4箇所のうちaction execution経路にread-back解決
+  （`wire_unknown_write_outcome_resolution_once`・G078 resolution service）を統合する。
+  CONFIRMED_EXECUTEDはaction相当outcomeを返してruntime継続、CONFIRMED_NOT_EXECUTEDは
+  `G079ActionNotExecutedError`（非terminal・次scheduled cycleの新規観測）、
+  UNRESOLVED/PARTIAL/拒否はterminal（G079 halt）とする。解決結果からallow値・permit・
+  hard-guard解除値を生成しない。
+- 実read-back producer（`backend/app/services/h11_v4_g078_private_get_producer.py`・
+  G026 one-use Private GET方式・module prefix gate `app.services.h11_v4_g078`を満たす
+  命名）を実装する。実装はfake credential pair・fake httpx clientのtestのみ。実Keychain
+  read・実Private GETはoperator実行。
+- G079 op60（`backend/scripts/h11_auto_v4_g079_operation_60_no_post.py`・G075パターン・
+  LaunchAgent install/readiness・実script提供）とG079 initial activation
+  （`backend/scripts/h11_auto_v4_g079_initial_activation.py`・実portsはoperatorが構築・
+  `--execute-final-transaction`明示flag必須）を実装する。実行はoperator。
+- `unattended_control_api.py`へG079 label分岐（ARM ON/OFF受諾・release ENABLED時・
+  `G079_RELEASE_CAPABILITY_LOCKED`）と`resolution_state`独立投影を追加する。
+- G079専用reviewed-files digest module・generation template・fake-only tests・
+  AGENTS.md本節を新設し、G079 reviewed digest / generation digestへ再凍結する。
+  AGENTS.md本節・UI変更により共有reviewed digestは変化するため、G076 canonical
+  bindingをlockstep再束縛する（未activation templateのみ・runtime marker/HALT/stateは
+  存在せず不変）。
+
+### G079でも禁止し続けること
+
+- エージェントによる実Keychain read、実Private API GET/POST、実broker write、
+  実注文・取消・変更・決済・OCO、実Pushover/SMTP送信、ARM実変更、LaunchAgent
+  install/bootstrap/kickstart、実runtime state root書込。
+- G076/G077/G078 runtime・test・digest module・template・設計書の変更・削除・reset
+  （immutable predecessor。G076はbindingのみlockstep再束縛）。
+- 同一scope・同一generationでの解決retry、repost、second attempt、結果不明後のwrite、
+  自動resume、generic allow bridge、env／`.env`による解除。
+- 同一M1 slot内での再評価、CONFIRMED_NOT_EXECUTEDからの即時再入。
+- 部分約定の未約定残を自動cancelすること（operator実行action・fresh観測を別境界で要する）。
+- broker POST。実op60/activation実行・ARM mutationはそれぞれ別の明示承認を必須とし、
+  broker POSTはさらに別activation boundary承認まで禁止（hard guard default-deny不変）。
+- 本例外下の実装・test完了をlive-ready、performance proof、activation承認として扱うこと。
+- commit／push（別途明示授権がある場合を除く）。G080を自動で作成しない。
