@@ -72,20 +72,6 @@ from app.services.h11_v4_gmo_public_preflight import (
     g013_public_cycle_key,
     read_g013_final_quote_once,
 )
-from app.services.h11_v4_notification_actual_preparation import (
-    H11V4NotificationCredentialBundle,
-)
-from app.services.h11_v4_notification_actual_transport import (
-    H11V4ActualEmailTransport,
-    H11V4ActualPushoverTransport,
-)
-from app.services.h11_v4_unattended_live_heartbeat_chain import (
-    V4HeartbeatChainStore,
-    v4_unattended_runtime_heartbeat_policy,
-)
-from app.services.h11_v4_unattended_live_orchestration import (
-    run_unattended_live_entry_cycle_once,
-)
 
 
 class G075LiveRuntimeError(RuntimeError):
@@ -455,36 +441,11 @@ class G075LiveActionPort:
         return G075Action.TIME_EXIT if elapsed >= self.generation.maximum_hold_seconds else None
 
     def _run_entry_actual(self, session: g013.V4GmoG013PreparedSession):
-        state_root = self.process_lock.state_root
-        risk_policy = v4_gmo_risk_policy()
-        risk_store = PhaseBRiskStore(state_root / "risk.json", policy=risk_policy)
-        if not risk_store.path.exists():
-            risk_store.save(risk_store.load())
-        dead_man = DeadManStore(
-            state_root / "dead-man-runtime.json", policy=v4_gmo_dead_man_policy()
-        )
-        chain = V4HeartbeatChainStore(
-            state_root / "unattended-heartbeat-chain.json",
-            policy=v4_unattended_runtime_heartbeat_policy(),
-        )
-        credentials = H11V4NotificationCredentialBundle()
-        with httpx.Client(timeout=5.0) as client, httpx.Client(timeout=10.0) as notify_client:
-            return run_unattended_live_entry_cycle_once(
-                session=session,
-                state_root=state_root,
-                risk_store=risk_store,
-                risk_policy=risk_policy,
-                dead_man_store=dead_man,
-                heartbeat_chain_store=chain,
-                notification_primary=H11V4ActualPushoverTransport(
-                    credentials=credentials, client=notify_client
-                ),
-                notification_secondary=H11V4ActualEmailTransport(credentials=credentials),
-                entry_gate_blocked_reasons=(),
-                credential_pair=V4GmoKeychainCredentialPair(),
-                client=client,
-                now_utc=datetime.now(UTC),
-            )
+        # G075 is terminal: no entry execution path may construct real
+        # credentials or bypass the bounded runner CLI single-caller contract.
+        # The unattended entry cycle is reachable only through
+        # backend/scripts/h11_auto_v4_unattended_live_bounded_run.py.
+        raise G075LiveRuntimeError("G075_GENERATION_TERMINAL_NO_ENTRY")
 
     def _run_exit_actual(self, scope: G075ActionScope):
         now = datetime.now(UTC)

@@ -131,6 +131,9 @@ class V4GmoFrozenGeneration:
     reconciliation_required_before_entry: bool | None = None
     predecessor_authorization_reused: bool | None = None
     predecessor_state_root_reused: bool | None = None
+    predecessor_generation_digest: str | None = None
+    predecessor_initial_activation_unknown: bool | None = None
+    predecessor_terminal_evidence_reused: bool | None = None
     frozen_design_digest: str | None = None
 
     def __post_init__(self) -> None:
@@ -302,6 +305,23 @@ class V4GmoFrozenGeneration:
                 and isinstance(self.successor_halt_release_digest, str)
                 and bool(_SHA256.fullmatch(self.successor_halt_release_digest))
             ),
+            (
+                # Weak provenance validation: predecessor keys are informational
+                # for G070-G075 (absent -> None) and required well-formed for
+                # G076+.  They are intentionally not hard-pinned to a specific
+                # predecessor digest so future corrective generations can carry
+                # their own successor relationship.
+                self.predecessor_generation_digest is None
+                or bool(_SHA256.fullmatch(self.predecessor_generation_digest))
+            ),
+            (
+                self.predecessor_initial_activation_unknown is None
+                or type(self.predecessor_initial_activation_unknown) is bool
+            ),
+            (
+                self.predecessor_terminal_evidence_reused is None
+                or type(self.predecessor_terminal_evidence_reused) is bool
+            ),
         )
         if not all(requirements):
             raise V4GmoGenerationError("v4 GMO frozen generation mismatch")
@@ -334,6 +354,9 @@ class V4GmoFrozenGeneration:
             "reconciliation_required_before_entry",
             "predecessor_authorization_reused",
             "predecessor_state_root_reused",
+            "predecessor_generation_digest",
+            "predecessor_initial_activation_unknown",
+            "predecessor_terminal_evidence_reused",
             "frozen_design_digest",
         ):
             if payload.get(field_name) is None:

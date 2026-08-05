@@ -95,25 +95,28 @@ def test_stale_safety_files_are_not_overwritten_before_halt_projection(tmp_path)
 
 
 def test_generic_scheduler_installer_refuses_g076_mutation():
-    installer = Path(
-        "backend/scripts/h11_auto_v4_install_unattended_live_scheduler_launchagent.py"
+    _REPO_ROOT = Path(__file__).resolve().parents[4]
+    installer = (
+        _REPO_ROOT
+        / "backend/scripts/h11_auto_v4_install_unattended_live_scheduler_launchagent.py"
     ).read_text(encoding="utf-8")
     assert "G076_FAKE_ONLY_LAUNCHAGENT_MUTATION_DISABLED" in installer
-    shared = Path(
-        "backend/app/h11_auto/v4_gmo_unattended_scheduler_launchd.py"
+    shared = (
+        _REPO_ROOT / "backend/app/h11_auto/v4_gmo_unattended_scheduler_launchd.py"
     ).read_text(encoding="utf-8")
     assert "G076_FAKE_ONLY_LAUNCHAGENT_MUTATION_DISABLED" in shared
 
 
 def test_g076_resident_paths_do_not_reach_live_arm_or_http_clients():
-    bootstrap = Path(
-        "backend/scripts/h11_auto_v4_g076_runtime_bootstrap.py"
-    ).read_text(encoding="utf-8")
+    _REPO_ROOT = Path(__file__).resolve().parents[4]
+    bootstrap = (_REPO_ROOT / "backend/scripts/h11_auto_v4_g076_runtime_bootstrap.py").read_text(
+        encoding="utf-8"
+    )
     assert "V4UnattendedLiveArmStore" not in bootstrap
     assert "v4_unattended_live_arm_state_path" not in bootstrap
-    network = Path(
-        "backend/app/services/h11_v4_g076_network_diagnostics.py"
-    ).read_text(encoding="utf-8")
+    network = (_REPO_ROOT / "backend/app/services/h11_v4_g076_network_diagnostics.py").read_text(
+        encoding="utf-8"
+    )
     assert "import httpx" not in network
     assert "httpx." not in network
 

@@ -7,6 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
+from app.services.h11_v4_g076_runtime import (
+    G076_GENERATION_LABEL,
+    compute_g076_reviewed_files_digest,
+)
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 from scripts import h11_auto_v4_monday_self_check as self_check
 
@@ -77,7 +81,19 @@ def test_generation_check_rejects_commissioned_flags(monkeypatch, tmp_path: Path
 def test_repository_frozen_generation_matches_current_reviewed_digest() -> None:
     repository = Path(__file__).resolve().parents[4]
 
-    reviewed_digest = compute_reviewed_files_digest(repository=repository)
+    # The canonical template binds to the G076-specific reviewed digest when
+    # the canonical generation is G076 (mirrors _load_current_contract in the
+    # manual UI); the shared digest nulls a different artifact set.
+    canonical_payload = json.loads(
+        (
+            repository / "docs/templates/h11_v4_gmo_frozen_generation.json"
+        ).read_text(encoding="utf-8")
+    )
+    reviewed_digest = (
+        compute_g076_reviewed_files_digest(repository=repository)
+        if canonical_payload.get("generation_label") == G076_GENERATION_LABEL
+        else compute_reviewed_files_digest(repository=repository)
+    )
     generation = load_v4_gmo_frozen_generation(
         repository=repository,
         implementation_digest=reviewed_digest,

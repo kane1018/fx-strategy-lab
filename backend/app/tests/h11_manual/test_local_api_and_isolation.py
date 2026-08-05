@@ -152,10 +152,12 @@ def test_local_ui_uses_four_switchable_signals_with_probability_charts(tmp_path)
         assert exit_status.json()["exit_signal"]["code"] == "NO_MANUAL_POSITION"
         broker_sync = client.get("/api/manual/broker-sync")
         assert broker_sync.status_code == 200
-        assert (
-            broker_sync.json()["status"]
-            == "AUTO_MODE_EXCLUSIVE_PRIVATE_CLIENT_BLOCKED"
-        )
+        # The settlement read client is disabled by default (no dedicated
+        # Keychain item is configured), so the safe status is NOT_CONFIGURED;
+        # AUTO_MODE_EXCLUSIVE_PRIVATE_CLIENT_BLOCKED was a stale label that
+        # never existed in the implementation.
+        assert broker_sync.json()["status"] == "NOT_CONFIGURED"
+        assert broker_sync.json()["configured"] is False
         assert broker_sync.json()["safety"]["actual_post"] is False
         positions = client.get("/api/manual/positions")
         assert positions.status_code == 200

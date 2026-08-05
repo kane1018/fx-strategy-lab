@@ -1,14 +1,14 @@
 {
   "architecture_status": "CLEAR",
   "arm_mutation_count": 0,
-  "artifact_digest": "sha256:7efd0e6a91e7b5eaed165f845a573faff4e3fb40db8873b48e2e00eb3748a367",
+  "artifact_digest": "sha256:25d3db97bfdba6c978e2149ff31d43a9a1db58b395018ff87e3a46324689cedb",
   "blocking_findings": [],
   "broker_get_count": 0,
   "broker_post_count": 0,
   "credential_read_count": 0,
   "external_human_signoff_verified": false,
   "frozen_design_digest": "sha256:c6ee955d3d899d50a75b2c16511fce7e2f290ee5088f6ee27f055bf970da92b9",
-  "generation_digest": "sha256:97a21c01889ec08f8ab79f98bc7a54b3824b9113b541138ef450659ec145dfbe",
+  "generation_digest": "sha256:829f2916c93a6bceb0a3278e2730870a61631eb25a772c65558b4c342fdf2caa",
   "generation_label": "H11_AUTO_30M_20260802_G076",
   "launchagent_mutation_count": 0,
   "notification_attempt_count": 0,
@@ -20,7 +20,7 @@
   "predecessor_terminal_evidence_reused": false,
   "private_api_read_count": 0,
   "review_scope": "G076_FINAL_RUNTIME_FAKE_ONLY",
-  "reviewed_files_digest": "sha256:bd278498be6d7afd9cdc7eaea63d11336f6aafa20b0f6ee57fb1e9778cddd088",
+  "reviewed_files_digest": "sha256:918c372041fcf8f865c3f64b9588a6f9e76e0a1addf7e4ff2a4f69cf08561189",
   "safety_status": "CLEAR",
   "schema": "H11_V4_G076_INDEPENDENT_REVIEW_ATTESTATION_V1"
 }

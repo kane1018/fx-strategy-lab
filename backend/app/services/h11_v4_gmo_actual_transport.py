@@ -618,7 +618,10 @@ class V4GmoHttpxPrivateTransport:
             V4PersistedTransportAuthorization | None
         ) = None,
     ) -> V4GmoPrivateEnvelope:
-        if self._recovered_exit_only:
+        # getattr default keeps the default-deny path reachable for forged or
+        # partially-initialized objects: the permit check below must raise the
+        # fixed safe label instead of an AttributeError (defense-in-depth).
+        if getattr(self, "_recovered_exit_only", False):
             scope = _require_recovered_exit_scope(
                 self._scope, now_utc=self._wall_clock_factory()
             )
