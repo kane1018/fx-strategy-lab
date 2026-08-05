@@ -37,7 +37,6 @@ V4_GMO_UNATTENDED_SCHEDULER_LABEL = "com.fxstrategylab.h11v4.unattended.schedule
 # fifth of the signal period instead of the whole thing.
 MINIMUM_START_INTERVAL_SECONDS = 60
 MAXIMUM_START_INTERVAL_SECONDS = 600
-G076_GENERATION_LABEL = "H11_AUTO_30M_20260802_G076"
 
 
 class V4GmoUnattendedSchedulerLaunchdError(RuntimeError):
@@ -88,54 +87,10 @@ def render_v4_gmo_unattended_scheduler_launchagent(
 
     repository = repository.resolve()
     python_executable = python_executable.resolve()
-    if generation.generation_label == G076_GENERATION_LABEL:
-        raise V4GmoUnattendedSchedulerLaunchdError(
-            "G076_FAKE_ONLY_LAUNCHAGENT_MUTATION_DISABLED"
-        )
     launcher_path = (repository / launcher_relative_path).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G066":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g066_runtime_bootstrap_no_post.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G067":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g067_runtime_bootstrap_no_post.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G068":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g068_runtime_bootstrap_no_post.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G069":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g069_runtime_bootstrap_no_post.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G070":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g070_runtime_bootstrap_no_post.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G071":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g071_runtime_bootstrap_no_post.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G072":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g072_runtime_bootstrap_no_post.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G073":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g073_runtime_bootstrap_no_post.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G074":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g074_runtime_bootstrap.py"
-        ).resolve()
     if generation.generation_label == "H11_AUTO_30M_20260802_G075":
         launcher_path = (
             repository / "backend/scripts/h11_auto_v4_g075_runtime_bootstrap.py"
-        ).resolve()
-    if generation.generation_label == "H11_AUTO_30M_20260802_G076":
-        launcher_path = (
-            repository / "backend/scripts/h11_auto_v4_g076_runtime_bootstrap.py"
         ).resolve()
     if (
         not repository.is_dir()
@@ -157,17 +112,7 @@ def render_v4_gmo_unattended_scheduler_launchagent(
     resident = generation.generation_label in {
         "H11_AUTO_30M_20260801_G064",
         "H11_AUTO_30M_20260801_G065",
-        "H11_AUTO_30M_20260802_G066",
-        "H11_AUTO_30M_20260802_G067",
-        "H11_AUTO_30M_20260802_G068",
-        "H11_AUTO_30M_20260802_G069",
-        "H11_AUTO_30M_20260802_G070",
-        "H11_AUTO_30M_20260802_G071",
-        "H11_AUTO_30M_20260802_G072",
-        "H11_AUTO_30M_20260802_G073",
-        "H11_AUTO_30M_20260802_G074",
         "H11_AUTO_30M_20260802_G075",
-        "H11_AUTO_30M_20260802_G076",
     }
     payload = {
         "Label": V4_GMO_UNATTENDED_SCHEDULER_LABEL,
@@ -232,13 +177,6 @@ def install_and_restart_v4_gmo_unattended_scheduler_launchagent(
         raise V4GmoUnattendedSchedulerLaunchdError(
             "V4_UNATTENDED_SCHEDULER_LAUNCHD_INSTALL_ARGUMENT_INVALID"
         ) from error
-    arguments = parsed.get("ProgramArguments")
-    if isinstance(arguments, list) and any(
-        "g076" in str(argument).lower() for argument in arguments
-    ):
-        raise V4GmoUnattendedSchedulerLaunchdError(
-            "G076_FAKE_ONLY_LAUNCHAGENT_MUTATION_DISABLED"
-        )
     if stdout_path.parent != stderr_path.parent or stdout_path.parent.is_symlink():
         raise V4GmoUnattendedSchedulerLaunchdError(
             "V4_UNATTENDED_SCHEDULER_LAUNCHD_INSTALL_ARGUMENT_INVALID"

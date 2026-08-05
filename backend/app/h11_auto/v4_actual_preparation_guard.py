@@ -1444,8 +1444,6 @@ _RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
     "H11_AUTO_30M_20260730_G054",
     "H11_AUTO_30M_20260730_G055",
     "H11_AUTO_30M_20260730_G056",
-    "H11_AUTO_30M_20260802_G066",
-    "H11_AUTO_30M_20260802_G067",
 }
 _PREPARATION_KNOWN_GENERATION_LABELS = _RUNTIME_ONLY_TARGET_GENERATION_LABELS | {
     "H11_AUTO_30M_20260728_G019",
@@ -1455,8 +1453,6 @@ _PREPARATION_KNOWN_GENERATION_LABELS = _RUNTIME_ONLY_TARGET_GENERATION_LABELS | 
     "H11_AUTO_30M_20260731_G063",
     "H11_AUTO_30M_20260801_G064",
     "H11_AUTO_30M_20260801_G065",
-    "H11_AUTO_30M_20260802_G066",
-    "H11_AUTO_30M_20260802_G067",
 }
 _G040_RUNTIME_CARRIED_OPERATIONS = tuple(
     operation
@@ -2175,8 +2171,6 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
     if generation_label in {
         "H11_AUTO_30M_20260801_G064",
         "H11_AUTO_30M_20260801_G065",
-        "H11_AUTO_30M_20260802_G066",
-        "H11_AUTO_30M_20260802_G067",
     }:
         try:
             generation = load_v4_gmo_frozen_generation(
@@ -2189,24 +2183,6 @@ def load_external_preparation_gate(*, repository: Path) -> V4ExternalPreparation
                 )
 
                 verify_g065_generation_contract(
-                    generation=generation,
-                    repository=repository,
-                )
-            elif generation_label == "H11_AUTO_30M_20260802_G066":
-                from app.services.h11_v4_g066_unattended_activation import (
-                    verify_g066_generation_contract,
-                )
-
-                verify_g066_generation_contract(
-                    generation=generation,
-                    repository=repository,
-                )
-            elif generation_label == "H11_AUTO_30M_20260802_G067":
-                from app.services.h11_v4_g067_unattended_activation import (
-                    verify_g067_generation_contract,
-                )
-
-                verify_g067_generation_contract(
                     generation=generation,
                     repository=repository,
                 )

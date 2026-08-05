@@ -39,28 +39,12 @@ V4_GMO_GENERATION_STATUS = "OPERATOR_FROZEN_NOT_ACTIVATED"
 V4_GMO_UNATTENDED_ACTIVATED_STATUS = "UNATTENDED_LIVE_COMMISSIONED"
 V4_GMO_RUNTIME_REVIEWED_STATUS = "UNATTENDED_RUNTIME_REVIEWED_AWAITING_COMMISSIONING"
 V4_GMO_GENERATION_ARTIFACT = Path("docs/templates/h11_v4_gmo_frozen_generation.json")
-V4_GMO_G070_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g070_frozen_generation.json")
-V4_GMO_G071_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g071_frozen_generation.json")
-V4_GMO_G072_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g072_frozen_generation.json")
-V4_GMO_G073_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g073_frozen_generation.json")
-V4_GMO_G074_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g074_frozen_generation.json")
 V4_GMO_G075_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g075_frozen_generation.json")
-V4_GMO_G076_CANDIDATE_ARTIFACT = Path("docs/templates/h11_v4_g076_frozen_generation.json")
 _RUNTIME_ONLY_GENERATION_LABELS = frozenset(
     {
         "H11_AUTO_30M_20260801_G064",
         "H11_AUTO_30M_20260801_G065",
-        "H11_AUTO_30M_20260802_G066",
-        "H11_AUTO_30M_20260802_G067",
-        "H11_AUTO_30M_20260802_G068",
-        "H11_AUTO_30M_20260802_G069",
-        "H11_AUTO_30M_20260802_G070",
-        "H11_AUTO_30M_20260802_G071",
-        "H11_AUTO_30M_20260802_G072",
-        "H11_AUTO_30M_20260802_G073",
-        "H11_AUTO_30M_20260802_G074",
         "H11_AUTO_30M_20260802_G075",
-        "H11_AUTO_30M_20260802_G076",
     }
 )
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -206,13 +190,7 @@ class V4GmoFrozenGeneration:
             (
                 self.generation_label
                 not in {
-                    "H11_AUTO_30M_20260802_G070",
-                    "H11_AUTO_30M_20260802_G071",
-                    "H11_AUTO_30M_20260802_G072",
-                    "H11_AUTO_30M_20260802_G073",
-                    "H11_AUTO_30M_20260802_G074",
                     "H11_AUTO_30M_20260802_G075",
-                    "H11_AUTO_30M_20260802_G076",
                 }
                 and all(
                     value is None
@@ -232,13 +210,7 @@ class V4GmoFrozenGeneration:
             or (
                 self.generation_label
                 in {
-                    "H11_AUTO_30M_20260802_G070",
-                    "H11_AUTO_30M_20260802_G071",
-                    "H11_AUTO_30M_20260802_G072",
-                    "H11_AUTO_30M_20260802_G073",
-                    "H11_AUTO_30M_20260802_G074",
                     "H11_AUTO_30M_20260802_G075",
-                    "H11_AUTO_30M_20260802_G076",
                 }
                 and self.daily_authorization_required is False
                 and self.per_trade_confirmation_required is False
@@ -263,14 +235,7 @@ class V4GmoFrozenGeneration:
                 self.status == V4_GMO_RUNTIME_REVIEWED_STATUS
                 and self.generation_label
                 in {
-                    "H11_AUTO_30M_20260802_G069",
-                    "H11_AUTO_30M_20260802_G070",
-                    "H11_AUTO_30M_20260802_G071",
-                    "H11_AUTO_30M_20260802_G072",
-                    "H11_AUTO_30M_20260802_G073",
-                    "H11_AUTO_30M_20260802_G074",
                     "H11_AUTO_30M_20260802_G075",
-                    "H11_AUTO_30M_20260802_G076",
                 }
                 and self.live_ready is False
                 and self.unattended_live_supported is False
@@ -307,10 +272,10 @@ class V4GmoFrozenGeneration:
             ),
             (
                 # Weak provenance validation: predecessor keys are informational
-                # for G070-G075 (absent -> None) and required well-formed for
-                # G076+.  They are intentionally not hard-pinned to a specific
-                # predecessor digest so future corrective generations can carry
-                # their own successor relationship.
+                # (absent -> None) or required well-formed when present. They
+                # are intentionally not hard-pinned to a specific predecessor
+                # digest so future corrective generations can carry their own
+                # successor relationship.
                 self.predecessor_generation_digest is None
                 or bool(_SHA256.fullmatch(self.predecessor_generation_digest))
             ),
@@ -367,13 +332,7 @@ class V4GmoFrozenGeneration:
     def digest(self) -> str:
         canonical = self.canonical_json
         if self.generation_label in {
-            "H11_AUTO_30M_20260802_G070",
-            "H11_AUTO_30M_20260802_G071",
-            "H11_AUTO_30M_20260802_G072",
-            "H11_AUTO_30M_20260802_G073",
-            "H11_AUTO_30M_20260802_G074",
             "H11_AUTO_30M_20260802_G075",
-            "H11_AUTO_30M_20260802_G076",
         }:
             payload = json.loads(canonical)
             payload.pop("runtime_commissioning_evidence_digest", None)
@@ -478,61 +437,6 @@ def load_v4_gmo_frozen_generation(
     )
 
 
-def load_v4_gmo_g070_candidate_generation(
-    *, repository: Path, implementation_digest: str
-) -> V4GmoFrozenGeneration:
-    """Load the candidate without promoting or mutating the canonical artifact."""
-
-    return _load_v4_gmo_generation_artifact(
-        path=repository.resolve() / V4_GMO_G070_CANDIDATE_ARTIFACT,
-        implementation_digest=implementation_digest,
-    )
-
-
-def load_v4_gmo_g071_candidate_generation(
-    *, repository: Path, implementation_digest: str
-) -> V4GmoFrozenGeneration:
-    """Load the G071 candidate without mutating the canonical artifact."""
-
-    return _load_v4_gmo_generation_artifact(
-        path=repository.resolve() / V4_GMO_G071_CANDIDATE_ARTIFACT,
-        implementation_digest=implementation_digest,
-    )
-
-
-def load_v4_gmo_g072_candidate_generation(
-    *, repository: Path, implementation_digest: str
-) -> V4GmoFrozenGeneration:
-    """Load the G072 candidate without promoting or mutating canonical state."""
-
-    return _load_v4_gmo_generation_artifact(
-        path=repository.resolve() / V4_GMO_G072_CANDIDATE_ARTIFACT,
-        implementation_digest=implementation_digest,
-    )
-
-
-def load_v4_gmo_g073_candidate_generation(
-    *, repository: Path, implementation_digest: str
-) -> V4GmoFrozenGeneration:
-    """Load the final G073 integration candidate without promotion."""
-
-    return _load_v4_gmo_generation_artifact(
-        path=repository.resolve() / V4_GMO_G073_CANDIDATE_ARTIFACT,
-        implementation_digest=implementation_digest,
-    )
-
-
-def load_v4_gmo_g074_candidate_generation(
-    *, repository: Path, implementation_digest: str
-) -> V4GmoFrozenGeneration:
-    """Load the single final-completion G074 candidate without promotion."""
-
-    return _load_v4_gmo_generation_artifact(
-        path=repository.resolve() / V4_GMO_G074_CANDIDATE_ARTIFACT,
-        implementation_digest=implementation_digest,
-    )
-
-
 def load_v4_gmo_g075_candidate_generation(
     *, repository: Path, implementation_digest: str
 ) -> V4GmoFrozenGeneration:
@@ -540,17 +444,6 @@ def load_v4_gmo_g075_candidate_generation(
 
     return _load_v4_gmo_generation_artifact(
         path=repository.resolve() / V4_GMO_G075_CANDIDATE_ARTIFACT,
-        implementation_digest=implementation_digest,
-    )
-
-
-def load_v4_gmo_g076_candidate_generation(
-    *, repository: Path, implementation_digest: str
-) -> V4GmoFrozenGeneration:
-    """Load the G076 final corrective candidate without promotion."""
-
-    return _load_v4_gmo_generation_artifact(
-        path=repository.resolve() / V4_GMO_G076_CANDIDATE_ARTIFACT,
         implementation_digest=implementation_digest,
     )
 

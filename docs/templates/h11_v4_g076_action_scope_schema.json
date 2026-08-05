@@ -1,9 +1,0 @@
-{
-  "schema": "H11_V4_G076_ACTION_SCOPE_SCHEMA_V1",
-  "scope": "generation-reviewed-digest-cycle-action",
-  "started_marker": "O_EXCL_before_transport",
-  "same_action_retry_allowed": false,
-  "unknown_outcome": "HALTED",
-  "broker_post_authorized": false,
-  "fake_transport_tests_only": true
-}
