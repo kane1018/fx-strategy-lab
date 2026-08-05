@@ -312,8 +312,12 @@ Private API 呼び出しを伴うため、実行は operator の判断に属す�
 (`unattended_control_api.py:164-179`、消費側 `app/h11_manual/api.py:67`)は
 **ARM中/HALT中に手動 Private GET を遮断する連動装置**であり、現在テストゼロ。
 
-**完了条件**: 上記関数を含む control API の振る舞いテストが復活し、
-削除済み世代への依存が無い形で通る。
+**この項目は orchestrator が担当する**(§1 規則2 との整合)。テストの復元は
+テスト作成そのものであり、実装者に委ねると「実装を鏡写しにしたテスト」に
+なるため。外部実装者はこの項目を実施しない。
+
+**完了条件**(orchestrator 側): `unattended_auto_mode_requested()` を含む
+control API の振る舞いテストが復活し、削除済み世代への依存が無い形で通る。
 
 ### P0-f: 運用文書の更新
 
