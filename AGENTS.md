@@ -1437,3 +1437,49 @@ read-back解決でレアパスへ縮小する。実Keychain、Private API、brok
 - 本例外下の実装・test完了をlive-ready、performance proof、activation承認として扱うこと。
 - commit／push（別途明示授権がある場合を除く）。実Keychain・実Private GET・実POST・
   operation 60・initial activation・read-back実解決は、それぞれ別の明示承認を必須とする。
+
+## H-11 v4 G078 corrective generation限定例外（独立A/S/Oレビュー指摘の修正）
+
+operatorがG078 corrective generation（`H11_AUTO_30M_20260805_G078`）の設計承認
+（G077の独立A/S/Oレビュー指摘 MEDIUM-1 / LOW-1 / LOW-2 / LOW-3 / INFO-1 の修正）と
+一括実装を明示承認した場合に限り、以下のno-POST・fake-only実装を行ってよい。
+G077はimmutable predecessorとして保持し、runtime・test・digest module・template・
+設計書は一切変更しない。実Keychain、Private API、broker GET/POST、注文、取消、変更、
+決済、通知、ARM変更、LaunchAgent操作は一切行わない。
+
+### G078で限定的に許可すること
+
+- `backend/app/services/h11_v4_g078_runtime.py`としてG077 runtimeのsuccessorを実装する。
+  C1: start-window超過（wall clock・`unknown_observed_monotonic`供給時のmonotonic両方）と
+  予算枯渇のpre-start拒否でpersistent HALTをlatchしてからraiseする（未解決UNKNOWNを
+  HALTなしで残さない）。C2: 解決予算をper-scope evidenceファイル数から導出し、
+  別budget台帳を廃止する（crash窓・破損台帳・-1投影の経路を構造的に除去）。C3:
+  `unknown_observed_monotonic`供給時はmonotonicでも15秒開始窓を強制する。C4: budget checkを
+  flock工程ロック内で実施する。
+- G078専用のreviewed-files digest module（`backend/h11_v4_g078_reviewed_digest.py`）、
+  generation template（`docs/templates/h11_v4_g078_frozen_generation.json`）、設計書
+  （`docs/H11_V4_G078_CORRECTIVE_FIXES_DESIGN.md`）、fake-only acceptance tests
+  （`backend/app/tests/h11_auto/test_v4_g078_unknown_resolution_fake_only.py`）を新設し、
+  G078 reviewed digest / generation digestへ再凍結する。AGENTS.md本節の追記により
+  共有reviewed digestも変化するため、G076 canonical bindingをlockstep再束縛する
+  （未activation templateのみ・runtime marker/HALT/stateは存在せず不変）。同様に、
+  未commissioningのG077 templateのbinding値（`reviewed_files_digest`／
+  `implementation_digest`）も、G077のown digest self-consistency testを維持するため
+  lockstep再束縛してよい（content・戦略契約は不変・generation digestは新値へ更新）。
+- 実装・testはfake/syntheticのみ。evidenceへ`actual_post_authorized=false`／
+  `broker_post_authorized=false`／`entry_authorized=false`を固定し、`__bool__`は常にfalse、
+  解決結果からaggregate allow・permit・hard-guard解除値を生成しない。
+
+### G078でも禁止し続けること
+
+- 実Keychain read、実Private API GET/POST、実broker write、実注文・取消・変更・決済・OCO、
+  実Pushover/SMTP送信、ARM実変更、LaunchAgent install/bootstrap/kickstart。
+- G077 runtime・test・digest module・template・設計書の変更・削除・reset（G077はimmutable
+  predecessor。G077のmarker・HALT・state root・evidenceが存在する場合はそれらも不変）。
+- 同一scope・同一generationでの解決retry、repost、second attempt、結果不明後のwrite、
+  自動resume、generic allow bridge、env／`.env`による解除。
+- 同一M1 slot内での再評価、CONFIRMED_NOT_EXECUTEDからの即時再入。
+- 部分約定の未約定残を自動cancelすること（operator実行action・fresh観測を別境界で要する）。
+- 本例外下の実装・test完了をlive-ready、performance proof、activation承認として扱うこと。
+- commit／push（別途明示授権がある場合を除く）。実Keychain・実Private GET・実POST・
+  operation 60・initial activation・read-back実解決は、それぞれ別の明示承認を必須とする。
