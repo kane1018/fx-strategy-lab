@@ -544,6 +544,13 @@ class V4GmoHttpxPrivateTransport:
                 }
             )
         self._market_close_attempted = False
+        # In-process dispatch counter: incremented immediately before the
+        # client.request call for POSTs only.  The coordinated path snapshots
+        # this to distinguish "a POST reached the broker but its outcome could
+        # not be recorded" (counter advanced, store not latched) from a true
+        # pre-dispatch failure.  Not persisted: process death is picked up by
+        # the store's restart latch; this is in-process classification only.
+        self.posts_dispatched = 0
         if not callable(unknown_post_callback):
             raise V4GmoActualTransportError("V4_GMO_UNKNOWN_POST_CALLBACK_REQUIRED")
         self._unknown_post_callback = unknown_post_callback
@@ -626,6 +633,7 @@ class V4GmoHttpxPrivateTransport:
         try:
             if request.method == "POST":
                 assert_real_broker_post_allowed(allow=True)
+                self.posts_dispatched += 1
             response = self._client.request(
                 request.method,
                 GMO_V4_PRIVATE_BASE_URL + request.transport_path,
@@ -638,7 +646,11 @@ class V4GmoHttpxPrivateTransport:
             if not isinstance(payload, Mapping):
                 raise V4GmoActualTransportError(V4_GMO_UNKNOWN_NON_JSON)
             envelope = V4GmoPrivateEnvelope.from_injected_payload(payload)
-        except Exception as error:  # noqa: BLE001
+        except BaseException as error:  # noqa: BLE001
+            # KeyboardInterrupt/SystemExit included: any failure after a POST
+            # attempt is in flight must run the unknown-post callback before
+            # re-raising, so an interrupted POST can never silently skip the
+            # latch that the caller relies on.
             if request.method == "POST":
                 try:
                     self._unknown_post_callback()

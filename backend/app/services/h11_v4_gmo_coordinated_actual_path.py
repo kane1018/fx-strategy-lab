@@ -379,6 +379,7 @@ class V4GmoCoordinatedActualPath:
         if attempt.cycle_ref != plan.cycle_ref:
             self.store.engage_unknown_halt()
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
+        dispatched_before = getattr(self.adapter.transport, "posts_dispatched", 0)
         try:
             record_risk_entry_attempt(
                 state=risk_state,
@@ -405,9 +406,24 @@ class V4GmoCoordinatedActualPath:
                 now_monotonic=self._monotonic_now(),
             )
             self._finish_transport(plan=plan, outcome=outcome)
-        except BaseException:
-            self.store.engage_unknown_halt()
-            raise
+        except BaseException as error:
+            # The transport's unknown-post callback is the only authority on
+            # "a POST may have reached the broker": it latches the store
+            # before re-raising.  If the store is not latched, no POST was
+            # dispatched in this attempt, so the failure is retryable and
+            # must not manufacture a false-UNKNOWN halt.
+            if self.store.unknown_halt_latched():
+                raise
+            if getattr(self.adapter.transport, "posts_dispatched", 0) > dispatched_before:
+                # A POST reached the broker (the dispatch counter advanced) but
+                # its outcome could not be recorded: the result is unknown, so
+                # the store must latch instead of reporting a pre-dispatch
+                # failure.
+                self.store.engage_unknown_halt()
+                raise
+            raise V4GmoCoordinatedPathError(
+                "V4_GMO_PRE_DISPATCH_FAILURE_NO_POST_SENT"
+            ) from error
         return outcome
 
     def prepare_exact_protection_plan(
@@ -542,6 +558,7 @@ class V4GmoCoordinatedActualPath:
         if attempt.cycle_ref != plan.cycle_ref:
             self.store.engage_unknown_halt()
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
+        dispatched_before = getattr(self.adapter.transport, "posts_dispatched", 0)
         try:
             self.after_persist_before_transport()
             self._pace_before_private_post()
@@ -553,9 +570,24 @@ class V4GmoCoordinatedActualPath:
                 protection_plan=protection_plan,
             )
             self._finish_transport(plan=plan, outcome=outcome)
-        except BaseException:
-            self.store.engage_unknown_halt()
-            raise
+        except BaseException as error:
+            # The transport's unknown-post callback is the only authority on
+            # "a POST may have reached the broker": it latches the store
+            # before re-raising.  If the store is not latched, no POST was
+            # dispatched in this attempt, so the failure is retryable and
+            # must not manufacture a false-UNKNOWN halt.
+            if self.store.unknown_halt_latched():
+                raise
+            if getattr(self.adapter.transport, "posts_dispatched", 0) > dispatched_before:
+                # A POST reached the broker (the dispatch counter advanced) but
+                # its outcome could not be recorded: the result is unknown, so
+                # the store must latch instead of reporting a pre-dispatch
+                # failure.
+                self.store.engage_unknown_halt()
+                raise
+            raise V4GmoCoordinatedPathError(
+                "V4_GMO_PRE_DISPATCH_FAILURE_NO_POST_SENT"
+            ) from error
         return outcome
 
     def perform_risk_reducing_once(
@@ -622,6 +654,7 @@ class V4GmoCoordinatedActualPath:
         if attempt.cycle_ref != plan.cycle_ref:
             self.store.engage_unknown_halt()
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
+        dispatched_before = getattr(self.adapter.transport, "posts_dispatched", 0)
         try:
             self.after_persist_before_transport()
             self._pace_before_private_post()
@@ -633,9 +666,24 @@ class V4GmoCoordinatedActualPath:
                 public_market_status_guard=public_market_status_guard,
             )
             self._finish_transport(plan=plan, outcome=outcome)
-        except BaseException:
-            self.store.engage_unknown_halt()
-            raise
+        except BaseException as error:
+            # The transport's unknown-post callback is the only authority on
+            # "a POST may have reached the broker": it latches the store
+            # before re-raising.  If the store is not latched, no POST was
+            # dispatched in this attempt, so the failure is retryable and
+            # must not manufacture a false-UNKNOWN halt.
+            if self.store.unknown_halt_latched():
+                raise
+            if getattr(self.adapter.transport, "posts_dispatched", 0) > dispatched_before:
+                # A POST reached the broker (the dispatch counter advanced) but
+                # its outcome could not be recorded: the result is unknown, so
+                # the store must latch instead of reporting a pre-dispatch
+                # failure.
+                self.store.engage_unknown_halt()
+                raise
+            raise V4GmoCoordinatedPathError(
+                "V4_GMO_PRE_DISPATCH_FAILURE_NO_POST_SENT"
+            ) from error
         return outcome
 
     def confirm_exact_protection_once(

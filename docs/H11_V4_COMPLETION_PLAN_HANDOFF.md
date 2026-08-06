@@ -325,7 +325,9 @@ control API の振る舞いテストが復活し、削除済み世代への依�
   `:12` が G076 を canonical と明記、`:50` の期待出力も G076。**全面的に誤り。**
 - `AGENTS.md`: G077/G078/G079 の例外セクションが削除済みモジュールを参照。
 
-`AGENTS.md` は `REVIEWED_FILES` 内なので、編集後に digest 再ベイクが必要。
+**Phase A で解消済み**: 両ファイルとも G075 基準へ更新済み(AGENTS.md の G076-G079 参照は
+49箇所→0、RUNBOOK は G075 基準へ全面書き換え)。AGENTS.md は `REVIEWED_FILES` 内のため、
+編集時は digest 再ベイクが必要(実施済み)。
 
 ---
 
@@ -537,3 +539,50 @@ P3 以降に投資する前に決める方が合理的である。
 | 対話式 canary は実際に約定した | 2026-07-27、coordinator DB + 実市場 ASK と価格一致 |
 | Ctrl-C で永久HALT・建玉が監視不在に | 2026-07-28 に実発生 |
 | エッジ ≒ コスト(約 −0.1 pips/回) | 19ヶ月 M1 BID/ASK、出口210通り総当たり |
+
+---
+
+## 13. Phase C 完了の追記（2026-08-06）
+
+Phase C（工学完成バッチ C-1〜C-5）はコミット後に独立3レーンレビューを経る。実装内容:
+
+### C-1: R1 解消 — halt を焼く権限は真の送信境界のみ
+
+- `h11_v4_gmo_actual_transport.py`（S0）: 送信 try の `except Exception` を
+  `except BaseException` へ変更。Ctrl-C を含む送信中失敗でも POST は
+  unknown-post callback（store latch）を経てから re-raise される。
+- `h11_v4_gmo_coordinated_actual_path.py`（S1/S2/S3）と
+  `h11_v4_gmo_actual_runtime_driver.py`（S4）: `except BaseException` 内の
+  `engage_unknown_halt()` を削除。store が latch 済みなら re-raise、
+  未 latch なら `V4_GMO_PRE_DISPATCH_FAILURE_NO_POST_SENT`（retryable）で
+  分類し、偽 UNKNOWN 永久HALT を製造しない。
+- G075 action wrapper（`h11_v4_g075_runtime.py`）: pre-dispatch 失敗は
+  `.started.` を削除して `G075_ACTION_PRE_DISPATCH_FAILED_RETRYABLE`、
+  分類不能は従来どおり UNKNOWN + halt（fail-safe 維持）。
+  G075 live port も同じ分類を適用（ledger 欠損=未送信、ledger 読めず=
+  分類不能）。
+- 既存の意図的 latch（`_require_transport_boundary_dead_man`・再起動 pending
+  回収）と `g013_canary.py:498` の `release_unattempted_reservation` は不変。
+
+### C-2: HALT discharge（操作者手続き・rename アーカイブのみ）
+
+- `app/services/h11_v4_halt_discharge.py` + `scripts/h11_auto_v4_halt_discharge.py`。
+  削除禁止・`os.replace` による `g0*-halt-discharged.<UTC>.json` への
+  rename アーカイブのみ。元内容は `original`、操作者記録は `resolution`
+  （operator / reason / broker_state_confirmation / halt_content_sha256、
+  実内容と一致必須）。1回1件・glob 一括解除なし・runtime からは不可達
+  （AST テストで固定）。実 HALT 2件への適用は operator の明示操作。
+
+### C-3: 表示系の正直化
+
+- `safe_g075_api_status` が `halt_scan`（CLEAR / UNRESOLVED_HALT_PRESENT /
+  SCAN_FAILED / NOT_CHECKED）と `persistent_halt`・`control_plane_state`
+  を投影。スキャン失敗でも表示は絶対に例外を出さない。
+
+### C-4: repository 引数の必須化
+
+- `_capability_valid` / `G075ResidentSupervisor` / `safe_g075_api_status` /
+  `load_g075_release_capability_digest` の `repository` を必須化（Phase A の
+  opt-in を廃止）。`build_g075_recovery_scope`・G075 live runtime・bootstrap・
+  control API を含む全呼び出し元を更新。
+- `verify_g075_scheduler_binding` の `getattr` を明示属性アクセスへ変更。

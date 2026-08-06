@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -60,7 +61,10 @@ from app.services.h11_v4_gmo_actual_transport import (
     V4GmoPrivateRequest,
     V4GmoSignedRequestFactory,
 )
-from app.services.h11_v4_gmo_coordinated_actual_path import V4GmoCoordinatedActualPath
+from app.services.h11_v4_gmo_coordinated_actual_path import (
+    V4GmoCoordinatedActualPath,
+    V4GmoCoordinatedPathError,
+)
 from app.services.h11_v4_gmo_exit_dispatcher import V4GmoExitDispatcher
 from app.services.h11_v4_gmo_formal_canary_source import refresh_g013_formal_canary_input
 from app.services.h11_v4_gmo_post_canary_reconciliation import require_g013_entry_enabled
@@ -128,6 +132,7 @@ class G075ReadOnlyActualTransport:
 class G075ReleasePreparationEvidence:
     """Per-signal release proof replacing daily preparation for G075 only."""
 
+    repository: Path
     state_root: Path
     generation_digest: str
     reviewed_files_digest: str
@@ -145,6 +150,7 @@ class G075ReleasePreparationEvidence:
         if now_utc.tzinfo is None:
             raise G075LiveRuntimeError("G075_RELEASE_EVIDENCE_CLOCK_INVALID")
         current = load_g075_release_capability_digest(
+            repository=self.repository,
             state_root=self.state_root,
             generation_digest=generation_digest,
             reviewed_files_digest=reviewed_files_digest,
@@ -203,6 +209,7 @@ def prepare_g075_unattended_session(
     if generation.generation_label != "H11_AUTO_30M_20260802_G075":
         raise G075LiveRuntimeError("G075_CANONICAL_GENERATION_REQUIRED")
     release_digest = load_g075_release_capability_digest(
+        repository=repository,
         state_root=state_root,
         generation_digest=generation.digest,
         reviewed_files_digest=implementation_digest,
@@ -276,6 +283,7 @@ def prepare_g075_unattended_session(
         exact_order_sheet_digest=sheet.digest,
     )
     release = G075ReleasePreparationEvidence(
+        repository=repository,
         state_root=state_root,
         generation_digest=generation.digest,
         reviewed_files_digest=implementation_digest,
@@ -404,6 +412,39 @@ class G075LiveActionPort:
         )
 
     def attempt_once(self, scope: G075ActionScope) -> G075ActionOutcome:
+        try:
+            return self._attempt_once_inner(scope)
+        except BaseException as error:
+            # Classify the failure at the dispatch boundary.  The transport's
+            # unknown-post callback is the ONLY thing that latches the store;
+            # if the ledger is absent or not latched, no POST can have reached
+            # the broker, so the failure is pre-dispatch and retryable.  The
+            # wrapper (G075OneShotActionDispatcher) turns this labeled error
+            # into G075_ACTION_PRE_DISPATCH_FAILED_RETRYABLE instead of a
+            # false-UNKNOWN permanent halt.
+            latched: bool | None = None
+            try:
+                store = V4GmoActualCoordinatorStore.open_monitor_observer(
+                    self.process_lock.state_root / "coordinator.sqlite3"
+                )
+                latched = store.unknown_halt_latched()
+            except V4GmoActualCoordinatorError:
+                # No ledger yet: nothing has ever been dispatched, because the
+                # transport's unknown-post callback writes this ledger before
+                # re-raising.  Missing ledger therefore means not latched.
+                latched = False
+            except (sqlite3.Error, OSError):
+                # Ledger exists but cannot be read: unclassifiable.  Fail-safe:
+                # let the original error propagate so the wrapper falls back
+                # to the UNKNOWN + halt path.
+                latched = None
+            if latched is False:
+                raise V4GmoCoordinatedPathError(
+                    "V4_GMO_PRE_DISPATCH_FAILURE_NO_POST_SENT"
+                ) from error
+            raise error
+
+    def _attempt_once_inner(self, scope: G075ActionScope) -> G075ActionOutcome:
         if scope.action is G075Action.ENTRY:
             if self.current_session is None:
                 raise G075LiveRuntimeError("G075_ENTRY_SESSION_REQUIRED")
@@ -458,6 +499,7 @@ class G075LiveActionPort:
         if evidence is None:
             raise G075LiveRuntimeError("G075_EXIT_RECONCILIATION_REQUIRED")
         recovery = build_g075_recovery_scope(
+            repository=self.repository,
             state_root=self.process_lock.state_root,
             generation_digest=self.generation.digest,
             reviewed_files_digest=self.generation.implementation_digest,

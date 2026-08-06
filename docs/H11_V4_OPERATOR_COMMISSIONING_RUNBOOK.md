@@ -83,6 +83,32 @@ backend/.venv/bin/python backend/scripts/h11_auto_v4_current_generation_shadow_c
 - 実runtime state root配下へshadow-commissioning evidenceを書く（operator実行のみ）。
 - 必須ではない。
 
+### 3.4 HALT discharge（操作者専用・renameアーカイブのみ・Phase C）
+
+ディスク上の未解決HALT2件（G074/G075）は実害なしと operator が判断した場合も、
+**解除は必ずこの手続きで記録を残して行う**。削除は禁止、rename アーカイブのみ。
+
+```bash
+# 1) 対象haltの内容とsha256を表示（スクリプトが表示する）
+PYTHONPATH=backend backend/.venv/bin/python \
+  backend/scripts/h11_auto_v4_halt_discharge.py \
+  --repository . \
+  --generation-digest sha256:f0e74bf0f3ef114db3474df4aa7348edf112a5c8534d55121f730173ea868c0d \
+  --halt-file-name g075-persistent-halt.json \
+  --operator "<operator名>" \
+  --reason "<解除理由>" \
+  --broker-state-confirmation "<建玉ゼロ・注文ゼロをいつどう確認したか>" \
+  --confirm-sha256 sha256:<表示された値>
+```
+
+- 対象は明示した1ファイルのみ（glob一括解除なし）。`--confirm-sha256` が
+  実ファイル内容の sha256 と一致しない限り実行されない。
+- アーカイブは `g075-halt-discharged.<UTC日時>.json` として元内容を
+  `original` に保持し、runtime の未解決HALTスキャン
+  （`g0*-persistent-halt.json`）から外れる。
+- **この手続きの実行は operator の判断に属する**。エージェントは実行しない。
+  discharge は `actual_post_authorized` 等の能力フラグを一切変えない。
+
 ## 4. ブロック解除のための経路（推奨順）
 
 ### Step A（独立3レーンレビュー・必須）

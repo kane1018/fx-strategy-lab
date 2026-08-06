@@ -137,11 +137,14 @@ class V4GmoActualRuntimeDriver:
                         broker_post_attempt_count=result.broker_post_attempt_count,
                     )
         except BaseException as error:
-            self.path.store.engage_unknown_halt()
             if isinstance(error, V4GmoActualRuntimeDriverError):
                 raise
+            if self.path.store.unknown_halt_latched():
+                raise V4GmoActualRuntimeDriverError(
+                    "V4_RUNTIME_DRIVER_FAILED_PERSISTENT_HALT"
+                ) from error
             raise V4GmoActualRuntimeDriverError(
-                "V4_RUNTIME_DRIVER_FAILED_PERSISTENT_HALT"
+                "V4_RUNTIME_DRIVER_PRE_DISPATCH_FAILED_NO_HALT"
             ) from error
 
     def __repr__(self) -> str:

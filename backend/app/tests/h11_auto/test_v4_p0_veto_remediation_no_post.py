@@ -372,15 +372,10 @@ def test_turn_on_refuses_when_any_unresolved_halt_exists(
     assert "G075_UNRESOLVED_HALT_PRESENT" in str(excinfo.value.detail)
 
 
-def test_unresolved_halt_scan_is_opt_in_until_phase_c(tmp_path: Path) -> None:
-    """Record the current opt-in wiring: without ``repository`` the directory
-    scan does not run, so a clean supervisor stays OFF despite an unresolved
-    halt elsewhere.
-
-    Phase C makes ``repository`` mandatory on the supervisor and the
-    capability reader; when that lands, this test must be INVERTED (it will
-    need to assert the refusal instead of the pass).
-    """
+def test_repository_is_mandatory_on_the_supervisor(tmp_path: Path) -> None:
+    """Phase C inverted the Phase A opt-in: ``repository`` is now REQUIRED on
+    the resident supervisor (and the capability reader), so omitting it raises
+    TypeError instead of silently skipping the unresolved-halt scan."""
     generation_digest = "sha256:" + "c" * 64
     reviewed_files_digest = "sha256:" + "d" * 64
     current = tmp_path / "current"
@@ -389,15 +384,19 @@ def test_unresolved_halt_scan_is_opt_in_until_phase_c(tmp_path: Path) -> None:
         tmp_path, generation_suffix="9" * 64, halt_file="g074-persistent-halt.json"
     )
 
-    supervisor = G075ResidentSupervisor(
-        state_root=current,
-        generation_digest=generation_digest,
-        reviewed_files_digest=reviewed_files_digest,
-        # repository deliberately omitted: the scan is opt-in until Phase C
-    )
-    status = supervisor.tick(now_utc=datetime.now(UTC), arm_on=False)
-    assert status["persistent_halt"] is False
-    assert status["effective_state"] == "OFF"
+    with pytest.raises(TypeError):
+        G075ResidentSupervisor(
+            state_root=current,
+            generation_digest=generation_digest,
+            reviewed_files_digest=reviewed_files_digest,
+            # repository deliberately omitted: it is mandatory since Phase C
+        )
+    with pytest.raises(TypeError):
+        load_g075_release_capability_digest(
+            state_root=current,
+            generation_digest=generation_digest,
+            reviewed_files_digest=reviewed_files_digest,
+        )
 
 
 def test_unresolved_unknown_cannot_be_escaped_by_dropping_the_digest() -> None:

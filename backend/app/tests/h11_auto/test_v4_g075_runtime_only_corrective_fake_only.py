@@ -190,6 +190,7 @@ def test_supervisor_connects_reconciliation_and_strategy_without_transport(tmp_p
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
         reconciliation_runner=lambda cycle, now: run_g075_reconciliation_cycle_once(
             state_root=tmp_path,
             generation_digest=GEN,
@@ -215,6 +216,7 @@ def test_protected_position_is_exit_only_and_unconfirmed_halts(tmp_path: Path):
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
         reconciliation_runner=lambda cycle, now: run_g075_reconciliation_cycle_once(
             state_root=tmp_path,
             generation_digest=GEN,
@@ -231,6 +233,7 @@ def test_protected_position_is_exit_only_and_unconfirmed_halts(tmp_path: Path):
         state_root=root2,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
         reconciliation_runner=lambda cycle, now: run_g075_reconciliation_cycle_once(
             state_root=root2,
             generation_digest=GEN,
@@ -324,6 +327,7 @@ def test_restart_health_and_arm_off_are_fail_closed(tmp_path: Path):
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
     ).tick(now_utc=NOW, arm_on=False, process_lock_single=False)
     assert status["effective_state"] == "HALTED"
     assert status["entry_gate_open"] is False
@@ -368,6 +372,7 @@ def test_initial_activation_is_one_shot_and_enables_switch_only_after_pass(tmp_p
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
     ).tick(now_utc=NOW, arm_on=True)
     assert status["release_state"] == "ENABLED"
     assert status["effective_state"] == "ON_WAITING"
@@ -395,6 +400,7 @@ def test_recovery_scope_requires_explicit_owned_quantity_and_protection(tmp_path
         now_utc=NOW,
     )
     scope = build_g075_recovery_scope(
+        repository=tmp_path,
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
@@ -417,6 +423,7 @@ def test_recovery_scope_requires_explicit_owned_quantity_and_protection(tmp_path
     )
     with pytest.raises(G075Error, match="RECOVERY_EVIDENCE_NOT_CLEAR"):
         build_g075_recovery_scope(
+            repository=tmp_path,
             state_root=tmp_path,
             generation_digest=GEN,
             reviewed_files_digest=REVIEWED,
@@ -438,6 +445,7 @@ def test_recovered_exit_transport_requires_exact_opaque_scope(tmp_path: Path):
         now_utc=NOW,
     )
     scope = build_g075_recovery_scope(
+        repository=tmp_path,
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
@@ -472,11 +480,13 @@ def test_resident_cycle_ids_do_not_collide_across_restarts(tmp_path: Path):
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
     )
     second = G075ResidentSupervisor(
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
     )
     assert first._next_cycle() != second._next_cycle()
 
@@ -488,6 +498,7 @@ def test_arm_control_availability_is_not_entry_readiness(tmp_path: Path):
         arm_on=False,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
     )
     assert status["arm_control_available"] is True
     assert status["arm_ready"] is True
@@ -500,6 +511,7 @@ def test_release_locked_contract_keeps_control_available_for_safe_refusal(tmp_pa
         arm_on=False,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
     )
     assert status["release_state"] == "LOCKED"
     assert status["runtime_activation_available"] is False
@@ -521,6 +533,7 @@ def test_capability_rejects_mismatched_operation_binding(tmp_path: Path):
         arm_on=False,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
     )
     assert status["release_state"] == "LOCKED"
     assert status["runtime_activation_available"] is False
@@ -537,6 +550,7 @@ def test_recovery_scope_is_action_bound_and_one_use(tmp_path: Path):
         now_utc=NOW,
     )
     kwargs = {
+        "repository": tmp_path,
         "state_root": tmp_path,
         "generation_digest": GEN,
         "reviewed_files_digest": REVIEWED,
@@ -562,6 +576,7 @@ def test_scheduler_binding_requires_exact_arguments_live_pid_and_chain(tmp_path:
         state_root=tmp_path,
         generation_digest=GEN,
         reviewed_files_digest=REVIEWED,
+        repository=tmp_path,
     ).tick(now_utc=NOW, arm_on=False)
     (tmp_path / "process.lock").write_text(
         json.dumps(

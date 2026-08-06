@@ -655,6 +655,7 @@ class G075RecoveryScope:
 
 def build_g075_recovery_scope(
     *,
+    repository: Path,
     state_root: Path,
     generation_digest: str,
     reviewed_files_digest: str,
@@ -667,6 +668,7 @@ def build_g075_recovery_scope(
     """Bind restart recovery to fresh, explicitly protected ownership evidence."""
 
     release_digest = load_g075_release_capability_digest(
+        repository=repository,
         state_root=state_root,
         generation_digest=generation_digest,
         reviewed_files_digest=reviewed_files_digest,
@@ -720,6 +722,26 @@ def build_g075_recovery_scope(
         {**asdict(scope), "schema": "H11_V4_G075_RECOVERY_SCOPE_V1"},
     )
     return scope
+
+
+def _g075_pre_dispatch_retryable(error: BaseException) -> bool:
+    """True when a port failure is a pre-dispatch failure (no POST sent).
+
+    The transport's unknown-post callback is the only authority on "a POST may
+    have reached the broker": it latches the coordinator store before
+    re-raising.  The coordinated path re-raises a labeled error when the store
+    is not latched; the G075 live port applies the same classification.
+    Imported lazily: the transport module imports this module, so a module-level
+    import here would be circular.
+    """
+    from app.services.h11_v4_gmo_coordinated_actual_path import (
+        V4GmoCoordinatedPathError,
+    )
+
+    return (
+        isinstance(error, V4GmoCoordinatedPathError)
+        and "V4_GMO_PRE_DISPATCH_FAILURE_NO_POST_SENT" in str(error)
+    )
 
 
 class G075OneShotActionDispatcher:
@@ -802,6 +824,13 @@ class G075OneShotActionDispatcher:
         try:
             outcome = self.port.attempt_once(scope)
         except BaseException as error:
+            if _g075_pre_dispatch_retryable(error):
+                # Pre-dispatch failure: no POST may have reached the broker
+                # (the transport's unknown-post callback is the only authority
+                # that latches).  Drop the started marker so the action can be
+                # retried, and do NOT manufacture a false-UNKNOWN halt.
+                os.remove(marker)
+                raise G075Error("G075_ACTION_PRE_DISPATCH_FAILED_RETRYABLE") from error
             _exclusive_json(
                 marker.with_name(marker.name.replace(".started.", ".result.")),
                 {
@@ -994,12 +1023,14 @@ def _capability_valid(
     state_root: Path,
     generation_digest: str,
     reviewed_files_digest: str,
-    repository: Path | None = None,
+    repository: Path,
 ) -> bool:
     if repository is not None:
         try:
             require_g075_no_unresolved_halt(repository=repository)
-        except G075Error:
+        except Exception:  # noqa: BLE001
+            # Scan failure is fail-closed: an unresolved halt OR an
+            # unreadable runtime directory both mean "not clear".
             return False
     try:
         capability = _read_json(state_root / G075_SWITCH_CAPABILITY_FILE, "G075_CAPABILITY_INVALID")
@@ -1052,7 +1083,7 @@ def load_g075_release_capability_digest(
     state_root: Path,
     generation_digest: str,
     reviewed_files_digest: str,
-    repository: Path | None = None,
+    repository: Path,
 ) -> str:
     if not _capability_valid(
         state_root=state_root,
@@ -1073,7 +1104,7 @@ class G075ResidentSupervisor:
     state_root: Path
     generation_digest: str
     reviewed_files_digest: str
-    repository: Path | None = None
+    repository: Path
     reconciliation_runner: Callable[[str, datetime], G075ReconciliationEvidence] | None = None
     strategy_evaluator: G075FrozenStrategyEvaluator | None = None
     entry_dispatcher: G075EntryDispatcher | None = None
@@ -1336,7 +1367,7 @@ def safe_g075_api_status(
     arm_on: bool,
     generation_digest: str,
     reviewed_files_digest: str,
-    repository: Path | None = None,
+    repository: Path,
 ) -> dict[str, object]:
     capability = _capability_valid(
         state_root=state_root,
@@ -1357,9 +1388,24 @@ def safe_g075_api_status(
             "persistent_halt": False,
         }
     effective = str(status.get("effective_state", G075EffectiveState.HALTED.value))
+    halt_scan = "NOT_CHECKED"
+    scan_halted = False
+    if repository is not None:
+        try:
+            require_g075_no_unresolved_halt(repository=repository)
+            halt_scan = "CLEAR"
+        except G075Error:
+            halt_scan = "UNRESOLVED_HALT_PRESENT"
+            scan_halted = True
+        except Exception:  # noqa: BLE001
+            # The display must never crash on a scan failure; report it.
+            halt_scan = "SCAN_FAILED"
+    persistent_halt = bool(status.get("persistent_halt")) or scan_halted
     return {
         **status,
-        "control_plane_state": "READY" if not status.get("persistent_halt") else "HALTED",
+        "control_plane_state": "HALTED" if persistent_halt else "READY",
+        "persistent_halt": persistent_halt,
+        "halt_scan": halt_scan,
         "generation_label": G075_GENERATION_LABEL,
         "generation_digest": generation_digest,
         "reviewed_files_digest": reviewed_files_digest,
@@ -1393,7 +1439,7 @@ def safe_g075_api_status(
 def verify_g075_scheduler_binding(
     *, generation: object, repository: Path, plist_path: Path, state_root: Path, now_utc: datetime
 ) -> None:
-    if getattr(generation, "generation_label", None) != G075_GENERATION_LABEL:
+    if generation.generation_label != G075_GENERATION_LABEL:
         raise G075Error("G075_GENERATION_REQUIRED")
     if (state_root / G075_PERSISTENT_HALT_FILE).exists() or (
         state_root / G075_PERSISTENT_HALT_FILE
@@ -1415,9 +1461,9 @@ def verify_g075_scheduler_binding(
         "--repository",
         str(repository.resolve()),
         "--expected-reviewed-files-digest",
-        str(getattr(generation, "implementation_digest", "")),
+        str(generation.implementation_digest),
         "--expected-generation-digest",
-        str(getattr(generation, "digest", "")),
+        str(generation.digest),
     ]
     if arguments != expected_arguments:
         raise G075Error("G075_SCHEDULER_BINDING_INVALID")

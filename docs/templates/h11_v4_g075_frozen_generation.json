@@ -25,7 +25,7 @@
   "frozen_design_digest": "sha256:9193b78f5c1c423689d6fc21d97793edf05ad1ff33408169d3574ba854bbf6de",
   "generation_label": "H11_AUTO_30M_20260802_G075",
   "heartbeat_interval_seconds": 15,
-  "implementation_digest": "sha256:ffc365d94068091f07e1f28164f597c658fbc4bc90ac29857430c1f6b00cd882",
+  "implementation_digest": "sha256:2f27898f7d149aecf59995a54a69ec4bb38c0a492868b0134470468bf5adc261",
   "live_ready": false,
   "maximum_consecutive_losses": 5,
   "maximum_entries_per_day": 30,
