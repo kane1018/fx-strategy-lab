@@ -148,19 +148,49 @@ def test_digests_reached_a_fixed_point_after_the_predecessor_fields() -> None:
         assert _load(path)["implementation_digest"] == reviewed, path.name
 
 
-def test_the_orphaned_predecessor_halt_is_still_on_disk() -> None:
-    """Guard against 'resolving' the finding by deleting the evidence."""
+def test_the_orphaned_predecessor_halt_evidence_survives_on_disk() -> None:
+    """Guard against 'resolving' the finding by deleting the evidence.
+
+    On 2026-08-06 the operator discharged this halt through the documented
+    procedure (``h11_auto_v4_halt_discharge.py``), which renames the marker
+    into a ``*-halt-discharged.<UTC>.json`` archive carrying the original
+    payload verbatim plus a resolution record.  Deletion remains forbidden,
+    so this test now accepts either state -- an undischarged marker, or an
+    archive -- and in both cases still asserts the original halt content,
+    including the fact that no order ever reached the broker.
+    """
     root = v4_gmo_runtime_state_root(
         repository=REPOSITORY, generation_digest=PREDECESSOR_DIGEST
     )
-    halt = root / G075_PERSISTENT_HALT_FILE
-    assert halt.is_file(), "the predecessor halt marker must not be deleted"
-    payload = _load(halt)
+    marker = root / G075_PERSISTENT_HALT_FILE
+    archives = sorted(root.glob("g0*-halt-discharged.*.json"))
+    assert marker.is_file() or archives, (
+        "the predecessor halt evidence must not be deleted: neither the "
+        f"marker {G075_PERSISTENT_HALT_FILE} nor a discharge archive exists "
+        f"under {root}"
+    )
+
+    if marker.is_file():
+        payload = _load(marker)
+    else:
+        archive = _load(archives[-1])
+        payload = archive["original"]
+        resolution = archive["resolution"]
+        for field in (
+            "operator",
+            "reason",
+            "broker_state_confirmation",
+            "halt_content_sha256",
+        ):
+            assert isinstance(resolution.get(field), str) and resolution[field].strip(), (
+                f"the discharge archive must record {field}"
+            )
+
     assert payload["status"] == "HALTED"
     assert payload["reason"] == "G075_INITIAL_TRANSACTION_UNKNOWN"
-    # It never actually reached the broker; the halt is an internal
-    # misclassification (see P1 R1), which is why it must not be silently
-    # discharged.
+    # It never actually reached the broker; the halt was an internal
+    # misclassification (the false-UNKNOWN pattern rooted out in Phase C),
+    # which is why the record has to survive its own discharge.
     assert payload["actual_post_count"] == 0
     assert payload["broker_write"] is False
 
