@@ -20,15 +20,10 @@ import pytest
 
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from app.services.h11_v4_g075_runtime import (
-    G075_PERSISTENT_HALT_FILE,
     G075Error,
-    G075_OPERATION_60_STARTED_FILE,
-    G075_OPERATION_60_RESULT_FILE,
     require_g075_no_unresolved_halt,
 )
 from app.services.h11_v4_halt_discharge import (
-    V4HaltDischargeError,
-    discharge_halt,
     halt_content_sha256,
 )
 
@@ -191,7 +186,6 @@ def test_no_g075_label_literal_drift_in_production() -> None:
     source = (REPOSITORY / "backend/app/services/h11_v4_g075_runtime.py").read_text()
     assert 'G075_GENERATION_LABEL = "H11_AUTO_30M_20260802_G075"' in source
 
-    from pathlib import Path
     production = sorted(
         p
         for p in (REPOSITORY / "backend").rglob("*.py")
@@ -217,3 +211,43 @@ def test_no_g075_label_literal_drift_in_production() -> None:
         "G075 label literal found outside allowlist; use G075_GENERATION_LABEL:\n"
         + "\n".join(offenders)
     )
+
+def test_op60_candidate_executes_the_label_lines_end_to_end(tmp_path) -> None:
+    """Regression for the round-2 Safety P1: the G075_GENERATION_LABEL
+    constant swap left the name unimported, so the marker-writing lines
+    raised NameError at runtime and burned the one-use O_EXCL marker as a
+    zero-byte file.  No prior test executed those lines.  This test drives
+    ``run_g075_operation_60_candidate`` through a PASSED run with fakes and
+    asserts both markers carry the canonical label, so an unimported or
+    renamed label fails loudly here instead of during commissioning."""
+    import importlib
+    import json
+    import sys
+
+    sys.path.insert(0, "scripts")
+    try:
+        op60 = importlib.import_module("h11_auto_v4_g075_operation_60_no_post")
+    finally:
+        sys.path.remove("scripts")
+
+    state_root = tmp_path / "state"
+    state_root.mkdir()
+    outcome = op60.run_g075_operation_60_candidate(
+        state_root=state_root,
+        generation_digest="sha256:" + "a" * 64,
+        reviewed_files_digest="sha256:" + "b" * 64,
+        installer=lambda: None,
+        readiness_verifier=lambda: True,
+        monotonic=iter(float(n) for n in range(100)).__next__,
+        sleep=lambda seconds: None,
+    )
+    assert outcome == "PASSED"
+    started = json.loads(
+        (state_root / op60.G075_OPERATION_60_STARTED_FILE).read_text()
+    )
+    result = json.loads(
+        (state_root / op60.G075_OPERATION_60_RESULT_FILE).read_text()
+    )
+    assert started["generation_label"] == "H11_AUTO_30M_20260802_G075"
+    assert result["generation_label"] == "H11_AUTO_30M_20260802_G075"
+    assert result["status"] == "PASSED"

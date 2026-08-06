@@ -10,6 +10,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.services.h11_v4_g075_runtime import (
+    G075_GENERATION_LABEL,
     G075_OPERATION_60_RESULT_FILE,
     G075_OPERATION_60_STARTED_FILE,
     G075Error,
