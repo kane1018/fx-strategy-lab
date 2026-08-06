@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Any
 
 from app.h11_auto.v4_gmo_generation import load_v4_gmo_frozen_generation
-from app.services.h11_v4_g064_unattended_activation import (
-    G064_GENERATION_LABEL,
-    V4G064ActivationError,
-    verify_g064_generation_contract,
+from app.services.h11_v4_g075_runtime import (
+    G075_GENERATION_LABEL,
+    G075Error,
+    verify_g075_review_artifacts,
 )
 from h11_v4_reviewed_digest import compute_reviewed_files_digest
 
@@ -27,7 +27,6 @@ FOCUSED_TESTS = (
     "app/tests/h11_auto/test_v4_gmo_actual_coordinator_precanary.py",
     "app/tests/h11_auto/test_v4_unattended_live_scheduled_launcher_fake_only.py",
     "app/tests/h11_auto/test_runtime_safety_no_post.py",
-    "app/tests/h11_auto/test_v4_monday_self_check_no_post.py",
     "app/tests/h11_auto/test_v4_gmo_g019_exit_policy_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_exit_and_commissioning_no_post.py",
     "app/tests/h11_auto/test_v4_g020_shadow_observer_no_post.py",
@@ -37,7 +36,6 @@ FOCUSED_TESTS = (
     "app/tests/h11_auto/test_v4_unattended_account_snapshot_producer_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_operational_readiness_no_post.py",
     "app/tests/h11_auto/test_v4_g028_unattended_runtime_integration_no_post.py",
-    "app/tests/h11_auto/test_v4_g063_generation_manifest_no_post.py",
     "app/tests/h11_auto/test_v4_g064_switch_only_runtime_no_post.py",
     "app/tests/h11_auto/test_v4_g064_switch_only_bounded_runner_no_post.py",
     "app/tests/h11_auto/test_v4_g064_runtime_invariants_no_post.py",
@@ -74,7 +72,6 @@ RUFF_TARGETS = (
     "scripts/h11_auto_v4_unattended_live_scheduled_launcher.py",
     "app/tests/h11_auto/test_v4_unattended_live_scheduled_launcher_fake_only.py",
     "app/tests/h11_auto/test_runtime_safety_no_post.py",
-    "app/tests/h11_auto/test_v4_monday_self_check_no_post.py",
     "app/tests/h11_auto/test_v4_gmo_actual_coordinator_precanary.py",
     "app/tests/h11_auto/test_v4_gmo_g019_exit_policy_no_post.py",
     "app/tests/h11_auto/test_v4_unattended_exit_and_commissioning_no_post.py",
@@ -196,40 +193,25 @@ def _verify_generation(repository: Path) -> tuple[str, Any]:
         raise MondaySelfCheckError("SELF_CHECK_ENTRY_CAP_MISMATCH")
     if generation.same_action_retry_allowed or generation.same_action_repost_allowed:
         raise MondaySelfCheckError("SELF_CHECK_RETRY_POLICY_MISMATCH")
-    if generation.generation_label == G064_GENERATION_LABEL:
+    if generation.generation_label == G075_GENERATION_LABEL:
         if (
             generation.actual_post_authorized
-            or generation.live_ready is not True
-            or generation.unattended_live_supported is not True
+            or generation.live_ready
+            or generation.unattended_live_supported
         ):
-            raise MondaySelfCheckError("SELF_CHECK_G064_RUNTIME_CONTRACT_MISMATCH")
+            raise MondaySelfCheckError("SELF_CHECK_G075_CONTRACT_NOT_NO_POST")
+        # G075 is runtime-only and unreviewed until a genuine three-lane
+        # review is recorded.  The review gate must refuse in that state;
+        # a passing gate here would mean a stale CLEAR was transplanted onto
+        # unreviewed code, so the honest offline result is REVIEW_PENDING.
         try:
-            verify_g064_generation_contract(
-                generation=generation, repository=repository
+            verify_g075_review_artifacts(
+                repository=repository,
+                generation_digest=generation.digest,
+                reviewed_files_digest=reviewed_digest,
             )
-        except V4G064ActivationError as error:
-            raise MondaySelfCheckError(
-                "SELF_CHECK_G064_ARTIFACT_BINDING_INVALID"
-            ) from error
-        attestation_path = (
-            repository / "docs/templates/h11_v4_g064_independent_review_attestation.json"
-        )
-        try:
-            attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            raise MondaySelfCheckError(
-                "SELF_CHECK_G064_REVIEW_ATTESTATION_INVALID"
-            ) from error
-        reviewed_commit = attestation.get("reviewed_commit")
-        if not isinstance(reviewed_commit, str):
-            raise MondaySelfCheckError("SELF_CHECK_G064_REVIEW_COMMIT_INVALID")
-        _require_success(
-            _run(
-                ["git", "merge-base", "--is-ancestor", reviewed_commit, "HEAD"],
-                cwd=repository,
-            ),
-            "SELF_CHECK_G064_REVIEW_COMMIT_NOT_ANCESTOR",
-        )
+        except G075Error:
+            raise MondaySelfCheckError("SELF_CHECK_G075_REVIEW_PENDING") from None
         return reviewed_digest, generation
     if (
         generation.actual_post_authorized

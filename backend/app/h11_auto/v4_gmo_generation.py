@@ -284,6 +284,19 @@ class V4GmoFrozenGeneration:
                 or type(self.predecessor_initial_activation_unknown) is bool
             ),
             (
+                # An unresolved initial-activation UNKNOWN must name the
+                # predecessor whose halt is unresolved.  Omitting or nulling
+                # the digest while still claiming the UNKNOWN would otherwise
+                # be an escape hatch past the runtime's unresolved-halt scan
+                # (P0-b / Phase A): the scan is deliberately manifest-free,
+                # and this field keeps the halt's provenance recorded.
+                self.predecessor_initial_activation_unknown is not True
+                or (
+                    isinstance(self.predecessor_generation_digest, str)
+                    and bool(_SHA256.fullmatch(self.predecessor_generation_digest))
+                )
+            ),
+            (
                 self.predecessor_terminal_evidence_reused is None
                 or type(self.predecessor_terminal_evidence_reused) is bool
             ),

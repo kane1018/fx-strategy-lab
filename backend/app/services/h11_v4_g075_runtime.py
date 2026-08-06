@@ -22,6 +22,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
+from app.h11_auto.v4_gmo_runtime_paths import V4_GMO_RUNTIME_STATE_RELATIVE
+
 G075_GENERATION_LABEL = "H11_AUTO_30M_20260802_G075"
 G075_PERSISTENT_HALT_FILE = "g075-persistent-halt.json"
 G075_RUNTIME_STATUS_FILE = "g075-runtime-status.json"
@@ -448,6 +450,26 @@ def engage_g075_halt(*, state_root: Path, reason: str) -> None:
             "actual_post_count": 0,
         },
     )
+
+
+def require_g075_no_unresolved_halt(*, repository: Path) -> None:
+    """Refuse startup while any generation root holds an unresolved halt.
+
+    State roots are keyed by generation digest, so minting a generation or
+    re-baking a digest silently re-keys the runtime and orphans a latched
+    persistent halt.  This scan is deliberately independent of the frozen
+    generation manifest: manifest edits are the mechanism by which the two
+    existing halts were orphaned, so the manifest cannot be the authority on
+    whether a halt is outstanding.  There is intentionally no release path
+    here; discharging a halt is an operator decision and a separate design.
+    """
+    runtime_root = repository.resolve() / V4_GMO_RUNTIME_STATE_RELATIVE
+    if not runtime_root.is_dir():
+        return
+    for generation_root in sorted(runtime_root.glob("generation-*")):
+        for halt_path in sorted(generation_root.glob("g0*-persistent-halt.json")):
+            if halt_path.exists() or halt_path.is_symlink():
+                raise G075Error("G075_UNRESOLVED_HALT_PRESENT")
 
 
 @dataclass(frozen=True)
@@ -952,7 +974,7 @@ class G075ProcessLock:
                 raise G075Error("G075_PROCESS_LOCK_INVALID") from None
             if self._pid_alive(pid):
                 raise G075Error("G075_PROCESS_LOCK_CONFLICT")
-            self.path.unlink()
+            os.remove(self.path)
         try:
             descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError as error:
@@ -963,13 +985,22 @@ class G075ProcessLock:
 
     def release(self) -> None:
         if self.acquired and self.path.is_file() and not self.path.is_symlink():
-            self.path.unlink()
+            os.remove(self.path)
         self.acquired = False
 
 
 def _capability_valid(
-    *, state_root: Path, generation_digest: str, reviewed_files_digest: str
+    *,
+    state_root: Path,
+    generation_digest: str,
+    reviewed_files_digest: str,
+    repository: Path | None = None,
 ) -> bool:
+    if repository is not None:
+        try:
+            require_g075_no_unresolved_halt(repository=repository)
+        except G075Error:
+            return False
     try:
         capability = _read_json(state_root / G075_SWITCH_CAPABILITY_FILE, "G075_CAPABILITY_INVALID")
         release = _read_json(
@@ -1017,12 +1048,17 @@ def _capability_valid(
 
 
 def load_g075_release_capability_digest(
-    *, state_root: Path, generation_digest: str, reviewed_files_digest: str
+    *,
+    state_root: Path,
+    generation_digest: str,
+    reviewed_files_digest: str,
+    repository: Path | None = None,
 ) -> str:
     if not _capability_valid(
         state_root=state_root,
         generation_digest=generation_digest,
         reviewed_files_digest=reviewed_files_digest,
+        repository=repository,
     ):
         raise G075Error("G075_RELEASE_CAPABILITY_LOCKED")
     release = _read_json(
@@ -1037,6 +1073,7 @@ class G075ResidentSupervisor:
     state_root: Path
     generation_digest: str
     reviewed_files_digest: str
+    repository: Path | None = None
     reconciliation_runner: Callable[[str, datetime], G075ReconciliationEvidence] | None = None
     strategy_evaluator: G075FrozenStrategyEvaluator | None = None
     entry_dispatcher: G075EntryDispatcher | None = None
@@ -1066,6 +1103,13 @@ class G075ResidentSupervisor:
         halted = (self.state_root / G075_PERSISTENT_HALT_FILE).exists() or (
             self.state_root / G075_PERSISTENT_HALT_FILE
         ).is_symlink()
+        predecessor_halted = False
+        if not halted and self.repository is not None:
+            try:
+                require_g075_no_unresolved_halt(repository=self.repository)
+            except G075Error:
+                halted = True
+                predecessor_halted = True
         evidence = None
         if not halted:
             try:
@@ -1090,6 +1134,7 @@ class G075ResidentSupervisor:
             state_root=self.state_root,
             generation_digest=self.generation_digest,
             reviewed_files_digest=self.reviewed_files_digest,
+            repository=self.repository,
         )
         decision: G075StrategyDecision | None = None
         effective = G075EffectiveState.OFF
@@ -1102,7 +1147,11 @@ class G075ResidentSupervisor:
             halted = True
             effective = G075EffectiveState.HALTED
             entry_state = G075EntryState.HALTED
-            reason = "G075_RUNTIME_HEALTH_NOT_CLEAR"
+            reason = (
+                "G075_UNRESOLVED_HALT_PRESENT"
+                if predecessor_halted
+                else "G075_RUNTIME_HEALTH_NOT_CLEAR"
+            )
         elif evidence is not None and evidence.state in {
             G075ReconciliationState.UNKNOWN,
             G075ReconciliationState.STALE,
@@ -1282,12 +1331,18 @@ class G075ResidentSupervisor:
 
 
 def safe_g075_api_status(
-    *, state_root: Path, arm_on: bool, generation_digest: str, reviewed_files_digest: str
+    *,
+    state_root: Path,
+    arm_on: bool,
+    generation_digest: str,
+    reviewed_files_digest: str,
+    repository: Path | None = None,
 ) -> dict[str, object]:
     capability = _capability_valid(
         state_root=state_root,
         generation_digest=generation_digest,
         reviewed_files_digest=reviewed_files_digest,
+        repository=repository,
     )
     try:
         status = _read_json(state_root / G075_RUNTIME_STATUS_FILE, "G075_RUNTIME_STATUS_REQUIRED")
@@ -1636,6 +1691,7 @@ __all__ = [
     "build_g075_recovery_scope",
     "load_g075_release_capability_digest",
     "load_g075_reconciliation",
+    "require_g075_no_unresolved_halt",
     "run_g075_initial_atomic_activation",
     "run_g075_initial_atomic_activation_fake_only",
     "run_g075_reconciliation_cycle_once",

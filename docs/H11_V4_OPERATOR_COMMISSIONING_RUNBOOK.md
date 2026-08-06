@@ -1,40 +1,49 @@
-# H-11 v4 Operator Commissioning Runbook（2026-08-05・G076/G077/G078状態）
+# H-11 v4 Operator Commissioning Runbook（2026-08-06・G075状態）
 
 このrunbookは、無人の自動売買完成（UIのARM ON/OFFで起動状態を変更できる仕様）へ向けた
 **現在のgate状態**と**operatorが実行できる操作**・**ブロックされているgateとその解除経路**を
 記録する。エージェントは実Keychain read・実Private GET・実broker POST・実通知・
 LaunchAgent install・ARM実変更・実runtime state root書込を行わない（すべてoperator境界）。
 
-## 1. 現在のgeneration状態（HEAD fc2d552・working tree clean）
+canonical世代は **G075**（`H11_AUTO_30M_20260802_G075`・runtime-only corrective）である。
+削除済み世代（G066〜G079のうちG075以外）を手順の前提にしないこと。
+
+## 1. 現在のgeneration状態（HEAD fe0b7cb）
 
 | generation | 役割 | status | commissioning |
 |---|---|---|---|
-| **G076**（canonical） | 最終完成candidate（fake-only runtime） | `UNATTENDED_RUNTIME_REVIEWED_AWAITING_COMMISSIONING` | **AWAITING_OPERATION_60**（未実行） |
-| G077 | read-back解決candidate（v1.1） | `G077_FAKE_ONLY_REVIEWED_AWAITING_COMMISSIONING` | 未commissioning（G078に超越） |
-| G078 | read-back解決corrective（C1-C4） | `G078_FAKE_ONLY_REVIEWED_AWAITING_COMMISSIONING` | 未commissioning（現行candidate） |
+| **G075**（canonical） | runtime-only corrective（no-POST） | `G075_RUNTIME_REVIEWED`（未レビュー） | **未commissioning**（op60未実行） |
 
-commissioning evidence（G076）: `status=G076_FAKE_ONLY_REVIEW_CLEAR_AWAITING_OPERATION_60`、
-`operation_60_executed=false`、`initial_atomic_activation_started=false`、
-`release_activation_executed=false`、全カウント0、全authorization false。
+G075のruntime state root（`backend/market_data/h11_v4_gmo_actual_runtime/generation-ffee0dfc…/`）は
+**未作成**である。ディスク上には**未解決の永久HALTが2件** latchされている（削除・改変禁止）:
+
+```
+generation-ce098ee8…/g074-persistent-halt.json   G074_INITIAL_TRANSACTION_UNKNOWN
+generation-f0e74bf0…/g075-persistent-halt.json   G075_INITIAL_TRANSACTION_UNKNOWN
+```
+
+いずれも `broker_post_count: 0` / `actual_post_count: 0` であり、実発注は発生していない。
 
 ## 2. Gate状態サマリ
 
 | gate | 状態 | 理由 |
 |---|---|---|
-| テスト基盤（full suite） | **CLEAR** | 9078 passed / 0 failed |
+| テスト基盤（full suite） | **CLEAR** | 8905 passed / 0 failed（Phase A時点） |
 | Ruff / diff check | **CLEAR** | — |
-| 独立A/S/Oレビュー | **CLEAR** | G077・G078ともVETOなし |
-| digest整合（S/D/G077/G078） | **CLEAR** | verify_g076_review_artifacts PASS |
+| 独立A/S/Oレビュー | **未CLEAR** | P0/Phase Aの変更は独立3レーンレビュー待ち |
+| レビュー合格証ゲート `verify_g075_review_artifacts` | **拒否（正しい状態）** | 未レビューコードへのCLEAR移植を防ぐため。**通過させないこと** |
+| digest整合（固定点） | **CLEAR** | reviewed `sha256:ffc365d9…` / generation `sha256:ffee0dfc…` |
 | UI契約ロード | **CLEAR** | `_load_current_contract`成功 |
-| **G076 operation 60** | **BLOCKED** | scriptの`main()`が`G076_OPERATION_60_FAKE_ONLY_CANDIDATE`で拒否 |
-| **G076 initial activation** | **BLOCKED** | scriptの`main()`が`G076_INITIAL_ACTIVATION_FAKE_ONLY_CANDIDATE`で拒否 |
-| **UI ARM ON/OFF（G076）** | **BLOCKED** | `G076_FAKE_ONLY_ARM_MUTATION_DISABLED` |
+| 未解決HALTスキャン `require_g075_no_unresolved_halt` | **拒否（正しい状態）** | ディスク上の未解決HALT2件を検出（`G075_UNRESOLVED_HALT_PRESENT`） |
+| **G075 operation 60** | **BLOCKED** | レビュー合格証ゲートが拒否するため |
+| **G075 initial activation** | **BLOCKED** | 同上 |
+| **UI ARM ON（G075）** | **BLOCKED** | 未解決HALTスキャンが拒否（`G075_UNRESOLVED_HALT_PRESENT`） |
 | **release capability** | **LOCKED** | initial activation未実行のため |
 
-**結論**: G076はfake-only最終完成candidateであり、設計上**実commissioning（op60/activation/ARM）は
-G076では実行できない**。G075は実op60が実行可能だったが（LaunchAgent install付き・PASSED実績）、
-G076のAGENTS.md例外は「実operationはcanonical昇格後の別明示承認を必須」かつ
-「LaunchAgent操作・operation 60・initial activation実行を許可しない」としてfake-onlyに凍結している。
+**結論**: G075は未レビュー・未commissioningであり、実op60/activation/ARMはすべて
+ブロックされたままが正しい。HALTファイルの削除や digest 再ベイクで gate を「通す」ことは
+**禁止**（過去2回のHALT脱出手段そのもの）。解除は operator の明示操作を要する別設計であり、
+Phase A の対象外。
 
 ## 3. operatorが今すぐ実行できる操作（read-only / no-POST）
 
@@ -47,21 +56,23 @@ PYTHONPATH=backend backend/.venv/bin/python backend/scripts/h11_auto_v4_monday_s
 
 - **前提**: working treeがcleanであること（untrackedファイルがあると
   `SELF_CHECK_WORKTREE_NOT_CLEAN`）。本runbook自体はcommit後に実行する。
-- 期待出力: `status=MONDAY_OFFLINE_SELF_CHECK_CLEAR generation=H11_AUTO_30M_20260802_G076
-  reviewed_files_digest=sha256:9b16bc4c... generation_digest=sha256:963ca2d1...`
+- **G075 では `status=SELF_CHECK_G075_REVIEW_PENDING` で恒久的に失敗（return 2）するのが正常である。**
+  これはレビュー未了を正直に表明する設計であり、**修理対象ではない**。G075 のレビュー合格証
+  ゲートが拒否したままである限り、Monday self-check はこの結果を返し続ける。
+- 期待出力（参考・クリア時）: `status=MONDAY_OFFLINE_SELF_CHECK_CLEAR
+  generation=H11_AUTO_30M_20260802_G075 reviewed_files_digest=sha256:ffc365d9…
+  generation_digest=sha256:ffee0dfc…`
 - 停止条件: `status=...ERROR...` または dirty tree・HEAD不一致・digest不一致で return 2
-- 実施内容: repo gate（clean main・HEAD==origin/main）・generation digest検証・
-  local checks（focused/related tests・ruff・danger scan相当）
 
-### 3.2 ローカルUIの起動（ARM ON/OFF画面の確認・G076ではmutation不可）
+### 3.2 ローカルUIの起動（ARM ON/OFF画面の確認）
 
 ```bash
 # docs/H11_MANUAL_SIGNAL_UI_NO_POST.md の起動手順に従う（local server・常駐なし）
 ```
 
-- G076ではPOST /on・/offは`G076_FAKE_ONLY_ARM_MUTATION_DISABLED`（409）で拒否される。
-  これは**設計どおり**（fake-only）。UIが契約をロードできること（500でないこと）自体は
-  A-1修正により確認済み。
+- G075ではPOST /onは未解決HALTスキャンが拒否（`G075_UNRESOLVED_HALT_PRESENT`、409）。
+  POST /off は常に通る（停止操作は阻害しない）。これは**設計どおり**。
+  UIが契約をロードできること（500でないこと）自体は確認済み。
 
 ### 3.3 （任意）shadow commissioning artifactの生成
 
@@ -70,17 +81,17 @@ backend/.venv/bin/python backend/scripts/h11_auto_v4_current_generation_shadow_c
 ```
 
 - 実runtime state root配下へshadow-commissioning evidenceを書く（operator実行のみ）。
-- 必須ではない（read-back解決の結線前）。
+- 必須ではない。
 
 ## 4. ブロック解除のための経路（推奨順）
 
-### Step A（エージェント実施・設計＋fake-only実装・operator承認必要）
-**read-back実解決のruntime結線**: G078の`run_g078_unknown_resolution_once`を実際の
-runtime（coordinator/write outcome層）へ接続する設計とfake-only実装。必須契約:
-- write action UNKNOWN直後（15秒以内）に解決stepを呼び出す
-- 解決stepの**全pre-start拒否**は、UNKNOWN write outcomeが実在する場合はterminal扱い
-  （engage halt）— G078 C1のwiring契約
-- 解決結果からallow値・permit・hard-guard解除値を生成しない（不変）
+### Step A（独立3レーンレビュー・必須）
+P0（VETO解消）とPhase A（安全欠陥4件の修正）の変更全体を対象に、Architecture / Safety /
+Operations の独立3レーンレビューを実施し、VETOなしとする。レビュー合格証
+（`h11_v4_g075_runtime_commissioning_evidence.json` /
+`h11_v4_g075_independent_review_attestation.json`）の digest 更新は、
+**本物のレビューを実施しその結果を記録した副産物**としてのみ発生してよい。
+ゲートを通すために書き換えることは禁止（自己署名パターン）。
 
 ### Step B（operator実施・必須）
 **launcher placeholder区画の充填**: `h11_auto_v4_unattended_live_scheduled_launcher.py`等の
@@ -88,14 +99,12 @@ runtime（coordinator/write outcome層）へ接続する設計とfake-only実装
 3区画をoperator自身が実装（エージェントは対象外・AGENTS.md既定方針）。heartbeat-chain policy値は
 確定済み（60/300秒）。
 
-### Step C（エージェント実施・設計＋実装・別明示承認必要）
-**実commissioning可能な次generation（G079候補）**: G076のfake-only制約（op60/activation/ARM）
-を解除し、実op60（LaunchAgent install付き・G075パターン）・initial activation・
-UI ARM ON/OFF（G078 labelをAPIが受理）を可能にするgeneration。
-- このgenerationのAGENTS.md例外は「実operationは別明示承認」を維持した上で
-  op60/activation/ARM mutationを明示的に許可する形で新設
-- 実op60実行 → resident readiness確認 → initial activation → durable switch確認の順
-- broker POSTはさらに別activation boundary承認まで禁止（hard guard default-deny不変）
+### Step C（G075 commissioning・それぞれ別明示承認必須）
+G075の実op60（LaunchAgent install付き・G075パターン）→ initial activation →
+UI ARM ON/OFF の順。各操作はoperatorの明示承認範囲でのみ行う。broker POSTはさらに
+別activation boundary承認まで禁止（hard guard default-deny不変）。実op60実行前に、
+ディスク上の未解決HALT2件の扱いをoperatorが明示決定する必要がある
+（解除機構は未設計であり、Phase Aの対象外）。
 
 ## 5. 安全境界（全Step共通・不変）
 
@@ -105,11 +114,10 @@ UI ARM ON/OFF（G078 labelをAPIが受理）を可能にするgeneration。
   env/`.env`解除禁止・retry/repost/second attempt禁止
 - `actual_post_authorized=false` / `broker_post_authorized=false` / `live_ready=false` /
   `unattended_live_supported=false` は実commissioning完了まで維持
-- G076/G077/G078のmarker・HALT・state root・evidence（存在する場合）の変更・reset禁止
+- `market_data/**/g0*-persistent-halt.json` の削除・改変禁止（未解決事象の証跡）
 
 ## 6. 現時点の推奨
 
-1. **Step A（runtime結線の設計）を次に進める**（エージェント実施・fake-only・digest影響なしの
-   設計書＋テストから開始し、operatorがレビュー後に実装承認）
+1. **Step A（独立3レーンレビュー）を次に進める**（P0 + Phase A の差分をレビュー）
 2. Step B（launcher充填）はoperatorが並行して進められる
-3. Step C（G079実commissioning generation）はStep A完了後・別明示承認で
+3. Step C（G075 commissioning）はStep A完了後・別明示承認で

@@ -24,6 +24,7 @@ from app.h11_auto.v4_gmo_generation import (
     v4_gmo_risk_policy,
 )
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
+from app.services.h11_v4_g075_runtime import G075_GENERATION_LABEL
 from h11_v4_reviewed_digest import (
     V4ReviewedDigestError,
     compute_reviewed_files_digest,
@@ -1444,6 +1445,10 @@ _RUNTIME_ONLY_TARGET_GENERATION_LABELS = {
     "H11_AUTO_30M_20260730_G054",
     "H11_AUTO_30M_20260730_G055",
     "H11_AUTO_30M_20260730_G056",
+    # G075 はここに含めない: この集合は「当日 00-50 を省略し過去の証跡を
+    # 持ち越す」レーン(_G040_RUNTIME_CARRIED_OPERATIONS / load_g040_runtime_only_
+    # carry_forward_evidence)を開く。G075 は未レビュー世代であり、このレーンは
+    # Reviewed runtime-only successors 用として設計されている。
 }
 _PREPARATION_KNOWN_GENERATION_LABELS = _RUNTIME_ONLY_TARGET_GENERATION_LABELS | {
     "H11_AUTO_30M_20260728_G019",
@@ -1453,6 +1458,7 @@ _PREPARATION_KNOWN_GENERATION_LABELS = _RUNTIME_ONLY_TARGET_GENERATION_LABELS | 
     "H11_AUTO_30M_20260731_G063",
     "H11_AUTO_30M_20260801_G064",
     "H11_AUTO_30M_20260801_G065",
+    G075_GENERATION_LABEL,
 }
 _G040_RUNTIME_CARRIED_OPERATIONS = tuple(
     operation

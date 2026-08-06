@@ -55,6 +55,7 @@ from app.services.h11_v4_g065_unattended_activation import (
 from app.services.h11_v4_g075_runtime import (
     G075_GENERATION_LABEL,
     G075Error,
+    require_g075_no_unresolved_halt,
     safe_g075_api_status,
     verify_g075_scheduler_binding,
 )
@@ -197,6 +198,7 @@ def _safe_status(contract: _CurrentContract, *, csrf_token: str | None = None) -
             arm_on=check.armed,
             generation_digest=contract.generation.digest,
             reviewed_files_digest=contract.reviewed_files_digest,
+            repository=REPOSITORY,
         )
         activation_available = bool(
             projected.get(
@@ -506,6 +508,7 @@ def turn_on(request_body: ArmChangeRequest, request: Request) -> dict:
             raise V4UnattendedLiveArmStateError("ARM_STATE_REVIEWED_FILES_MISMATCH")
         current = _safe_status(contract)
         if contract.generation.generation_label == G075_GENERATION_LABEL:
+            require_g075_no_unresolved_halt(repository=REPOSITORY)
             if current.get("release_state") != "ENABLED":
                 raise G075Error("G075_RELEASE_CAPABILITY_LOCKED")
         elif (

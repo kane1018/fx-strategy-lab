@@ -529,7 +529,8 @@ P3 以降に投資する前に決める方が合理的である。
 | 事実 | 根拠 |
 |---|---|
 | G066〜G079 でエントリー成功した世代はゼロ | 実機の state root / launchctl / stderr ログ |
-| G075 の entry は封じられたスタブ | `h11_v4_g075_live_runtime.py:443-448` + fake-only 実行 |
+| G075 の実発注経路は存在し到達可能（エントリー成功はゼロ） | `h11_auto_v4_unattended_live_bounded_run.py:164` の SWITCH_ONLY 分岐は G064/G065 のみ。G075 は bounded runner CLI → orchestration → driver の経路で到達可能 |
+| `G075_GENERATION_TERMINAL_NO_ENTRY`（`h11_v4_g075_live_runtime.py:448`）は意図的な封印 | 常駐 supervisor レーンが実credential/実transportを構築しないための単一呼び出し口契約の強制であり、欠落ではない |
 | 偽 UNKNOWN → 永久HALT の連鎖 | `h11_v4_g075_runtime.py:782` + 実行再現 |
 | G074/G075 に未解決 HALT が latch | `market_data/.../g07{4,5}-persistent-halt.json` |
 | 実機 LaunchAgent は digest 陳腐化で停止中 | `launchctl print`(last exit code = 1) |

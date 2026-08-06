@@ -74,6 +74,7 @@ def main() -> int:
             state_root=state_root,
             generation_digest=generation.digest,
             reviewed_files_digest=reviewed,
+            repository=repository,
         )
         live_port = None
         while True:
@@ -86,6 +87,7 @@ def main() -> int:
                     state_root=state_root,
                     generation_digest=generation.digest,
                     reviewed_files_digest=reviewed,
+                    repository=repository,
                 )
             except G075Error:
                 release_digest = None
