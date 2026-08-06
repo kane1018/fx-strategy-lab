@@ -28,7 +28,7 @@ generation-f0e74bf0…/g075-persistent-halt.json   G075_INITIAL_TRANSACTION_UNKN
 
 | gate | 状態 | 理由 |
 |---|---|---|
-| テスト基盤（full suite） | **CLEAR** | 8934 passed / 0 failed（2026-08-06 Phase D 時点。増加は正常） |
+| テスト基盤（full suite） | **CLEAR** | 8941 passed / 0 failed（2026-08-06 Phase D hotfix 時点。増加は正常） |
 | Ruff / diff check | **CLEAR** | — |
 | 独立A/S/Oレビュー | **未CLEAR** | P0/Phase Aの変更は独立3レーンレビュー待ち |
 | レビュー合格証ゲート `verify_g075_review_artifacts` | **拒否（正しい状態）** | 未レビューコードへのCLEAR移植を防ぐため。**通過させないこと** |
@@ -89,6 +89,12 @@ backend/.venv/bin/python backend/scripts/h11_auto_v4_current_generation_shadow_c
 **解除は必ずこの手続きで記録を残して行う**。削除は禁止、rename アーカイブのみ。
 
 ```bash
+# 0) 対象halt(generation digestとファイル名)を事前に列挙する
+find backend/market_data/h11_v4_gmo_actual_runtime -name "g0*-persistent-halt.json"
+# パスは .../generation-<64桁hex>/gNNN-persistent-halt.json の形。
+# --generation-digest には "sha256:" + <64桁hex> を、--halt-file-name には
+# ファイル名をそのまま渡す。
+
 # 1) 対象haltの内容とsha256を表示（スクリプトが表示する）
 PYTHONPATH=backend backend/.venv/bin/python \
   backend/scripts/h11_auto_v4_halt_discharge.py \
