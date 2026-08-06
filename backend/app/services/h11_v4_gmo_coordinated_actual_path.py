@@ -379,7 +379,7 @@ class V4GmoCoordinatedActualPath:
         if attempt.cycle_ref != plan.cycle_ref:
             self.store.engage_unknown_halt()
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
-        dispatched_before = getattr(self.adapter.transport, "posts_dispatched", 0)
+        dispatched_before = self.adapter.transport.posts_dispatched
         try:
             record_risk_entry_attempt(
                 state=risk_state,
@@ -414,7 +414,7 @@ class V4GmoCoordinatedActualPath:
             # must not manufacture a false-UNKNOWN halt.
             if self.store.unknown_halt_latched():
                 raise
-            if getattr(self.adapter.transport, "posts_dispatched", 0) > dispatched_before:
+            if self.adapter.transport.posts_dispatched > dispatched_before:
                 # A POST reached the broker (the dispatch counter advanced) but
                 # its outcome could not be recorded: the result is unknown, so
                 # the store must latch instead of reporting a pre-dispatch
@@ -558,7 +558,7 @@ class V4GmoCoordinatedActualPath:
         if attempt.cycle_ref != plan.cycle_ref:
             self.store.engage_unknown_halt()
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
-        dispatched_before = getattr(self.adapter.transport, "posts_dispatched", 0)
+        dispatched_before = self.adapter.transport.posts_dispatched
         try:
             self.after_persist_before_transport()
             self._pace_before_private_post()
@@ -578,7 +578,7 @@ class V4GmoCoordinatedActualPath:
             # must not manufacture a false-UNKNOWN halt.
             if self.store.unknown_halt_latched():
                 raise
-            if getattr(self.adapter.transport, "posts_dispatched", 0) > dispatched_before:
+            if self.adapter.transport.posts_dispatched > dispatched_before:
                 # A POST reached the broker (the dispatch counter advanced) but
                 # its outcome could not be recorded: the result is unknown, so
                 # the store must latch instead of reporting a pre-dispatch
@@ -654,7 +654,7 @@ class V4GmoCoordinatedActualPath:
         if attempt.cycle_ref != plan.cycle_ref:
             self.store.engage_unknown_halt()
             raise V4GmoCoordinatedPathError("V4_COORDINATED_CYCLE_MISMATCH")
-        dispatched_before = getattr(self.adapter.transport, "posts_dispatched", 0)
+        dispatched_before = self.adapter.transport.posts_dispatched
         try:
             self.after_persist_before_transport()
             self._pace_before_private_post()
@@ -674,7 +674,7 @@ class V4GmoCoordinatedActualPath:
             # must not manufacture a false-UNKNOWN halt.
             if self.store.unknown_halt_latched():
                 raise
-            if getattr(self.adapter.transport, "posts_dispatched", 0) > dispatched_before:
+            if self.adapter.transport.posts_dispatched > dispatched_before:
                 # A POST reached the broker (the dispatch counter advanced) but
                 # its outcome could not be recorded: the result is unknown, so
                 # the store must latch instead of reporting a pre-dispatch

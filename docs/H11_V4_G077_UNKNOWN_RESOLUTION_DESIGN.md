@@ -1,3 +1,5 @@
+> **[SUPERSEDED 2026-08-06]** この世代は削除済み。現行は G075（HANDOFF 参照）
+
 # H-11 v4 G077 Unknown-Resolution Read-Back 設計書（no-POST・fake-only実装先行）
 
 - 日付: 2026-08-05

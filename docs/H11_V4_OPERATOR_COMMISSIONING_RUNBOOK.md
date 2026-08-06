@@ -14,7 +14,7 @@ canonical世代は **G075**（`H11_AUTO_30M_20260802_G075`・runtime-only correc
 |---|---|---|---|
 | **G075**（canonical） | runtime-only corrective（no-POST） | `G075_RUNTIME_REVIEWED`（未レビュー） | **未commissioning**（op60未実行） |
 
-G075のruntime state root（`backend/market_data/h11_v4_gmo_actual_runtime/generation-ffee0dfc…/`）は
+G075のruntime state root（`backend/market_data/h11_v4_gmo_actual_runtime/generation-<code変更後のdigest>/`）は
 **未作成**である。ディスク上には**未解決の永久HALTが2件** latchされている（削除・改変禁止）:
 
 ```
@@ -28,11 +28,11 @@ generation-f0e74bf0…/g075-persistent-halt.json   G075_INITIAL_TRANSACTION_UNKN
 
 | gate | 状態 | 理由 |
 |---|---|---|
-| テスト基盤（full suite） | **CLEAR** | 8905 passed / 0 failed（Phase A時点） |
+| テスト基盤（full suite） | **CLEAR** | 8934 passed / 0 failed（2026-08-06 Phase D 時点。増加は正常） |
 | Ruff / diff check | **CLEAR** | — |
 | 独立A/S/Oレビュー | **未CLEAR** | P0/Phase Aの変更は独立3レーンレビュー待ち |
 | レビュー合格証ゲート `verify_g075_review_artifacts` | **拒否（正しい状態）** | 未レビューコードへのCLEAR移植を防ぐため。**通過させないこと** |
-| digest整合（固定点） | **CLEAR** | reviewed `sha256:ffc365d9…` / generation `sha256:ffee0dfc…` |
+| digest整合（固定点） | **CLEAR** | §0 のコマンドで現在値を得ること（コード変更で動く） |
 | UI契約ロード | **CLEAR** | `_load_current_contract`成功 |
 | 未解決HALTスキャン `require_g075_no_unresolved_halt` | **拒否（正しい状態）** | ディスク上の未解決HALT2件を検出（`G075_UNRESOLVED_HALT_PRESENT`） |
 | **G075 operation 60** | **BLOCKED** | レビュー合格証ゲートが拒否するため |
@@ -60,8 +60,8 @@ PYTHONPATH=backend backend/.venv/bin/python backend/scripts/h11_auto_v4_monday_s
   これはレビュー未了を正直に表明する設計であり、**修理対象ではない**。G075 のレビュー合格証
   ゲートが拒否したままである限り、Monday self-check はこの結果を返し続ける。
 - 期待出力（参考・クリア時）: `status=MONDAY_OFFLINE_SELF_CHECK_CLEAR
-  generation=H11_AUTO_30M_20260802_G075 reviewed_files_digest=sha256:ffc365d9…
-  generation_digest=sha256:ffee0dfc…`
+  generation=H11_AUTO_30M_20260802_G075 reviewed_files_digest=<現在値>
+  generation_digest=<現在値>`（digest はコード変更で動く。§0 コマンドで得ること）
 - 停止条件: `status=...ERROR...` または dirty tree・HEAD不一致・digest不一致で return 2
 
 ### 3.2 ローカルUIの起動（ARM ON/OFF画面の確認）

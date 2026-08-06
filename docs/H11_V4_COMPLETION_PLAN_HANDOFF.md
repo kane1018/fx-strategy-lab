@@ -20,7 +20,7 @@ cd /Users/naoikansui/Desktop/トレード
 git rev-parse HEAD          # 期待: 5df62a3(異なる場合は着手前に orchestrator へ報告)
 git status --short          # 期待: 空(dirty なら着手しない)
 cd backend && .venv/bin/python -m pytest app/tests/ -q | tail -3
-                            # 期待: 8882 passed, 0 failed
+                            # 期待: 8934 passed, 0 failed（2026-08-06 Phase D 時点。増加は正常）
 ```
 
 **HEAD が `5df62a3` でない場合、この文書の行番号・digest 値はすべて信用できない。**

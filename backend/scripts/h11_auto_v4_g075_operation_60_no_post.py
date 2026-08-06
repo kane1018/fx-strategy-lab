@@ -14,6 +14,7 @@ from app.services.h11_v4_g075_runtime import (
     G075_OPERATION_60_STARTED_FILE,
     G075Error,
     engage_g075_halt,
+    require_g075_no_unresolved_halt,
     verify_g075_review_artifacts,
     verify_g075_scheduler_binding,
 )
@@ -58,7 +59,7 @@ def run_g075_operation_60_candidate(
         outcome = "UNKNOWN"
     result = {
         "status": outcome,
-        "generation_label": "H11_AUTO_30M_20260802_G075",
+        "generation_label": G075_GENERATION_LABEL,
         "generation_digest": generation_digest,
         "reviewed_files_digest": reviewed_files_digest,
         "broker_post_count": 0,
@@ -85,7 +86,7 @@ def _exclusive_start(path: Path, generation_digest: str, reviewed_files_digest: 
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         json.dump(
             {
-                "generation_label": "H11_AUTO_30M_20260802_G075",
+                "generation_label": G075_GENERATION_LABEL,
                 "generation_digest": generation_digest,
                 "reviewed_files_digest": reviewed_files_digest,
                 "status": "STARTED",
@@ -108,6 +109,10 @@ def main() -> int:
 
     repository = Path(__file__).resolve().parents[2]
     require_clean_main(repository=repository)
+    # D-P1a: refuse BEFORE any marker write, so the one-shot marker is not
+    # burned on a guaranteed-UNKNOWN outcome.  Mirrors the same early gate
+    # added to unattended_control_api.turn_on() and runbook §3.4.
+    require_g075_no_unresolved_halt(repository=repository)
     reviewed = compute_reviewed_files_digest(repository=repository)
     generation = load_v4_gmo_frozen_generation(
         repository=repository, implementation_digest=reviewed

@@ -23,6 +23,7 @@ from app.services.h11_v4_g075_runtime import (  # noqa: E402
     G075_GENERATION_LABEL,
     G075Error,
     G075SanitizedSnapshot,
+    require_g075_no_unresolved_halt,
     run_g075_initial_atomic_activation,
     run_g075_reconciliation_cycle_once,
     verify_g075_review_artifacts,
@@ -53,6 +54,9 @@ def main() -> int:
         raise G075Error("G075_INITIAL_TRANSACTION_EXPLICIT_FLAG_REQUIRED")
     repository = args.repository.resolve()
     require_clean_main(repository=repository)
+    # D-P1a: refuse BEFORE the initial-transaction_started marker is written,
+    # so the marker is not burned on a guaranteed-UNKNOWN outcome.
+    require_g075_no_unresolved_halt(repository=repository)
     reviewed = compute_reviewed_files_digest(repository=repository)
     generation = load_v4_gmo_frozen_generation(
         repository=repository, implementation_digest=reviewed

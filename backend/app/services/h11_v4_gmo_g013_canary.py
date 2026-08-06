@@ -53,6 +53,7 @@ from app.h11_auto.v4_gmo_generation import (
 )
 from app.h11_auto.v4_gmo_protection import H11_V4_GMO_PROTECTION_CONTRACT_HASH
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
+from app.services.h11_v4_g075_runtime import G075_GENERATION_LABEL
 from app.services.h11_v4_gmo_actual_adapter import V4GmoPrivateOutcome
 from app.services.h11_v4_gmo_actual_runtime_binding import (
     V4GmoActualRuntimeBinding,
@@ -516,7 +517,7 @@ def _refresh_session_evidence_before_permit(
     if generation.digest != session.generation.digest:
         raise V4GmoG013CanaryError("G013_GENERATION_CHANGED_BEFORE_PERMIT")
     current = datetime.now(UTC)
-    if generation.generation_label == "H11_AUTO_30M_20260802_G075":
+    if generation.generation_label == G075_GENERATION_LABEL:
         refresh = getattr(session.preparation_evidence, "refresh_for_generation", None)
         if not callable(refresh):
             raise V4GmoG013CanaryError("G075_RELEASE_EVIDENCE_INVALID")

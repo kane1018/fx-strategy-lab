@@ -113,6 +113,7 @@ class _Clock:
 class _FakeTransport:
     responses: list[dict[str, Any]]
     requests: list[V4GmoPrivateRequest] = field(default_factory=list)
+    posts_dispatched: int = 0
 
     def request(
         self,
@@ -129,6 +130,7 @@ class _FakeTransport:
 class _TimeoutThenReadTransport:
     requests: list[V4GmoPrivateRequest] = field(default_factory=list)
     calls: int = 0
+    posts_dispatched: int = 0
 
     def request(
         self,

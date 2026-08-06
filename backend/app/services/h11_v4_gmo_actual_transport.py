@@ -407,6 +407,12 @@ class V4GmoPrivateTransport(Protocol):
             V4PersistedTransportAuthorization | None
         ) = None,
     ) -> V4GmoPrivateEnvelope: ...
+    # D-P2-1 (Arch F-2): the coordinated path distinguishes a POST that
+    # reached the broker (counter advanced) from a pre-dispatch failure
+    # (counter unchanged).  The counter MUST be a required attribute on
+    # every transport; getattr-with-default would silently treat a missing
+    # counter as "no POST", defeating the classification.  Fail-closed.
+    posts_dispatched: int
 
 
 @dataclass(repr=False)

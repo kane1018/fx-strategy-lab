@@ -395,6 +395,12 @@ def run_g075_reconciliation_cycle_once(
         if isinstance(error, G075Error):
             raise
         raise G075Error("G075_RECONCILIATION_UNKNOWN_NO_RETRY") from error
+    # NOTE: D-P2-2 (Safety P2-1) kept the narrow `except Exception` here by
+    # design.  The above block is the recovery-time poisoning path; widening
+    # to BaseException would re-raise KeyboardInterrupt INTO the outcome
+    # write (already attempted above), risking a half-written file.  The
+    # transport-level BaseException broadening in
+    # h11_v4_gmo_actual_transport.py is the correct boundary.
 
 
 def load_g075_reconciliation(
@@ -740,7 +746,7 @@ def _g075_pre_dispatch_retryable(error: BaseException) -> bool:
 
     return (
         isinstance(error, V4GmoCoordinatedPathError)
-        and "V4_GMO_PRE_DISPATCH_FAILURE_NO_POST_SENT" in str(error)
+        and str(error) == "V4_GMO_PRE_DISPATCH_FAILURE_NO_POST_SENT"
     )
 
 
@@ -1668,7 +1674,11 @@ def run_g075_initial_atomic_activation(
             {**outcome, "artifact_digest": _canonical_hash(outcome)},
         )
         return "PASSED"
-    except Exception:
+    except BaseException:
+        # D-P2-2 (Safety P2-1): widen to BaseException so KeyboardInterrupt
+        # during the activation transaction runs the same halt + outcome
+        # write path as a normal exception.  Behaviour (halt latched,
+        # outcome UNKNOWN recorded) is unchanged.
         engage_g075_halt(state_root=state_root, reason="G075_INITIAL_TRANSACTION_UNKNOWN")
         _atomic_json(
             state_root / G075_INITIAL_TRANSACTION_OUTCOME_FILE,

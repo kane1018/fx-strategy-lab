@@ -42,7 +42,7 @@ from app.services.h11_v4_halt_discharge import (  # noqa: E402
 )
 
 
-def _parse_args() -> argparse.Namespace:
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", type=Path, required=True)
     parser.add_argument("--generation-digest", required=True)
@@ -51,7 +51,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--reason", required=True)
     parser.add_argument("--broker-state-confirmation", required=True)
     parser.add_argument("--confirm-sha256", required=True)
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:

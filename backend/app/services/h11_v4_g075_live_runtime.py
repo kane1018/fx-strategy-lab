@@ -38,6 +38,7 @@ from app.h11_auto.v4_gmo_generation import (
 from app.h11_auto.v4_gmo_runtime_paths import v4_gmo_runtime_state_root
 from app.services import h11_v4_gmo_g013_canary as g013
 from app.services.h11_v4_g075_runtime import (
+    G075_GENERATION_LABEL,
     G075Action,
     G075ActionOutcome,
     G075ActionScope,
@@ -206,7 +207,7 @@ def prepare_g075_unattended_session(
     generation = load_v4_gmo_frozen_generation(
         repository=repository, implementation_digest=implementation_digest
     )
-    if generation.generation_label != "H11_AUTO_30M_20260802_G075":
+    if generation.generation_label != G075_GENERATION_LABEL:
         raise G075LiveRuntimeError("G075_CANONICAL_GENERATION_REQUIRED")
     release_digest = load_g075_release_capability_digest(
         repository=repository,
