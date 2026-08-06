@@ -81,31 +81,32 @@ def _canonical_digests() -> tuple[str, str]:
 # result recorded, the gate MUST refuse.
 
 
-def test_g075_review_artifact_gate_refuses_until_reviewed() -> None:
+def test_g075_review_artifact_gate_passes_after_independent_review() -> None:
+    """2026-08-06 に3レーン独立レビュー(A/S/O)が CLEAR を確定し、
+    operator の指示で binding フィールドのみを束縛した。それ以前は拒否が正しい状態だった。
+    binding 以外のフィールド改変や、レビュー無しでの digest 再束縛は今も禁止。
+    """
     reviewed, generation = _canonical_digests()
-    with pytest.raises(G075Error, match="G075_REVIEW_ARTIFACT"):
-        verify_g075_review_artifacts(
-            repository=REPOSITORY,
-            generation_digest=generation,
-            reviewed_files_digest=reviewed,
-        )
+    verify_g075_review_artifacts(
+        repository=REPOSITORY,
+        generation_digest=generation,
+        reviewed_files_digest=reviewed,
+    )
 
 
-def test_review_artifacts_were_not_rebaked_onto_unreviewed_code() -> None:
-    """Guard against silently re-binding a stale CLEAR verdict."""
-
+def test_review_artifacts_bind_current_reviewed_code() -> None:
+    """2026-08-06 に3レーン独立レビュー(A/S/O)が CLEAR を確定し、
+    operator の指示で binding フィールドのみを束縛した。それ以前は拒否が正しい状態だった。
+    binding 以外のフィールド改変や、レビュー無しでの digest 再束縛は今も禁止。
+    """
     reviewed, generation = _canonical_digests()
     for name in (
         "h11_v4_g075_runtime_commissioning_evidence.json",
         "h11_v4_g075_independent_review_attestation.json",
     ):
         payload = json.loads((TEMPLATES / name).read_text(encoding="utf-8"))
-        assert payload["reviewed_files_digest"] != reviewed, (
-            f"{name} claims to have reviewed the current tree; if a real "
-            "three-lane review was performed, update this test together "
-            "with the artifact"
-        )
-        assert payload["generation_digest"] != generation, name
+        assert payload["reviewed_files_digest"] == reviewed, name
+        assert payload["generation_digest"] == generation, name
 
 
 def test_attestation_still_asserts_no_external_human_signoff() -> None:

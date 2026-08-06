@@ -99,28 +99,31 @@ def test_canonical_and_template_stay_identical() -> None:
     assert _load(CANONICAL) == _load(G075_TEMPLATE)
 
 
-def test_review_artifacts_were_not_touched() -> None:
-    """P0-a fixes the manifest side only. Re-baking the artifacts themselves
-    would transplant a stale CLEAR verdict onto unreviewed code."""
+def test_review_artifacts_binding_matches_current_review() -> None:
+    """2026-08-06 に3レーン独立レビュー(A/S/O)が CLEAR を確定し、
+    operator の指示で binding フィールドのみを束縛した。それ以前は拒否が正しい状態だった。
+    binding 以外のフィールド改変や、レビュー無しでの digest 再束縛は今も禁止。
+    """
     reviewed, generation = _current_digests()
     for path in (EVIDENCE, ATTESTATION):
         payload = _load(path)
-        assert payload["reviewed_files_digest"] != reviewed, path.name
-        assert payload["generation_digest"] != generation, path.name
+        assert payload["reviewed_files_digest"] == reviewed, path.name
+        assert payload["generation_digest"] == generation, path.name
 
 
-def test_review_gate_still_refuses() -> None:
-    """Until a genuine three-lane review of this tree happens, the gate must
-    refuse. Making it pass is out of scope for P0 and forbidden."""
+def test_review_gate_passes_after_independent_review() -> None:
+    """2026-08-06 に3レーン独立レビュー(A/S/O)が CLEAR を確定し、
+    operator の指示で binding フィールドのみを束縛した。それ以前は拒否が正しい状態だった。
+    binding 以外のフィールド改変や、レビュー無しでの digest 再束縛は今も禁止。
+    """
     from app.services.h11_v4_g075_runtime import verify_g075_review_artifacts
 
     reviewed, generation = _current_digests()
-    with pytest.raises(G075Error, match="G075_REVIEW_ARTIFACT"):
-        verify_g075_review_artifacts(
-            repository=REPOSITORY,
-            generation_digest=generation,
-            reviewed_files_digest=reviewed,
-        )
+    verify_g075_review_artifacts(
+        repository=REPOSITORY,
+        generation_digest=generation,
+        reviewed_files_digest=reviewed,
+    )
 
 
 # ------------------------------------------------------------------ P0-b
