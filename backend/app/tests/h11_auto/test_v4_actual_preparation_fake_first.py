@@ -1745,46 +1745,140 @@ def test_cross_day_begin_uses_generation_wide_operation_lock(
         second_day.begin(V4PreparationOperation.NETWORK_TIME)
 
 
-def test_persistent_preparation_ledger_enforces_order_and_started_is_terminal(
+def test_same_day_retry_replaces_failed_started_marker(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
+    """Same-day retry was restored by operator direction in e2925f8.
+
+    619f4ab later reintroduced the terminal unresolved-attempt rule for a
+    deleted G029 generation. The current contract is retry-until-PASSED:
+    a failed attempt can be replaced on the same day, while PASSED remains
+    final. The retry still does not prove a crashed external action did not
+    already happen.
+    """
     ledger = V4PreparationAttemptLedger(external_gate=external_gate)
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
         ledger.begin(V4PreparationOperation.PUSHOVER)
-    # Model a crashed process by releasing its OS-level lock without writing
-    # PASSED. The durable started marker must still forbid a new attempt.
-    presence_permit = ledger.begin(V4PreparationOperation.PRESENCE)
+
+    first = ledger.begin(V4PreparationOperation.PRESENCE)
+    first_token = first._attempt_token
+    ledger._locks[V4PreparationOperation.PRESENCE].release()
+
+    retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    second = retry_ledger.begin(V4PreparationOperation.PRESENCE)
+    assert second._attempt_token != first_token
+    started = retry_ledger._marker(V4PreparationOperation.PRESENCE, "started")
+    assert json.loads(started.read_text(encoding="utf-8"))["attempt_token"] == second._attempt_token
+    _test_only_complete(retry_ledger, second, V4PreparationOperation.PRESENCE)
+    with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
+        retry_ledger.begin(V4PreparationOperation.PUSHOVER)
+    access_permit = retry_ledger.begin(V4PreparationOperation.KEYCHAIN_ACCESS)
+    _test_only_complete(
+        retry_ledger, access_permit, V4PreparationOperation.KEYCHAIN_ACCESS
+    )
+    pushover_permit = retry_ledger.begin(V4PreparationOperation.PUSHOVER)
+    _test_only_complete(
+        retry_ledger, pushover_permit, V4PreparationOperation.PUSHOVER
+    )
+    retry_ledger.begin(V4PreparationOperation.SMTP)
+
+
+def test_same_day_retry_after_passed_is_final_for_operation(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    """A PASSED operation cannot be retried again on the same trading day."""
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    permit = ledger.begin(V4PreparationOperation.PRESENCE)
+    _test_only_complete(ledger, permit, V4PreparationOperation.PRESENCE)
+    with pytest.raises(V4ActualPreparationGuardError, match="ALREADY_ATTEMPTED"):
+        ledger.begin(V4PreparationOperation.PRESENCE)
+
+
+def test_same_day_retry_invalidates_old_permit(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    """The replaced marker must remain bound to the newest attempt token."""
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    first = ledger.begin(V4PreparationOperation.PRESENCE)
     ledger._locks[V4PreparationOperation.PRESENCE].release()
     retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
-    with pytest.raises(
-        V4ActualPreparationGuardError,
-        match="GENERATION_TERMINAL_UNRESOLVED",
-    ):
-        retry_ledger.begin(V4PreparationOperation.PRESENCE)
-    next_day_ledger = V4PreparationAttemptLedger(
+    second = retry_ledger.begin(V4PreparationOperation.PRESENCE)
+    first._completion_digest = "sha256:" + "0" * 64
+    first._completion_report = {"forced": True}
+    with pytest.raises(V4ActualPreparationGuardError, match="ATTEMPT_STATE_INVALID"):
+        ledger.complete(V4PreparationOperation.PRESENCE, operation_permit=first)
+    _test_only_complete(retry_ledger, second, V4PreparationOperation.PRESENCE)
+
+
+def test_previous_started_attempt_does_not_block_next_day(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    """An unresolved marker from yesterday does not block today's sequence."""
+    previous_day = V4PreparationAttemptLedger(
+        external_gate=external_gate,
+        now_utc=datetime(2040, 1, 1, tzinfo=UTC),
+    )
+    previous_day.begin(V4PreparationOperation.PRESENCE)
+    previous_day._locks[V4PreparationOperation.PRESENCE].release()
+    current_day = V4PreparationAttemptLedger(
         external_gate=external_gate,
         now_utc=datetime(2040, 1, 2, tzinfo=UTC),
     )
-    with pytest.raises(
-        V4ActualPreparationGuardError,
-        match="GENERATION_TERMINAL_UNRESOLVED",
-    ):
-        next_day_ledger.begin(V4PreparationOperation.PRESENCE)
-    _test_only_complete(ledger, presence_permit, V4PreparationOperation.PRESENCE)
-    # Once PASSED, the operation is final for the day -- no further retry.
-    with pytest.raises(V4ActualPreparationGuardError, match="ALREADY_ATTEMPTED"):
-        ledger.begin(V4PreparationOperation.PRESENCE)
+    permit = current_day.begin(V4PreparationOperation.PRESENCE)
+    _test_only_complete(current_day, permit, V4PreparationOperation.PRESENCE)
+
+
+def test_same_day_sequence_rejects_unpassed_predecessor(
+    external_gate: V4ExternalPreparationGate,
+) -> None:
+    """Next operation is blocked until its predecessor reaches PASSED.
+
+    Same-day retry (Phase E) relaxes re-attempting the SAME operation; it must
+    not let the sequence advance past an operation that never passed.  The
+    generation-wide process lock is released first because in real operation
+    each step runs in its own subprocess, so the lock never spans two
+    different operations -- holding it here would mask the ordering check
+    behind ``OPERATION_IN_PROGRESS``.
+    """
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    permit = ledger.begin(V4PreparationOperation.PRESENCE)
+    assert permit._operation == V4PreparationOperation.PRESENCE
+    ledger._locks[V4PreparationOperation.PRESENCE].release()
+
+    successor = V4PreparationAttemptLedger(external_gate=external_gate)
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
-        ledger.begin(V4PreparationOperation.PUSHOVER)
-    access_permit = ledger.begin(V4PreparationOperation.KEYCHAIN_ACCESS)
-    _test_only_complete(
-        ledger, access_permit, V4PreparationOperation.KEYCHAIN_ACCESS
-    )
-    pushover_permit = ledger.begin(V4PreparationOperation.PUSHOVER)
-    _test_only_complete(
-        ledger, pushover_permit, V4PreparationOperation.PUSHOVER
-    )
-    ledger.begin(V4PreparationOperation.SMTP)
+        successor.begin(V4PreparationOperation.KEYCHAIN_ACCESS)
+
+
+def test_same_day_begin_retry_sensitivity_detects_unlink_failure(
+    external_gate: V4ExternalPreparationGate,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If an old started marker cannot be unlinked, retry keeps the prior marker."""
+    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    first = ledger.begin(V4PreparationOperation.PRESENCE)
+    started = ledger._marker(V4PreparationOperation.PRESENCE, "started")
+    before = json.loads(started.read_text(encoding="utf-8"))
+    assert first._attempt_token == before["attempt_token"]
+    ledger._locks[V4PreparationOperation.PRESENCE].release()
+
+    retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    original_unlink = Path.unlink
+
+    def fail_unlink(path: Path, *args: object, **_kwargs: object) -> None:
+        if path == started:
+            raise OSError("forced failure")
+        return original_unlink(path, *args)
+
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+    with pytest.raises(V4ActualPreparationGuardError, match="ATTEMPT_NOT_PERSISTED"):
+        retry_ledger._begin(
+            operation=V4PreparationOperation.PRESENCE,
+            runtime_predecessor_clear=False,
+        )
+
+    after = json.loads(started.read_text(encoding="utf-8"))
+    assert after == before
 
 
 def test_started_and_passed_markers_must_share_attempt_token(
@@ -1801,11 +1895,10 @@ def test_started_and_passed_markers_must_share_attempt_token(
         external_gate=external_gate,
         now_utc=datetime(2040, 1, 2, tzinfo=UTC),
     )
-    with pytest.raises(
-        V4ActualPreparationGuardError,
-        match="GENERATION_TERMINAL_UNRESOLVED",
-    ):
-        next_day.begin(V4PreparationOperation.PRESENCE)
+    # The prior day's mismatched marker is historical and must not block the
+    # new day's sequence; the new attempt still receives a fresh token.
+    retry = next_day.begin(V4PreparationOperation.PRESENCE)
+    assert retry._attempt_token != "unrelated-attempt"
 
 
 def test_preparation_ledger_rejects_predecessor_from_other_review_digest(
@@ -2052,22 +2145,10 @@ def test_network_time_preparation_off_cannot_complete(
     with pytest.raises(V4ActualPreparationGuardError, match="PERMIT_INVALID"):
         ledger.complete(V4PreparationOperation.NETWORK_TIME, operation_permit=permit)
     ledger._locks[V4PreparationOperation.NETWORK_TIME].release()
-    with pytest.raises(
-        V4ActualPreparationGuardError,
-        match="GENERATION_TERMINAL_UNRESOLVED",
-    ):
-        V4PreparationAttemptLedger(external_gate=external_gate).begin(
-            V4PreparationOperation.NETWORK_TIME
-        )
-    next_day = V4PreparationAttemptLedger(
-        external_gate=external_gate,
-        now_utc=datetime(2040, 1, 2, tzinfo=UTC),
-    )
-    with pytest.raises(
-        V4ActualPreparationGuardError,
-        match="GENERATION_TERMINAL_UNRESOLVED",
-    ):
-        next_day.begin(V4PreparationOperation.PRESENCE)
+    retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    retry = retry_ledger.begin(V4PreparationOperation.NETWORK_TIME)
+    assert retry._attempt_token != permit._attempt_token
+    retry_ledger._locks[V4PreparationOperation.NETWORK_TIME].release()
 
 
 def test_host_script_uses_only_prechecked_network_time_result() -> None:

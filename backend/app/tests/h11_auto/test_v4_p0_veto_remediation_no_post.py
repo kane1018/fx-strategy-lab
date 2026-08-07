@@ -99,31 +99,39 @@ def test_canonical_and_template_stay_identical() -> None:
     assert _load(CANONICAL) == _load(G075_TEMPLATE)
 
 
-def test_review_artifacts_binding_matches_current_review() -> None:
-    """2026-08-06 に3レーン独立レビュー(A/S/O)が CLEAR を確定し、
-    operator の指示で binding フィールドのみを束縛した。それ以前は拒否が正しい状態だった。
-    binding 以外のフィールド改変や、レビュー無しでの digest 再束縛は今も禁止。
+def test_review_artifacts_were_not_rebaked_onto_unreviewed_code() -> None:
+    """The attestation must not be re-pointed at code no reviewer saw.
+
+    The 2026-08-06 three-lane review cleared reviewed digest ``e60e03d2…``
+    and the operator bound the artifacts to it.  Phase E then reopened the
+    daily preparation guard, moving the digest again.  The artifacts must
+    keep naming the reviewed digest until a new review concludes; re-baking
+    them to match the working tree is the forgery pattern this suite exists
+    to catch.
     """
-    reviewed, generation = _current_digests()
+    reviewed, _generation = _current_digests()
     for path in (EVIDENCE, ATTESTATION):
         payload = _load(path)
-        assert payload["reviewed_files_digest"] == reviewed, path.name
-        assert payload["generation_digest"] == generation, path.name
+        assert payload["reviewed_files_digest"] != reviewed, (
+            f"{path.name} was re-baked onto the current unreviewed tree"
+        )
 
 
-def test_review_gate_passes_after_independent_review() -> None:
-    """2026-08-06 に3レーン独立レビュー(A/S/O)が CLEAR を確定し、
-    operator の指示で binding フィールドのみを束縛した。それ以前は拒否が正しい状態だった。
-    binding 以外のフィールド改変や、レビュー無しでの digest 再束縛は今も禁止。
+def test_review_gate_refuses_unreviewed_code() -> None:
+    """Refusal is correct until Phase E is independently reviewed.
+
+    See ``test_review_artifacts_were_not_rebaked_onto_unreviewed_code`` for
+    the review cycle this test tracks.
     """
-    from app.services.h11_v4_g075_runtime import verify_g075_review_artifacts
+    from app.services.h11_v4_g075_runtime import G075Error, verify_g075_review_artifacts
 
     reviewed, generation = _current_digests()
-    verify_g075_review_artifacts(
-        repository=REPOSITORY,
-        generation_digest=generation,
-        reviewed_files_digest=reviewed,
-    )
+    with pytest.raises(G075Error, match="G075_REVIEW_ARTIFACT"):
+        verify_g075_review_artifacts(
+            repository=REPOSITORY,
+            generation_digest=generation,
+            reviewed_files_digest=reviewed,
+        )
 
 
 # ------------------------------------------------------------------ P0-b

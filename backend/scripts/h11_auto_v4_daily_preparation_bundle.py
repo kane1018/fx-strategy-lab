@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Bundles the 9 automatable daily H-11 v4 external-preparation steps.
+"""Bundles the 11 daily H-11 v4 external-preparation steps.
 
 Runs three named stages, one `--stage` at a time -- never all the way
-through in one invocation, because two steps (20_email_confirmation,
-40_exclusivity_confirmation) require the operator to look at something
-real first (the just-sent confirmation email; the broker account/app) and
-then type an exact confirmation phrase. No script can substitute for that.
+through in one invocation, because two manual steps (20_email_confirmation,
+40_exclusivity_confirmation) require the operator to look at something real
+first (the just-sent confirmation email; the broker account/app) and then type
+an exact confirmation phrase. No script can substitute for that.
 
 - ``--stage 1``: 00_presence, 05_keychain_access, 10_pushover, 15_smtp.
   Stop after this and run 20_email_confirmation yourself once you have
@@ -24,13 +24,14 @@ exactly as if you had typed it yourself (``python -m scripts.<name>``, in
 a fresh subprocess) -- this bundler adds no new preparation logic, no new
 safety checks, and never touches the ledger itself.
 
-Each of the 11 steps is one-use for the current generation and trading day
-from the instant its durable started marker is written. A failed, mismatched,
-crashed, or unknown attempt is terminal for that generation because the
-external action may already have fired. This bundler stops immediately at
-the first non-zero exit code and never attempts later steps. Preserve every
-marker, fix the cause, and create a reviewed corrective generation that
-restarts at operation 00.
+Each step may be retried on the same trading day until it reaches ``PASSED``.
+Once ``PASSED`` is durable, that step is final for the day. A retry only
+replaces the failed attempt marker and does not prove that a prior external
+action did not fire after a crash; the generation lock excludes concurrent
+attempts, while crash-after-action remains a disclosed residual risk. This
+bundler stops immediately at the first non-zero exit code and never attempts
+later steps; rerun the same stage after fixing the cause, without changing the
+bundler's stop-on-failure behavior.
 """
 
 from __future__ import annotations
