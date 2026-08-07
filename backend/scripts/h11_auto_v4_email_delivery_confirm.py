@@ -1,4 +1,8 @@
-"""Record exact operator confirmation of the one test email delivery."""
+"""Record exact operator confirmation of the one test email delivery.
+
+This step performs no external transport action; it is a local exact-phrase
+check bound to the active preparation ledger.
+"""
 
 from __future__ import annotations
 

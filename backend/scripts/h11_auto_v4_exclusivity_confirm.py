@@ -1,4 +1,8 @@
-"""Record exact operator confirmation of temporary account exclusivity."""
+"""Record exact operator confirmation of temporary account exclusivity.
+
+This step performs no external transport action; it is a local exact-phrase
+check bound to the active preparation ledger.
+"""
 
 from __future__ import annotations
 

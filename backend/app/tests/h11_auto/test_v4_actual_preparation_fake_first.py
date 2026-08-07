@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import inspect
 import json
 import smtplib
@@ -60,6 +61,15 @@ from scripts import (
     h11_auto_v4_actual_host_kill_rehearsal as host_rehearsal_script,
 )
 from scripts import h11_auto_v4_email_delivery_confirm as email_confirm_script
+
+_SCRIPT_ROOT = Path(__file__).resolve().parents[3] / "scripts"
+_EMAIL_CONFIRMATION_SCRIPT_PATH = (
+    _SCRIPT_ROOT / "h11_auto_v4_email_delivery_confirm.py"
+)
+_EXCLUSIVITY_CONFIRMATION_SCRIPT_PATH = (
+    _SCRIPT_ROOT / "h11_auto_v4_exclusivity_confirm.py"
+)
+_PRESENCE_SCRIPT_PATH = _SCRIPT_ROOT / "h11_auto_v4_actual_preparation_presence.py"
 
 
 @dataclass(frozen=True)
@@ -1748,14 +1758,7 @@ def test_cross_day_begin_uses_generation_wide_operation_lock(
 def test_same_day_retry_replaces_failed_started_marker(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
-    """Same-day retry was restored by operator direction in e2925f8.
-
-    619f4ab later reintroduced the terminal unresolved-attempt rule for a
-    deleted G029 generation. The current contract is retry-until-PASSED:
-    a failed attempt can be replaced on the same day, while PASSED remains
-    final. The retry still does not prove a crashed external action did not
-    already happen.
-    """
+    """Same-day retry is permitted only after failed started markers for no-external-op steps."""
     ledger = V4PreparationAttemptLedger(external_gate=external_gate)
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
         ledger.begin(V4PreparationOperation.PUSHOVER)
@@ -1781,6 +1784,98 @@ def test_same_day_retry_replaces_failed_started_marker(
         retry_ledger, pushover_permit, V4PreparationOperation.PUSHOVER
     )
     retry_ledger.begin(V4PreparationOperation.SMTP)
+
+
+@pytest.mark.parametrize(
+    "operation",
+    (
+        V4PreparationOperation.PRESENCE,
+        V4PreparationOperation.EMAIL_CONFIRMATION,
+        V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
+    ),
+)
+def test_same_day_retry_replaces_unfinished_started_marker_for_no_external_action_steps(
+    external_gate: V4ExternalPreparationGate,
+    operation: V4PreparationOperation,
+) -> None:
+    first_ledger, first = _permit_for(
+        external_gate=external_gate,
+        target=operation,
+    )
+    first_token = first._attempt_token
+    first_ledger._locks[operation].release()
+    retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
+    second = retry_ledger.begin(operation)
+    assert second._attempt_token != first_token
+    started = retry_ledger._marker(operation, "started")
+    assert json.loads(started.read_text(encoding="utf-8"))["attempt_token"] == second._attempt_token
+
+
+@pytest.mark.parametrize(
+    "operation",
+    (
+        V4PreparationOperation.PUSHOVER,
+        V4PreparationOperation.SMTP,
+        V4PreparationOperation.PRIVATE_GET,
+    ),
+)
+def test_same_day_retry_rejected_for_external_action_steps(
+    external_gate: V4ExternalPreparationGate,
+    operation: V4PreparationOperation,
+) -> None:
+    first_ledger, _ = _permit_for(
+        external_gate=external_gate,
+        target=operation,
+    )
+    first_ledger._locks[operation].release()
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="ALREADY_ATTEMPTED",
+    ):
+        V4PreparationAttemptLedger(external_gate=external_gate).begin(operation)
+    started = first_ledger._marker(operation, "started")
+    assert json.loads(started.read_text(encoding="utf-8"))["operation"] == operation.value
+
+
+def test_same_day_retryable_operations_only_expected_actions() -> None:
+    assert (
+        guard_module._SAME_DAY_RETRYABLE_OPERATIONS
+        == {
+            V4PreparationOperation.PRESENCE,
+            V4PreparationOperation.EMAIL_CONFIRMATION,
+            V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "script_path",
+    (
+        _EMAIL_CONFIRMATION_SCRIPT_PATH,
+        _EXCLUSIVITY_CONFIRMATION_SCRIPT_PATH,
+        _PRESENCE_SCRIPT_PATH,
+    ),
+)
+def test_restricted_confirmation_scripts_do_not_import_external_io_modules(
+    script_path: Path,
+) -> None:
+    tree = ast.parse(script_path.read_text(encoding="utf-8"))
+    forbidden = {"subprocess", "httpx", "requests", "socket", "smtplib"}
+    seen_forbidden: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules = [alias.name.split(".")[0] for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            modules = [node.module.split(".")[0]] if node.module else []
+        else:
+            continue
+        for module_name in modules:
+            if module_name in forbidden:
+                seen_forbidden.add(module_name)
+    assert not seen_forbidden, (
+        f"{script_path} imported forbidden external-IO modules: "
+        f"{', '.join(sorted(seen_forbidden))}"
+    )
 
 
 def test_same_day_retry_after_passed_is_final_for_operation(
@@ -2146,9 +2241,11 @@ def test_network_time_preparation_off_cannot_complete(
         ledger.complete(V4PreparationOperation.NETWORK_TIME, operation_permit=permit)
     ledger._locks[V4PreparationOperation.NETWORK_TIME].release()
     retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
-    retry = retry_ledger.begin(V4PreparationOperation.NETWORK_TIME)
-    assert retry._attempt_token != permit._attempt_token
-    retry_ledger._locks[V4PreparationOperation.NETWORK_TIME].release()
+    with pytest.raises(
+        V4ActualPreparationGuardError,
+        match="ALREADY_ATTEMPTED",
+    ):
+        retry_ledger.begin(V4PreparationOperation.NETWORK_TIME)
 
 
 def test_host_script_uses_only_prechecked_network_time_result() -> None:
@@ -2394,3 +2491,59 @@ def test_public_preflight_still_rejects_quote_beyond_clock_skew_window(
     assert report.quote_fresh is False
     assert report.status == "BLOCKED_PUBLIC_STATUS_TICKER_NOT_CLEAR"
     client.close()
+
+
+def test_confirmation_scripts_differ_in_when_they_validate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-6: pin the asymmetry between the two operator-typed confirmations.
+
+    ``20_email_confirmation`` validates the phrase BEFORE ``ledger.begin()``,
+    so a typo never starts an attempt and leaves no marker at all.
+    ``40_exclusivity_confirmation`` takes the permit first and compares
+    afterwards, so a typo DOES consume a started marker -- which is precisely
+    why 40 needs the same-day retry restored in Phase E/F.  An independent
+    Operations review surfaced this asymmetry and noted the script path had
+    no direct coverage.  If either script moves its validation, this test
+    fails and the retry rationale must be re-examined.
+    """
+    import ast
+    import inspect
+
+    from app.h11_auto import v4_actual_preparation_guard as guard
+
+    def _call_order(script_name: str) -> list[str]:
+        source = (
+            Path(inspect.getfile(guard)).resolve().parents[3]
+            / "backend/scripts"
+            / script_name
+        ).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        main = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "main"
+        )
+        names: list[str] = []
+        for node in ast.walk(main):
+            if isinstance(node, ast.Call):
+                target = node.func
+                if isinstance(target, ast.Name):
+                    names.append((node.lineno, target.id))
+                elif isinstance(target, ast.Attribute):
+                    names.append((node.lineno, target.attr))
+        return [name for _lineno, name in sorted(names)]
+
+    email = _call_order("h11_auto_v4_email_delivery_confirm.py")
+    assert email.index("validate_email_delivery_confirmation_exact") < email.index(
+        "begin"
+    ), "20 must validate before begin(): a typo must not consume an attempt"
+
+    exclusivity = _call_order("h11_auto_v4_exclusivity_confirm.py")
+    assert exclusivity.index("begin") < exclusivity.index(
+        "confirm_account_exclusivity_exact"
+    ), "40 compares after begin(), which is why it needs same-day retry"
+    assert (
+        V4PreparationOperation.EXCLUSIVITY_CONFIRMATION
+        in guard._SAME_DAY_RETRYABLE_OPERATIONS
+    )

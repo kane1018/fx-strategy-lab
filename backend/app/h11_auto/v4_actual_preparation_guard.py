@@ -481,6 +481,13 @@ _G064_FRESH_PREVIOUS_OPERATION = {
 _G064_FRESH_OPERATIONS = frozenset(_G064_FRESH_PREVIOUS_OPERATION)
 _G065_FRESH_PREVIOUS_OPERATION = dict(_G064_FRESH_PREVIOUS_OPERATION)
 _G065_FRESH_OPERATIONS = frozenset(_G065_FRESH_PREVIOUS_OPERATION)
+_SAME_DAY_RETRYABLE_OPERATIONS = frozenset(
+    {
+        V4PreparationOperation.PRESENCE,
+        V4PreparationOperation.EMAIL_CONFIRMATION,
+        V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
+    }
+)
 
 
 class V4PreparationOperationPermit:
@@ -903,23 +910,26 @@ def _operation_report_is_clear(
 
 
 class V4PreparationAttemptLedger:
-    """Persistent sequence; a step is retryable same-day until it PASSES.
+    """Persistent sequence with constrained same-day re-try behavior.
 
-    A failed or mismatched attempt (wrong confirmation phrase, transient send
-    error, etc.) does not lock the operator out for the rest of the trading
-    day: the stale ``started`` marker is replaced and the step may be
-    attempted again. Once an operation reaches ``PASSED`` for the day it is
-    final -- it cannot be re-attempted or reset without a new trading day.
+    Same-day re-try is explicitly limited to operations that have no external
+    side effects in this phase: ``00_presence``, ``20_email_confirmation``, and
+    ``40_exclusivity_confirmation``. For those, a failed attempt keeps the
+    operation runnable again on the same trading day: the stale ``started`` marker
+    is replaced with a fresh ``attempt_token``.
 
-    Re-attempt is implemented as marker replacement only; it does not prove
-    that a prior external action did not already fire (Pushover/SMTP send,
-    private GET, kill). Concurrent execution is blocked by the generation lock,
-    but crash-after-action retry remains a disclosed residual risk.
+    All other operations keep a stricter contract: if their ``started`` marker is
+    present and not yet ``PASSED``, they are rejected for the same trading day.
+    This includes keychain access, notifications, private GET, and monitor
+    installation operations with external action.
 
-    再試行はマーカーを置換するだけで、前回のattemptの実外部アクション
-    (Pushover/SMTP送信、private GET、kill)が既に発火していなかったことを
-    証明しません。並行実行は世代ロックで防止しますが、クラッシュ後の再試行
-    は既知の残存リスクとして開示します。
+    Once an operation reaches ``PASSED`` it is final for the day and cannot be
+    re-attempted or reset without a new trading day. Concurrency remains
+    blocked by the generation lock.
+
+    再試行は外部作用を持たない3操作(00/20/40)のみに限定し、既存の実外部作用
+    を持つ8操作は同日``started``が残存する間は再試行不可です。``PASSED``後は
+    当日の再試行は不可です。並行実行は世代ロックで防止されます。
     """
 
     def __init__(
@@ -1123,12 +1133,20 @@ class V4PreparationAttemptLedger:
         if started.is_symlink():
             lock.release()
             raise V4ActualPreparationGuardError(V4PreparationFailureCode.STATE_SYMLINK_FORBIDDEN)
-        if self._has_unresolved_attempt(skip_operation=operation):
+        retryable_same_day = operation in _SAME_DAY_RETRYABLE_OPERATIONS
+        if not retryable_same_day and started.exists():
+            lock.release()
+            raise V4ActualPreparationGuardError(
+                V4PreparationFailureCode.OPERATION_ALREADY_ATTEMPTED
+            )
+        if self._has_unresolved_attempt(
+            skip_operation=operation if retryable_same_day else None
+        ):
             lock.release()
             raise V4ActualPreparationGuardError(
                 V4PreparationFailureCode.GENERATION_TERMINAL_UNRESOLVED
             )
-        if started.exists():
+        if started.exists() and retryable_same_day:
             try:
                 started.unlink()
             except OSError as error:
@@ -1217,17 +1235,19 @@ class V4PreparationAttemptLedger:
         return self.state_root / f"{operation.value}.{self._trading_day_jst}.{suffix}.json"
 
     def _has_unresolved_attempt(
-        self, *, skip_operation: V4PreparationOperation
+        self, *, skip_operation: V4PreparationOperation | None = None
     ) -> bool:
-        """Reject unresolved attempts from other operations on this trading day.
+        """Reject unresolved attempts on this trading day.
 
-        The operation currently being begun is intentionally excluded: its
-        started marker is the failed attempt that will be replaced under the
-        generation lock. Markers from earlier trading days are historical
-        evidence and must not block a fresh daily preparation sequence.
+        For same-day-retryable operations, that operation is intentionally
+        skipped because its ``started`` marker is the failed attempt that will be
+        replaced under the generation lock. For non-retryable operations, no
+        operation is skipped and any existing unresolved ``started`` marker blocks.
+        Markers from earlier trading days are historical evidence and must not
+        block a fresh daily preparation sequence.
         """
         for operation in V4PreparationOperation:
-            if operation is skip_operation:
+            if skip_operation is not None and operation is skip_operation:
                 continue
             started = self._marker(operation, "started")
             if not started.exists():

@@ -1,4 +1,8 @@
-"""Presence-only H-11 v4 Keychain check after the clean-main gate."""
+"""Presence-only H-11 v4 Keychain check after the clean-main gate.
+
+This step performs no external side-effect action; it only checks local keychain
+item presence required by the preparation sequence.
+"""
 
 from __future__ import annotations
 

@@ -24,12 +24,13 @@ exactly as if you had typed it yourself (``python -m scripts.<name>``, in
 a fresh subprocess) -- this bundler adds no new preparation logic, no new
 safety checks, and never touches the ledger itself.
 
-Each step may be retried on the same trading day until it reaches ``PASSED``.
-Once ``PASSED`` is durable, that step is final for the day. A retry only
-replaces the failed attempt marker and does not prove that a prior external
-action did not fire after a crash; the generation lock excludes concurrent
-attempts, while crash-after-action remains a disclosed residual risk. This
-bundler stops immediately at the first non-zero exit code and never attempts
+Only no-op local confirmation steps are retryable on the same trading day:
+``00_presence``, ``20_email_confirmation``, and ``40_exclusivity_confirmation``.
+All other steps are one-attempt-per-day after ``started`` is written unless they
+first reach ``PASSED``. This reduces same-day retry risk for external-action
+operations while preserving recovery for operator-only phrase checks.
+
+This bundler stops immediately at the first non-zero exit code and never attempts
 later steps; rerun the same stage after fixing the cause, without changing the
 bundler's stop-on-failure behavior.
 """

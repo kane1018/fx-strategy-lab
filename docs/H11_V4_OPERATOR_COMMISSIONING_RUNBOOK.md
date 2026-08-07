@@ -8,36 +8,57 @@ LaunchAgent install・ARM実変更・実runtime state root書込を行わない�
 canonical世代は **G075**（`H11_AUTO_30M_20260802_G075`・runtime-only corrective）である。
 削除済み世代（G066〜G079のうちG075以外）を手順の前提にしないこと。
 
-## 1. 現在のgeneration状態（HEAD fe0b7cb）
+## 1. 現在のgeneration状態
+
+HEAD・digest・テスト件数の具体値はこの文書に**書かない**。コード変更のたびに動くため、
+必ず §0 のコマンドでその場の実測値を得ること（この文書は過去3回、値の陳腐化で
+独立レビューの指摘を受けている）。
 
 | generation | 役割 | status | commissioning |
 |---|---|---|---|
-| **G075**（canonical） | runtime-only corrective（no-POST） | `G075_RUNTIME_REVIEWED`（未レビュー） | **未commissioning**（op60未実行） |
+| **G075**（canonical） | runtime-only corrective（no-POST） | `G075_RUNTIME_REVIEWED` | **未commissioning**（op60未実行） |
 
-G075のruntime state root（`backend/market_data/h11_v4_gmo_actual_runtime/generation-<code変更後のdigest>/`）は
-**未作成**である。ディスク上には**未解決の永久HALTが2件** latchされている（削除・改変禁止）:
+G075のruntime state root（`backend/market_data/h11_v4_gmo_actual_runtime/generation-<現在のgeneration digest>/`）は
+**未作成**である。
+
+### 永久HALT: 2026-08-06 に解除済み
+
+かつてディスク上に未解決の永久HALTが2件latchされていたが、operator が §3.4 の正規手続きで
+解除した。現在の未解決HALTは **0件**（`require_g075_no_unresolved_halt` は CLEAR）。
+
+解除の記録はリネームアーカイブとして残っている（削除禁止）:
 
 ```
-generation-ce098ee8…/g074-persistent-halt.json   G074_INITIAL_TRANSACTION_UNKNOWN
-generation-f0e74bf0…/g075-persistent-halt.json   G075_INITIAL_TRANSACTION_UNKNOWN
+generation-ce098ee8…/g074-halt-discharged.20260806T234244Z.json
+generation-f0e74bf0…/g075-halt-discharged.20260806T234252Z.json
 ```
 
-いずれも `broker_post_count: 0` / `actual_post_count: 0` であり、実発注は発生していない。
+各アーカイブは元のHALT内容を `original` に、解除記録（operator / reason /
+broker_state_confirmation / halt_content_sha256）を `resolution` に保持する。
+いずれの元記録も `broker_write: false` / `actual_post_count: 0` であり、
+実発注は一度も発生していない（Phase Cで根絶した偽UNKNOWNの実物）。
+
+確認コマンド:
+
+```bash
+find backend/market_data/h11_v4_gmo_actual_runtime -name "g0*-persistent-halt.json" | wc -l   # 期待 0
+find backend/market_data/h11_v4_gmo_actual_runtime -name "*halt-discharged*" | wc -l          # 期待 2
+```
 
 ## 2. Gate状態サマリ
 
 | gate | 状態 | 理由 |
 |---|---|---|
-| テスト基盤（full suite） | **CLEAR** | 8941 passed / 0 failed（2026-08-06 Phase D hotfix 時点。増加は正常） |
+| テスト基盤（full suite） | **CLEAR** | §0 のコマンドで実測（0 failed であること。件数は増加が正常）。※ macOS Keychain への書き込み権限が無い実行環境では `app/tests/test_h11_v3_keychain_credential_no_post.py` の2件が error になるが、これは環境要因であり欠陥ではない |
 | Ruff / diff check | **CLEAR** | — |
 | 独立A/S/Oレビュー | **未CLEAR** | P0/Phase Aの変更は独立3レーンレビュー待ち |
 | レビュー合格証ゲート `verify_g075_review_artifacts` | **拒否（正しい状態）** | 未レビューコードへのCLEAR移植を防ぐため。**通過させないこと** |
 | digest整合（固定点） | **CLEAR** | §0 のコマンドで現在値を得ること（コード変更で動く） |
 | UI契約ロード | **CLEAR** | `_load_current_contract`成功 |
-| 未解決HALTスキャン `require_g075_no_unresolved_halt` | **拒否（正しい状態）** | ディスク上の未解決HALT2件を検出（`G075_UNRESOLVED_HALT_PRESENT`） |
+| 未解決HALTスキャン `require_g075_no_unresolved_halt` | **CLEAR** | 2026-08-06 に operator が2件とも正規手続きで解除済み（§1） |
 | **G075 operation 60** | **BLOCKED** | レビュー合格証ゲートが拒否するため |
 | **G075 initial activation** | **BLOCKED** | 同上 |
-| **UI ARM ON（G075）** | **BLOCKED** | 未解決HALTスキャンが拒否（`G075_UNRESOLVED_HALT_PRESENT`） |
+| **UI ARM ON（G075）** | **BLOCKED** | `release_state` が `LOCKED`（initial activation 未実行・レビュー未了）。HALTが理由ではない |
 | **release capability** | **LOCKED** | initial activation未実行のため |
 
 **結論**: G075は未レビュー・未commissioningであり、実op60/activation/ARMはすべて
@@ -70,7 +91,7 @@ PYTHONPATH=backend backend/.venv/bin/python backend/scripts/h11_auto_v4_monday_s
 # docs/H11_MANUAL_SIGNAL_UI_NO_POST.md の起動手順に従う（local server・常駐なし）
 ```
 
-- G075ではPOST /onは未解決HALTスキャンが拒否（`G075_UNRESOLVED_HALT_PRESENT`、409）。
+- G075ではPOST /onは `release_state != ENABLED` により拒否（`G075_RELEASE_CAPABILITY_LOCKED`、409）。未解決HALTスキャンは現在CLEARなので拒否理由ではないが、HALTが再発すれば同経路で `G075_UNRESOLVED_HALT_PRESENT` により先に拒否される。
   POST /off は常に通る（停止操作は阻害しない）。これは**設計どおり**。
   UIが契約をロードできること（500でないこと）自体は確認済み。
 
@@ -85,8 +106,12 @@ backend/.venv/bin/python backend/scripts/h11_auto_v4_current_generation_shadow_c
 
 ### 3.4 HALT discharge（操作者専用・renameアーカイブのみ・Phase C）
 
-ディスク上の未解決HALT2件（G074/G075）は実害なしと operator が判断した場合も、
-**解除は必ずこの手続きで記録を残して行う**。削除は禁止、rename アーカイブのみ。
+**この手続きは 2026-08-06 に実施済み**（G074/G075 の2件、§1 参照）。現在の未解決HALTは
+0件なので、以下は**将来HALTが再発した場合の手順**として残している。
+
+HALT は実害なしと operator が判断した場合も、**解除は必ずこの手続きで記録を残して行う**。
+削除は禁止、rename アーカイブのみ。`--generation-digest` の値は手順 0) の列挙結果から
+取ること（下の例に埋まっている値は 2026-08-06 に解除した G075 のもので、再利用しない）。
 
 ```bash
 # 0) 対象halt(generation digestとファイル名)を事前に列挙する

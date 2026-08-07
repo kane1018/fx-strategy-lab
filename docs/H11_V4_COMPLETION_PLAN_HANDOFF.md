@@ -20,7 +20,8 @@ cd /Users/naoikansui/Desktop/トレード
 git rev-parse HEAD          # 期待: 5df62a3(異なる場合は着手前に orchestrator へ報告)
 git status --short          # 期待: 空(dirty なら着手しない)
 cd backend && .venv/bin/python -m pytest app/tests/ -q | tail -3
-                            # 期待: 8941 passed, 0 failed（2026-08-06 Phase D hotfix 時点。増加は正常）
+                            # 期待: 0 failed（件数は増加が正常なので固定値で判定しないこと。
+                            #        Keychain 権限の無い環境では keychain テスト2件が error になる）
 ```
 
 **HEAD が `5df62a3` でない場合、この文書の行番号・digest 値はすべて信用できない。**
@@ -54,6 +55,18 @@ print(load_v4_gmo_frozen_generation(repository=repo, implementation_digest=compu
 | canonical 世代ラベル | `H11_AUTO_30M_20260802_G075` |
 
 ---
+
+### レビュー依頼時の注意（2026-08-07 追記）
+
+独立レビューを外部環境に依頼する場合、**フルスイートの合格件数を固定値で要求しない**こと。
+macOS Keychain への書き込み権限が無い実行環境では
+`backend/app/tests/test_h11_v3_keychain_credential_no_post.py` の2件が必ず error になり、
+コードとは無関係の VETO を生む（2026-08-07 に Architecture / Operations の2レーンで発生）。
+「当該2件を除いて 0 failed であること」と指定すること。
+
+同様に、HEAD・digest・テスト件数の具体値を手順書に書かないこと。値はコード変更のたびに
+動き、この文書と運用 runbook は過去3回、値の陳腐化で指摘を受けている。§0 の再計算
+コマンドに置き換え、「いつ時点の実測か」だけを添えること。
 
 ## 1. 不変の運用規則(例外なし)
 
