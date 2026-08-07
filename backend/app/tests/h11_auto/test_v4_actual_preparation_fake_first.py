@@ -1758,38 +1758,35 @@ def test_cross_day_begin_uses_generation_wide_operation_lock(
 def test_same_day_retry_replaces_failed_started_marker(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
-    """Same-day retry is permitted only after failed started markers for no-external-op steps."""
+    """A failed confirmation attempt is replaced, and ordering still holds.
+
+    Uses 20_email_confirmation because that is a retryable operation: the
+    sequence still has to be walked to it, and the steps before it stay
+    single-attempt.
+    """
     ledger = V4PreparationAttemptLedger(external_gate=external_gate)
     with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
         ledger.begin(V4PreparationOperation.PUSHOVER)
 
-    first = ledger.begin(V4PreparationOperation.PRESENCE)
+    target = V4PreparationOperation.EMAIL_CONFIRMATION
+    ledger, first = _permit_for(external_gate=external_gate, target=target)
     first_token = first._attempt_token
-    ledger._locks[V4PreparationOperation.PRESENCE].release()
+    ledger._locks[target].release()
 
     retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
-    second = retry_ledger.begin(V4PreparationOperation.PRESENCE)
+    second = retry_ledger.begin(target)
     assert second._attempt_token != first_token
-    started = retry_ledger._marker(V4PreparationOperation.PRESENCE, "started")
+    started = retry_ledger._marker(target, "started")
     assert json.loads(started.read_text(encoding="utf-8"))["attempt_token"] == second._attempt_token
-    _test_only_complete(retry_ledger, second, V4PreparationOperation.PRESENCE)
-    with pytest.raises(V4ActualPreparationGuardError, match="PREVIOUS_NOT_CLEAR"):
-        retry_ledger.begin(V4PreparationOperation.PUSHOVER)
-    access_permit = retry_ledger.begin(V4PreparationOperation.KEYCHAIN_ACCESS)
-    _test_only_complete(
-        retry_ledger, access_permit, V4PreparationOperation.KEYCHAIN_ACCESS
-    )
-    pushover_permit = retry_ledger.begin(V4PreparationOperation.PUSHOVER)
-    _test_only_complete(
-        retry_ledger, pushover_permit, V4PreparationOperation.PUSHOVER
-    )
-    retry_ledger.begin(V4PreparationOperation.SMTP)
+    _test_only_complete(retry_ledger, second, target)
+    # The next operation only opens once its predecessor has PASSED.
+    network_time = retry_ledger.begin(V4PreparationOperation.NETWORK_TIME)
+    _test_only_complete(retry_ledger, network_time, V4PreparationOperation.NETWORK_TIME)
 
 
 @pytest.mark.parametrize(
     "operation",
     (
-        V4PreparationOperation.PRESENCE,
         V4PreparationOperation.EMAIL_CONFIRMATION,
         V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
     ),
@@ -1814,6 +1811,9 @@ def test_same_day_retry_replaces_unfinished_started_marker_for_no_external_actio
 @pytest.mark.parametrize(
     "operation",
     (
+        # 00_presence reads as a local check but shells out to `security`
+        # once per item, so it belongs here rather than in the retryable set.
+        V4PreparationOperation.PRESENCE,
         V4PreparationOperation.PUSHOVER,
         V4PreparationOperation.SMTP,
         V4PreparationOperation.PRIVATE_GET,
@@ -1838,13 +1838,13 @@ def test_same_day_retry_rejected_for_external_action_steps(
 
 
 def test_same_day_retryable_operations_only_expected_actions() -> None:
-    assert (
-        guard_module._SAME_DAY_RETRYABLE_OPERATIONS
-        == {
-            V4PreparationOperation.PRESENCE,
-            V4PreparationOperation.EMAIL_CONFIRMATION,
-            V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
-        }
+    assert guard_module._SAME_DAY_RETRYABLE_OPERATIONS == {
+        V4PreparationOperation.EMAIL_CONFIRMATION,
+        V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
+    }, (
+        "same-day retry must cover exactly the two operator-typed confirmations. "
+        "00_presence was removed on 2026-08-07 after an independent Safety review "
+        "found that check_v4_keychain_presence_only shells out to `security`."
     )
 
 
@@ -1893,16 +1893,16 @@ def test_same_day_retry_invalidates_old_permit(
     external_gate: V4ExternalPreparationGate,
 ) -> None:
     """The replaced marker must remain bound to the newest attempt token."""
-    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
-    first = ledger.begin(V4PreparationOperation.PRESENCE)
-    ledger._locks[V4PreparationOperation.PRESENCE].release()
+    target = V4PreparationOperation.EMAIL_CONFIRMATION
+    ledger, first = _permit_for(external_gate=external_gate, target=target)
+    ledger._locks[target].release()
     retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
-    second = retry_ledger.begin(V4PreparationOperation.PRESENCE)
+    second = retry_ledger.begin(target)
     first._completion_digest = "sha256:" + "0" * 64
     first._completion_report = {"forced": True}
     with pytest.raises(V4ActualPreparationGuardError, match="ATTEMPT_STATE_INVALID"):
-        ledger.complete(V4PreparationOperation.PRESENCE, operation_permit=first)
-    _test_only_complete(retry_ledger, second, V4PreparationOperation.PRESENCE)
+        ledger.complete(target, operation_permit=first)
+    _test_only_complete(retry_ledger, second, target)
 
 
 def test_previous_started_attempt_does_not_block_next_day(
@@ -1950,12 +1950,12 @@ def test_same_day_begin_retry_sensitivity_detects_unlink_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """If an old started marker cannot be unlinked, retry keeps the prior marker."""
-    ledger = V4PreparationAttemptLedger(external_gate=external_gate)
-    first = ledger.begin(V4PreparationOperation.PRESENCE)
-    started = ledger._marker(V4PreparationOperation.PRESENCE, "started")
+    target = V4PreparationOperation.EMAIL_CONFIRMATION
+    ledger, first = _permit_for(external_gate=external_gate, target=target)
+    started = ledger._marker(target, "started")
     before = json.loads(started.read_text(encoding="utf-8"))
     assert first._attempt_token == before["attempt_token"]
-    ledger._locks[V4PreparationOperation.PRESENCE].release()
+    ledger._locks[target].release()
 
     retry_ledger = V4PreparationAttemptLedger(external_gate=external_gate)
     original_unlink = Path.unlink
@@ -1968,7 +1968,7 @@ def test_same_day_begin_retry_sensitivity_detects_unlink_failure(
     monkeypatch.setattr(Path, "unlink", fail_unlink)
     with pytest.raises(V4ActualPreparationGuardError, match="ATTEMPT_NOT_PERSISTED"):
         retry_ledger._begin(
-            operation=V4PreparationOperation.PRESENCE,
+            operation=target,
             runtime_predecessor_clear=False,
         )
 
@@ -2546,4 +2546,86 @@ def test_confirmation_scripts_differ_in_when_they_validate(
     assert (
         V4PreparationOperation.EXCLUSIVITY_CONFIRMATION
         in guard._SAME_DAY_RETRYABLE_OPERATIONS
+    )
+
+
+def test_retryable_operations_cannot_reach_an_external_action() -> None:
+    """The admission rule for same-day retry, checked by call graph.
+
+    An earlier version of ``_SAME_DAY_RETRYABLE_OPERATIONS`` admitted
+    ``00_presence`` on the strength of its script's imports alone.  That was
+    wrong: the script imports only argparse/json/pathlib and the guard, but the
+    guard function it calls shells out to ``security find-generic-password``
+    once per item.  An independent Safety review caught it (2026-08-07).
+
+    Import-level checks cannot see that, so this test walks the call graph from
+    each retryable operation's guard entry point and fails if any transitively
+    reachable function touches a subprocess runner.  It is the check that would
+    have caught the original error, and it is what keeps the admission rule
+    ("no reachable external action") mechanical rather than a matter of
+    judgement.
+    """
+    import ast
+
+    from app.h11_auto import v4_actual_preparation_guard as guard
+
+    source = Path(guard.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    # Every way this module reaches an external process.
+    runner_names = {"subprocess", "runner", "_default_runner", "_default_keychain_runner"}
+
+    def reaches_external_action(name: str, seen: set[str] | None = None) -> bool:
+        seen = seen if seen is not None else set()
+        if name in seen or name not in functions:
+            return False
+        seen.add(name)
+        for node in ast.walk(functions[name]):
+            if isinstance(node, ast.Name) and node.id in runner_names:
+                return True
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "subprocess"
+            ):
+                return True
+            if isinstance(node, ast.Call):
+                target = node.func
+                called = (
+                    target.id
+                    if isinstance(target, ast.Name)
+                    else getattr(target, "attr", None)
+                )
+                if called in runner_names:
+                    return True
+                if called and reaches_external_action(called, seen):
+                    return True
+        return False
+
+    entry_points = {
+        V4PreparationOperation.EMAIL_CONFIRMATION: (
+            "validate_email_delivery_confirmation_exact",
+            "confirm_email_delivery_exact",
+        ),
+        V4PreparationOperation.EXCLUSIVITY_CONFIRMATION: (
+            "confirm_account_exclusivity_exact",
+        ),
+    }
+    assert set(entry_points) == guard._SAME_DAY_RETRYABLE_OPERATIONS, (
+        "every retryable operation needs its guard entry points listed here"
+    )
+    for operation, names in entry_points.items():
+        for name in names:
+            assert name in functions, f"{name} is no longer a module-level function"
+            assert not reaches_external_action(name), (
+                f"{operation.value} can reach an external action via {name}; it "
+                "must not be same-day retryable"
+            )
+
+    # The counter-example that motivated this test must still be detected.
+    assert reaches_external_action("check_v4_keychain_presence_only"), (
+        "00_presence's guard entry point must still register as external; if "
+        "this stops holding, re-derive the admission rule before trusting it"
     )

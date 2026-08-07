@@ -1,7 +1,10 @@
 """Presence-only H-11 v4 Keychain check after the clean-main gate.
 
-This step performs no external side-effect action; it only checks local keychain
-item presence required by the preparation sequence.
+This step performs no *side-effecting* action -- it only checks that the required
+Keychain items exist, never asking Keychain to output a value. It does launch a
+subprocess (``security find-generic-password``) per item, so it is NOT same-day
+retryable: see ``_SAME_DAY_RETRYABLE_OPERATIONS`` in the preparation guard. It
+takes no operator input, so retry was never needed here.
 """
 
 from __future__ import annotations

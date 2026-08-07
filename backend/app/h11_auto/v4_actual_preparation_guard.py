@@ -481,9 +481,26 @@ _G064_FRESH_PREVIOUS_OPERATION = {
 _G064_FRESH_OPERATIONS = frozenset(_G064_FRESH_PREVIOUS_OPERATION)
 _G065_FRESH_PREVIOUS_OPERATION = dict(_G064_FRESH_PREVIOUS_OPERATION)
 _G065_FRESH_OPERATIONS = frozenset(_G065_FRESH_PREVIOUS_OPERATION)
+# Same-day retry is allowed ONLY where a failed attempt cannot possibly have
+# fired a real external action: retry replaces a marker, it can never prove that
+# a crashed attempt's action had not already happened.  The admission test is
+# mechanical and must stay mechanical -- no path from the operation's entry
+# point may reach a subprocess, a socket, or a message send.  The call-graph
+# reachability test in test_v4_actual_preparation_fake_first.py enforces it.
+#
+# That leaves exactly the two operator-typed confirmations, which are also the
+# only steps where a typo is possible -- the entire reason retry was needed.
+# Both merely compare a typed phrase against an expected value; the email
+# itself was already sent by 15_smtp.
+#
+# 00_presence is deliberately NOT here.  It reads as a local check, and an
+# earlier version of this set included it on the strength of the script's
+# imports alone, but check_v4_keychain_presence_only shells out to
+# `security find-generic-password` once per item.  An independent Safety review
+# caught that (2026-08-07); following the call graph is the check that matters.
+# 00_presence takes no operator input, so it never needed retry.
 _SAME_DAY_RETRYABLE_OPERATIONS = frozenset(
     {
-        V4PreparationOperation.PRESENCE,
         V4PreparationOperation.EMAIL_CONFIRMATION,
         V4PreparationOperation.EXCLUSIVITY_CONFIRMATION,
     }
@@ -912,24 +929,34 @@ def _operation_report_is_clear(
 class V4PreparationAttemptLedger:
     """Persistent sequence with constrained same-day re-try behavior.
 
-    Same-day re-try is explicitly limited to operations that have no external
-    side effects in this phase: ``00_presence``, ``20_email_confirmation``, and
-    ``40_exclusivity_confirmation``. For those, a failed attempt keeps the
-    operation runnable again on the same trading day: the stale ``started`` marker
-    is replaced with a fresh ``attempt_token``.
+    Same-day re-try is limited to the two operator-typed confirmations,
+    ``20_email_confirmation`` and ``40_exclusivity_confirmation``.  No path from
+    either reaches a subprocess, a socket, or a message send: both only compare
+    a typed phrase against an expected value (the email was already sent by
+    ``15_smtp``).  For those, a failed attempt keeps the operation runnable
+    again the same trading day -- the stale ``started`` marker is replaced with
+    a fresh ``attempt_token``.
 
-    All other operations keep a stricter contract: if their ``started`` marker is
-    present and not yet ``PASSED``, they are rejected for the same trading day.
-    This includes keychain access, notifications, private GET, and monitor
-    installation operations with external action.
+    Every other operation keeps the stricter contract: while its ``started``
+    marker exists without ``PASSED``, it is rejected for that trading day.  That
+    covers everything performing a real external action -- keychain reads,
+    Pushover/SMTP sends, network time, the host-kill rehearsal, public/private
+    GETs, the LaunchAgent install -- because a retry cannot prove a crashed
+    attempt's action had not already fired.  ``00_presence`` belongs to this
+    stricter group despite reading as local: it shells out to
+    ``security find-generic-password``.  It takes no operator input, so retry
+    was never needed there.
 
     Once an operation reaches ``PASSED`` it is final for the day and cannot be
-    re-attempted or reset without a new trading day. Concurrency remains
-    blocked by the generation lock.
+    re-attempted or reset without a new trading day.  Concurrency remains
+    blocked by the generation lock, and a superseded permit cannot complete a
+    later attempt (``attempt_token``).
 
-    再試行は外部作用を持たない3操作(00/20/40)のみに限定し、既存の実外部作用
-    を持つ8操作は同日``started``が残存する間は再試行不可です。``PASSED``後は
-    当日の再試行は不可です。並行実行は世代ロックで防止されます。
+    再試行は operator が手入力する2操作(20/40)のみ。どちらも subprocess・
+    ソケット・送信のいずれにも到達しない(呼び出しグラフで検証)。実外部作用を
+    持つ9操作は同日``started``が残存する間は再試行不可。``00_presence`` は
+    一見ローカルだが ``security`` を起動するため後者に含む(operator の入力を
+    取らないので再試行は不要)。``PASSED``後は当日最終。
     """
 
     def __init__(

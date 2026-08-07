@@ -24,11 +24,14 @@ exactly as if you had typed it yourself (``python -m scripts.<name>``, in
 a fresh subprocess) -- this bundler adds no new preparation logic, no new
 safety checks, and never touches the ledger itself.
 
-Only no-op local confirmation steps are retryable on the same trading day:
-``00_presence``, ``20_email_confirmation``, and ``40_exclusivity_confirmation``.
-All other steps are one-attempt-per-day after ``started`` is written unless they
-first reach ``PASSED``. This reduces same-day retry risk for external-action
-operations while preserving recovery for operator-only phrase checks.
+Only the two operator-typed confirmations are retryable on the same trading
+day: ``20_email_confirmation`` and ``40_exclusivity_confirmation``. Neither
+reaches a subprocess, a socket, or a message send -- they only compare a typed
+phrase against an expected value, which is also the only place a typo can
+happen. Every other step, including ``00_presence`` (which shells out to
+``security find-generic-password`` once per item), is one attempt per trading
+day once its ``started`` marker is written, because a retry cannot prove that a
+crashed attempt's real external action had not already fired.
 
 This bundler stops immediately at the first non-zero exit code and never attempts
 later steps; rerun the same stage after fixing the cause, without changing the
