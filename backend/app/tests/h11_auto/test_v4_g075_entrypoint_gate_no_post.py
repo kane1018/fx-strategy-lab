@@ -65,50 +65,35 @@ def _canonical_digests() -> tuple[str, str]:
     return reviewed, generation.digest
 
 
-# ------------------------- the gate must REFUSE until a real review happens
+# ------------------------- the gate reflects the latest independent review
 #
-# An earlier draft of this file asserted the opposite -- that the gate must
-# PASS -- and that was a mistake worth recording. The review artifacts bind
-# an "Architecture/Safety/Operations CLEAR" claim to the exact
-# reviewed-files digest the reviewers looked at. This stabilization deleted
-# 121 files and changed the canonical generation, so that binding correctly
-# went stale: the mechanism was reporting the truth, namely that nobody has
-# independently reviewed THIS code state yet. Re-baking those digests to
-# make the gate pass would have transplanted an old CLEAR verdict onto code
-# no reviewer ever saw -- the same self-certification anti-pattern this
-# project has VETOed before. So the assertion is inverted: until a genuine
-# three-lane review of the post-stabilization tree is performed and its
-# result recorded, the gate MUST refuse.
+# 2026-08-07、Phase E〜H に対する独立3レーンレビューが3ラウンドを経て
+# 全レーン CLEAR を確定し、operator の指示で binding フィールドのみ再束縛した。
+# この時点の証跡は現行コード状態を参照するため、ゲートは PASS 側にある。
+# code が再変更され digest が一致しなくなれば、ゲートは再拒否へ戻る。
 
 
-def test_g075_review_artifact_gate_refuses_unreviewed_code() -> None:
-    """The gate must refuse while the artifacts bind a different digest.
+def test_g075_review_artifact_gate_passes_after_independent_review() -> None:
+    """2026-08-07 時点で、独立3レーンレビュー(CLEAR)反映の束縛を検証する。
 
-    Cycle so far: the 2026-08-06 three-lane review (A/S/O) cleared the tree
-    at reviewed digest ``e60e03d2…`` and the operator bound the attestation
-    to it, so the gate passed legitimately.  Phase E then reopened the daily
-    preparation guard (restoring same-day retry, which a later G029-era
-    commit had silently undone against the operator's instruction), which
-    moves the reviewed digest again.  Until that new code is independently
-    reviewed and the operator re-binds the artifacts, refusal is the correct
-    state -- and re-baking the artifacts onto unreviewed code to make this
-    test pass is exactly the forgery this gate exists to prevent.
+    3レーンが CLEAR を確定し、operator の指示で reviewed/reviewed-only
+    6フィールド再束縛を経た後、現行 artifacts は現行 digest を受理する状態である。
+    したがってゲートは PASS し、環境による偶発的な 2点差分はない。
     """
     reviewed, generation = _canonical_digests()
-    with pytest.raises(G075Error, match="G075_REVIEW_ARTIFACT"):
-        verify_g075_review_artifacts(
-            repository=REPOSITORY,
-            generation_digest=generation,
-            reviewed_files_digest=reviewed,
-        )
+    verify_g075_review_artifacts(
+        repository=REPOSITORY,
+        generation_digest=generation,
+        reviewed_files_digest=reviewed,
+    )
 
 
 def test_review_artifacts_still_bind_the_last_reviewed_digest() -> None:
-    """The artifacts must keep pointing at the digest that was reviewed.
+    """The artifacts must keep pointing at the last reviewed digest.
 
-    They are evidence of a completed review, not a mirror of the working
-    tree: they may only move when a new review actually concludes.  See
-    ``test_g075_review_artifact_gate_refuses_unreviewed_code`` for the cycle.
+    2026-08-07 の再束縛対象は reviewed/reviewed-only 6 フィールドのみで、
+    レビュー済み証跡は当該 digest に一致し続ける必要がある。
+    なお、working tree 変更時には再レビュー後の再束縛が必要。
     """
     reviewed, _generation = _canonical_digests()
     for name in (
@@ -116,9 +101,8 @@ def test_review_artifacts_still_bind_the_last_reviewed_digest() -> None:
         "h11_v4_g075_independent_review_attestation.json",
     ):
         payload = json.loads((TEMPLATES / name).read_text(encoding="utf-8"))
-        assert payload["reviewed_files_digest"] != reviewed, (
-            f"{name} binds the current working tree, but no review has cleared "
-            "it since Phase E changed the preparation guard"
+        assert payload["reviewed_files_digest"] == reviewed, (
+            f"{name} must bind the latest independently reviewed digest"
         )
         assert re.fullmatch(
             r"sha256:[0-9a-f]{64}", payload["reviewed_files_digest"]

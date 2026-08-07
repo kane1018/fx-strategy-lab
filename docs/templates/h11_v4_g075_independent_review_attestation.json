@@ -1,14 +1,14 @@
 {
   "architecture_status": "CLEAR",
   "arm_mutation_count": 0,
-  "artifact_digest": "sha256:e3cea6d9b595fd723c67ab01069d2ee5ab1b7f457be116fa2d391b45c883a480",
+  "artifact_digest": "sha256:59bbb062e5d2ecc88ff9dad174c5f562b2bbedd22020ce373e4e802352bd8ce7",
   "blocking_findings": [],
   "broker_get_count": 0,
   "broker_post_count": 0,
   "credential_read_count": 0,
   "external_human_signoff_verified": false,
   "frozen_design_digest": "sha256:9193b78f5c1c423689d6fc21d97793edf05ad1ff33408169d3574ba854bbf6de",
-  "generation_digest": "sha256:3209c42426f53e74bd329f4aebc184e3843f9305f9f8471bf82057f7f2621f08",
+  "generation_digest": "sha256:ca4d8ebb03e290881d1be96325322babe0c55df2260121e5b97caaf734038a16",
   "generation_label": "H11_AUTO_30M_20260802_G075",
   "launchagent_mutation_count": 0,
   "notification_attempt_count": 0,
@@ -17,7 +17,7 @@
   "predecessor_generation_digest": "sha256:ce098ee83b0f6dec6929779fea01b61f92ebdb089f2de074df7131fbad183087",
   "private_api_read_count": 0,
   "review_scope": "G075_RUNTIME_ONLY_CORRECTIVE_FAKE_ONLY",
-  "reviewed_files_digest": "sha256:e60e03d28389b3b6ee09d6150f9f9257e2e6a78cc6c53d805dbed2e2988aa2ef",
+  "reviewed_files_digest": "sha256:f5d826530c617a98574dbcb9d10f3181f10a44df3a2a223abee5be6e24e154ce",
   "safety_status": "CLEAR",
   "schema": "H11_V4_G075_INDEPENDENT_REVIEW_ATTESTATION_V1"
 }
