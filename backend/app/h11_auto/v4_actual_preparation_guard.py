@@ -484,9 +484,18 @@ _G065_FRESH_OPERATIONS = frozenset(_G065_FRESH_PREVIOUS_OPERATION)
 # Same-day retry is allowed ONLY where a failed attempt cannot possibly have
 # fired a real external action: retry replaces a marker, it can never prove that
 # a crashed attempt's action had not already happened.  The admission test is
-# mechanical and must stay mechanical -- no path from the operation's entry
-# point may reach a subprocess, a socket, or a message send.  The call-graph
-# reachability test in test_v4_actual_preparation_fake_first.py enforces it.
+# mechanical and must stay mechanical -- no path from the operation's own guard
+# entry points (the functions invoked under its permit) may reach a subprocess,
+# a socket, or a message send.  The call-graph reachability test in
+# test_v4_actual_preparation_fake_first.py enforces exactly that scope.
+#
+# The scope is "what the operation does under its permit", not "what the wrapper
+# script does before it".  Every one of the eleven scripts calls
+# require_clean_main first, which shells out to git; that runs before the ledger
+# is opened, is identical for all operations, and is read-only, so it says
+# nothing about whether a given operation can double-fire.  An independent
+# Safety review flagged the earlier wording ("no subprocess anywhere") as
+# imprecise -- it is the permit-scoped work that decides admission.
 #
 # That leaves exactly the two operator-typed confirmations, which are also the
 # only steps where a typo is possible -- the entire reason retry was needed.
